@@ -94,7 +94,7 @@ Ask the society:
 
 At the initial read on 2026-09-07, main was 307ebba9947313f654677c03c54e72fb2e80695b and only README.md was visible.
 
-Later the same day, Claude's implementation appeared as Draft PR #1 on branch claude/dvd-tivat-app-dev-n8wctb at 35a6416fc8e5afc5fc7abc9526d433a99fb3e658. Its PR description reports a React/Vite exercise prototype, documentation, screenshots and passing automated checks. Those claims have not yet been independently reviewed in this branch and must be verified against the exact commit before acceptance.
+Later the same day, Claude's implementation appeared as Draft PR #1 on branch claude/dvd-tivat-app-dev-n8wctb at 35a6416fc8e5afc5fc7abc9526d433a99fb3e658. Its PR description reports a React/Vite exercise prototype, documentation, screenshots and passing automated checks. An independent static/evidence review of that exact head is recorded in CODEX_REVIEW_PR1.md. It found no blocking domain defect for supervised owner testing and two pre-demonstration findings: direct-to-location interaction ordering on mobile and inconsistent browser-test totals in documentation.
 
 No production readiness, real alert delivery or society acceptance is claimed here. This documentation branch adds no application code and does not deploy anything.
 
