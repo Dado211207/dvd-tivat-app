@@ -5,6 +5,51 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-07 — Harden local storage startup checks
+
+**Finding and reproduction**
+
+The start-up capability check wrote and deleted the fixed generic key `__dvd_tivat_probe__`.
+Another application on the same origin could already own that key, in which case merely opening
+this prototype overwrote and deleted the other application's value. Separately, `loadState()` did
+not catch a `getItem()` refusal after the storage reference and write probe had succeeded, so a
+browser policy change during start-up could crash React initialisation instead of showing the
+existing storage warning.
+
+Both regressions were written and run before the correction. The focused pre-fix result was
+**2 failed, 10 passed**: one uncaught `SecurityError`, and one erased pre-existing probe value. The
+test-only commit is preserved as remote commit `4e192fa`.
+
+**Correction**
+
+- The write probe now stays in the prototype's own `dvd-tivat-prototip:*` namespace.
+- Any value already present at that namespaced probe is restored, including a best-effort restore
+  when a storage backend mutates and then throws.
+- Refusal of the real state read is caught. The app starts from fictional seed data and displays
+  the existing `NEDOSTUPNO` warning instead of crashing.
+
+**Verified**
+
+| Check | Result |
+|---|---|
+| Persistence suite | **12 passed** |
+| Full Vitest suite | **49 passed** |
+| ESLint | Passes |
+| Strict TypeScript + Vite 8 production build | Passes |
+| GitHub CI run 34149475169, job 101828503089, attempt 1 | **Success** |
+| Playwright + axe | **40 passed** — 20 desktop and 20 phone |
+
+The CI result is on the exact runtime correction `279619b`. The failure-report upload step was
+correctly skipped because the job passed; no verification step was skipped.
+
+**Next concrete action**
+
+Review stacked Draft PR #6 after #5. Do not merge, deploy or publish automatically. The committed
+screenshots still need regeneration before the meeting because this environment could not download
+Chromium locally.
+
+---
+
 ## 2026-09-07 — Isolate unsent member drafts between simulated actors
 
 **Finding and reproduction**
