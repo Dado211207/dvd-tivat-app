@@ -157,6 +157,8 @@ export const T = {
   noCallForYou: 'Za vas trenutno nema otvorenog poziva',
   noCallForYouHint: 'Kada dezurni uputi poziv i vi budete medju primaocima, prikazace se ovdje.',
   yourAnswer: 'Vas odgovor',
+  answerHint: 'Izaberite odgovor, provjerite detalje, pa ga posaljite.',
+  sendAnswer: 'Posalji odgovor',
   changeAnswer: 'Promijeni odgovor',
   etaQuestion: 'Za koliko stizete?',
   etaMinutes: 'minuta',

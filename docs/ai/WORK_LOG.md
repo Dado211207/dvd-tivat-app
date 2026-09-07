@@ -5,6 +5,42 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-07 — Member response confirmation and test-count correction
+
+**Done**
+
+- Continued from `claude/dvd-tivat-app-dev-n8wctb@35a6416` on the separate
+  `codex/member-response-confirmation` branch. The source branch and `main` were not modified.
+- Corrected the member response flow: tapping `Dolazim`, `Dolazim kasnije` or `Ne mogu` now creates
+  a visible draft. The member reviews the destination and, where applicable, the ETA before the
+  explicit `Posalji odgovor` action records anything.
+- Added a browser regression covering arrival via the station, direct arrival, delayed arrival,
+  refusal, and editing an existing answer. Updated the existing flow, accessibility and screenshot
+  paths to use the same explicit confirmation.
+- Corrected `PROJECT_STATE.md` to distinguish 38 CI browser checks from the two desktop-only
+  screenshot-generation checks instead of combining them into one ambiguous total.
+
+**Verified before push**
+
+| Check | Result |
+|---|---|
+| ESLint | Passes |
+| Vitest | **47 passed** |
+| Strict TypeScript + production build | Passes |
+| `git diff --check` | Passes |
+| Playwright | Pending GitHub CI; this environment could not download its Chromium test binary |
+
+The missing local Chromium is an environment limitation, not counted as a browser-test pass. The
+change must not be merged unless GitHub CI executes the browser and accessibility suite on the
+exact branch head and passes.
+
+**Next concrete action**
+
+Open a stacked Draft PR into `claude/dvd-tivat-app-dev-n8wctb`, verify its exact-head CI, then update
+this entry with the run evidence. Do not merge or deploy it automatically.
+
+---
+
 ## 2026-09-07 — Session 1, part 2: prototype implementation and verification
 
 **Done**
