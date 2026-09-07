@@ -64,6 +64,17 @@ Also fixed: `scrollable-region-focusable` at phone width — tables and the moda
 no tab stop, so they were unreachable without a pointer. Added a labelled `ScrollRegion`. And row
 headers were inheriting the column-header styling, rendering member names uppercase and faint.
 
+**Two more found by CI itself, on the first hosted run**
+
+4. The browser job died on a bare `Timed out waiting 120000ms from config.webServer`. `vite preview`
+   binds `localhost` by default, which on the runner can resolve to `::1` while Playwright probes
+   `127.0.0.1` — the server was up and unreachable. Both sides are now pinned to `127.0.0.1`, and
+   the webServer's stdout/stderr are piped so the next such failure is readable rather than a bare
+   timeout. Reproduced the CI path locally with `CI=1`, which forces a fresh server instead of
+   reusing a running one.
+5. The workflow listened to both `push` on every branch and `pull_request`, so each push to a
+   branch with an open PR ran the whole suite twice. Push now covers `main` only.
+
 **Not done / limitations**
 
 - No server, no accounts, no notification of any kind. By design.
@@ -72,6 +83,9 @@ headers were inheriting the column-header styling, rendering member names upperc
   verified in this session and are marked as such.
 - No private preview hosting was available, so the prototype is provided as a runnable project and
   screenshots. It has not been deployed anywhere.
+- Playwright resolves to a version whose bundled Chromium build may not match a pre-provisioned
+  sandbox. `PLAYWRIGHT_CHROMIUM_PATH` points the run at an existing browser; CI installs its own and
+  leaves the variable unset.
 
 **Next concrete action**
 
