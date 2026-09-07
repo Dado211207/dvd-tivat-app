@@ -21,8 +21,27 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 
 ## Status
 
-**Planning: complete.** Implementation: in progress — see [WORK_LOG.md](./WORK_LOG.md) for the
-current entry.
+**Planning complete. Phase 1 prototype complete and verified.** All checks green: 47 unit tests,
+38 browser tests across desktop and phone viewports, axe-core clean on every view in both light and
+dark themes, strict typecheck and lint clean. See [WORK_LOG.md](./WORK_LOG.md) for the evidence and
+for the three real defects the checks caught.
+
+Not deployed anywhere. Not merged. No licence file.
+
+## Where things are
+
+```
+src/domain/      pure rules - types, errors, commands, reducer, selectors, seed, message
+src/storage/     one localStorage key, with every failure mode handled
+src/state/       React binding: injects the clock, ids and persistence
+src/ui/          six views + shared components; hand-written CSS in src/styles
+src/i18n/        every user-facing string, local language, no diacritics
+e2e/             Playwright: flow, accessibility, screenshots (tagged @screenshots)
+```
+
+The rule that matters when changing anything: **`applyCommand` in `src/domain/reducer.ts` is the
+only place state changes.** Adding a rule in a component instead puts it out of reach of the tests
+and one careless edit away from breaking.
 
 ## Non-negotiable rules for anyone continuing this work
 
@@ -67,4 +86,9 @@ The two that most affect the work:
 
 ## Next concrete action
 
-See the last entry of [WORK_LOG.md](./WORK_LOG.md).
+Take the prototype to the meeting with the society and answer
+[PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
+Phase 2 until Q1 and Q12 are answered — the first can invalidate the plan, the second decides
+whether the project is worth continuing at all.
+
+See the last entry of [WORK_LOG.md](./WORK_LOG.md) for detail.

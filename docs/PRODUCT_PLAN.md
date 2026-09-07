@@ -91,6 +91,12 @@ Each is a guess. Each is cheap to change now and expensive to change later.
    it does change hosting cost.
 8. **A8** — There is no legal or institutional obligation forcing a particular dispatch system.
    **If this is wrong it can invalidate the whole project**, and it must be checked first.
+9. **A9** — Only one exercise or incident is open at a time. The prototype enforces this, because
+   for a society of this size two simultaneous open call-outs on one screen is more likely to be a
+   mistake than an intention. If Tivat does run concurrent incidents, this is a one-line change to
+   the rule in `applyCommand`, but it changes the station display and the member's screen too.
+10. **A10** — Members are called out by group and by name from a roster the society maintains
+    itself; there is no automatic selection by availability, skill or proximity.
 
 ### A.6 Deliberate non-goals for the whole product, not just the prototype
 
