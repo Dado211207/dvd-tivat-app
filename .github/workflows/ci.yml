@@ -2,9 +2,11 @@ name: CI
 
 # Standard GitHub-hosted runners only. No paid infrastructure, no self-hosted
 # runners, no external services.
+# Pushes to a branch with an open pull request are covered by the pull_request
+# trigger. Listening to both would run the whole suite twice for one commit.
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
     branches: [main]
 

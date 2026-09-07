@@ -41,8 +41,14 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run build && npm run preview',
+    // Both sides pinned to 127.0.0.1. Left as "localhost", the server can bind
+    // to ::1 while this probe hits 127.0.0.1, and the run dies on a bare
+    // "timed out waiting for webServer" with nothing to go on.
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // Surface the server's own output so a startup failure is readable.
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 });
