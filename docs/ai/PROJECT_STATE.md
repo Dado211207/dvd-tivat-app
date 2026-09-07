@@ -15,7 +15,7 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public. Do not create another.
-- Working branch: `codex/persistence-load-hardening`, stacked on `codex/member-draft-isolation`,
+- Working branch: `codex/dvd-tivat-interface`, stacked on `codex/persistence-load-hardening`, `codex/member-draft-isolation`,
   `codex/dev-toolchain-security`, and `codex/member-response-confirmation` in that order. Keep each
   as a separate review; do not rewrite or force-push any base branch.
 - Default branch: `main`. Do not merge; the owner decides.
@@ -23,11 +23,14 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 
 ## Status
 
-**Planning complete. Phase 1 prototype complete and verified.** All checks green: 49 unit tests;
-40 CI browser checks (20 scenarios in desktop and 20 in phone viewports), plus 2 separate
-desktop-only screenshot-generation checks; axe-core clean on every view in both light and dark
-themes; strict typecheck and lint clean. See [WORK_LOG.md](./WORK_LOG.md) for the evidence and for
-the defects the checks caught.
+**Phase 1 prototype complete; personalised interface under review.** Prior checkpoint PR #6 has
+49 unit and 40 browser/accessibility checks green. This pass adds the DVD Tivat layout, a route-safe
+keyboard skip link, readable-state preservation when writes fail, three browser scenarios and one
+unit regression. Current-head verification belongs in the work log and PR evidence, not inferred
+from the previous checkpoint. See [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md).
+
+The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
+on DVD Tivat; do not implement multi-society routing or treat this assumption as an agreed requirement.
 
 Not deployed anywhere. Not merged. No licence file.
 
@@ -35,10 +38,10 @@ Not deployed anywhere. Not merged. No licence file.
 
 ```
 src/domain/      pure rules - types, errors, commands, reducer, selectors, seed, message
-src/storage/     one localStorage key, with every failure mode handled
+src/storage/     one state key plus a namespaced write probe; known failures tested
 src/state/       React binding: injects the clock, ids and persistence
 src/ui/          six views + shared components; hand-written CSS in src/styles
-src/i18n/        every user-facing string, local language, no diacritics
+src/i18n/        shared labels; additional view copy lives in components; no diacritics
 e2e/             Playwright: flow, accessibility, screenshots (tagged @screenshots)
 ```
 
@@ -70,6 +73,8 @@ and one careless edit away from breaking.
 ## Known limitations (by design, not defects)
 
 - Data lives in one browser's `localStorage`; nothing is shared between devices or users.
+- Use one demonstration tab. Concurrent tabs can overwrite each other's local records; there is no sync.
+- Stored JSON receives a top-level shape check, not complete nested schema validation; do not hand-edit it.
 - No authentication and no permission enforcement anywhere.
 - No notification is sent by any code path.
 - The 15/30/60-minute arrival bands are taken from the reference product and are unconfirmed
@@ -89,8 +94,9 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Review stacked Draft PRs #3, #4, #5 and #6; their browser/accessibility evidence is recorded in
-[WORK_LOG.md](./WORK_LOG.md). After that, take the prototype to the meeting with the society and answer
+Review the personalised interface after stacked Draft PRs #3, #4, #5 and #6; evidence is recorded in
+[WORK_LOG.md](./WORK_LOG.md). Use [DEMO_GUIDE.md](../DEMO_GUIDE.md) for the owner's first test and the
+meeting, then answer
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
 Phase 2 until Q1 and Q12 are answered — the first can invalidate the plan, the second decides
 whether the project is worth continuing at all.

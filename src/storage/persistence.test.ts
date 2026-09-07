@@ -83,6 +83,20 @@ describe('loading', () => {
     expect(loaded.state.members).toHaveLength(state.members.length);
   });
 
+  it('keeps readable saved data when the browser refuses new writes', () => {
+    const { store, data } = fakeStorage({ failWrite: true });
+    install(store);
+    const saved = createSeedState();
+    saved.exercises[0]!.title = 'Previously saved fictional exercise';
+    const raw = JSON.stringify(saved);
+    data.set(STORAGE_KEY, raw);
+
+    const loaded = loadState();
+    expect(loaded.state).toEqual(saved);
+    expect(loaded.warning).toMatch(/ucitani.*nije moguce cuvati/i);
+    expect(data.get(STORAGE_KEY)).toBe(raw);
+  });
+
   it('warns and falls back to the seed when storage is unavailable', () => {
     install(null);
     const result = loadState();

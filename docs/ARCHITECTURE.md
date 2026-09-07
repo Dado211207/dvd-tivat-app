@@ -18,7 +18,7 @@ the path to a real system open. Anything described as future is not built.
 | Styling | **Hand-written CSS** with custom properties | The instruction is original styling for DVD Tivat. A utility framework would drag in someone else's visual language, and a design system is not needed for six screens |
 | Routing | ~40 lines of hash routing | Deep-linkable views for tests and demos, no server rewrite rules, no dependency |
 | Persistence | `localStorage`, one key | Explicitly permitted for a local demonstration. See §5 |
-| State | `useReducer` over a **pure domain reducer** | See §3 — this is the important decision |
+| State | React context with `useState` and a current-state ref, invoking the **pure domain reducer** | See §3; the ref gives successive commands the latest state |
 
 **Runtime dependencies: `react` and `react-dom`. Nothing else.** Everything else is a dev
 dependency. No backend, no database, no account, no paid service, no analytics, no telemetry, no
@@ -28,8 +28,8 @@ network calls of any kind at runtime.
 
 - **Next.js / Remix** — a server we do not have and must not pretend to have.
 - **Tailwind / MUI / Chakra** — imported visual identity; the brief asks for an original one.
-- **Redux / Zustand / TanStack Query** — no server to synchronise with; `useReducer` around a pure
-  function is the whole requirement.
+- **Redux / Zustand / TanStack Query** — no server to synchronise with; the context binding around
+  the pure command reducer is sufficient.
 - **A real backend now** — would produce infrastructure and cost before the requirements exist, and
   is Phase 2 by design.
 - **Vue / Svelte / SolidJS** — all fine; React wins only on the React Native transfer path.
@@ -53,7 +53,7 @@ network calls of any kind at runtime.
 
   src/ui/         components and the six views
 
-  src/i18n/       every user-facing string, in one file, local language, no diacritics
+  src/i18n/       shared labels; view-specific copy also lives in components; no diacritics
 ```
 
 The dependency arrow points one way: `ui → state → domain`. `domain` imports nothing from the

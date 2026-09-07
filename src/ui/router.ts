@@ -2,7 +2,7 @@
  * Minimal hash router.
  *
  * Hash routing keeps the build a plain static folder - no server rewrite rules,
- * so the prototype opens from disk or from any static host. Views stay
+ * so the prototype works on a local HTTP server or static host. Views stay
  * deep-linkable, which browser tests and a live demonstration both need.
  */
 

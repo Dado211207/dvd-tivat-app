@@ -10,6 +10,7 @@
  */
 
 import type { RoleId } from '@/domain/types';
+import { useRef } from 'react';
 import {
   APP_NAME,
   APP_SUBTITLE,
@@ -23,6 +24,7 @@ import {
 import { makeId, useApp } from '@/state/AppStateContext';
 import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
+import { NavIcon } from './ui/components/NavIcon';
 import { hrefFor, ROUTES, useRoute, type Route } from './ui/router';
 import { DispatcherView } from './ui/views/DispatcherView';
 import { DisplayView } from './ui/views/DisplayView';
@@ -44,6 +46,7 @@ export function App() {
   const route = useRoute();
   const { state, run, storageWarning } = useApp();
   const View = VIEWS[route];
+  const mainRef = useRef<HTMLElement>(null);
 
   const current = state.members.find((m) => m.id === state.simulation.actorId);
 
@@ -60,17 +63,17 @@ export function App() {
 
   return (
     <div className="app">
-      <a className="skip-link" href="#main">
+      <a className="skip-link" href="#main" onClick={(event) => {
+        // A fragment navigation would also change our hash route. Move focus
+        // without changing the URL or discarding the current view's draft.
+        event.preventDefault();
+        mainRef.current?.focus();
+        mainRef.current?.scrollIntoView({ block: 'start' });
+      }}>
         Preskoci na sadrzaj
       </a>
 
-      {/* Always visible, on every screen, including the station display. */}
-      <div className="sim-bar">
-        <span className="sim-bar__tag">{SIM_BANNER_TITLE}</span>
-        <span className="sim-bar__text">{SIM_BANNER_TEXT}</span>
-      </div>
-
-      <header className="masthead">
+      <aside className="station-rail" aria-label="DVD Tivat radni prostor">
         <div className="masthead__identity">
           {/* Provisional text identity. No official logo is used. */}
           <div className="masthead__mark" aria-hidden="true">
@@ -78,8 +81,29 @@ export function App() {
           </div>
           <div>
             <div className="masthead__name">{APP_NAME}</div>
-            <div className="masthead__sub">{APP_SUBTITLE}</div>
+            <div className="masthead__sub">Dobrovoljno vatrogasno drustvo</div>
           </div>
+        </div>
+        <p className="rail-caption">RADNI PROSTOR</p>
+        <nav className="nav" aria-label="Glavna navigacija">
+          {ROUTES.map((r) => (
+            <a key={r} className="nav__link" href={hrefFor(r)}
+              aria-current={route === r ? 'page' : undefined} data-testid={`nav-${r}`}>
+              <NavIcon route={r} />{NAV[r]}
+            </a>
+          ))}
+        </nav>
+        <div className="rail-note">
+          <span className="rail-note__label">NAS DOM. NAS TIM.</span>
+          <p>Prostor za vjezbe DVD Tivat.</p>
+          <p className="rail-note__detail">Lokalna demonstracija sa izmisljenim podacima.</p>
+        </div>
+      </aside>
+
+      <header className="masthead">
+        <div className="workspace-heading">
+          <p className="eyebrow">DVD TIVAT / PROTOTIP</p>
+          <p className="workspace-heading__title">{NAV[route]}</p>
         </div>
 
         <div className="actor-switch">
@@ -102,23 +126,15 @@ export function App() {
         </div>
       </header>
 
-      <nav className="nav" aria-label="Glavna navigacija">
-        {ROUTES.map((r) => (
-          <a
-            key={r}
-            className="nav__link"
-            href={hrefFor(r)}
-            aria-current={route === r ? 'page' : undefined}
-            data-testid={`nav-${r}`}
-          >
-            {NAV[r]}
-          </a>
-        ))}
-      </nav>
+      {/* Always visible, including the station display. This is not a login. */}
+      <div className="sim-bar">
+        <span className="sim-bar__tag">{SIM_BANNER_TITLE}</span>
+        <span className="sim-bar__text">{SIM_BANNER_TEXT}</span>
+      </div>
 
       <LiveRegion />
 
-      <main className={route === 'prikaz' ? 'main main--wide' : 'main'} id="main">
+      <main ref={mainRef} tabIndex={-1} className={route === 'prikaz' ? 'main main--wide' : 'main'} id="main">
         {storageWarning ? <Notice tone="error">{storageWarning}</Notice> : null}
         <VisibleNotice />
         {/* A member form contains an unsent local draft. Remount only this view

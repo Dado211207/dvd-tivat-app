@@ -11,12 +11,12 @@ import { createCall, goTo, openApp, switchActor } from './helpers';
 
 const DIR = 'docs/screenshots';
 
-// Tagged so CI can skip it: these tests write files into the repository, and a
-// CI run must not leave the working tree dirty. Regenerate locally with
-// `npm run screenshots`.
+// Tagged separately from assertions. CI captures these as a review artifact;
+// it never commits images automatically. Regenerate with `npm run screenshots`.
 test.describe('screenshots', { tag: '@screenshots' }, () => {
   test('captures every main view with populated fictional data', async ({ page }) => {
     await openApp(page);
+    await page.screenshot({ path: `${DIR}/00-dvd-tivat-overview.png` });
 
     // 1. Composer with recipients chosen, before anything is sent.
     await page.getByLabel(/^Naslov/).fill('Vjezba: dimna komora, rad sa IDA aparatima');
@@ -104,5 +104,11 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await goTo(page, 'clan');
     await expect(page.getByTestId('member-call-title')).toBeVisible();
     await page.screenshot({ path: `${DIR}/09-clan-telefon.png`, fullPage: true });
+    await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
+    await page.getByTestId('eta-30').click();
+    await page.getByTestId('submit-response').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${DIR}/10-clan-pregled-odgovora.png` });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot({ path: `${DIR}/11-clan-tamna-tema.png` });
   });
 });
