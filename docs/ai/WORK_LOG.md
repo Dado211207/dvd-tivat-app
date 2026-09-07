@@ -28,16 +28,18 @@ Record what was done, what was verified, and what the next concrete action is.
 | Vitest | **47 passed** |
 | Strict TypeScript + production build | Passes |
 | `git diff --check` | Passes |
-| Playwright | Pending GitHub CI; this environment could not download its Chromium test binary |
+| GitHub CI run 34146149937, job 101818505766, attempt 1 | **Success** |
+| Playwright + axe in that job | **38 passed** — 19 desktop and 19 phone |
 
-The missing local Chromium is an environment limitation, not counted as a browser-test pass. The
-change must not be merged unless GitHub CI executes the browser and accessibility suite on the
-exact branch head and passes.
+The local environment could not download its Chromium test binary, so no local browser-test pass is
+claimed. GitHub CI installed Chromium and executed the full browser/accessibility suite on the exact
+runtime commit `f09fea1`; all 38 checks passed. A later documentation-only commit records that
+evidence and does not change application or test code.
 
 **Next concrete action**
 
-Open a stacked Draft PR into `claude/dvd-tivat-app-dev-n8wctb`, verify its exact-head CI, then update
-this entry with the run evidence. Do not merge or deploy it automatically.
+Review stacked Draft PR #3 into `claude/dvd-tivat-app-dev-n8wctb`. Do not merge or deploy it
+automatically.
 
 ---
 
