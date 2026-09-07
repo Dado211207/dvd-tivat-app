@@ -37,12 +37,16 @@ project was unnecessary risk for anyone running the prototype locally.
 | Vitest 5 | **47 passed** |
 | Strict TypeScript + Vite 8 production build | Passes |
 | `git diff --check` | Passes |
-| Browser/accessibility CI | Pending; do not count as passed until GitHub runs it |
+| GitHub CI run 34147837288, job 101823596636, attempt 1 | **Success** |
+| Playwright + axe in that job | **38 passed** — 19 desktop and 19 phone |
+
+GitHub CI installed Chromium and exercised the browser/accessibility suite on the exact toolchain
+commit `4f070a5`; all 38 checks passed. A later documentation-only commit records that evidence and
+does not change dependencies, application code or tests.
 
 **Next concrete action**
 
-Open a stacked Draft PR, require an exact-head GitHub CI pass, and leave it unmerged for owner
-review.
+Review stacked Draft PR #4. Leave it unmerged and undeployed for owner review.
 
 ---
 

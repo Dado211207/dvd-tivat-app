@@ -89,8 +89,8 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Review Draft PR #3, which has exact-head browser/accessibility evidence recorded in
-[WORK_LOG.md](./WORK_LOG.md). After that, take the prototype to the meeting with the society and answer
+Review Draft PR #3 and the stacked toolchain Draft PR #4; their browser/accessibility evidence is
+recorded in [WORK_LOG.md](./WORK_LOG.md). After that, take the prototype to the meeting with the society and answer
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
 Phase 2 until Q1 and Q12 are answered — the first can invalidate the plan, the second decides
 whether the project is worth continuing at all.
