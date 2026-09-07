@@ -53,3 +53,20 @@ test('overview vehicle count changes only with a recorded movement', async ({ pa
   const total = Number(initial.split('/')[1]);
   await expect(page.getByTestId('overview-vehicles')).toHaveText(`${inStation - 1} / ${total}`);
 });
+
+test('member copy distinguishes an unsent answer, a recorded answer and an edit', async ({ page }) => {
+  await openApp(page);
+  await createCall(page);
+  await switchActor(page, 'Ivan Radulovic');
+  await goTo(page, 'clan');
+  const note = page.getByTestId('response-storage-note');
+  await expect(note).toContainText('Odgovor jos nije zabiljezen');
+  await page.getByTestId('answer-DOLAZIM').click();
+  await expect(note).toContainText('Odgovor jos nije zabiljezen');
+  await page.getByTestId('submit-response').click();
+  await expect(note).toContainText('Odgovor je zabiljezen samo u ovom pregledacu');
+  await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
+  await expect(note).toContainText('Izmjena jos nije zabiljezena');
+  await page.getByRole('button', { name: 'Odustani', exact: true }).click();
+  await expect(note).toContainText('Odgovor je zabiljezen samo u ovom pregledacu');
+});

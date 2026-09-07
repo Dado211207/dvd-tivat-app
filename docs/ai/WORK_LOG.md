@@ -27,7 +27,16 @@ The simulation disclosure remains visible on every view. Added DESIGN_DIRECTION 
   now proceed even if writes fail; existing data load with a truthful warning. No stored state is
   overwritten during loading. Full nested validation and multi-tab synchronisation remain limitations.
 
-**Verification:** local and current-head CI results will be recorded in the PR after the first run.
+**First verification on runtime head `6016df4`:** lint, typecheck, build and **50 unit tests** passed
+locally and on GitHub. CI run **34167989821**, job **101882738158**, attempt 1: **46 browser/axe
+checks and 2 screenshot scenarios passed**. Twelve PNGs in artifact **10034805633**, ZIP SHA-256
+`01e8d04406d3a0bc1e2e128727fa8e28d5a69ca435b27ea9c7626c0bc828ebfb`, downloaded and matched before review.
+
+**Visual-review follow-up:** the member notice still claimed an answer had been recorded before
+submission (pre-existing copy). It now distinguishes unsent, recorded and editing states, covered
+by one browser scenario in both viewports. Full-page screenshot capture now scrolls to the top so
+the sticky rail does not appear halfway down the image. Final follow-up CI belongs in the PR evidence.
+
 The interactive cloud browser could not open this environment's localhost (`ERR_BLOCKED_BY_CLIENT`),
 so browser verification and refreshed images use the repository's existing Playwright suite on a
 standard GitHub runner. Added a CI screenshot artifact step; no deployment or automatic image commit.
