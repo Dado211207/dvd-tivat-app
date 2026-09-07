@@ -157,6 +157,42 @@ test('a member reviews every answer and its details before submitting', async ({
   await expect(page.getByTestId('current-answer')).not.toContainText('direktno na lokaciju');
 });
 
+test('an unsent member draft never crosses to another simulated actor', async ({ page }) => {
+  await openApp(page);
+  await createCall(page);
+  await switchActor(page, 'Ivan Radulovic');
+  await goTo(page, 'clan');
+
+  await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
+  await page.getByTestId('eta-60').click();
+  await page.getByTestId('direct-to-location').check();
+  await expect(page.getByTestId('submit-response')).toBeVisible();
+
+  // Changing the simulated person represents a different user. Their form
+  // must begin empty and must not expose Ivan's unsent answer or destination.
+  await switchActor(page, 'Petar Krivokapic');
+  await expect(page.getByTestId('current-member')).toHaveText('Petar Krivokapic');
+  await expect(page.getByTestId('submit-response')).toHaveCount(0);
+  await expect(page.getByTestId('direct-to-location')).toHaveCount(0);
+  await expect(page.getByTestId('eta-60')).toHaveCount(0);
+  await expect(page.getByTestId('answer-DOLAZIM')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('answer-DOLAZIM_KASNIJE')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  await expect(page.getByTestId('answer-NE_MOGU')).toHaveAttribute('aria-pressed', 'false');
+
+  // The old draft was never submitted and is discarded rather than restored
+  // when the first simulated person is selected again.
+  await switchActor(page, 'Ivan Radulovic');
+  await expect(page.getByTestId('submit-response')).toHaveCount(0);
+  await expect(page.getByTestId('direct-to-location')).toHaveCount(0);
+
+  await switchActor(page, 'Ana Vukovic');
+  await goTo(page, 'dezurni');
+  await expect(page.locator('.total--unknown .total__num')).toHaveText('4');
+});
+
 test('a closed exercise cannot be answered', async ({ page }) => {
   await openApp(page);
   await createCall(page);
