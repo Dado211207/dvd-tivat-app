@@ -5,6 +5,47 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-07 — Development toolchain security update
+
+**Finding**
+
+`npm audit --omit=dev` reported zero production vulnerabilities, but the full audit reported five
+development-only findings: three moderate, one high and one critical. They affected the local
+Vite/esbuild development server and the optional Vitest UI server. The application ships no Node
+server, so this was not a runtime-app vulnerability, but leaving known vulnerable tools in the
+project was unnecessary risk for anyone running the prototype locally.
+
+**Done**
+
+- Upgraded the compatible toolchain set together: Vite 5 to 8.2.2, Vitest 2 to 5.0.0, and the React
+  Vite plugin 4 to 6.1.1. No `--force` or `--legacy-peer-deps` was used.
+- Rebuilt `package-lock.json` from the declared dependency set instead of preserving an old peer
+  graph that npm correctly refused to reconcile.
+- Added the Node version range required by Vitest 5 and documented it in the README.
+- Updated the architecture document's current Vite version. The earlier Session 1 entry remains
+  unchanged as historical evidence of what was originally scaffolded.
+- Corrected the old claim that Vite output can be opened directly from disk. The generated HTML
+  uses root-relative `/assets/...` URLs; it must be served by `npm run preview` or a static host.
+
+**Verified before push**
+
+| Check | Result |
+|---|---|
+| `npm audit --omit=dev` | **0 vulnerabilities** |
+| Full `npm audit` | **0 vulnerabilities** |
+| ESLint | Passes |
+| Vitest 5 | **47 passed** |
+| Strict TypeScript + Vite 8 production build | Passes |
+| `git diff --check` | Passes |
+| Browser/accessibility CI | Pending; do not count as passed until GitHub runs it |
+
+**Next concrete action**
+
+Open a stacked Draft PR, require an exact-head GitHub CI pass, and leave it unmerged for owner
+review.
+
+---
+
 ## 2026-09-07 — Member response confirmation and test-count correction
 
 **Done**

@@ -11,7 +11,7 @@ the path to a real system open. Anything described as future is not built.
 |---|---|---|
 | Language | **TypeScript** (strict) | The domain rules are the valuable part of this repository. Types are what stop `Dolazim` from being assignable to a vehicle status |
 | UI | **React 18** | Boring, well documented, and the one mainstream UI library whose skills transfer directly to **React Native** if Phase 3 goes ahead |
-| Build/dev | **Vite 5** | Static output, no server, no configuration ceremony. `npm run build` produces a folder that can be opened from disk or from any static host |
+| Build/dev | **Vite 8** | Static output, no application server and little configuration. `npm run build` produces a folder for any static host; `npm run preview` serves it locally for review |
 | Unit tests | **Vitest** | Same transform pipeline as the build, so tests cannot pass on code the build would reject |
 | Browser tests | **Playwright** (Chromium) | Real browser, real keyboard, real viewports; runs headless in CI on a standard GitHub runner |
 | Accessibility | **axe-core** via `@axe-core/playwright` | Automated checks inside the same browser run, against real rendered state |

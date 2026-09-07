@@ -15,9 +15,9 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public. Do not create another.
-- Working branch: `codex/member-response-confirmation`, based on
-  `claude/dvd-tivat-app-dev-n8wctb@35a6416`. Keep this as a separate review; do not rewrite or
-  force-push the Claude branch.
+- Working branch: `codex/dev-toolchain-security`, stacked on
+  `codex/member-response-confirmation`. Keep each as a separate review; do not rewrite or force-push
+  either base branch.
 - Default branch: `main`. Do not merge; the owner decides.
 - No `LICENSE` file. The owner has not chosen a licence and one must not be added for them.
 
