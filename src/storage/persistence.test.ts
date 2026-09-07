@@ -102,10 +102,12 @@ describe('loading', () => {
     const { store, data } = fakeStorage();
     install(store);
     store.setItem('__dvd_tivat_probe__', 'belongs-to-another-application');
+    store.setItem(`${STORAGE_KEY}:write-probe`, 'pre-existing-value');
 
     loadState();
 
     expect(data.get('__dvd_tivat_probe__')).toBe('belongs-to-another-application');
+    expect(data.get(`${STORAGE_KEY}:write-probe`)).toBe('pre-existing-value');
   });
 
   it('falls back to the seed on unparseable data instead of crashing', () => {

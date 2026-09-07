@@ -60,12 +60,31 @@ function storageOrNull(): Storage | null {
  * that refuses storage outright.
  */
 function storageAcceptsWrites(storage: Storage): boolean {
-  const probe = '__dvd_tivat_probe__';
+  // Stay inside this prototype's namespace, and restore any value already at
+  // the probe key. A generic fixed key can belong to another application on
+  // the same origin; overwriting and deleting it would corrupt unrelated data.
+  const probe = `${STORAGE_KEY}:write-probe`;
+  let previous: string | null = null;
+  let previousRead = false;
   try {
+    previous = storage.getItem(probe);
+    previousRead = true;
     storage.setItem(probe, '1');
-    storage.removeItem(probe);
+    if (previous === null) storage.removeItem(probe);
+    else storage.setItem(probe, previous);
     return true;
   } catch {
+    // A backend may mutate and then throw. Best-effort restoration prevents a
+    // failed capability check from becoming a destructive write of its own.
+    if (previousRead) {
+      try {
+        if (previous === null) storage.removeItem(probe);
+        else storage.setItem(probe, previous);
+      } catch {
+        // The caller will report storage as unavailable; no stronger claim is
+        // possible when the browser also refuses the restoration.
+      }
+    }
     return false;
   }
 }
@@ -76,7 +95,15 @@ export function loadState(): LoadResult {
     return { state: createSeedState(), status: 'NEDOSTUPNO', warning: WARNINGS.NEDOSTUPNO };
   }
 
-  const raw = storage.getItem(STORAGE_KEY);
+  let raw: string | null;
+  try {
+    raw = storage.getItem(STORAGE_KEY);
+  } catch {
+    // Access can be revoked between the capability probe and the real read.
+    // Starting with the fictional seed plus a visible warning is safer than
+    // crashing the entire prototype during React initialisation.
+    return { state: createSeedState(), status: 'NEDOSTUPNO', warning: WARNINGS.NEDOSTUPNO };
+  }
   if (raw === null) {
     return { state: createSeedState(), status: 'PRVO_POKRETANJE', warning: null };
   }
