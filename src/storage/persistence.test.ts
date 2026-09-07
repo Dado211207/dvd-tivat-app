@@ -10,12 +10,14 @@ import { SCHEMA_VERSION } from '@/domain/types';
 import { clearStoredState, loadState, saveState, STORAGE_KEY } from './persistence';
 
 /** A minimal in-memory Storage that can be told to misbehave. */
-function fakeStorage(options: { failRead?: boolean; failWrite?: boolean } = {}) {
+function fakeStorage(options: { failRead?: boolean; failReadKey?: string; failWrite?: boolean } = {}) {
   const data = new Map<string, string>();
   return {
     store: {
       getItem: (key: string) => {
-        if (options.failRead) throw new DOMException('SecurityError');
+        if (options.failRead || options.failReadKey === key) {
+          throw new DOMException('SecurityError');
+        }
         return data.get(key) ?? null;
       },
       setItem: (key: string, value: string) => {
@@ -90,7 +92,10 @@ describe('loading', () => {
   });
 
   it('warns instead of crashing when reading storage is refused after access succeeds', () => {
-    install(fakeStorage({ failRead: true }).store);
+    // The namespaced capability probe is readable and writable. Only the real
+    // state read fails, proving the catch after the probe rather than the
+    // earlier general-unavailability branch.
+    install(fakeStorage({ failReadKey: STORAGE_KEY }).store);
 
     expect(() => loadState()).not.toThrow();
     const result = loadState();
