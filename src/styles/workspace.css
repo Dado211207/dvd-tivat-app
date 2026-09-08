@@ -468,16 +468,15 @@ body {
   color: var(--c-ink-faint);
 }
 
-.station-overview__fact-note {
+.station-overview__facts dd.station-overview__fact-note {
   display: block;
-  overflow: hidden;
   margin: 0;
+  font-family: var(--font);
   font-size: 0.62rem;
   font-weight: 400;
   line-height: 1.35;
   color: var(--c-ink-faint);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 /* -------------------------------------------------------------- work cards */
@@ -956,7 +955,7 @@ dialog {
     font-size: 1.4rem;
   }
 
-  .station-overview__fact-note {
+  .station-overview__facts dd.station-overview__fact-note {
     display: none;
   }
 

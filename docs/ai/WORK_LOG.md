@@ -43,6 +43,15 @@ The `Izaslo` chip measured 4.38:1 against its pale accent surface. That run was 
 commit changes the light-theme accent from `#087b8c` to `#077687`, a measured 4.68:1 on that surface;
 the existing dark-theme token is unchanged and no test or semantic status is changed.
 
+**First complete browser pass and visual finding:** CI run `34234493087`, job `102088592524`,
+attempt 1, passed all 50 unit tests, 48 browser/accessibility scenarios and two screenshot scenarios.
+Screenshot artifact `10059284486` matched GitHub's recorded ZIP SHA-256
+`4eb17435f0b4c307e62deb09a2f2b0c308329f037317babcb6e37c47f12585ac`. Visual inspection then
+found that the three summary fact notes rendered at the numeric `dd` size and were ellipsised. The
+cause was selector specificity after changing those notes from `span` to semantic `dd`. The next
+commit gives the note selector equal structural specificity and allows the short copy to wrap; this
+is a visual correction even though the automated suite was already green.
+
 **Next:** push one atomic branch commit, open a Draft PR, run the existing 48 browser/accessibility
 checks and two screenshot scenarios, then visually inspect the generated desktop and phone PNGs.
 Do not merge or create the replacement video before owner review.
