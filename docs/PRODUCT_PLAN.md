@@ -12,6 +12,12 @@ built), [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) (where the work currently s
 
 ## 0. One paragraph
 
+**Owner update, 2026-09-07:** the current expectation is that only DVD Tivat will use the app.
+This remains **unconfirmed by the society**. Personalise Phase 1 for DVD Tivat; do not add an
+organisation switcher, neighbouring-society routing or multi-tenant administration. Ask the society
+to confirm this at the meeting before treating it as a production constraint. See
+[DESIGN_DIRECTION.md](./DESIGN_DIRECTION.md) and [DEMO_GUIDE.md](./DEMO_GUIDE.md).
+
 A coordination tool for a volunteer fire society: someone authorised composes a call-out, chooses
 exactly who it goes to, confirms it, and then watches real answers arrive — while vehicle
 departures, the incident's operational status and the society's own record of what happened are

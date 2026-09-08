@@ -6,17 +6,24 @@
  * `npx playwright test screenshots --project=desktop`.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { createCall, goTo, openApp, switchActor } from './helpers';
 
 const DIR = 'docs/screenshots';
 
-// Tagged so CI can skip it: these tests write files into the repository, and a
-// CI run must not leave the working tree dirty. Regenerate locally with
-// `npm run screenshots`.
+async function capture(page: Page, name: string, fullPage = true) {
+  // A sticky rail is painted at the current scroll offset in a full-page
+  // capture. Start at the top so the image describes one coherent page.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: `${DIR}/${name}`, fullPage });
+}
+
+// Tagged separately from assertions. CI captures these as a review artifact;
+// it never commits images automatically. Regenerate with `npm run screenshots`.
 test.describe('screenshots', { tag: '@screenshots' }, () => {
   test('captures every main view with populated fictional data', async ({ page }) => {
     await openApp(page);
+    await capture(page, '00-dvd-tivat-overview.png', false);
 
     // 1. Composer with recipients chosen, before anything is sent.
     await page.getByLabel(/^Naslov/).fill('Vjezba: dimna komora, rad sa IDA aparatima');
@@ -27,7 +34,7 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.getByLabel(/^Lokacija prijavioca/).fill('Vatrogasni dom (izmisljeno)');
     await page.getByRole('checkbox', { name: /Nosioci IDA aparata/ }).check();
     await page.getByRole('checkbox', { name: /^Nikola Djukic/ }).check();
-    await page.screenshot({ path: `${DIR}/01-dezurni-nova-vjezba.png`, fullPage: true });
+    await capture(page, '01-dezurni-nova-vjezba.png');
 
     // 2. The confirmation preview: exact message, exact recipients.
     await page.getByRole('button', { name: 'Pregledaj i posalji' }).click();
@@ -39,7 +46,7 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await switchActor(page, 'Ivan Radulovic');
     await goTo(page, 'clan');
     await expect(page.getByTestId('member-call-title')).toBeVisible();
-    await page.screenshot({ path: `${DIR}/03-clan-poziv.png`, fullPage: true });
+    await capture(page, '03-clan-poziv.png');
 
     // Populate a mixed, realistic-looking set of answers.
     await page.getByTestId('answer-DOLAZIM').click();
@@ -66,21 +73,21 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.getByTestId('depart-NV-1').click();
     await page.getByLabel(/^Svrha/).fill('Vjezba - dovoz opreme');
     await page.getByRole('button', { name: 'Potvrdi' }).click();
-    await page.screenshot({ path: `${DIR}/05-vozila.png`, fullPage: true });
+    await capture(page, '05-vozila.png');
 
     // 5. The duty officer watching the response come in.
     await goTo(page, 'dezurni');
     await page.getByRole('button', { name: 'Ekipa krenula', exact: true }).click();
-    await page.screenshot({ path: `${DIR}/04-dezurni-odzivi.png`, fullPage: true });
+    await capture(page, '04-dezurni-odzivi.png');
 
     // 6. The station display.
     await goTo(page, 'prikaz');
     await expect(page.getByTestId('display-title')).toBeVisible();
-    await page.screenshot({ path: `${DIR}/06-prikaz-u-domu.png`, fullPage: true });
+    await capture(page, '06-prikaz-u-domu.png');
 
     // 7. Roster.
     await goTo(page, 'clanovi');
-    await page.screenshot({ path: `${DIR}/07-clanovi.png`, fullPage: true });
+    await capture(page, '07-clanovi.png');
 
     // 8. History and the activity log, after closing.
     await goTo(page, 'dezurni');
@@ -88,7 +95,7 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.getByLabel(/^Razlog/).fill('Vjezba zavrsena po planu.');
     await page.getByRole('button', { name: 'Potvrdi', exact: true }).click();
     await goTo(page, 'istorija');
-    await page.screenshot({ path: `${DIR}/08-istorija.png`, fullPage: true });
+    await capture(page, '08-istorija.png');
   });
 
   test('captures the member view at phone size', async ({ page }) => {
@@ -103,6 +110,12 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await switchActor(page, 'Ivan Radulovic');
     await goTo(page, 'clan');
     await expect(page.getByTestId('member-call-title')).toBeVisible();
-    await page.screenshot({ path: `${DIR}/09-clan-telefon.png`, fullPage: true });
+    await capture(page, '09-clan-telefon.png');
+    await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
+    await page.getByTestId('eta-30').click();
+    await page.getByTestId('submit-response').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${DIR}/10-clan-pregled-odgovora.png` });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.screenshot({ path: `${DIR}/11-clan-tamna-tema.png` });
   });
 });

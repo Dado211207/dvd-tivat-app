@@ -23,6 +23,7 @@ import { makeId, useApp, useStableCommandId } from '@/state/AppStateContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DeliveryNotice } from '../components/DeliveryNotice';
 import { MapLink } from '../components/MapLink';
+import { StationOverview } from '../components/StationOverview';
 import {
   AnswerChip,
   Chip,
@@ -43,6 +44,7 @@ export function DispatcherView() {
   return (
     <>
       <h1 className="sr-only">{T.dispatcherTitle}</h1>
+      <StationOverview />
       {exercise ? <ActiveExercise /> : <Composer />}
     </>
   );

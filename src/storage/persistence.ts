@@ -20,6 +20,7 @@ export type LoadStatus =
   | 'UCITANO'
   | 'PRVO_POKRETANJE'
   | 'NEDOSTUPNO'
+  | 'SAMO_CITANJE'
   | 'OSTECENI_PODACI'
   | 'NEPOZNATA_VERZIJA';
 
@@ -35,6 +36,8 @@ const WARNINGS: Record<LoadStatus, string | null> = {
   PRVO_POKRETANJE: null,
   NEDOSTUPNO:
     'Ovaj pregledac ne dozvoljava cuvanje podataka. Prototip radi, ali ce se podaci izgubiti pri osvjezavanju stranice.',
+  SAMO_CITANJE:
+    'Sacuvani probni podaci su ucitani, ali izmjene trenutno nije moguce cuvati. Nove promjene ce se izgubiti pri osvjezavanju stranice.',
   OSTECENI_PODACI:
     'Sacuvani probni podaci nisu citljivi i vraceni su na pocetno stanje. Nista nije poslato niti izgubljeno izvan ovog pregledaca.',
   NEPOZNATA_VERZIJA:
@@ -91,9 +94,12 @@ function storageAcceptsWrites(storage: Storage): boolean {
 
 export function loadState(): LoadResult {
   const storage = storageOrNull();
-  if (!storage || !storageAcceptsWrites(storage)) {
+  if (!storage) {
     return { state: createSeedState(), status: 'NEDOSTUPNO', warning: WARNINGS.NEDOSTUPNO };
   }
+  // A full quota can still allow reads. Never replace readable saved work
+  // with the seed just because a new write would be refused.
+  const writable = storageAcceptsWrites(storage);
 
   let raw: string | null;
   try {
@@ -105,7 +111,9 @@ export function loadState(): LoadResult {
     return { state: createSeedState(), status: 'NEDOSTUPNO', warning: WARNINGS.NEDOSTUPNO };
   }
   if (raw === null) {
-    return { state: createSeedState(), status: 'PRVO_POKRETANJE', warning: null };
+    return writable
+      ? { state: createSeedState(), status: 'PRVO_POKRETANJE', warning: null }
+      : { state: createSeedState(), status: 'NEDOSTUPNO', warning: WARNINGS.NEDOSTUPNO };
   }
 
   let parsed: unknown;
@@ -137,7 +145,9 @@ export function loadState(): LoadResult {
     };
   }
 
-  return { state: parsed, status: 'UCITANO', warning: null };
+  return writable
+    ? { state: parsed, status: 'UCITANO', warning: null }
+    : { state: parsed, status: 'SAMO_CITANJE', warning: WARNINGS.SAMO_CITANJE };
 }
 
 export type SaveResult = { ok: true } | { ok: false; warning: string };

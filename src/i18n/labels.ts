@@ -1,5 +1,5 @@
 /**
- * Every user-facing string, in one place.
+ * Shared user-facing labels. View-specific explanatory copy lives with its view.
  *
  * Local language, WITHOUT diacritics, per the brief. Repository documentation
  * and code comments stay in English.
@@ -21,7 +21,7 @@ export const APP_SUBTITLE = 'Prototip za vjezbe';
 
 export const SIM_BANNER_TITLE = 'SIMULACIJA';
 export const SIM_BANNER_TEXT =
-  'Izmisljeni clanovi i izmisljeni podaci. Prototip ne salje nijedno obavjestenje - ni push, ni SMS, ni poziv. Prebacivanje uloge je demonstracija, nije prijava na nalog.';
+  'Izmisljeni podaci. Nema push, SMS ni telefonskih poziva. Uloge su simulirane; ovo nije prijava na nalog.';
 
 export const LOCAL_DATA_NOTE =
   'Podaci se cuvaju samo u ovom pregledacu, na ovom uredjaju. Nista se ne sinhronizuje izmedju uredjaja niti se salje na server. Brisanje podataka pregledaca brise i ovo.';

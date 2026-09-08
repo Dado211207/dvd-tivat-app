@@ -232,8 +232,14 @@ export function MemberView() {
             ) : null}
 
             <Notice tone="warn">
-              Odgovor je zabiljezen samo lokalno, u ovom pregledacu. Ne postoji server koji ga je
-              primio i potvrdio, i dezurni ga vidi samo zato sto gleda isti pregledac.
+              <p data-testid="response-storage-note">
+                {editing
+                  ? 'Izmjena jos nije zabiljezena. Prethodni odgovor ostaje dok ne posaljete izmjenu.'
+                  : existing
+                    ? 'Odgovor je zabiljezen samo u ovom pregledacu.'
+                    : 'Odgovor jos nije zabiljezen. Izaberite ga, pa pritisnite Posalji odgovor.'}
+                {' '}Nema potvrde servera niti sinhronizacije sa drugim uredjajima.
+              </p>
             </Notice>
           </section>
         </>

@@ -5,6 +5,55 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-07 — Personalise the DVD Tivat workspace and prepare the demonstration
+
+**Owner direction:** implement the outstanding review, mobile/keyboard checks, screenshots and
+demonstration scenario. Personalise the modern interface for DVD Tivat. Use by this society alone
+is an expectation, not confirmed; recorded in PRODUCT_PLAN and PROJECT_STATE. Claude is temporarily
+unavailable; Codex is continuing on `codex/dvd-tivat-interface`, preserving every previous branch.
+
+**Changes:** navy society rail, responsive six-item navigation, system light/dark working surfaces,
+original sea-line decoration and a team overview whose fictional record counts use existing selectors.
+No official logo, remote asset, dependency, authentication, alert channel or operational rule added.
+The simulation disclosure remains visible on every view. Added DESIGN_DIRECTION and DEMO_GUIDE.
+
+**Two corrections found during the requested review:**
+
+- The skip link's `#main` fragment changed the hash route to the default screen. It now moves keyboard
+  focus to main without changing the route or losing an unsent member draft. Added an HTTP browser
+  interaction test, compact-width navigation checks and a count-independence scenario.
+- A failed write probe discarded readable saved work in favour of the seed. A pre-fix persistence
+  run showed **1 failed, 12 passed**, with the saved exercise title replaced by the seed title. Reads
+  now proceed even if writes fail; existing data load with a truthful warning. No stored state is
+  overwritten during loading. Full nested validation and multi-tab synchronisation remain limitations.
+
+**First verification on runtime head `6016df4`:** lint, typecheck, build and **50 unit tests** passed
+locally and on GitHub. CI run **34167989821**, job **101882738158**, attempt 1: **46 browser/axe
+checks and 2 screenshot scenarios passed**. Twelve PNGs in artifact **10034805633**, ZIP SHA-256
+`01e8d04406d3a0bc1e2e128727fa8e28d5a69ca435b27ea9c7626c0bc828ebfb`, downloaded and matched before review.
+
+**Visual-review follow-up:** the member notice still claimed an answer had been recorded before
+submission (pre-existing copy). It now distinguishes unsent, recorded and editing states, covered
+by one browser scenario in both viewports. Full-page screenshot capture now scrolls to the top so
+the sticky rail does not appear halfway down the image. Final follow-up CI belongs in the PR evidence.
+
+**Follow-up verification on `dc38f1a`:** GitHub CI run **34168251914**, job **101883472581**, attempt
+1: lint, strict typecheck, production build, **50 unit tests, 48 browser/axe checks and 2 screenshot
+scenarios all passed**. Twelve screenshots in artifact **10034881906** were downloaded, the ZIP
+matched SHA-256 `b8e9ed27f4816caf697e6e8d337f4a0dd615394bc3270a2295f90d29a97a12a0`, and the corrected desktop
+and phone images were visually reviewed before being committed. The artifact contained only the
+12 expected PNG basenames. No test was re-run; both CI runs were attempt 1.
+
+The interactive cloud browser could not open this environment's localhost (`ERR_BLOCKED_BY_CLIENT`),
+so browser verification and refreshed images use the repository's existing Playwright suite on a
+standard GitHub runner. Added a CI screenshot artifact step; no deployment or automatic image commit.
+The first local typecheck caught an optional indexed test value; corrected before CI.
+
+**Next:** review Draft PR #7 and the committed screenshots, then have the owner run the demo.
+Keep all PRs Draft and unmerged; no publishing, licence, paid service or real member data.
+
+---
+
 ## 2026-09-07 — Harden local storage startup checks
 
 **Finding and reproduction**
