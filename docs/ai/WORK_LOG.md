@@ -5,6 +5,41 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-08 — Final review, ordered merge and post-merge verification
+
+**Owner approval:** after the combined-tree review reported no blocker, the owner explicitly
+approved merging the reviewed stack.
+
+**Review before merge:** the complete PR #7 tree matched the remote branch tree. Local lint,
+strict typecheck, 50 unit tests and the production build passed. Both the full and runtime-only npm
+audits reported zero known vulnerabilities. The public-tree scan found no real phone number,
+email, credential, member record or private incident data. The only runtime external URL is the
+OpenStreetMap search link opened by an explicit user click. Exact-head CI run `34200629847`, job
+`101978356399`, attempt 1, passed 48 browser/accessibility checks and 2 screenshot scenarios.
+
+**Merge:** PRs #1, #3, #4, #5, #6 and #7 were merged with merge commits in that order. Each next
+PR was retargeted to `main` only after its verified base landed, preserving the tested ancestry.
+Final `main` is `5c9acb6853543d61d6219fe377ba466e83ddf897`. GitHub compare reported the PR #7 branch ahead by
+zero with no changed files, proving the merged tree is the reviewed final tree. PR #2 was not part
+of the application stack and remains unmerged.
+
+**Post-merge verification:** CI run `34204300780`, job `101990099552`, push event, attempt 1,
+completed successfully on the exact final `main` commit. Dependency installation reported zero
+vulnerabilities; lint, strict typecheck and production build passed; 50 unit tests, 48 Chromium
+browser/accessibility checks and 2 screenshot scenarios passed. Artifact `10047140105` contains
+12 PNGs, is 2,303,291 bytes, and has GitHub-recorded ZIP SHA-256
+`5f3251f5f910889af95809ef65dd6c2f43391a8a0f9b4fe86069be10c8efdda7`.
+
+**Unchanged limits:** no deployment, licence, account, backend, notification channel, paid service
+or real data was added. Single-society use is still the owner's expectation, not a confirmed DVD
+Tivat requirement.
+
+**Next:** owner testing from `main` using `docs/DEMO_GUIDE.md`. Record concrete feedback before
+changing the prototype. Do not begin production work before PRODUCT_PLAN questions Q1 and Q12 are
+answered with the society.
+
+---
+
 ## 2026-09-07 — Personalise the DVD Tivat workspace and prepare the demonstration
 
 **Owner direction:** implement the outstanding review, mobile/keyboard checks, screenshots and

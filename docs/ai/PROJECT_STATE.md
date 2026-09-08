@@ -3,7 +3,7 @@
 Single source of truth for resuming this work without reading the conversation that produced it.
 **Update this file in the same commit as the change it describes.**
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ---
 
@@ -15,25 +15,26 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public. Do not create another.
-- Working branch: `codex/dvd-tivat-interface`, stacked on `codex/persistence-load-hardening`, `codex/member-draft-isolation`,
-  `codex/dev-toolchain-security`, and `codex/member-response-confirmation` in that order. Keep each
-  as a separate review; do not rewrite or force-push any base branch.
-- Default branch: `main`. Do not merge; the owner decides.
+- Verified application state: `main@5c9acb6853543d61d6219fe377ba466e83ddf897`.
+- PRs #1, #3, #4, #5, #6 and #7 were merged with merge commits, in that order, after the owner's
+  explicit approval. Their source branches were not rewritten or deleted.
+- PR #2 is separate historical continuity documentation. It is not part of the application stack
+  and remains unmerged pending closure as superseded.
 - No `LICENSE` file. The owner has not chosen a licence and one must not be added for them.
 
 ## Status
 
-**Phase 1 prototype complete; personalised interface ready for owner review.** On runtime head
-`dc38f1a`, 50 unit tests and 48 browser/accessibility checks passed; 12 current screenshots were
-captured on the same head. This pass adds the DVD Tivat layout, a route-safe keyboard skip link,
-readable-state preservation when writes fail, four browser scenarios and one unit regression.
-See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
+**Phase 1 prototype complete, merged and ready for supervised owner testing.** The final merged
+tree is byte-for-byte the reviewed PR #7 tree. Post-merge CI run `34204300780`, job
+`101990099552`, attempt 1, passed lint, strict typecheck, production build, 50 unit tests,
+48 browser/accessibility checks and 2 screenshot scenarios. The run produced 12 review PNGs in
+artifact `10047140105`. See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
 [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
 
 The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
 on DVD Tivat; do not implement multi-society routing or treat this assumption as an agreed requirement.
 
-Not deployed anywhere. Not merged. No licence file.
+Not deployed anywhere. No licence file. No real alert, account or member data exists.
 
 ## Where things are
 
@@ -95,9 +96,10 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Review Draft PR #7 after stacked Draft PRs #3, #4, #5 and #6; evidence is recorded in
-[WORK_LOG.md](./WORK_LOG.md). Use [DEMO_GUIDE.md](../DEMO_GUIDE.md) for the owner's first test and the
-meeting, then answer
+The owner should run the merged prototype locally from `main`, using
+[DEMO_GUIDE.md](../DEMO_GUIDE.md), and record each issue with the screen, exact steps, expected
+result and actual result. Fix confirmed defects on a new branch, then use the same guide for the
+society meeting and answer
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
 Phase 2 until Q1 and Q12 are answered — the first can invalidate the plan, the second decides
 whether the project is worth continuing at all.
