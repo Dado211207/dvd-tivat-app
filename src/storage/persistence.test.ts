@@ -10,11 +10,16 @@ import { SCHEMA_VERSION } from '@/domain/types';
 import { clearStoredState, loadState, saveState, STORAGE_KEY } from './persistence';
 
 /** A minimal in-memory Storage that can be told to misbehave. */
-function fakeStorage(options: { failWrite?: boolean } = {}) {
+function fakeStorage(options: { failRead?: boolean; failReadKey?: string; failWrite?: boolean } = {}) {
   const data = new Map<string, string>();
   return {
     store: {
-      getItem: (key: string) => data.get(key) ?? null,
+      getItem: (key: string) => {
+        if (options.failRead || options.failReadKey === key) {
+          throw new DOMException('SecurityError');
+        }
+        return data.get(key) ?? null;
+      },
       setItem: (key: string, value: string) => {
         if (options.failWrite) throw new DOMException('QuotaExceededError');
         data.set(key, value);
@@ -84,6 +89,30 @@ describe('loading', () => {
     expect(result.status).toBe('NEDOSTUPNO');
     expect(result.warning).toMatch(/ne dozvoljava cuvanje/i);
     expect(result.state.members.length).toBeGreaterThan(0);
+  });
+
+  it('warns instead of crashing when reading storage is refused after access succeeds', () => {
+    // The namespaced capability probe is readable and writable. Only the real
+    // state read fails, proving the catch after the probe rather than the
+    // earlier general-unavailability branch.
+    install(fakeStorage({ failReadKey: STORAGE_KEY }).store);
+
+    expect(() => loadState()).not.toThrow();
+    const result = loadState();
+    expect(result.status).toBe('NEDOSTUPNO');
+    expect(result.warning).toMatch(/ne dozvoljava cuvanje/i);
+  });
+
+  it('does not overwrite or delete an unrelated application write probe', () => {
+    const { store, data } = fakeStorage();
+    install(store);
+    store.setItem('__dvd_tivat_probe__', 'belongs-to-another-application');
+    store.setItem(`${STORAGE_KEY}:write-probe`, 'pre-existing-value');
+
+    loadState();
+
+    expect(data.get('__dvd_tivat_probe__')).toBe('belongs-to-another-application');
+    expect(data.get(`${STORAGE_KEY}:write-probe`)).toBe('pre-existing-value');
   });
 
   it('falls back to the seed on unparseable data instead of crashing', () => {
