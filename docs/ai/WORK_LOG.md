@@ -37,12 +37,19 @@ submission (pre-existing copy). It now distinguishes unsent, recorded and editin
 by one browser scenario in both viewports. Full-page screenshot capture now scrolls to the top so
 the sticky rail does not appear halfway down the image. Final follow-up CI belongs in the PR evidence.
 
+**Follow-up verification on `dc38f1a`:** GitHub CI run **34168251914**, job **101883472581**, attempt
+1: lint, strict typecheck, production build, **50 unit tests, 48 browser/axe checks and 2 screenshot
+scenarios all passed**. Twelve screenshots in artifact **10034881906** were downloaded, the ZIP
+matched SHA-256 `b8e9ed27f4816caf697e6e8d337f4a0dd615394bc3270a2295f90d29a97a12a0`, and the corrected desktop
+and phone images were visually reviewed before being committed. The artifact contained only the
+12 expected PNG basenames. No test was re-run; both CI runs were attempt 1.
+
 The interactive cloud browser could not open this environment's localhost (`ERR_BLOCKED_BY_CLIENT`),
 so browser verification and refreshed images use the repository's existing Playwright suite on a
 standard GitHub runner. Added a CI screenshot artifact step; no deployment or automatic image commit.
 The first local typecheck caught an optional indexed test value; corrected before CI.
 
-**Next:** review the actual screenshots and current-head results, then have the owner run the demo.
+**Next:** review Draft PR #7 and the committed screenshots, then have the owner run the demo.
 Keep all PRs Draft and unmerged; no publishing, licence, paid service or real member data.
 
 ---

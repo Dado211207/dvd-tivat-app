@@ -23,11 +23,12 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 
 ## Status
 
-**Phase 1 prototype complete; personalised interface under review.** Prior checkpoint PR #6 has
-49 unit and 40 browser/accessibility checks green. This pass adds the DVD Tivat layout, a route-safe
-keyboard skip link, readable-state preservation when writes fail, three browser scenarios and one
-unit regression. Current-head verification belongs in the work log and PR evidence, not inferred
-from the previous checkpoint. See [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md).
+**Phase 1 prototype complete; personalised interface ready for owner review.** On runtime head
+`dc38f1a`, 50 unit tests and 48 browser/accessibility checks passed; 12 current screenshots were
+captured on the same head. This pass adds the DVD Tivat layout, a route-safe keyboard skip link,
+readable-state preservation when writes fail, four browser scenarios and one unit regression.
+See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
+[DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
 
 The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
 on DVD Tivat; do not implement multi-society routing or treat this assumption as an agreed requirement.
@@ -94,7 +95,7 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Review the personalised interface after stacked Draft PRs #3, #4, #5 and #6; evidence is recorded in
+Review Draft PR #7 after stacked Draft PRs #3, #4, #5 and #6; evidence is recorded in
 [WORK_LOG.md](./WORK_LOG.md). Use [DEMO_GUIDE.md](../DEMO_GUIDE.md) for the owner's first test and the
 meeting, then answer
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
