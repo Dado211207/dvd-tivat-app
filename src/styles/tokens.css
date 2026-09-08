@@ -1,0 +1,133 @@
+/*
+ * Design tokens for the DVD Tivat prototype.
+ *
+ * Original styling written for this project. Deliberate decisions:
+ *
+ *  - The institutional accent is a deep Adriatic teal, not red. Tivat is a
+ *    coastal town and, more importantly, red has to stay rare to keep meaning
+ *    anything at 03:00.
+ *  - RED IS RESERVED for an active alert and for destructive confirmation.
+ *    Nothing decorative is red. "Ne mogu" is deliberately NOT red - it is an
+ *    ordinary, legitimate answer, and colouring it like an emergency would be
+ *    both wrong and unkind.
+ *  - Every status carries a text symbol as well as a colour, for colour vision
+ *    deficiency and for a sunlit station wall.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Neutrals - cool graphite, readable under station lighting */
+  --c-ink: #10151b;
+  --c-ink-soft: #3d4956;
+  /* 5.2:1 on --c-canvas. An earlier, lighter grey measured 4.49:1 and failed
+     WCAG AA for small text - secondary text still has to be readable. */
+  --c-ink-faint: #5b6673;
+  --c-line: #d3dae1;
+  --c-line-strong: #a9b5c1;
+  --c-surface: #ffffff;
+  --c-surface-2: #f2f5f8;
+  --c-surface-3: #e6ebf0;
+  --c-canvas: #eef2f6;
+
+  /* Institutional accent */
+  --c-accent: #0d5c63;
+  --c-accent-strong: #084247;
+  --c-accent-soft: #d7ebec;
+  --c-accent-ink: #ffffff;
+
+  /* Text placed on a strong, saturated fill. It must flip with the theme: the
+     alert and response colours are dark in light mode and light in dark mode,
+     so a hardcoded white here fails contrast in one of the two. */
+  --c-ink-inverse: #ffffff;
+
+  /* Urgency. Used sparingly and never decoratively. */
+  --c-alert: #b3261e;
+  --c-alert-strong: #8c1d18;
+  --c-alert-soft: #fbe6e4;
+
+  /* Response semantics */
+  --c-yes: #1d6b3f;
+  --c-yes-soft: #dff0e5;
+  --c-later: #8a5a00;
+  --c-later-soft: #fdefd4;
+  --c-no: #4a5560;
+  --c-no-soft: #e4e8ec;
+  /* 5.1:1 on --c-unknown-soft, at chip text size. */
+  --c-unknown: #5b6673;
+  --c-unknown-soft: #eceff2;
+
+  /* Simulation marker - amber, distinct from both accent and alert */
+  --c-sim: #7a5a00;
+  --c-sim-bg: #fff3cd;
+  --c-sim-line: #d9b74a;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  --shadow-1: 0 1px 2px rgb(16 21 27 / 8%), 0 2px 8px rgb(16 21 27 / 6%);
+  --shadow-2: 0 4px 16px rgb(16 21 27 / 12%);
+
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  /* Touch targets. The member's answer buttons are the largest control here on
+     purpose: they are pressed by someone half awake. */
+  --tap-min: 44px;
+  --tap-answer: 64px;
+
+  --focus: 3px solid var(--c-accent);
+  --focus-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-ink: #eef2f6;
+    --c-ink-soft: #b9c4cf;
+    --c-ink-faint: #8c98a5;
+    --c-line: #2b3540;
+    --c-line-strong: #3f4b57;
+    --c-surface: #161c23;
+    --c-surface-2: #1d242c;
+    --c-surface-3: #262f38;
+    --c-canvas: #0e1319;
+
+    --c-accent: #4fc3cc;
+    --c-accent-strong: #7ad8de;
+    --c-accent-soft: #10353a;
+    --c-accent-ink: #06222a;
+
+    --c-ink-inverse: #10151b;
+
+    --c-alert: #ff8a80;
+    --c-alert-strong: #ffb4ab;
+    --c-alert-soft: #3d1512;
+
+    --c-yes: #7fd6a1;
+    --c-yes-soft: #12331f;
+    --c-later: #f0c168;
+    --c-later-soft: #3a2c0b;
+    --c-no: #aab6c2;
+    --c-no-soft: #262f38;
+    --c-unknown: #98a4b0;
+    --c-unknown-soft: #212a32;
+
+    --c-sim: #f2d68a;
+    --c-sim-bg: #33290b;
+    --c-sim-line: #806413;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 40%), 0 2px 8px rgb(0 0 0 / 30%);
+    --shadow-2: 0 4px 16px rgb(0 0 0 / 50%);
+
+    --focus: 3px solid var(--c-accent);
+  }
+}

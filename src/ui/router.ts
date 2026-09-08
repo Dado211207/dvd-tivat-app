@@ -1,0 +1,34 @@
+/**
+ * Minimal hash router.
+ *
+ * Hash routing keeps the build a plain static folder - no server rewrite rules,
+ * so the prototype opens from disk or from any static host. Views stay
+ * deep-linkable, which browser tests and a live demonstration both need.
+ */
+
+import { useEffect, useState } from 'react';
+
+export const ROUTES = ['dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija'] as const;
+export type Route = (typeof ROUTES)[number];
+
+/** The application opens into the duty officer's working screen, not a landing page. */
+export const DEFAULT_ROUTE: Route = 'dezurni';
+
+function readHash(): Route {
+  const raw = window.location.hash.replace(/^#\/?/, '');
+  return (ROUTES as readonly string[]).includes(raw) ? (raw as Route) : DEFAULT_ROUTE;
+}
+
+export function useRoute(): Route {
+  const [route, setRoute] = useState<Route>(() => readHash());
+
+  useEffect(() => {
+    const onChange = () => setRoute(readHash());
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+
+  return route;
+}
+
+export const hrefFor = (route: Route): string => `#/${route}`;
