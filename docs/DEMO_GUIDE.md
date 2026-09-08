@@ -5,7 +5,7 @@ This is a workflow prototype, not an operational alerting system.
 
 ## Prepare
 
-1. Use the reviewed `codex/dvd-tivat-interface` branch, which includes the preceding stacked work.
+1. Use the reviewed `main` branch at or after `5c9acb6853543d61d6219fe377ba466e83ddf897`.
    Run `npm ci`, then `npm run dev`. Open the local HTTP address printed by Vite. Do not open
    `dist/index.html` directly. No deployment or paid service is necessary.
 2. Use one browser and one tab. This prototype does not synchronise across tabs, phones or computers.
