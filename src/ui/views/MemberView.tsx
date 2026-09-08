@@ -120,6 +120,7 @@ export function MemberView() {
             <div className="card__head">
               <h2 id="answer-h">{T.yourAnswer}</h2>
             </div>
+            <p className="small muted">{T.answerHint}</p>
 
             {error ? <Notice tone="error">{error}</Notice> : null}
 
@@ -159,9 +160,7 @@ export function MemberView() {
                       data-testid={`answer-${answer}`}
                       onClick={() => {
                         setDraft(answer);
-                        // "Dolazim kasnije" needs a time band, so it is a two-step
-                        // answer. The other two send immediately - one tap.
-                        if (answer !== 'DOLAZIM_KASNIJE') submit(answer);
+                        if (answer === 'NE_MOGU') setDirect(false);
                       }}
                     >
                       <span className="answer-btn__sym" aria-hidden="true">
@@ -172,7 +171,7 @@ export function MemberView() {
                   ))}
                 </div>
 
-                {draft !== 'NE_MOGU' ? (
+                {draft !== null && draft !== 'NE_MOGU' ? (
                   <label className="check">
                     <input
                       type="checkbox"
@@ -203,16 +202,18 @@ export function MemberView() {
                         </button>
                       ))}
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--block"
-                      style={{ marginTop: 'var(--sp-3)' }}
-                      data-testid="confirm-later"
-                      onClick={() => submit('DOLAZIM_KASNIJE')}
-                    >
-                      Posalji odgovor
-                    </button>
                   </div>
+                ) : null}
+
+                {draft !== null ? (
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--block"
+                    data-testid="submit-response"
+                    onClick={() => submit(draft)}
+                  >
+                    {T.sendAnswer}
+                  </button>
                 ) : null}
 
                 {editing ? (

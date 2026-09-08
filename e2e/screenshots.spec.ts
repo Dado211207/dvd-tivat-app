@@ -43,18 +43,21 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
 
     // Populate a mixed, realistic-looking set of answers.
     await page.getByTestId('answer-DOLAZIM').click();
+    await page.getByTestId('submit-response').click();
 
     await switchActor(page, 'Petar Krivokapic');
     await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
     await page.getByTestId('eta-30').click();
-    await page.getByTestId('confirm-later').click();
+    await page.getByTestId('submit-response').click();
 
     await switchActor(page, 'Vuk Mitrovic');
     await page.getByTestId('answer-NE_MOGU').click();
+    await page.getByTestId('submit-response').click();
 
     await switchActor(page, 'Luka Jovanovic');
-    await page.getByTestId('direct-to-location').check();
     await page.getByTestId('answer-DOLAZIM').click();
+    await page.getByTestId('direct-to-location').check();
+    await page.getByTestId('submit-response').click();
     // Nikola Djukic deliberately never answers: silence is a real state.
 
     // 4. Vehicles.

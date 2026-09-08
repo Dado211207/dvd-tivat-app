@@ -33,6 +33,7 @@ test.describe('accessibility', () => {
     await switchActor(page, 'Ivan Radulovic');
     await goTo(page, 'clan');
     await page.getByTestId('answer-DOLAZIM').click();
+    await page.getByTestId('submit-response').click();
 
     await goTo(page, 'vozila');
     await page.getByTestId('depart-NV-1').click();
@@ -57,6 +58,7 @@ test.describe('accessibility', () => {
     await switchActor(page, 'Ivan Radulovic');
     await goTo(page, 'clan');
     await page.getByTestId('answer-DOLAZIM').click();
+    await page.getByTestId('submit-response').click();
     // Reopen the form so the selected (filled) answer button is rendered - its
     // text sits on a saturated fill, which is where a hardcoded colour breaks.
     await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
@@ -109,6 +111,7 @@ test.describe('accessibility', () => {
     await switchActor(page, 'Ivan Radulovic');
     await goTo(page, 'clan');
     await page.getByTestId('answer-DOLAZIM').click();
+    await page.getByTestId('submit-response').click();
 
     await goTo(page, 'dezurni');
     // Every recipient row reads as text, whether answered or not.

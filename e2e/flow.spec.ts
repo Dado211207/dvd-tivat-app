@@ -53,6 +53,7 @@ test('full exercise: send, answer, change answer, vehicle, status, close, histor
   await goTo(page, 'clan');
   await expect(page.getByTestId('member-call-title')).toHaveText('Vjezba: dimna komora');
   await page.getByTestId('answer-DOLAZIM').click();
+  await page.getByTestId('submit-response').click();
   await expect(page.getByTestId('current-answer')).toContainText('Dolazim');
 
   // --- a member who was not called sees nothing -----------------------------
@@ -63,12 +64,13 @@ test('full exercise: send, answer, change answer, vehicle, status, close, histor
   await switchActor(page, 'Petar Krivokapic');
   await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
   await page.getByTestId('eta-30').click();
-  await page.getByTestId('confirm-later').click();
+  await page.getByTestId('submit-response').click();
   await expect(page.getByTestId('current-answer')).toContainText('30 min');
 
   // --- changing an answer affects only that member --------------------------
   await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
   await page.getByTestId('answer-NE_MOGU').click();
+  await page.getByTestId('submit-response').click();
   await expect(page.getByTestId('current-answer')).toContainText('Ne mogu');
 
   await goTo(page, 'dezurni');
@@ -112,6 +114,47 @@ test('full exercise: send, answer, change answer, vehicle, status, close, histor
   await expect(page.getByTestId('history-rows')).toContainText('Vjezba: dimna komora');
   await expect(page.getByTestId('activity-rows')).toContainText('Odgovor promijenjen');
   await expect(page.getByTestId('activity-rows')).toContainText('Vozilo izaslo');
+});
+
+test('a member reviews every answer and its details before submitting', async ({ page }) => {
+  await openApp(page);
+  await createCall(page);
+  await switchActor(page, 'Ivan Radulovic');
+  await goTo(page, 'clan');
+
+  // Selecting an answer is only a local draft. Nothing is recorded until the
+  // member explicitly submits the answer after reviewing its details.
+  await page.getByTestId('answer-DOLAZIM').click();
+  await expect(page.getByTestId('current-answer')).toHaveCount(0);
+  await expect(page.getByTestId('direct-to-location')).toBeVisible();
+  await page.getByTestId('submit-response').click();
+  await expect(page.getByTestId('current-answer')).toContainText('Dolazim');
+  await expect(page.getByTestId('current-answer')).not.toContainText('direktno na lokaciju');
+
+  // The same explicit confirmation applies while editing, including the
+  // direct-to-location choice.
+  await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
+  await page.getByTestId('answer-DOLAZIM').click();
+  await page.getByTestId('direct-to-location').check();
+  await expect(page.getByTestId('current-answer')).toHaveCount(0);
+  await page.getByTestId('submit-response').click();
+  await expect(page.getByTestId('current-answer')).toContainText('direktno na lokaciju');
+
+  await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
+  await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
+  await page.getByTestId('eta-60').click();
+  await page.getByTestId('direct-to-location').uncheck();
+  await page.getByTestId('submit-response').click();
+  await expect(page.getByTestId('current-answer')).toContainText('60 min');
+
+  // "Ne mogu" cannot retain a destination choice from an earlier answer.
+  await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
+  await page.getByTestId('answer-NE_MOGU').click();
+  await expect(page.getByTestId('direct-to-location')).toHaveCount(0);
+  await expect(page.getByTestId('current-answer')).toHaveCount(0);
+  await page.getByTestId('submit-response').click();
+  await expect(page.getByTestId('current-answer')).toContainText('Ne mogu');
+  await expect(page.getByTestId('current-answer')).not.toContainText('direktno na lokaciju');
 });
 
 test('a closed exercise cannot be answered', async ({ page }) => {
