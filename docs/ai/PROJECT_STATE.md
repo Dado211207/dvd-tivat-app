@@ -15,8 +15,8 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public. Do not create another.
-- Verified application state: `main@5c9acb6853543d61d6219fe377ba466e83ddf897`.
-- PRs #1, #3, #4, #5, #6 and #7 were merged with merge commits, in that order, after the owner's
+- Verified application state: `main@9b4ba3fd22e83d30cb64c9718b673b5c19167a94`.
+- PRs #1, #3, #4, #5, #6, #7 and #8 were merged with merge commits, in that order, after the owner's
   explicit approval. Their source branches were not rewritten or deleted.
 - PR #2 is separate historical continuity documentation. It is not part of the application stack
   and remains unmerged pending closure as superseded.
@@ -24,11 +24,16 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 
 ## Status
 
-**Phase 1 prototype complete, merged and ready for supervised owner testing.** The final merged
-tree is byte-for-byte the reviewed PR #7 tree. Post-merge CI run `34204300780`, job
-`101990099552`, attempt 1, passed lint, strict typecheck, production build, 50 unit tests,
-48 browser/accessibility checks and 2 screenshot scenarios. The run produced 12 review PNGs in
-artifact `10047140105`. See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
+**Phase 1 behaviour is complete on `main`; a visual redesign is under owner review on
+`codex/modern-ui-ux`.** The redesign keeps the domain, confirmation flow, simulation disclosure
+and six product views unchanged while replacing the dense presentation with a simpler operational
+workspace. It must not be merged and the promotional video must not be remade until the owner has
+reviewed real desktop and phone screenshots.
+
+Local verification on the redesign passes lint, 50 unit tests, strict typecheck and the production
+build. Browser, accessibility and screenshot evidence must come from GitHub CI because this
+environment could not download the Playwright Chromium binary; that infrastructure limitation is
+not being presented as an application pass. See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
 [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
 
 The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
@@ -96,12 +101,13 @@ The two that most affect the work:
 
 ## Next concrete action
 
-The owner should run the merged prototype locally from `main`, using
-[DEMO_GUIDE.md](../DEMO_GUIDE.md), and record each issue with the screen, exact steps, expected
-result and actual result. Fix confirmed defects on a new branch, then use the same guide for the
-society meeting and answer
-[PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
-Phase 2 until Q1 and Q12 are answered — the first can invalidate the plan, the second decides
-whether the project is worth continuing at all.
+Run GitHub CI on the exact redesign head, download its screenshot artifact and inspect both desktop
+and phone layouts. The owner then reviews those images and requests visual changes. Keep the branch
+unmerged until that approval. After the UI and functions are accepted, replace the first promotional
+video with a new script, more natural narration and footage captured from the accepted interface.
+
+Production Phase 2 still waits on
+[PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society), especially
+Q1 and Q12. Visual approval does not answer those operational questions.
 
 See the last entry of [WORK_LOG.md](./WORK_LOG.md) for detail.

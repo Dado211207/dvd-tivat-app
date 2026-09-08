@@ -5,6 +5,37 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-08 — Simplify and modernise the interface before remaking the video
+
+**Owner direction:** the first cinematic demonstration was acceptable as a video, but its application
+interface was not. Do not revise the video yet. First produce a cleaner, simpler and more modern
+desktop and phone experience, preserve every function, let the owner review it, then write a better
+script and use more natural narration for the replacement video.
+
+**Branch and safety:** work is isolated on `codex/modern-ui-ux`, based on verified
+`main@9b4ba3fd22e83d30cb64c9718b673b5c19167a94`. No merge, deployment, real alert, real data,
+credential, paid service or new video is part of this change.
+
+**Interface correction:** removed the oversized decorative first-screen treatment and replaced it
+with a compact operational summary whose status and counts come from the existing fictional state.
+Grouped the six routes into operations and records, made the call composer a clear two-step workflow,
+kept diagnostics secondary, and replaced the two-row phone menu with a compact horizontally
+scrollable navigation row. Light and dark palettes now use calmer surfaces, stronger hierarchy,
+larger focus rings and local system typography. The simulation disclosure, actor selector, preview
+confirmation, validation, accessibility labels and every domain transition remain in place.
+
+**Local verification:** `npm run verify` passed: ESLint, 50 Vitest tests, strict TypeScript and the
+Vite production build. `git diff --check` passed. The repository Playwright command could not launch
+locally because its Chromium binary was absent. One installation attempt was made; the CDN timed out
+or returned 502, so it was not repeated. Browser, accessibility, responsive and screenshot evidence
+will come from the existing GitHub workflow on the exact branch head rather than being guessed.
+
+**Next:** push one atomic branch commit, open a Draft PR, run the existing 48 browser/accessibility
+checks and two screenshot scenarios, then visually inspect the generated desktop and phone PNGs.
+Do not merge or create the replacement video before owner review.
+
+---
+
 ## 2026-09-08 — Final review, ordered merge and post-merge verification
 
 **Owner approval:** after the combined-tree review reported no blocker, the owner explicitly

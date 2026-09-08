@@ -134,10 +134,14 @@ function Composer() {
     error?.field === field ? error.message : undefined;
 
   return (
-    <div className="grid-2">
-      <section className="card" aria-labelledby="composer-h">
-        <div className="card__head">
-          <h2 id="composer-h">{T.newExercise}</h2>
+    <div className="grid-2 composer-grid">
+      <section className="card workflow-card" aria-labelledby="composer-h">
+        <div className="card__head card__head--step">
+          <span className="step-number" aria-hidden="true">01</span>
+          <div>
+            <p className="card__kicker">Detalji poziva</p>
+            <h2 id="composer-h">{T.newExercise}</h2>
+          </div>
         </div>
 
         {error && !error.field ? <Notice tone="error">{error.message}</Notice> : null}
@@ -220,10 +224,14 @@ function Composer() {
         </div>
       </section>
 
-      <section className="card" aria-labelledby="recipients-h">
-        <div className="card__head">
-          <h2 id="recipients-h">{T.recipients}</h2>
-          <p className="small" data-testid="selected-count">
+      <section className="card workflow-card recipients-card" aria-labelledby="recipients-h">
+        <div className="card__head card__head--step">
+          <span className="step-number" aria-hidden="true">02</span>
+          <div>
+            <p className="card__kicker">Kome ide poziv</p>
+            <h2 id="recipients-h">{T.recipients}</h2>
+          </div>
+          <p className="selected-count" data-testid="selected-count">
             {T.selectedCount}: <strong>{resolved.length}</strong>
           </p>
         </div>
@@ -274,9 +282,12 @@ function Composer() {
           </div>
         </fieldset>
 
-        <button type="button" className="btn btn--primary btn--block" onClick={openPreview}>
-          {T.reviewAndSend}
-        </button>
+        <div className="composer-action">
+          <p><strong>{resolved.length}</strong> izabranih primalaca</p>
+          <button type="button" className="btn btn--primary" onClick={openPreview}>
+            {T.reviewAndSend}
+          </button>
+        </div>
       </section>
 
       <ConfirmDialog

@@ -25,7 +25,7 @@ import { makeId, useApp } from '@/state/AppStateContext';
 import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
-import { hrefFor, ROUTES, useRoute, type Route } from './ui/router';
+import { hrefFor, useRoute, type Route } from './ui/router';
 import { DispatcherView } from './ui/views/DispatcherView';
 import { DisplayView } from './ui/views/DisplayView';
 import { HistoryView } from './ui/views/HistoryView';
@@ -40,6 +40,20 @@ const VIEWS: Record<Route, () => JSX.Element> = {
   prikaz: DisplayView,
   clanovi: RosterView,
   istorija: HistoryView,
+};
+
+const NAV_GROUPS: { label: string; routes: Route[] }[] = [
+  { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
+  { label: 'Evidencija', routes: ['clanovi', 'istorija'] },
+];
+
+const ROUTE_DESCRIPTION: Record<Route, string> = {
+  dezurni: 'Priprema poziva i pracenje odziva ekipe',
+  clan: 'Poziv i odgovor iz ugla izabranog clana',
+  vozila: 'Rucna evidencija izlaska i povratka vozila',
+  prikaz: 'Pregled stanja namijenjen ekranu u domu',
+  clanovi: 'Clanovi, uloge, grupe i osposobljenosti',
+  istorija: 'Zavrsene vjezbe i hronologija promjena',
 };
 
 export function App() {
@@ -77,52 +91,65 @@ export function App() {
         <div className="masthead__identity">
           {/* Provisional text identity. No official logo is used. */}
           <div className="masthead__mark" aria-hidden="true">
-            DVD
+            D
           </div>
           <div>
             <div className="masthead__name">{APP_NAME}</div>
-            <div className="masthead__sub">Dobrovoljno vatrogasno drustvo</div>
+            <div className="masthead__sub">Operativni prototip</div>
           </div>
         </div>
-        <p className="rail-caption">RADNI PROSTOR</p>
         <nav className="nav" aria-label="Glavna navigacija">
-          {ROUTES.map((r) => (
-            <a key={r} className="nav__link" href={hrefFor(r)}
-              aria-current={route === r ? 'page' : undefined} data-testid={`nav-${r}`}>
-              <NavIcon route={r} />{NAV[r]}
-            </a>
+          {NAV_GROUPS.map((group) => (
+            <div className="nav__group" key={group.label}>
+              <p className="nav__label">{group.label}</p>
+              <div className="nav__items">
+                {group.routes.map((r) => (
+                  <a key={r} className="nav__link" href={hrefFor(r)}
+                    aria-current={route === r ? 'page' : undefined} data-testid={`nav-${r}`}>
+                    <span className="nav__icon"><NavIcon route={r} /></span>
+                    <span>{NAV[r]}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="rail-note">
-          <span className="rail-note__label">NAS DOM. NAS TIM.</span>
-          <p>Prostor za vjezbe DVD Tivat.</p>
-          <p className="rail-note__detail">Lokalna demonstracija sa izmisljenim podacima.</p>
+          <span className="rail-note__status" aria-hidden="true" />
+          <div>
+            <span className="rail-note__label">LOKALNA SIMULACIJA</span>
+            <p className="rail-note__detail">Bez stvarnih poziva i obavjestenja</p>
+          </div>
         </div>
       </aside>
 
       <header className="masthead">
         <div className="workspace-heading">
-          <p className="eyebrow">DVD TIVAT / PROTOTIP</p>
+          <p className="eyebrow">DVD TIVAT</p>
           <p className="workspace-heading__title">{NAV[route]}</p>
+          <p className="workspace-heading__description">{ROUTE_DESCRIPTION[route]}</p>
         </div>
 
-        <div className="actor-switch">
-          <label htmlFor="actor-select">
-            Simulirani ucesnik
-            <span className="sr-only"> - {T.simulateMemberHint}</span>
-          </label>
-          <select
-            id="actor-select"
-            data-testid="actor-select"
-            value={state.simulation.actorId}
-            onChange={(e) => switchActor(e.target.value)}
-          >
-            {state.members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name} - {ROLE_LABEL[member.roleProposed]}
-              </option>
-            ))}
-          </select>
+        <div className="masthead__tools">
+          <span className="local-pill"><span aria-hidden="true" /> Lokalni prototip</span>
+          <div className="actor-switch">
+            <label htmlFor="actor-select">
+              Simulirani ucesnik
+              <span className="sr-only"> - {T.simulateMemberHint}</span>
+            </label>
+            <select
+              id="actor-select"
+              data-testid="actor-select"
+              value={state.simulation.actorId}
+              onChange={(e) => switchActor(e.target.value)}
+            >
+              {state.members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} - {ROLE_LABEL[member.roleProposed]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </header>
 
