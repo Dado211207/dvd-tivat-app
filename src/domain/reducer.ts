@@ -25,6 +25,7 @@ import {
   type ActivityKind,
   type AppState,
   type Call,
+  type CitizenReport,
   type DeliveryAttempt,
   type Exercise,
   type Id,
@@ -89,6 +90,21 @@ export function resolveRecipients(state: AppState, memberIds: Id[], groupIds: Id
 
 const openMovementFor = (state: AppState, vehicleId: Id): VehicleMovement | undefined =>
   state.vehicleMovements.find((m) => m.vehicleId === vehicleId && m.returnedAt === null);
+
+function coordinatesAreValid(
+  coordinates: { latitude: number; longitude: number; accuracyMeters: number | null },
+): boolean {
+  return (
+    Number.isFinite(coordinates.latitude) &&
+    Number.isFinite(coordinates.longitude) &&
+    coordinates.latitude >= -90 &&
+    coordinates.latitude <= 90 &&
+    coordinates.longitude >= -180 &&
+    coordinates.longitude <= 180 &&
+    (coordinates.accuracyMeters === null ||
+      (Number.isFinite(coordinates.accuracyMeters) && coordinates.accuracyMeters >= 0))
+  );
+}
 
 // ---------------------------------------------------------------------------
 // applyCommand
@@ -461,6 +477,63 @@ export function applyCommand(state: AppState, command: Command, ctx: Ctx): Resul
           ),
           ...state.activity,
         ],
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'SUBMIT_CITIZEN_REPORT': {
+      if (isBlank(command.description)) return err('NEDOSTAJE_OPIS_PRIJAVE', 'reportDescription');
+      if (isBlank(command.incidentLocation) && command.coordinates === null) {
+        return err('NEDOSTAJE_LOKACIJA_PRIJAVE', 'reportLocation');
+      }
+      if (command.coordinates !== null && !coordinatesAreValid(command.coordinates)) {
+        return err('NEISPRAVNE_KOORDINATE', 'reportLocation');
+      }
+
+      const report: CitizenReport = {
+        id: ctx.id(),
+        kind: command.kind,
+        description: command.description.trim(),
+        incidentLocation: command.incidentLocation.trim(),
+        coordinates: command.coordinates ? { ...command.coordinates } : null,
+        photoIncluded: command.photoIncluded,
+        status: 'SACUVANA_LOKALNO',
+        createdAt: ctx.now(),
+        reviewedAt: null,
+        reviewedBy: null,
+      };
+
+      return ok({
+        ...state,
+        citizenReports: [report, ...state.citizenReports],
+        // A report is intake data only. It creates no exercise, call, delivery
+        // attempt, response or vehicle movement.
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'REVIEW_CITIZEN_REPORT': {
+      const report = state.citizenReports.find((item) => item.id === command.reportId);
+      if (!report) return err('PRIJAVA_NE_POSTOJI');
+      if (report.status === 'PREGLEDANA_U_SIMULACIJI') {
+        return ok({ ...state, appliedCommandIds: remember(state, command.commandId) });
+      }
+      const at = ctx.now();
+      return ok({
+        ...state,
+        citizenReports: state.citizenReports.map((item) =>
+          item.id === report.id
+            ? {
+                ...item,
+                status: 'PREGLEDANA_U_SIMULACIJI' as const,
+                reviewedAt: at,
+                reviewedBy: command.actorId,
+              }
+            : item,
+        ),
+        // Reviewing is not accepting an incident and does not dispatch anyone.
         appliedCommandIds: remember(state, command.commandId),
       });
     }

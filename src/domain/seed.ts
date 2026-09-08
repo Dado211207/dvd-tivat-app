@@ -289,6 +289,7 @@ export function createSeedState(): AppState {
     members: MEMBERS.map((m) => ({ ...m, specialties: [...m.specialties], groupIds: [...m.groupIds] })),
     groups: GROUPS.map((g) => ({ ...g, memberIds: [...g.memberIds] })),
     vehicles: VEHICLES.map((v) => ({ ...v })),
+    citizenReports: [],
     ...history,
     // The demonstration starts as the duty officer, because that is the screen
     // the application is for.

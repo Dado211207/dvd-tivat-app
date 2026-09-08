@@ -33,6 +33,14 @@ export const NAV = {
   prikaz: 'Prikaz u domu',
   clanovi: 'Clanovi',
   istorija: 'Istorija',
+  dojava: 'Prijava gradjana',
+} as const;
+
+export const CITIZEN_REPORT_KIND_LABEL = {
+  POZAR_ILI_DIM: 'Pozar ili dim',
+  SAOBRACAJNA_NEZGODA: 'Saobracajna nezgoda',
+  TEHNICKA_POMOC: 'Tehnicka pomoc',
+  DRUGO: 'Drugo',
 } as const;
 
 export const ROLE_LABEL: Record<RoleId, string> = {

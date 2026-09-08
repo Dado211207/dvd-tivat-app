@@ -118,4 +118,12 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.screenshot({ path: `${DIR}/11-clan-tamna-tema.png` });
   });
+
+  test('captures the citizen report intake at phone size', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openApp(page, 'dojava');
+    await page.getByLabel(/^Opis/).fill('Gust dim se vidi iza izmisljene zgrade.');
+    await page.getByLabel(/^Mjesto dogadjaja/).fill('Izmisljeni orijentir kod obale');
+    await capture(page, '12-prijava-gradjana-telefon.png');
+  });
 });

@@ -443,3 +443,41 @@ can invalidate the plan, and the second decides whether it is worth doing.
 
 Scaffold the React + TypeScript + Vite project per `docs/ARCHITECTURE.md` §1, then implement
 `src/domain/` (types, errors, commands, pure reducer, selectors, fictional seed) before any UI.
+# 2026-09-08 — Citizen-report prototype, first slice
+
+**Scope**
+
+- Started `codex/citizen-report-prototype` from the exact tree under review in
+  `codex/modern-ui-ux`. Stable `main` and the redesign branch were not modified.
+- Added a seventh route for a citizen to describe a possible incident, attach an optional
+  session-only photo, type a landmark or explicitly request device coordinates, review the exact
+  record, and save it locally.
+- Added a separate DVD Tivat inbox action that can say only "reviewed in simulation". The domain
+  structurally prevents report submission or review from creating an exercise, call, delivery,
+  member response or vehicle movement.
+- Bumped the JSON schema to 2 with one explicit lossless migration from schema 1: add an empty
+  report inbox. Unknown versions are still rejected.
+
+**Privacy and safety boundary**
+
+- No backend, account, notification, upload or real alert channel was added.
+- Image bytes and the local filename never enter application state or local storage.
+- Device location is requested only after an explicit button press and remains in this browser.
+- Every report screen states that it is not an emergency channel and that nothing reaches DVD
+  Tivat or any service.
+
+**Verification so far**
+
+- TypeScript and ESLint pass.
+- 24 focused domain and persistence tests pass, including nine new report rules and explicit
+  schema migration coverage.
+- Local browser execution is not claimed: the Playwright Chromium download failed with repeated
+  CDN timeouts/502 responses. GitHub CI must execute the browser, mobile and accessibility checks
+  on the eventual pushed head.
+
+**Next concrete action**
+
+Run the complete local non-browser gate, finish browser-test coverage and push this isolated branch
+for a Draft stacked review. Do not merge or deploy it.
+
+---

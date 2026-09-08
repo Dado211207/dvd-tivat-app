@@ -24,7 +24,11 @@ export type DomainErrorCode =
   | 'VOZILO_NIJE_IZASLO'
   | 'CLAN_NE_POSTOJI'
   | 'NEISPRAVAN_STATUS'
-  | 'NEDOSTAJE_RAZLOG';
+  | 'NEDOSTAJE_RAZLOG'
+  | 'NEDOSTAJE_OPIS_PRIJAVE'
+  | 'NEDOSTAJE_LOKACIJA_PRIJAVE'
+  | 'NEISPRAVNE_KOORDINATE'
+  | 'PRIJAVA_NE_POSTOJI';
 
 export interface DomainError {
   code: DomainErrorCode;
@@ -53,6 +57,11 @@ const MESSAGES: Record<DomainErrorCode, string> = {
   CLAN_NE_POSTOJI: 'Clan ne postoji.',
   NEISPRAVAN_STATUS: 'Taj status nije moguc iz trenutnog stanja vjezbe.',
   NEDOSTAJE_RAZLOG: 'Unesite kratak razlog.',
+  NEDOSTAJE_OPIS_PRIJAVE: 'Opisite sta vidite i sta je ugrozeno.',
+  NEDOSTAJE_LOKACIJA_PRIJAVE:
+    'Unesite lokaciju dogadjaja ili izricito dozvolite pristup lokaciji uredjaja.',
+  NEISPRAVNE_KOORDINATE: 'Lokacija uredjaja nije citljiva. Pokusajte ponovo ili unesite mjesto.',
+  PRIJAVA_NE_POSTOJI: 'Probna prijava ne postoji.',
 };
 
 export function domainError(code: DomainErrorCode, field?: string): DomainError {

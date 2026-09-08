@@ -127,12 +127,40 @@ export function loadState(): LoadResult {
     };
   }
 
-  if (!isPlausibleState(parsed)) {
+  if (!isPlausibleBaseState(parsed)) {
     return {
       state: createSeedState(),
       status: 'OSTECENI_PODACI',
       warning: WARNINGS.OSTECENI_PODACI,
     };
+  }
+
+  // The only known migration is explicit and lossless: schema 1 predates the
+  // citizen-report inbox, so it gains an empty array and nothing else changes.
+  // Unknown versions are still refused below rather than guessed at.
+  if (parsed.schemaVersion === 1 && !('citizenReports' in parsed)) {
+    const migrated: AppState = {
+      ...(parsed as Omit<AppState, 'schemaVersion' | 'citizenReports'>),
+      schemaVersion: SCHEMA_VERSION,
+      citizenReports: [],
+    };
+    if (!writable) {
+      return {
+        state: migrated,
+        status: 'SAMO_CITANJE',
+        warning: WARNINGS.SAMO_CITANJE,
+      };
+    }
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      return { state: migrated, status: 'UCITANO', warning: null };
+    } catch {
+      return {
+        state: migrated,
+        status: 'SAMO_CITANJE',
+        warning: WARNINGS.SAMO_CITANJE,
+      };
+    }
   }
 
   // No silent migration. Guessing at the shape of data from another build is
@@ -142,6 +170,13 @@ export function loadState(): LoadResult {
       state: createSeedState(),
       status: 'NEPOZNATA_VERZIJA',
       warning: WARNINGS.NEPOZNATA_VERZIJA,
+    };
+  }
+  if (!isCurrentState(parsed)) {
+    return {
+      state: createSeedState(),
+      status: 'OSTECENI_PODACI',
+      warning: WARNINGS.OSTECENI_PODACI,
     };
   }
 
@@ -184,7 +219,9 @@ export function clearStoredState(): void {
  * A structural check, not a full schema validation. Enough to tell stored state
  * from unrelated JSON without pretending to guarantee its contents.
  */
-function isPlausibleState(value: unknown): value is AppState {
+type PlausibleBaseState = Omit<AppState, 'citizenReports'> & { citizenReports?: unknown };
+
+function isPlausibleBaseState(value: unknown): value is PlausibleBaseState {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Record<string, unknown>;
   const arrays = [
@@ -208,4 +245,8 @@ function isPlausibleState(value: unknown): value is AppState {
     typeof simulation.actorId === 'string' &&
     typeof simulation.viewRole === 'string'
   );
+}
+
+function isCurrentState(value: PlausibleBaseState): value is AppState {
+  return Array.isArray(value.citizenReports);
 }

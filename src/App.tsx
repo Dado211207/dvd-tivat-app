@@ -27,6 +27,7 @@ import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
 import { hrefFor, useRoute, type Route } from './ui/router';
 import { DispatcherView } from './ui/views/DispatcherView';
+import { CitizenReportView } from './ui/views/CitizenReportView';
 import { DisplayView } from './ui/views/DisplayView';
 import { HistoryView } from './ui/views/HistoryView';
 import { MemberView } from './ui/views/MemberView';
@@ -34,6 +35,7 @@ import { RosterView } from './ui/views/RosterView';
 import { VehiclesView } from './ui/views/VehiclesView';
 
 const VIEWS: Record<Route, () => JSX.Element> = {
+  dojava: CitizenReportView,
   dezurni: DispatcherView,
   clan: MemberView,
   vozila: VehiclesView,
@@ -43,11 +45,13 @@ const VIEWS: Record<Route, () => JSX.Element> = {
 };
 
 const NAV_GROUPS: { label: string; routes: Route[] }[] = [
+  { label: 'Prijava', routes: ['dojava'] },
   { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
   { label: 'Evidencija', routes: ['clanovi', 'istorija'] },
 ];
 
 const ROUTE_DESCRIPTION: Record<Route, string> = {
+  dojava: 'Probna prijava dogadjaja i lokalni pregled DVD Tivat-a',
   dezurni: 'Priprema poziva i pracenje odziva ekipe',
   clan: 'Poziv i odgovor iz ugla izabranog clana',
   vozila: 'Rucna evidencija izlaska i povratka vozila',

@@ -11,6 +11,7 @@
  */
 
 import type {
+  CitizenReportKind,
   EtaMinutes,
   ExerciseKind,
   ExerciseStatus,
@@ -84,6 +85,22 @@ export interface ReturnVehicle extends Base {
   vehicleId: Id;
 }
 
+/** Saves a citizen report in this browser only. It sends nothing. */
+export interface SubmitCitizenReport extends Base {
+  type: 'SUBMIT_CITIZEN_REPORT';
+  kind: CitizenReportKind;
+  description: string;
+  incidentLocation: string;
+  coordinates: { latitude: number; longitude: number; accuracyMeters: number | null } | null;
+  photoIncluded: boolean;
+}
+
+/** Marks the locally visible report as reviewed in the simulation. */
+export interface ReviewCitizenReport extends Base {
+  type: 'REVIEW_CITIZEN_REPORT';
+  reportId: Id;
+}
+
 /** Switches which fictional person the screen is pretending to be. Grants nothing. */
 export interface SetSimulatedActor extends Base {
   type: 'SET_SIMULATED_ACTOR';
@@ -105,6 +122,8 @@ export type Command =
   | CancelExercise
   | DepartVehicle
   | ReturnVehicle
+  | SubmitCitizenReport
+  | ReviewCitizenReport
   | SetSimulatedActor
   | ResetDemoData;
 

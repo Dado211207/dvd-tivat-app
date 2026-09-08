@@ -10,7 +10,8 @@ Last updated: 2026-09-08
 ## Current scope
 
 Phase 1 of [PRODUCT_PLAN.md](../PRODUCT_PLAN.md) — a **local browser exercise prototype** for DVD
-Tivat call-out and response. No server, no accounts, no notifications, no real data.
+Tivat call-out, response and citizen-report intake. No server, no accounts, no notifications, no
+real data.
 
 ## Repository and branch
 
@@ -24,11 +25,11 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 
 ## Status
 
-**Phase 1 behaviour is complete on `main`; a visual redesign is under owner review on
-`codex/modern-ui-ux`.** The redesign keeps the domain, confirmation flow, simulation disclosure
-and six product views unchanged while replacing the dense presentation with a simpler operational
-workspace. It must not be merged and the promotional video must not be remade until the owner has
-reviewed real desktop and phone screenshots.
+**A citizen-report prototype is in progress on `codex/citizen-report-prototype`, stacked on the
+unmerged visual redesign `codex/modern-ui-ux`.** It adds a seventh route while preserving the
+redesign, confirmation flow and simulation disclosure. The intake is deliberately local-only and
+must not be described as a working alert channel. Neither branch may be merged and the promotional
+video must not be remade until owner review.
 
 Local verification on the redesign passes lint, 50 unit tests, strict typecheck and the production
 build. Browser, accessibility and screenshot evidence must come from GitHub CI because this
@@ -47,7 +48,7 @@ Not deployed anywhere. No licence file. No real alert, account or member data ex
 src/domain/      pure rules - types, errors, commands, reducer, selectors, seed, message
 src/storage/     one state key plus a namespaced write probe; known failures tested
 src/state/       React binding: injects the clock, ids and persistence
-src/ui/          six views + shared components; hand-written CSS in src/styles
+src/ui/          seven views + shared components; hand-written CSS in src/styles
 src/i18n/        shared labels; additional view copy lives in components; no diacritics
 e2e/             Playwright: flow, accessibility, screenshots (tagged @screenshots)
 ```
@@ -84,6 +85,8 @@ and one careless edit away from breaking.
 - Stored JSON receives a top-level shape check, not complete nested schema validation; do not hand-edit it.
 - No authentication and no permission enforcement anywhere.
 - No notification is sent by any code path.
+- Citizen photographs are session-only previews; only the boolean fact that one was included is
+  stored. Device coordinates are read only after an explicit user action and remain local.
 - The 15/30/60-minute arrival bands are taken from the reference product and are unconfirmed
   placeholders for Tivat.
 - A browser prototype is **no evidence** that a locked Android or iOS device will raise an alarm.
@@ -101,10 +104,10 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Run GitHub CI on the exact redesign head, download its screenshot artifact and inspect both desktop
-and phone layouts. The owner then reviews those images and requests visual changes. Keep the branch
-unmerged until that approval. After the UI and functions are accepted, replace the first promotional
-video with a new script, more natural narration and footage captured from the accepted interface.
+Complete the citizen-report slice, then run GitHub CI on its exact head and inspect the generated
+desktop and phone evidence. Keep it as a Draft stacked above the unmerged redesign. After the UI
+and functions are accepted, replace the first promotional video with a new script, more natural
+narration and footage captured from the accepted interface.
 
 Production Phase 2 still waits on
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society), especially

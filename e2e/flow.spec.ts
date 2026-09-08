@@ -15,6 +15,61 @@ test('opens directly into the duty officer working screen', async ({ page }) => 
   await expect(page.getByText('SIMULACIJA', { exact: true })).toBeVisible();
 });
 
+test('citizen report is reviewed, saved locally and never becomes a call', async ({ page }) => {
+  await openApp(page, 'dojava');
+
+  await page.getByTestId('review-citizen-report').click();
+  await expect(page.locator('#reportDescription')).toBeFocused();
+  await expect(page.getByTestId('notice')).toContainText('Opisite sta vidite');
+
+  await page.getByLabel(/^Opis/).fill('Gust dim se vidi iza izmisljene zgrade.');
+  await page.getByLabel(/^Mjesto dogadjaja/).fill('Izmisljeni orijentir');
+  await page.locator('#reportPhoto').setInputFiles({
+    name: 'probna-slika.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nXQAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  });
+
+  await page.getByTestId('review-citizen-report').click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Gust dim');
+  await expect(dialog).toContainText('Izmisljeni orijentir');
+  await expect(dialog).toContainText('Ukljucena samo u ovom pregledu');
+  await page.getByRole('button', { name: 'Sacuvaj lokalnu simulaciju' }).click();
+
+  const reports = page.getByTestId('citizen-report-list');
+  await expect(reports.getByRole('listitem')).toHaveCount(1);
+  await expect(reports).toContainText('Sacuvana lokalno');
+  await expect(reports).toContainText('bajtovi nijesu sacuvani');
+
+  await page.getByRole('button', { name: 'Oznaci kao pregledanu u simulaciji' }).click();
+  await expect(reports).toContainText('Pregledana u simulaciji');
+  await expect(reports).toContainText('ne znaci da je prijava prihvacena');
+
+  await goTo(page, 'dezurni');
+  await expect(page.getByRole('heading', { name: 'Nova vjezba' })).toBeVisible();
+  await expect(page.getByTestId('active-title')).toHaveCount(0);
+});
+
+test('citizen location is requested only after an explicit action', async ({ page, context }) => {
+  await context.grantPermissions(['geolocation'], { origin: 'http://127.0.0.1:4173' });
+  // Deliberately fictional open-water coordinates; no private place enters a
+  // public test, screenshot or CI artifact.
+  await context.setGeolocation({ latitude: 1.234567, longitude: 2.345678, accuracy: 14 });
+  await openApp(page, 'dojava');
+
+  await expect(page.getByText(/1\.234567/)).toHaveCount(0);
+  await page.getByTestId('use-location').click();
+  await expect(page.getByText(/1\.234567, 2\.345678/)).toBeVisible();
+
+  await page.getByLabel(/^Opis/).fill('Dim se vidi sa izmisljene lokacije.');
+  await page.getByTestId('review-citizen-report').click();
+  await expect(page.getByRole('dialog')).toContainText('1.234567, 2.345678');
+});
+
 test('full exercise: send, answer, change answer, vehicle, status, close, history', async ({
   page,
 }) => {

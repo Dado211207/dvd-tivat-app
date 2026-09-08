@@ -35,6 +35,7 @@ export function emptyState(): AppState {
     deliveryAttempts: [],
     responses: [],
     vehicleMovements: [],
+    citizenReports: [],
     activity: [],
   };
 }

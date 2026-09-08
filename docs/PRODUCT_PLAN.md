@@ -54,6 +54,10 @@ Everything in this list is implemented and running in the repository.
 - A large-format station display view.
 - Roster, exercise history, a timestamped activity log naming the simulated actor, and a
   confirmed reset that clears only this prototype's own stored data.
+- A **local citizen-report demonstration**: event type, description, typed place, optional
+  device location requested only after an explicit press, optional in-session photo preview,
+  exact review, local save, and a separate "reviewed in simulation" action for DVD Tivat.
+  It sends nothing and cannot create a call-out, delivery, response or vehicle movement.
 
 ### A.3 What the prototype deliberately does **not** do
 
@@ -66,7 +70,7 @@ Not "not yet built" — **deliberately absent, because pretending would be the f
 | Shared data between devices | Data lives in one browser's `localStorage`. Two phones running the prototype see two unrelated worlds |
 | Live personnel tracking | Out of scope by instruction, and a significant privacy decision the society has not made |
 | Real member data of any kind | The repository is public. Every person, phone label, vehicle and address in it is invented |
-| Citizen reporting, radius dispatch, door control, official system integration | Out of scope for this stage; recorded in §D as later possibilities only |
+| Real citizen-report delivery, radius dispatch, door control, official system integration | The prototype now demonstrates local intake only. No report reaches DVD Tivat or any service |
 
 ### A.4 The gap between prototype and production, stated plainly
 
@@ -85,7 +89,8 @@ Each of those is a separate piece of work with its own acceptance criteria, list
 
 Each is a guess. Each is cheap to change now and expensive to change later.
 
-1. **A1** — The first useful thing is *internal call-out and response*, not citizen reporting.
+1. **A1** — Internal call-out and response remains the operational core. Citizen reporting is now
+   demonstrated only as a local requirements prototype; its real use is unconfirmed.
 2. **A2** — Someone at the society is authorised to call people out; there is a human decision, not
    an automatic trigger.
 3. **A3** — Members answer on their own phones, in the local language.
@@ -234,6 +239,12 @@ another member.
 `returnedAt`, `returnedBy`. A vehicle's state is *derived* — out if it has a movement with no
 `returnedAt`, otherwise in the station. Derived from movements only, never from responses.
 
+**`CitizenReport`** — a local intake record kept separate from every operational fact. `kind`,
+`description`, typed `incidentLocation`, optional coordinates captured only after explicit browser
+permission, `photoIncluded` (boolean only), `status`, `createdAt`, `reviewedAt`, `reviewedBy`.
+The photograph's bytes and local filename are never persisted. `status` can only say
+`SACUVANA_LOKALNO` or `PREGLEDANA_U_SIMULACIJI`; neither claims delivery, acceptance or dispatch.
+
 **`ActivityEntry`** — append-only. `id`, `at`, `actorId`, `actorName`, `kind`, `summary`,
 `exerciseId`. Every state change writes one. Nothing rewrites or deletes them except the explicit
 demo reset.
@@ -275,6 +286,8 @@ Acceptance:
 - [x] No real people, no real numbers, no real addresses anywhere in the repository.
 - [x] Simulation and non-delivery are visible on screen, not only in documentation.
 - [x] Unit tests over the domain rules; browser tests over the whole flow at phone and desktop sizes; automated accessibility checks with material findings fixed.
+- [x] Citizen-report intake can be demonstrated end to end in one browser while structurally
+      creating no exercise, call, delivery, member response or vehicle movement.
 
 ### Phase 2 — Real accounts, server authorisation, shared data
 
@@ -349,7 +362,7 @@ Entry conditions, all of which must hold before this phase is even planned:
 
 ### Later possibilities, recorded but not planned
 
-Citizen reporting; automatic regional dispatch; hydrant and AED map layers; availability scheduling;
+Real citizen-report delivery; automatic regional dispatch; hydrant and AED map layers; availability scheduling;
 station door control; integration with official dispatch systems; statistics and annual reports;
 station display hardware. Each is a separate decision. None is implied by anything built so far.
 
