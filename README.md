@@ -18,12 +18,15 @@ an emergency.
 
 ## Run it
 
+Requires Node.js 22.12 or newer on an even-numbered release line (22, 24, 26+), matching Vitest's
+supported Node versions.
+
 ```bash
 npm install
 npm run dev        # http://localhost:5173
 ```
 
-Build a static copy (a plain folder, no server needed):
+Build the static output and serve it locally for review:
 
 ```bash
 npm run build && npm run preview

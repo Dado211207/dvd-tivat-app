@@ -15,9 +15,9 @@ Tivat call-out and response. No server, no accounts, no notifications, no real d
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public. Do not create another.
-- Working branch: `codex/member-response-confirmation`, based on
-  `claude/dvd-tivat-app-dev-n8wctb@35a6416`. Keep this as a separate review; do not rewrite or
-  force-push the Claude branch.
+- Working branch: `codex/dev-toolchain-security`, stacked on
+  `codex/member-response-confirmation`. Keep each as a separate review; do not rewrite or force-push
+  either base branch.
 - Default branch: `main`. Do not merge; the owner decides.
 - No `LICENSE` file. The owner has not chosen a licence and one must not be added for them.
 
@@ -89,8 +89,8 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Review Draft PR #3, which has exact-head browser/accessibility evidence recorded in
-[WORK_LOG.md](./WORK_LOG.md). After that, take the prototype to the meeting with the society and answer
+Review Draft PR #3 and the stacked toolchain Draft PR #4; their browser/accessibility evidence is
+recorded in [WORK_LOG.md](./WORK_LOG.md). After that, take the prototype to the meeting with the society and answer
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
 Phase 2 until Q1 and Q12 are answered — the first can invalidate the plan, the second decides
 whether the project is worth continuing at all.
