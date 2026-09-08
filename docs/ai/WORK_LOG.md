@@ -5,6 +5,49 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-07 — Isolate unsent member drafts between simulated actors
+
+**Finding and reproduction**
+
+`MemberView` kept its answer draft, ETA, direct-to-location choice, error and edit mode in component
+state. Switching the simulated actor did not unmount that view, so a second fictional member could
+inherit the first member's unsent form. Nothing had been persisted, but the second member could
+submit the inherited choices as their own.
+
+The regression was pushed before the correction. GitHub run 34148415755, job 101825317231, attempt
+1 failed on both desktop and phone: after switching from Ivan to Petar, `submit-response` still had
+count 1 instead of 0. The rest of the browser suite passed (38 passed, 2 failed).
+
+**Correction**
+
+- Key only the member view by the simulated actor id. React now remounts that local form when the
+  simulated person changes, discarding the old person's unsent draft.
+- Other views are not keyed by actor, so changing the simulation selector cannot erase an
+  in-progress dispatcher or vehicle form.
+- The regression verifies a delayed/direct draft, switches actors twice, requires clean controls,
+  and finally confirms that all four called members still have no recorded response.
+
+**Verified**
+
+| Check | Result |
+|---|---|
+| Full `npm audit` | **0 vulnerabilities** |
+| ESLint | Passes |
+| Vitest 5 | **47 passed** |
+| Strict TypeScript + Vite 8 production build | Passes |
+| GitHub CI run 34148622458, job 101825935869, attempt 1 | **Success** |
+| Playwright + axe | **40 passed** — 20 desktop and 20 phone |
+
+The failing run remains recorded; it was not rerun. The passing result came from the next commit
+containing the product correction.
+
+**Next concrete action**
+
+Review stacked Draft PR #5. The committed screenshot files still need regeneration before the
+meeting; the screenshot test is updated, but this environment could not download Chromium.
+
+---
+
 ## 2026-09-07 — Development toolchain security update
 
 **Finding**

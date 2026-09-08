@@ -121,7 +121,10 @@ export function App() {
       <main className={route === 'prikaz' ? 'main main--wide' : 'main'} id="main">
         {storageWarning ? <Notice tone="error">{storageWarning}</Notice> : null}
         <VisibleNotice />
-        <View />
+        {/* A member form contains an unsent local draft. Remount only this view
+            when the simulated person changes so one member can never inherit
+            another member's answer, ETA, destination, error or edit state. */}
+        <View key={route === 'clan' ? state.simulation.actorId : route} />
       </main>
 
       <footer className="foot">
