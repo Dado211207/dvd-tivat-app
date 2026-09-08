@@ -12,6 +12,7 @@ import { CITIZEN_REPORT_KIND_LABEL, formatTime } from '@/i18n/labels';
 import { makeId, useApp, useStableCommandId } from '@/state/AppStateContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
+import { hrefFor } from '../router';
 
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -345,7 +346,16 @@ export function CitizenReportView() {
                       Oznaci kao pregledanu u simulaciji
                     </button>
                   ) : (
-                    <p className="small muted">Ovo ne znaci da je prijava prihvacena niti da je ekipa krenula.</p>
+                    <div className="report-item__next">
+                      <p className="small muted">Ovo ne znaci da je prijava prihvacena niti da je ekipa krenula.</p>
+                      <a
+                        className="btn btn--primary"
+                        href={`${hrefFor('dezurni')}?dojava=${encodeURIComponent(report.id)}`}
+                        data-testid="prepare-call-from-report"
+                      >
+                        Pripremi poziv iz prijave
+                      </a>
+                    </div>
                   )}
                 </li>
               ))}

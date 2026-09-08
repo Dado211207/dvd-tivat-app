@@ -57,7 +57,9 @@ Everything in this list is implemented and running in the repository.
 - A **local citizen-report demonstration**: event type, description, typed place, optional
   device location requested only after an explicit press, optional in-session photo preview,
   exact review, local save, and a separate "reviewed in simulation" action for DVD Tivat.
-  It sends nothing and cannot create a call-out, delivery, response or vehicle movement.
+  A reviewed report can prefill a dispatcher draft, but the duty officer must still choose
+  recipients and confirm the normal preview. It sends nothing and cannot itself create a
+  call-out, delivery, response or vehicle movement.
 
 ### A.3 What the prototype deliberately does **not** do
 

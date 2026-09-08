@@ -18,7 +18,7 @@ import {
   isDeliveryUnattempted,
 } from '@/domain/selectors';
 import { OPEN_STATUSES, type ExerciseKind, type ExerciseStatus, type Id } from '@/domain/types';
-import { ANSWER_LABEL, DELIVERY_LABEL, formatTime, STATUS_LABEL, T } from '@/i18n/labels';
+import { ANSWER_LABEL, CITIZEN_REPORT_KIND_LABEL, DELIVERY_LABEL, formatTime, STATUS_LABEL, T } from '@/i18n/labels';
 import { makeId, useApp, useStableCommandId } from '@/state/AppStateContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DeliveryNotice } from '../components/DeliveryNotice';
@@ -34,6 +34,7 @@ import {
   StatusChip,
   Total,
 } from '../components/primitives';
+import { readRouteParam } from '../router';
 
 const KINDS: ExerciseKind[] = ['VJEZBA', 'TEST', 'SIMULIRANA_INTERVENCIJA'];
 
@@ -57,10 +58,18 @@ export function DispatcherView() {
 function Composer() {
   const { state, run, check, announce } = useApp();
 
-  const [kind, setKind] = useState<ExerciseKind>('VJEZBA');
-  const [title, setTitle] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [incidentLocation, setIncidentLocation] = useState('');
+  const reportId = readRouteParam('dojava');
+  const sourceReport = state.citizenReports.find(
+    (report) => report.id === reportId && report.status === 'PREGLEDANA_U_SIMULACIJI',
+  );
+  const sourceLocation = sourceReport?.incidentLocation || (sourceReport?.coordinates
+    ? `${sourceReport.coordinates.latitude.toFixed(6)}, ${sourceReport.coordinates.longitude.toFixed(6)}`
+    : '');
+
+  const [kind, setKind] = useState<ExerciseKind>(sourceReport ? 'SIMULIRANA_INTERVENCIJA' : 'VJEZBA');
+  const [title, setTitle] = useState(sourceReport ? `Dojava: ${CITIZEN_REPORT_KIND_LABEL[sourceReport.kind]}` : '');
+  const [instructions, setInstructions] = useState(sourceReport?.description ?? '');
+  const [incidentLocation, setIncidentLocation] = useState(sourceLocation);
   const [reporterLocation, setReporterLocation] = useState('');
   const [memberIds, setMemberIds] = useState<Id[]>([]);
   const [groupIds, setGroupIds] = useState<Id[]>([]);
@@ -145,6 +154,17 @@ function Composer() {
         </div>
 
         {error && !error.field ? <Notice tone="error">{error.message}</Notice> : null}
+
+        {sourceReport ? (
+          <Notice tone="warn">
+            Polja su unaprijed popunjena iz lokalno pregledane probne prijave. Provjerite svaki
+            detalj i sami izaberite primaoce. Poziv jos nije kreiran niti poslat.
+          </Notice>
+        ) : reportId ? (
+          <Notice tone="error">
+            Probna prijava nije pronadjena ili jos nije oznacena kao pregledana. Nista nije kreirano.
+          </Notice>
+        ) : null}
 
         {/* No onSubmit: sending happens only from the preview dialog. */}
         <div>

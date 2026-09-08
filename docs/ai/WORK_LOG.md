@@ -455,6 +455,8 @@ Scaffold the React + TypeScript + Vite project per `docs/ARCHITECTURE.md` §1, t
 - Added a separate DVD Tivat inbox action that can say only "reviewed in simulation". The domain
   structurally prevents report submission or review from creating an exercise, call, delivery,
   member response or vehicle movement.
+- A reviewed item may prefill the existing dispatcher composer. It selects no recipients and
+  creates nothing until the duty officer reviews and explicitly confirms the ordinary call flow.
 - Bumped the JSON schema to 2 with one explicit lossless migration from schema 1: add an empty
   report inbox. Unknown versions are still rejected.
 

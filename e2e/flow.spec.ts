@@ -49,7 +49,11 @@ test('citizen report is reviewed, saved locally and never becomes a call', async
   await expect(reports).toContainText('Pregledana u simulaciji');
   await expect(reports).toContainText('ne znaci da je prijava prihvacena');
 
-  await goTo(page, 'dezurni');
+  await page.getByTestId('prepare-call-from-report').click();
+  await expect(page.getByLabel(/^Naslov/)).toHaveValue('Dojava: Pozar ili dim');
+  await expect(page.getByLabel(/^Uputstvo za clanove/)).toHaveValue(/Gust dim/);
+  await expect(page.getByLabel(/^Lokacija dogadjaja/)).toHaveValue('Izmisljeni orijentir');
+  await expect(page.getByTestId('selected-count')).toContainText('0');
   await expect(page.getByRole('heading', { name: 'Nova vjezba' })).toBeVisible();
   await expect(page.getByTestId('active-title')).toHaveCount(0);
 });
