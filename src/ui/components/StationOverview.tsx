@@ -26,9 +26,9 @@ export function StationOverview() {
         </span>
       </div>
       <dl className="station-overview__facts">
-        <div><dt>Clanovi</dt><dd data-testid="overview-members">{state.members.length}</dd><span>u demonstraciji</span></div>
-        <div><dt>Grupe</dt><dd>{state.groups.length}</dd><span>probnih grupa</span></div>
-        <div><dt>Vozila u domu</dt><dd data-testid="overview-vehicles">{inStation}<span> / {state.vehicles.length}</span></dd><span>rucno evidentirano</span></div>
+        <div><dt>Clanovi</dt><dd data-testid="overview-members">{state.members.length}</dd><dd className="station-overview__fact-note">u demonstraciji</dd></div>
+        <div><dt>Grupe</dt><dd>{state.groups.length}</dd><dd className="station-overview__fact-note">probnih grupa</dd></div>
+        <div><dt>Vozila u domu</dt><dd data-testid="overview-vehicles">{inStation}<span> / {state.vehicles.length}</span></dd><dd className="station-overview__fact-note">rucno evidentirano</dd></div>
       </dl>
     </section>
   );

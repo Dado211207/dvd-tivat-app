@@ -30,6 +30,13 @@ locally because its Chromium binary was absent. One installation attempt was mad
 or returned 502, so it was not repeated. Browser, accessibility, responsive and screenshot evidence
 will come from the existing GitHub workflow on the exact branch head rather than being guessed.
 
+**First browser result and correction:** CI run `34233620774`, job `102085644202`, attempt 1,
+failed five accessibility scenarios while all functional browser scenarios passed. Axe found the
+new footer colour at 4.35:1 instead of the required 4.5:1 and found three explanatory `span`
+elements inside a definition-list group. The result was not rerun. The next commit darkens the
+shared faint-text token with margin, increases footer text slightly, and represents each fact note
+as a proper `dd`; no accessibility assertion was changed.
+
 **Next:** push one atomic branch commit, open a Draft PR, run the existing 48 browser/accessibility
 checks and two screenshot scenarios, then visually inspect the generated desktop and phone PNGs.
 Do not merge or create the replacement video before owner review.

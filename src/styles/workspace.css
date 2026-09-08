@@ -341,7 +341,7 @@ body {
 .foot {
   grid-area: footer;
   padding: 18px 34px 22px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--c-ink-faint);
   text-align: left;
   border-top: 1px solid var(--c-line);
@@ -468,10 +468,13 @@ body {
   color: var(--c-ink-faint);
 }
 
-.station-overview__facts > div > span {
+.station-overview__fact-note {
   display: block;
   overflow: hidden;
+  margin: 0;
   font-size: 0.62rem;
+  font-weight: 400;
+  line-height: 1.35;
   color: var(--c-ink-faint);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -953,7 +956,7 @@ dialog {
     font-size: 1.4rem;
   }
 
-  .station-overview__facts > div > span {
+  .station-overview__fact-note {
     display: none;
   }
 
