@@ -34,8 +34,14 @@ will come from the existing GitHub workflow on the exact branch head rather than
 failed five accessibility scenarios while all functional browser scenarios passed. Axe found the
 new footer colour at 4.35:1 instead of the required 4.5:1 and found three explanatory `span`
 elements inside a definition-list group. The result was not rerun. The next commit darkens the
-shared faint-text token with margin, increases footer text slightly, and represents each fact note
+shared faint-text token with a safety margin, increases footer text slightly, and represents each fact note
 as a proper `dd`; no accessibility assertion was changed.
+
+**Second browser result and correction:** CI run `34234136013`, job `102087384224`, attempt 1,
+passed 46 browser scenarios and failed the same active-vehicle contrast check on desktop and phone.
+The `Izaslo` chip measured 4.38:1 against its pale accent surface. That run was not rerun. The next
+commit changes the light-theme accent from `#087b8c` to `#077687`, a measured 4.68:1 on that surface;
+the existing dark-theme token is unchanged and no test or semantic status is changed.
 
 **Next:** push one atomic branch commit, open a Draft PR, run the existing 48 browser/accessibility
 checks and two screenshot scenarios, then visually inspect the generated desktop and phone PNGs.
