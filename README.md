@@ -1,17 +1,33 @@
-# DVD Tivat — exercise prototype
+# DVD Tivat — internal mobilisation and intervention records
 
-A coordination prototype for a volunteer fire society: raise a call-out, choose
-exactly who it goes to, confirm it, and watch real answers arrive — while
-vehicle movements, the operational status of the incident and the society's own
-record stay **separate facts that no single action is allowed to fake**.
+An **internal** coordination system for a volunteer fire society: an authorised
+commander publishes an intervention with verified details and an exact location,
+approved firefighters receive it and respond, and the society keeps a reliable
+record of who actually attended, where, when they arrived, when they left and
+how long each interval lasted — while response intent, notification state,
+vehicle movements and the operational status of the incident stay **separate
+facts that no single action is allowed to fake**.
 
-> **This is a simulation.** It runs entirely in one browser, it sends **no push
-> notification, no SMS and no phone call to anyone**, and its account screen is
-> a workflow preview: the role selector is a demonstration control, not a login. Every member,
-> contact label, vehicle and location in this repository is invented.
+> ### This is not a public emergency reporting channel
+>
+> It is **not** a replacement for calling the official fire service, and nobody
+> should ever be encouraged to use it instead. Owner decision of 9 September
+> 2026. The earlier citizen-report screen is abandoned research, kept only
+> behind an explicitly experimental heading.
 
-Status: **Phase 1 — working prototype for discussion with the society.** Nothing
-here is agreed with DVD Tivat yet, and nothing here is ready to be relied on in
+> **The application is still a local prototype.** It runs in one browser, it
+> sends **no push notification, no SMS and no phone call to anyone**, and its
+> role selector is a demonstration control, not a login. Every member, contact
+> label, vehicle and location in this repository is invented.
+>
+> The **database schema** is a step ahead of the application: it is written and
+> integration-tested against real PostgreSQL, but no Supabase project exists and
+> no application code is connected to it yet. See
+> [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) for exactly
+> what is and is not enforced.
+
+Status: **prototype plus a verified server contract.** Nothing is agreed with
+DVD Tivat yet, nothing is deployed, and nothing here is ready to be relied on in
 an emergency.
 
 The member-confirmed operating profile is represented at realistic scale: 52 fictional roster rows,
@@ -44,12 +60,18 @@ npm run build && npm run preview
 npm run lint         # ESLint, including static accessibility rules
 npm run typecheck    # tsc --noEmit, strict
 npm run test         # Vitest - domain rules and storage failure handling
+npm run test:db      # PostgreSQL - migrations, role matrix, RLS, attendance
 npm run e2e          # Playwright - full flow, keyboard, axe accessibility
 npm run screenshots  # regenerates docs/screenshots/ (writes into the repo)
 ```
 
 `npm run e2e` needs a browser once: `npm run e2e:install`. If your environment
 already provides one, point at it with `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromium`.
+
+`npm run test:db` needs a real PostgreSQL 16 - no Supabase project, credentials
+or paid service. `npm run db:start` provides a throwaway one; see
+[docs/DATABASE.md](docs/DATABASE.md). It drops and recreates schemas, so point it
+only at a scratch database.
 
 ## The screens
 
@@ -62,7 +84,7 @@ already provides one, point at it with `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromi
 | **Clanovi** | Everyone; editable in the admin simulation | The fictional roster, groups and vehicles, with a local-only editor for invented demonstration records |
 | **Nalozi i pristup** | Owner-workflow discussion | Shows email verification, citizen-by-default registration and owner-only role assignment with fictional local rows |
 | **Istorija** | Everyone | Past exercises, the timestamped activity log, and a confirmed demo reset |
-| **Dojava gradjana** | Citizen-workflow discussion | Locally review and save an untrusted fictional report; an authorised simulation may use it only to prefill the normal confirmed call flow |
+| **Prijava gradjana (istrazivanje)** | **Abandoned research, not part of the product** | Out of the operational navigation groups. Retained only so reviewed work can be reused, behind an explicitly experimental heading and a non-emergency notice |
 
 The application opens straight into the duty officer's screen. There is no
 landing page — the point of a prototype is to be driven.
@@ -75,7 +97,9 @@ landing page — the point of a prototype is to be driven.
 | Authentication or permissions | The role selector switches which fictional person the screen pretends to be. It protects nothing |
 | Shared data | State lives in one browser's `localStorage`. Two devices show two unrelated worlds, and clearing browser data deletes it |
 | Real member data | The repository is public. Everything is invented |
-| Real citizen-report delivery, radius dispatch, door control, official integrations, continuous location tracking | The prototype demonstrates local intake only. It contacts nobody and tracks nobody |
+| Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
+| Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
+| A connected server | The schema is written and tested, but no Supabase project exists and no application code uses it. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
 
 **A browser prototype is not evidence that a locked Android or iPhone will raise
 an alarm.** Whether that is achievable at all depends on platform permissions,
@@ -90,7 +114,9 @@ store policy and delivery acknowledgements, and it is a separate investigation
 | [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md) | Member-confirmed membership, vehicles, assembly flow and phone mix, separated from pending product decisions |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack choice and rejected alternatives, layering, the pure domain reducer, persistence limits, path to mobile |
 | [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) | Gated server, identity, notification and mobile architecture if DVD Tivat accepts the workflow |
-| [docs/ACCOUNTS_REPORTS_MAP_PLAN.md](docs/ACCOUNTS_REPORTS_MAP_PLAN.md) | Detailed account, email-code, owner access, incident map, photo and report-alert plan plus production gates |
+| [docs/ACCESS_MODEL.md](docs/ACCESS_MODEL.md) | **The account, role and row-level-security contract, and exactly what is not enforced yet** |
+| [docs/DATABASE.md](docs/DATABASE.md) | **Schema semantics, the attendance rules, and how to run the database tests** |
+| [docs/ACCOUNTS_REPORTS_MAP_PLAN.md](docs/ACCOUNTS_REPORTS_MAP_PLAN.md) | Earlier account, email-code, owner access, incident map and photo plan. Superseded on citizen reporting by the internal-operations decision |
 | [docs/FIREAPP_REVIEW.md](docs/FIREAPP_REVIEW.md) | What the reference product's public documentation says, per-claim, with what was and was not verified |
 | [docs/FIRST_TEST_CHECKLIST.md](docs/FIRST_TEST_CHECKLIST.md) | Exact simulation-only pass/fail checks for the owner's first desktop and phone test |
 | [docs/PRESENTATION_SCRIPT.md](docs/PRESENTATION_SCRIPT.md) | An 8–10 minute first presentation with honest spoken boundaries and decisions to collect |

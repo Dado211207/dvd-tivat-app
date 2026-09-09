@@ -1,14 +1,22 @@
 /**
- * Citizen-report intake for the presentation prototype.
+ * ABANDONED RESEARCH - not part of the product.
  *
- * This deliberately stops at local intake and review. It has no network
- * client, no notification channel and no emergency-service integration, so it
- * cannot accidentally become an operational reporting path during a demo.
+ * The owner decided on 9 September 2026 that DVD Tivat is an INTERNAL
+ * mobilisation and intervention-record system, and explicitly not a replacement
+ * for calling the official fire service. Citizen reporting is therefore out of
+ * the production promise and out of the operational navigation groups.
+ *
+ * The screen is retained only so reviewed work (map picker, coordinate
+ * provenance, review flow) can be reused, and it stays behind an explicitly
+ * experimental heading. It has no network client, no notification channel and
+ * no emergency-service integration, so it cannot become an operational
+ * reporting path. Do not promote it back into the product without a new,
+ * explicit owner decision.
  */
 
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { CitizenReportKind, ReportCoordinates } from '@/domain/types';
-import { CITIZEN_REPORT_KIND_LABEL, formatTime } from '@/i18n/labels';
+import { CITIZEN_REPORT_KIND_LABEL, formatTime, NOT_AN_EMERGENCY_CHANNEL } from '@/i18n/labels';
 import { makeId, useApp, useStableCommandId } from '@/state/AppStateContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IncidentMapPicker, ReportMap } from '../components/IncidentMap';
@@ -179,11 +187,17 @@ export function CitizenReportView() {
 
   return (
     <>
-      <h1 className="sr-only">Prijava gradjana</h1>
+      <h1 className="sr-only">Prijava gradjana - napusteni istrazivacki prototip</h1>
 
       <Notice tone="error">
-        <strong>Ovo nije kanal za hitne slucajeve.</strong> Prototip ne salje prijavu DVD Tivat-u
-        niti bilo kojoj sluzbi. U neposrednoj opasnosti koristite zvanicni kanal za hitne slucajeve.
+        <strong>Ovo nije kanal za hitne slucajeve.</strong> {NOT_AN_EMERGENCY_CHANNEL}
+      </Notice>
+
+      <Notice tone="warn">
+        <strong>Napusteno istrazivanje.</strong> Vlasnik je 9. septembra 2026. odlucio da DVD Tivat
+        aplikacija bude interni sistem za mobilizaciju i evidenciju intervencija, a ne zamjena za
+        pozivanje zvanicne vatrogasne sluzbe. Ovaj ekran se cuva samo kao istrazivacki materijal i
+        nije dio proizvoda.
       </Notice>
 
       <div className="report-layout">

@@ -5,6 +5,102 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-09 - Internal-operations direction, and a verified database contract
+
+**Product direction (highest priority of the brief).** Recorded the owner's decision that DVD Tivat
+is an internal mobilisation and intervention-record system and **not** a replacement for calling the
+official fire service. Citizen reporting was the FIRST item in primary navigation; it is now out of
+the operational groups, under an explicitly experimental heading, with a non-emergency notice and an
+"abandoned research" notice on the screen itself. The wording deliberately does not invent an
+emergency telephone number - that is blocker B4 for the owner.
+
+**Base chosen and reported.** Branched from `codex/access-map-research` (`f1111d5`), the newest
+coherent tree, rather than from `main`. Verified first that `main` is an ancestor of it and that the
+previous branch head `35a6416` (merged as PR #1) is contained in it, so nothing was discarded and no
+force-push was needed. The stack is linear: `main` -> #9 -> #10 -> #11 -> #12 -> `f1111d5`.
+
+**The database is now real, and tested.** This was the repository's largest unverified risk: a
+migration that had never been applied anywhere, with an access model that existed only on paper.
+
+- `202609090001` left **untouched**, so a database that already applied it converges with a clean
+  one. All repairs are additive in `202609090002`.
+- Repaired the confirmed defects: `current_dvd_role()` now requires an **active** grant AND a
+  **complete** profile AND one of the four operational roles (it previously checked none of that, so
+  a suspended or half-registered account kept its privileges); added `owner_set_account_active` with
+  a mandatory reason and a status audit (the owner could grant roles but never take access away);
+  enforced at most three images per report; tightened the report-insert policy from "any
+  authenticated user" to an active account.
+- Added `PENDING` as the default so an unapproved account holds nothing, and enforced **exactly one
+  owner** with a partial unique index rather than with application code that could be forgotten.
+- Added the internal-operations schema: members/groups/vehicles, interventions with an explicit
+  lifecycle, frozen recipient sets, an honest notification outbox with separate provider-attempt
+  rows, responses with retained revisions, vehicle movements, an operational audit, and
+  **attendance intervals** - the primary new capability.
+- All writes go through `security definer` commands; RLS grants reads only. There is no direct
+  insert or update path a client could use to forge an operational fact.
+
+**Attendance, per the brief's core requirement.** Several intervals per member per intervention;
+trusted server timestamps; user-reported times kept as separate columns that duration never reads;
+duration derived as the sum of closed intervals with open ones reported separately; corrections
+requiring a reason and preserving before/after immutably; and closing an intervention with open
+intervals refused unless command explicitly acknowledges it - the intervals are then left open
+rather than given an invented checkout time. A member being in two places at once is refused by an
+**exclusion constraint across all interventions**, so participation hours cannot be double-counted;
+that rule is documented as a decision in `docs/DATABASE.md`.
+
+**Resolved the location contract mismatch.** The interface allowed a coordinate-only report while
+the SQL demanded 2-300 characters, so a valid-looking submission would have failed at the database
+boundary. The contract is now one thing: typed text always required, coordinates optional and
+carrying their provenance and capture time. Both the accepted and the rejected path are tested.
+
+**Verified**
+
+| Check | Command | Result |
+|---|---|---|
+| Lint | `npm run lint` | Pass |
+| Types (strict) | `npm run typecheck` | Pass |
+| Unit | `npm run test` | **91 passed** |
+| Database + RLS | `npm run test:db` | **81 passed** |
+| Build | `npx vite build` | Pass |
+| Browser + axe | `npm run e2e` | **66 passed** |
+
+The database tests run against real PostgreSQL 16.13 - no Supabase project, no credentials, no paid
+service. Every test switches to the non-superuser `authenticated` role first; without that
+PostgreSQL would bypass RLS and the suite would pass while proving nothing. Added a `postgres:16`
+service container to CI so the same suite runs on a standard GitHub runner.
+
+**Three real defects found by these tests and fixed at the cause**
+
+1. `current_dvd_role()` returned `'PENDING'` for unapproved accounts. No permission leaked, because
+   `is_dvd_staff()` excluded it, but "no internal role" was not one unambiguous value and a policy
+   written later could have mistaken it for a role. It now returns NULL.
+2. `effective_eta not in (15, 30, 60)` is NULL when the ETA is NULL, so a missing arrival band fell
+   through the guard to the table constraint and the caller got an opaque error instead of
+   `ETA_REQUIRED`. Classic SQL NULL trap.
+3. `current_account_status()` was reachable by `anon`. Least privilege: an anonymous visitor already
+   knows it is anonymous and needs nothing from the operational schema.
+
+**Not done, and honestly not claimed**
+
+- **No application code uses the new schema.** The browser prototype still runs on device-local
+  state with a simulated actor. The schema is verified; the client is not connected to it.
+- No Supabase project exists, so registration, email verification, password reset, session
+  invalidation for suspended accounts, storage uploads and realtime remain unproven. Blocker B1.
+- The Supabase platform surface in the tests is emulated (`supabase/tests/00_supabase_stub.sql`). It
+  reproduces `auth.uid()` from JWT claims, the three database roles and the storage helpers; it does
+  not reproduce GoTrue, the API gateway or realtime.
+- No notification transport, no CSV export, no owner/admin write commands for members, groups and
+  vehicles, no PWA decision, no deployment, no device testing.
+
+**Next concrete action**
+
+Wire the application to the verified schema: a global auth/access state that loads profile, role and
+status before protected routes render, then real protected routes, then the commander publish flow
+and the attendance board. This needs blocker **B1** (a Supabase project) resolved first - the wiring
+cannot be honestly verified without one.
+
+---
+
 ## 2026-09-09 — Accounts, owner roles and incident-map foundation
 
 **Requested workflow:** added the detailed design for email/password signup, a six-digit email

@@ -51,14 +51,24 @@ const VIEWS: Record<Route, ComponentType> = {
   istorija: HistoryView,
 };
 
+/**
+ * Navigation order follows the owner's decision of 9 September 2026: this is an
+ * INTERNAL mobilisation and intervention-record system. Citizen reporting is no
+ * longer part of the product promise, so it is not in the operational groups and
+ * is never the first thing the application offers. It stays reachable only under
+ * an explicitly experimental heading, because deleting it would discard reviewed
+ * work that may still be reused - but it must never read as a way to report a
+ * fire. Nobody may be encouraged to use this instead of calling the official
+ * emergency service.
+ */
 const NAV_GROUPS: { label: string; routes: Route[] }[] = [
-  { label: 'Prijava', routes: ['dojava'] },
   { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
   { label: 'Evidencija', routes: ['clanovi', 'nalozi', 'istorija'] },
+  { label: 'Istrazivanje (nije u upotrebi)', routes: ['dojava'] },
 ];
 
 const ROUTE_DESCRIPTION: Record<Route, string> = {
-  dojava: 'Probna prijava dogadjaja i lokalni pregled DVD Tivat-a',
+  dojava: 'Napusteni istrazivacki prototip. Nije kanal za prijavu hitnih slucajeva',
   dezurni: 'Priprema poziva i pracenje odziva ekipe',
   clan: 'Poziv i odgovor iz ugla izabranog clana',
   vozila: 'Rucna evidencija izlaska i povratka vozila',

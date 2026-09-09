@@ -34,8 +34,17 @@ export const NAV = {
   clanovi: 'Clanovi',
   nalozi: 'Nalozi i pristup',
   istorija: 'Istorija',
-  dojava: 'Prijava gradjana',
+  dojava: 'Prijava gradjana (istrazivanje)',
 } as const;
+
+/**
+ * Shown wherever the abandoned citizen-report research is reachable. The
+ * application must never compete with the official emergency service, and the
+ * exact number to display is an owner decision (see docs/ai/PROJECT_STATE.md),
+ * so this wording does not invent one.
+ */
+export const NOT_AN_EMERGENCY_CHANNEL =
+  'Ovo nije kanal za prijavu hitnih slucajeva. Kod pozara ili nesrece odmah pozovite zvanicnu vatrogasnu sluzbu telefonom. Ovaj ekran je napusteni istrazivacki prototip: nista se ne salje niti stize do DVD Tivat-a.';
 
 export const CITIZEN_REPORT_KIND_LABEL = {
   POZAR_ILI_DIM: 'Pozar ili dim',

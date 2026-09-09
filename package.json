@@ -18,7 +18,10 @@
     "e2e": "playwright test --grep-invert @screenshots",
     "e2e:install": "playwright install --with-deps chromium",
     "screenshots": "playwright test --project=desktop --grep @screenshots",
-    "verify": "npm run lint && npm run test && npm run build"
+    "verify": "npm run lint && npm run test && npm run build",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "db:start": "bash scripts/local-postgres.sh start",
+    "db:stop": "bash scripts/local-postgres.sh stop"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -33,6 +36,7 @@
     "@playwright/test": "^1.49.1",
     "@types/leaflet": "^1.9.20",
     "@types/node": "^22.20.1",
+    "@types/pg": "^8.23.1",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "6.1.1",
@@ -41,6 +45,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
     "jsdom": "^25.0.1",
+    "pg": "^8.23.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.0",
     "vite": "8.2.2",
