@@ -67,6 +67,27 @@ describe('citizen report intake', () => {
     expect(after.citizenReports[0]!.coordinates).toEqual(coordinates);
   });
 
+  it('retains map provenance and rejects incomplete provenance', () => {
+    const { ctx } = makeCtx();
+    const coordinates = {
+      latitude: 42.4319,
+      longitude: 18.7112,
+      accuracyMeters: null,
+      source: 'MAP_PIN' as const,
+      capturedAt: '2026-09-09T07:00:00.000Z',
+    };
+    const after = must(emptyState(), report({ incidentLocation: '', coordinates }), ctx);
+    expect(after.citizenReports[0]!.coordinates).toEqual(coordinates);
+
+    const invalid = applyCommand(
+      emptyState(),
+      report({ incidentLocation: '', coordinates: { ...coordinates, capturedAt: undefined } }),
+      ctx,
+    );
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) expect(invalid.error.code).toBe('NEISPRAVNE_KOORDINATE');
+  });
+
   it('rejects impossible or non-finite coordinates', () => {
     const { ctx } = makeCtx();
     for (const coordinates of [

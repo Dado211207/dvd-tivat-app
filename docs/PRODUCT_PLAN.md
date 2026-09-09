@@ -8,6 +8,8 @@ without diacritics.
 Companion documents: [FIREAPP_REVIEW.md](./FIREAPP_REVIEW.md) (what the reference product
 documents and how well we verified it), [ARCHITECTURE.md](./ARCHITECTURE.md) (how the prototype is
 built), [PRODUCTION_ARCHITECTURE.md](./PRODUCTION_ARCHITECTURE.md) (the gated path after approval),
+[ACCOUNTS_REPORTS_MAP_PLAN.md](./ACCOUNTS_REPORTS_MAP_PLAN.md) (the detailed verified-account,
+owner-controlled role, report, photo and map design),
 [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) (where the work currently stands).
 
 ---
@@ -135,6 +137,12 @@ already trusts must remain in place.
 ---
 
 ## B. Roles and permissions
+
+The four-role matrix below is retained as the original call-out prototype chronology. The proposed
+production account model now has five roles (`OWNER`, `ADMIN`, `COMMANDER`, `FIREFIGHTER`,
+`CITIZEN`) and is authoritative in [ACCOUNTS_REPORTS_MAP_PLAN.md §3](./ACCOUNTS_REPORTS_MAP_PLAN.md#3-roles-and-permissions).
+In particular, every new verified account starts as a citizen and only the owner can grant a higher
+role. The role selector in this prototype remains a simulation and grants nothing.
 
 ### B.1 The four roles
 

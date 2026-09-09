@@ -92,7 +92,13 @@ export interface SubmitCitizenReport extends Base {
   kind: CitizenReportKind;
   description: string;
   incidentLocation: string;
-  coordinates: { latitude: number; longitude: number; accuracyMeters: number | null } | null;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number | null;
+    source?: 'DEVICE' | 'MAP_PIN';
+    capturedAt?: string;
+  } | null;
   photoIncluded: boolean;
 }
 

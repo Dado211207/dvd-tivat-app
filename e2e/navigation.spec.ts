@@ -19,11 +19,11 @@ test('keyboard skip link preserves the member route and unsent answer', async ({
   await expect(page.getByTestId('current-answer')).toHaveCount(0);
 });
 
-test('all seven routes stay reachable without page overflow at compact widths', async ({ page }) => {
+test('all eight routes stay reachable without page overflow at compact widths', async ({ page }) => {
   await openApp(page);
   for (const width of [320, 720, 1024]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija']) {
+    for (const route of ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'nalozi', 'istorija']) {
       const link = page.getByTestId(`nav-${route}`);
       await expect(link).toBeVisible();
       const box = await link.boundingBox();

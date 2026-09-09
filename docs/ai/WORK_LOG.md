@@ -5,6 +5,49 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-09 — Accounts, owner roles and incident-map foundation
+
+**Requested workflow:** added the detailed design for email/password signup, a six-digit email
+verification code, name-and-surname completion, citizen-by-default access, and owner-only promotion
+to firefighter, commander or administrator. Names are display data; permissions bind to the
+authentication UUID. The owner role is deliberately absent from assignable roles.
+
+**Report workflow:** specified and tested that every active approved firefighter, commander,
+administrator and owner receives an informational `UNVERIFIED` report alert. This is separate from
+an authorised call-out. Citizens cannot see the member roster, account directory, other reports or
+operational details.
+
+**Prototype UI:** added an eighth `Nalozi i pristup` view with the five-step registration flow and
+a searchable fictional owner directory. It lets the owner simulation review role assignment without
+accepting real emails or claiming authentication. Added an interactive Leaflet/OpenStreetMap map to
+citizen intake: explicit device location and explicit map pin carry different sources, and stored
+prototype reports appear with labelled unverified/reviewed markers. CI blocks community tile requests
+rather than using the public tile service as test infrastructure.
+
+**Production foundation:** added a dormant Supabase client for signup, OTP verification, profile
+completion, sign-in and sign-out; a sample file containing only public browser configuration names;
+and a SQL migration for profiles, access grants, role audit, citizen reports and private-media
+metadata with RLS enabled. No project exists or is configured by this change, and the migration is
+not applied anywhere.
+
+**Research:** primary-source security, upload, geolocation, map-policy, push, storage and email limits
+are cited in `ACCOUNTS_REPORTS_MAP_PLAN.md`. Free service allowances are treated as prototype capacity,
+not reliability evidence. Custom SMTP, real role-policy tests, private storage, owner MFA and field
+notification measurements remain gates before involving real people.
+
+**Verification:** ESLint, 91 Vitest tests across eight files, strict TypeScript, production build and
+`git diff --check` pass on the final local tree. The initial build warned that the new map and auth
+libraries pushed one JavaScript chunk over 500 kB; the account and citizen-report views are now lazy
+chunks, reducing the initial bundle to about 230 kB (69 kB gzip). The local Playwright run was
+attempted and all 66 scenarios stopped before page launch because the required Chromium executable
+was absent. Four official CDN attempts then timed out or returned 502, so no browser pass is claimed
+locally. The complete tests remain committed for GitHub CI, which installs its own browser.
+
+**Next:** publish this isolated branch for review and require the exact-head GitHub browser and
+accessibility job to pass. The SQL migration has not been executed because this environment has no
+dedicated Supabase project or local PostgreSQL instance; apply it only after independent review. Do
+not configure a backend, deploy, send email or alert anyone as part of this slice.
+
 ## 2026-09-09 — Prepare the first-test and presentation package
 
 **Source clarification:** the prototype owner confirmed that he is a DVD Tivat

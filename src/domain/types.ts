@@ -92,6 +92,10 @@ export interface ReportCoordinates {
   latitude: number;
   longitude: number;
   accuracyMeters: number | null;
+  /** How this point was selected. Device position is not automatically the incident. */
+  source?: 'DEVICE' | 'MAP_PIN';
+  /** ISO timestamp supplied by the browser at the explicit selection action. */
+  capturedAt?: Timestamp;
 }
 
 export interface CitizenReport {

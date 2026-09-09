@@ -92,8 +92,21 @@ const openMovementFor = (state: AppState, vehicleId: Id): VehicleMovement | unde
   state.vehicleMovements.find((m) => m.vehicleId === vehicleId && m.returnedAt === null);
 
 function coordinatesAreValid(
-  coordinates: { latitude: number; longitude: number; accuracyMeters: number | null },
+  coordinates: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number | null;
+    source?: 'DEVICE' | 'MAP_PIN';
+    capturedAt?: string;
+  },
 ): boolean {
+  const sourceValid = coordinates.source === undefined ||
+    coordinates.source === 'DEVICE' || coordinates.source === 'MAP_PIN';
+  const timestampValid = coordinates.capturedAt === undefined ||
+    Number.isFinite(Date.parse(coordinates.capturedAt));
+  const provenanceComplete =
+    (coordinates.source === undefined && coordinates.capturedAt === undefined) ||
+    (coordinates.source !== undefined && coordinates.capturedAt !== undefined);
   return (
     Number.isFinite(coordinates.latitude) &&
     Number.isFinite(coordinates.longitude) &&
@@ -103,6 +116,9 @@ function coordinatesAreValid(
     coordinates.longitude <= 180 &&
     (coordinates.accuracyMeters === null ||
       (Number.isFinite(coordinates.accuracyMeters) && coordinates.accuracyMeters >= 0))
+    && sourceValid
+    && timestampValid
+    && provenanceComplete
   );
 }
 

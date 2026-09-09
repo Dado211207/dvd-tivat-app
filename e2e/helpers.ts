@@ -5,6 +5,10 @@ import type { Page } from '@playwright/test';
  * profile, so one test cannot leave state behind for another.
  */
 export async function openApp(page: Page, route = 'dezurni') {
+  // The public OSM tile service is not a test dependency. The application map
+  // and marker interactions still render; CI never sweeps community tile
+  // infrastructure on every navigation and screenshot.
+  await page.route('https://*.tile.openstreetmap.org/**', (request) => request.abort());
   await page.goto(`/#/${route}`);
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();

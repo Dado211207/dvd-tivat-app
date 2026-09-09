@@ -2,6 +2,20 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { openApp, switchActor } from './helpers';
 
+test('only the owner simulation can open the account directory and assign a role', async ({ page }) => {
+  await openApp(page, 'nalozi');
+  await expect(page.getByText('Ovaj spisak je sakriven.')).toBeVisible();
+
+  await switchActor(page, 'Marko Perovic');
+  await expect(page.getByRole('heading', { name: 'Svi registrovani nalozi' })).toBeVisible();
+
+  const role = page.getByLabel('Uloga za Probni Korisnik 01');
+  await expect(role).toHaveValue('CITIZEN');
+  await role.selectOption('FIREFIGHTER');
+  await expect(role).toHaveValue('FIREFIGHTER');
+  await expect(page.locator('[aria-live="polite"]')).toContainText('Vatrogasac');
+});
+
 test('an administrator can maintain fictional members, groups and vehicles locally', async ({ page }) => {
   await openApp(page, 'clanovi');
   await expect(page.getByText('Ovaj dio se prikazuje samo kada je izabran')).toBeVisible();

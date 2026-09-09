@@ -6,8 +6,8 @@ vehicle movements, the operational status of the incident and the society's own
 record stay **separate facts that no single action is allowed to fake**.
 
 > **This is a simulation.** It runs entirely in one browser, it sends **no push
-> notification, no SMS and no phone call to anyone**, and it has no accounts:
-> the role selector is a demonstration control, not a login. Every member,
+> notification, no SMS and no phone call to anyone**, and its account screen is
+> a workflow preview: the role selector is a demonstration control, not a login. Every member,
 > contact label, vehicle and location in this repository is invented.
 
 Status: **Phase 1 — working prototype for discussion with the society.** Nothing
@@ -60,6 +60,7 @@ already provides one, point at it with `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromi
 | **Vozila** | Anyone at the station | Log vehicle departures and returns as explicit, independent actions |
 | **Prikaz u bazi** | Station wall display | Large read-only overview: incident, location, totals, answers, vehicles |
 | **Clanovi** | Everyone; editable in the admin simulation | The fictional roster, groups and vehicles, with a local-only editor for invented demonstration records |
+| **Nalozi i pristup** | Owner-workflow discussion | Shows email verification, citizen-by-default registration and owner-only role assignment with fictional local rows |
 | **Istorija** | Everyone | Past exercises, the timestamped activity log, and a confirmed demo reset |
 | **Dojava gradjana** | Citizen-workflow discussion | Locally review and save an untrusted fictional report; an authorised simulation may use it only to prefill the normal confirmed call flow |
 
@@ -89,6 +90,7 @@ store policy and delivery acknowledgements, and it is a separate investigation
 | [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md) | Member-confirmed membership, vehicles, assembly flow and phone mix, separated from pending product decisions |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack choice and rejected alternatives, layering, the pure domain reducer, persistence limits, path to mobile |
 | [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) | Gated server, identity, notification and mobile architecture if DVD Tivat accepts the workflow |
+| [docs/ACCOUNTS_REPORTS_MAP_PLAN.md](docs/ACCOUNTS_REPORTS_MAP_PLAN.md) | Detailed account, email-code, owner access, incident map, photo and report-alert plan plus production gates |
 | [docs/FIREAPP_REVIEW.md](docs/FIREAPP_REVIEW.md) | What the reference product's public documentation says, per-claim, with what was and was not verified |
 | [docs/FIRST_TEST_CHECKLIST.md](docs/FIRST_TEST_CHECKLIST.md) | Exact simulation-only pass/fail checks for the owner's first desktop and phone test |
 | [docs/PRESENTATION_SCRIPT.md](docs/PRESENTATION_SCRIPT.md) | An 8–10 minute first presentation with honest spoken boundaries and decisions to collect |
@@ -101,8 +103,9 @@ store policy and delivery acknowledgements, and it is a separate investigation
 ## Built with
 
 TypeScript, React and Vite; Vitest, Playwright and axe-core for verification.
-No backend, no database, no paid service, and two runtime dependencies (`react`,
-`react-dom`). Reasoning and rejected alternatives in
+The local prototype has no connected backend or paid service. Supabase and Leaflet client libraries
+are now present for the isolated account/map foundation, but no real project credentials are stored
+and no production channel is active. Reasoning and rejected alternatives in
 [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Licence

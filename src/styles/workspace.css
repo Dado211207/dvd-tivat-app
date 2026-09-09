@@ -830,6 +830,208 @@ fieldset {
   gap: 8px;
 }
 
+.map-picker-section {
+  display: grid;
+  gap: 11px;
+  margin-bottom: 20px;
+}
+
+.map-picker-section__head {
+  display: flex;
+  gap: 16px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.incident-map {
+  overflow: hidden;
+  background: #dce8e8;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 15px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 55%);
+}
+
+.incident-map .leaflet-container {
+  width: 100%;
+  height: 340px;
+  font-family: var(--font-body);
+  background: #dce8e8;
+}
+
+.incident-map--overview {
+  margin-top: 18px;
+}
+
+.incident-map--overview .leaflet-container {
+  height: 260px;
+}
+
+.incident-map__caption,
+.map-legend {
+  padding: 10px 12px;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--c-ink-soft);
+  background: var(--c-surface-2);
+  border-top: 1px solid var(--c-line);
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.map-legend span {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.map-legend i {
+  width: 10px;
+  height: 10px;
+  background: #e58b21;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 18%);
+}
+
+.map-legend i[data-tone='reviewed'] {
+  background: #1b7f5d;
+}
+
+.leaflet-control-attribution {
+  font-size: 0.62rem;
+}
+
+/* -------------------------------------------------------- account access */
+
+.account-flow {
+  padding: 22px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #0d2b38, #0a202c);
+  border: 1px solid rgb(104 213 224 / 22%);
+  border-radius: 18px;
+  box-shadow: var(--shadow-1);
+}
+
+.account-connect {
+  margin-top: 20px;
+}
+
+.account-auth-form {
+  display: grid;
+  gap: 2px;
+  max-width: 560px;
+}
+
+.account-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.account-flow h2 {
+  color: #f2fcfd;
+}
+
+.account-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+  list-style: none;
+}
+
+.account-steps li {
+  display: grid;
+  align-content: start;
+  min-height: 144px;
+  padding: 15px;
+  color: #d6e9ed;
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 14px;
+}
+
+.account-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 19px;
+  font-weight: 800;
+  color: #071a21;
+  background: #78e1e6;
+  border-radius: 10px;
+}
+
+.account-steps strong {
+  font-size: 0.88rem;
+}
+
+.account-steps small {
+  margin-top: 6px;
+  line-height: 1.45;
+  color: #96b6bf;
+}
+
+.account-search {
+  display: grid;
+  gap: 7px;
+  max-width: 560px;
+  margin: 12px 0 18px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--c-ink-soft);
+}
+
+.account-search input,
+.account-table select {
+  min-height: 44px;
+  padding: 8px 11px;
+  font: inherit;
+  color: var(--c-ink);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 10px;
+}
+
+.account-table-wrap {
+  overflow-x: auto;
+}
+
+.account-table {
+  width: 100%;
+  min-width: 650px;
+  border-collapse: collapse;
+}
+
+.account-table th,
+.account-table td {
+  padding: 13px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.account-table th {
+  font-size: 0.7rem;
+  color: var(--c-ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.account-table td:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.account-table td small {
+  color: var(--c-ink-faint);
+}
+
 .report-photo {
   padding: 10px;
   margin-bottom: 20px;
@@ -1015,6 +1217,10 @@ dialog {
 
   .report-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1216,6 +1422,26 @@ dialog {
 
   .report-location__actions .btn {
     width: 100%;
+  }
+
+  .map-picker-section__head {
+    display: grid;
+  }
+
+  .incident-map .leaflet-container {
+    height: 290px;
+  }
+
+  .account-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-steps li {
+    min-height: auto;
+  }
+
+  .account-steps li > span {
+    margin-bottom: 12px;
   }
 
   .report-facts > div {

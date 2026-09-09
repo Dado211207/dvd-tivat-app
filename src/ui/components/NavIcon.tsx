@@ -9,6 +9,7 @@ export function NavIcon({ route }: { route: Route }) {
     vozila: <><path d="M3 6h11v12H3zM14 10h4l3 4v4h-7" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M5 3h5" /></>,
     prikaz: <><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M12 17v4m-5 0h10M6 8h5m-5 4h12" /></>,
     clanovi: <><circle cx="9" cy="7" r="3" /><path d="M2 21v-3a7 7 0 0 1 14 0v3m0-17a3 3 0 0 1 0 6m3 4a6 6 0 0 1 3 5v2" /></>,
+    nalozi: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2.5" /><path d="M5.5 17a3.5 3.5 0 0 1 7 0M15 9h3m-3 4h3" /></>,
     istorija: <><path d="M3 11a9 9 0 1 1 3 8M3 4v7h7m2-4v6l4 2" /></>,
   };
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{paths[route]}</svg>;

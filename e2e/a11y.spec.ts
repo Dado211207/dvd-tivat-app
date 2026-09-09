@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test';
 import { createCall, goTo, openApp, switchActor } from './helpers';
 
 const RULESETS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
-const VIEWS = ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija'];
+const VIEWS = ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'nalozi', 'istorija'];
 
 test.describe('accessibility', () => {
   test('empty views pass an axe scan', async ({ page }) => {

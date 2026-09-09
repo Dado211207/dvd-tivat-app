@@ -77,6 +77,16 @@ test('citizen location is requested only after an explicit action', async ({ pag
   await expect(page.getByRole('dialog')).toContainText('1.234567, 2.345678');
 });
 
+test('citizen can place an incident pin without claiming it is the device position', async ({ page }) => {
+  await openApp(page, 'dojava');
+  const map = page.getByTestId('incident-map-picker').locator('.leaflet-container');
+  await expect(map).toBeVisible();
+  await map.click({ position: { x: 180, y: 140 } });
+  await expect(page.getByText(/Mjesto dogadjaja je oznaceno:/)).toBeVisible();
+  await expect(page.getByText(/GPS uredjaja i rucna oznaka nijesu isto/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ukloni oznaku' })).toBeVisible();
+});
+
 test('full exercise: send, answer, change answer, vehicle, status, close, history', async ({
   page,
 }) => {

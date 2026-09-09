@@ -9,9 +9,17 @@ Last updated: 2026-09-09
 
 ## Current scope
 
-Phase 1 of [PRODUCT_PLAN.md](../PRODUCT_PLAN.md) — a **local browser exercise prototype** for DVD
-Tivat call-out, response and citizen-report intake. No server, no accounts, no notifications, no
-real data.
+Phase 1 of [PRODUCT_PLAN.md](../PRODUCT_PLAN.md) remains a **local browser exercise prototype** for
+DVD Tivat call-out, response and citizen-report intake. The isolated branch
+`codex/access-map-research` now adds the first reviewable Phase 2 foundation: an interactive incident
+map, a fictional account/access workflow, pure owner-controlled role rules, a dormant Supabase Auth
+client and a reviewed SQL/RLS migration. No Supabase project is configured, no email is sent, no
+account is created, no notification is delivered and no real data is present.
+
+The authoritative new design is [ACCOUNTS_REPORTS_MAP_PLAN.md](../ACCOUNTS_REPORTS_MAP_PLAN.md).
+Every verified signup starts as `CITIZEN`; only `OWNER` may grant `FIREFIGHTER`, `COMMANDER` or
+`ADMIN`; and an unverified citizen report is an informational staff alert, never a call-out. The
+current actor selector still grants no rights and must remain visibly labelled as a simulation.
 
 The active isolated slice is Draft PR #12 on `codex/dvd-tivat-operational-profile`, stacked above
 Draft PR #11. Exact runtime-and-handoff head `0631119b8316cb390a654c70eaee6278e7dbee2e`
@@ -74,9 +82,12 @@ Not deployed anywhere. No licence file. No real alert, account or member data ex
 src/domain/      pure rules - types, errors, commands, reducer, selectors, seed, message
 src/storage/     one state key plus a namespaced write probe; known failures tested
 src/state/       React binding: injects the clock, ids and persistence
-src/ui/          seven views + local fictional-data editor; hand-written CSS in src/styles
+src/access/      pure production role and report-recipient policy plus tests
+src/auth/        dormant Supabase signup/code/profile/login client; no configured project
+src/ui/          eight views + local fictional-data editor; hand-written CSS in src/styles
 src/i18n/        shared labels; additional view copy lives in components; no diacritics
 e2e/             Playwright: flow, admin, accessibility, screenshots (tagged @screenshots)
+supabase/        reviewable SQL/RLS migration only; not applied anywhere
 ```
 
 The rule that matters when changing anything: **`applyCommand` in `src/domain/reducer.ts` is the
@@ -112,7 +123,9 @@ and one careless edit away from breaking.
 - Data lives in one browser's `localStorage`; nothing is shared between devices or users.
 - Use one demonstration tab. Concurrent tabs can overwrite each other's local records; there is no sync.
 - Stored JSON receives a top-level shape check, not complete nested schema validation; do not hand-edit it.
-- No authentication and no permission enforcement anywhere.
+- No connected authentication or production permission enforcement. The account view is a clearly
+  labelled interaction prototype; pure access rules and SQL policies are a foundation, not evidence
+  of a configured server.
 - No notification is sent by any code path.
 - Citizen photographs are session-only previews; only the boolean fact that one was included is
   stored. Device coordinates are read only after an explicit user action and remain local.
@@ -132,6 +145,14 @@ The two that most affect the work:
   per operational member per year does not?
 
 ## Next concrete action
+
+Review and test `codex/access-map-research` without real email addresses or incident data. Before a
+connected pilot, create a dedicated organisation-owned Supabase project, configure custom SMTP and
+the signup-code template, independently review/apply the migration, bootstrap the exact owner UUID,
+then run every positive and negative role test listed in `ACCOUNTS_REPORTS_MAP_PLAN.md` section 12.
+Do not advertise the local account screen as working authentication and do not send real alerts.
+
+The earlier presentation sequence remains below as historical context for the stacked Phase 1 PRs.
 
 Complete [FIRST_TEST_CHECKLIST.md](../FIRST_TEST_CHECKLIST.md) on desktop and phone width. Fix any
 blocking prototype defect before presenting. Then use [PRESENTATION_SCRIPT.md](../PRESENTATION_SCRIPT.md)

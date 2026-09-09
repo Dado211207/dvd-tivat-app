@@ -32,6 +32,7 @@ export const NAV = {
   vozila: 'Vozila',
   prikaz: 'Prikaz u bazi',
   clanovi: 'Clanovi',
+  nalozi: 'Nalozi i pristup',
   istorija: 'Istorija',
   dojava: 'Prijava gradjana',
 } as const;

@@ -10,7 +10,7 @@
  */
 
 import type { RoleId } from '@/domain/types';
-import { useRef } from 'react';
+import { lazy, Suspense, useRef, type ComponentType } from 'react';
 import {
   APP_NAME,
   APP_SUBTITLE,
@@ -27,27 +27,34 @@ import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
 import { hrefFor, useRoute, type Route } from './ui/router';
 import { DispatcherView } from './ui/views/DispatcherView';
-import { CitizenReportView } from './ui/views/CitizenReportView';
 import { DisplayView } from './ui/views/DisplayView';
 import { HistoryView } from './ui/views/HistoryView';
 import { MemberView } from './ui/views/MemberView';
 import { RosterView } from './ui/views/RosterView';
 import { VehiclesView } from './ui/views/VehiclesView';
 
-const VIEWS: Record<Route, () => JSX.Element> = {
+const CitizenReportView = lazy(() =>
+  import('./ui/views/CitizenReportView').then((module) => ({ default: module.CitizenReportView })),
+);
+const AccountsView = lazy(() =>
+  import('./ui/views/AccountsView').then((module) => ({ default: module.AccountsView })),
+);
+
+const VIEWS: Record<Route, ComponentType> = {
   dojava: CitizenReportView,
   dezurni: DispatcherView,
   clan: MemberView,
   vozila: VehiclesView,
   prikaz: DisplayView,
   clanovi: RosterView,
+  nalozi: AccountsView,
   istorija: HistoryView,
 };
 
 const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Prijava', routes: ['dojava'] },
   { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
-  { label: 'Evidencija', routes: ['clanovi', 'istorija'] },
+  { label: 'Evidencija', routes: ['clanovi', 'nalozi', 'istorija'] },
 ];
 
 const ROUTE_DESCRIPTION: Record<Route, string> = {
@@ -57,6 +64,7 @@ const ROUTE_DESCRIPTION: Record<Route, string> = {
   vozila: 'Rucna evidencija izlaska i povratka vozila',
   prikaz: 'Pregled stanja namijenjen ekranu u bazi',
   clanovi: 'Clanovi, uloge, grupe i osposobljenosti',
+  nalozi: 'Registracija, potvrda emaila i vlasnicka dodjela pristupa',
   istorija: 'Zavrsene vjezbe i hronologija promjena',
 };
 
@@ -171,7 +179,9 @@ export function App() {
         {/* A member form contains an unsent local draft. Remount only this view
             when the simulated person changes so one member can never inherit
             another member's answer, ETA, destination, error or edit state. */}
-        <View key={route === 'clan' ? state.simulation.actorId : route} />
+        <Suspense fallback={<p role="status">Ucitavanje prikaza...</p>}>
+          <View key={route === 'clan' ? state.simulation.actorId : route} />
+        </Suspense>
       </main>
 
       <footer className="foot">

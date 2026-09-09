@@ -11,6 +11,7 @@ import type { CitizenReportKind, ReportCoordinates } from '@/domain/types';
 import { CITIZEN_REPORT_KIND_LABEL, formatTime } from '@/i18n/labels';
 import { makeId, useApp, useStableCommandId } from '@/state/AppStateContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { IncidentMapPicker, ReportMap } from '../components/IncidentMap';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
 import { hrefFor } from '../router';
 
@@ -25,6 +26,12 @@ function coordinateText(coordinates: ReportCoordinates): string {
     ? ''
     : `, tacnost oko ${Math.round(coordinates.accuracyMeters)} m`;
   return `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}${accuracy}`;
+}
+
+function coordinateSourceText(coordinates: ReportCoordinates): string {
+  if (coordinates.source === 'DEVICE') return 'Polozaj uredjaja potvrden kao mjesto dogadjaja';
+  if (coordinates.source === 'MAP_PIN') return 'Rucno postavljena oznaka na mapi';
+  return 'Izvor nije zabiljezen u starijoj probnoj prijavi';
 }
 
 export function CitizenReportView() {
@@ -115,6 +122,8 @@ export function CitizenReportView() {
           accuracyMeters: Number.isFinite(position.coords.accuracy)
             ? position.coords.accuracy
             : null,
+          source: 'DEVICE' as const,
+          capturedAt: new Date(position.timestamp).toISOString(),
         };
         setCoordinates(next);
         setLocationStatus('ready');
@@ -237,9 +246,9 @@ export function CitizenReportView() {
 
           <div className="report-location" data-status={locationStatus}>
             <div>
-              <strong>Lokacija uredjaja</strong>
+              <strong>Koristi polozaj uredjaja kao mjesto dogadjaja</strong>
               <p>
-                Pristup se trazi tek kada pritisnete dugme. Koordinate ostaju samo u ovom pregledacu.
+                Koristite samo ako ste na mjestu dogadjaja. Pristup se trazi tek kada pritisnete dugme.
               </p>
               {locationMessage ? <p className="report-location__result" role="status">{locationMessage}</p> : null}
             </div>
@@ -251,7 +260,7 @@ export function CitizenReportView() {
                 disabled={locationStatus === 'locating'}
                 data-testid="use-location"
               >
-                {locationStatus === 'locating' ? 'Citam lokaciju...' : coordinates ? 'Osvjezi lokaciju' : 'Dodaj moju lokaciju'}
+                {locationStatus === 'locating' ? 'Citam lokaciju...' : coordinates?.source === 'DEVICE' ? 'Osvjezi polozaj' : 'Koristi moj polozaj kao mjesto'}
               </button>
               {coordinates ? (
                 <button
@@ -268,6 +277,38 @@ export function CitizenReportView() {
                 </button>
               ) : null}
             </div>
+          </div>
+
+          <div className="map-picker-section">
+            <div className="map-picker-section__head">
+              <div>
+                <strong>Oznacite mjesto na mapi</strong>
+                <p className="muted small">Oznaka predstavlja dogadjaj, ne automatski polozaj prijavioca.</p>
+              </div>
+              {coordinates ? (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setCoordinates(null);
+                    setLocationStatus('idle');
+                    setLocationMessage('');
+                  }}
+                >
+                  Ukloni oznaku
+                </button>
+              ) : null}
+            </div>
+            <IncidentMapPicker
+              coordinates={coordinates}
+              onPick={(next) => {
+                setCoordinates(next);
+                setLocationStatus('ready');
+                setLocationMessage(`Mjesto dogadjaja je oznaceno: ${coordinateText(next)}.`);
+                setErrors((current) => ({ ...current, reportLocation: '' }));
+                announce('Mjesto dogadjaja je oznaceno na mapi.');
+              }}
+            />
           </div>
 
           <Field
@@ -311,6 +352,15 @@ export function CitizenReportView() {
             </div>
           </div>
 
+          <ReportMap
+            reports={state.citizenReports.map((report) => ({
+              id: report.id,
+              coordinates: report.coordinates,
+              label: report.incidentLocation || 'Oznacena lokacija',
+              reviewed: report.status === 'PREGLEDANA_U_SIMULACIJI',
+            }))}
+          />
+
           <Notice tone="warn">
             Prijave se vide ovdje samo zato sto su oba prikaza u istom pregledacu. To nije dokaz
             isporuke, prijema alarma niti izlaska ekipe.
@@ -339,6 +389,7 @@ export function CitizenReportView() {
                   <dl className="report-facts">
                     <div><dt>Mjesto</dt><dd>{report.incidentLocation || 'Nije rucno uneseno'}</dd></div>
                     <div><dt>GPS</dt><dd>{report.coordinates ? coordinateText(report.coordinates) : 'Nije dodat'}</dd></div>
+                    <div><dt>Izvor oznake</dt><dd>{report.coordinates ? coordinateSourceText(report.coordinates) : 'Nije dodat'}</dd></div>
                     <div><dt>Fotografija</dt><dd>{report.photoIncluded ? 'Bila ukljucena; bajtovi nijesu sacuvani' : 'Nije ukljucena'}</dd></div>
                   </dl>
                   {report.status === 'SACUVANA_LOKALNO' ? (
@@ -378,6 +429,7 @@ export function CitizenReportView() {
             <div><dt>Opis</dt><dd>{description.trim()}</dd></div>
             <div><dt>Mjesto</dt><dd>{incidentLocation.trim() || 'Nije rucno uneseno'}</dd></div>
             <div><dt>GPS</dt><dd>{coordinates ? coordinateText(coordinates) : 'Nije dodat'}</dd></div>
+            <div><dt>Izvor oznake</dt><dd>{coordinates ? coordinateSourceText(coordinates) : 'Nije dodat'}</dd></div>
             <div><dt>Fotografija</dt><dd>{photo ? 'Ukljucena samo u ovom pregledu' : 'Nije ukljucena'}</dd></div>
           </dl>
           {photo ? <img className="report-review__photo" src={photo.url} alt="Fotografija u pregledu prijave" /> : null}
