@@ -3,6 +3,11 @@
 Audience: the owner first, then a small discussion with the society. Allow **10–12 minutes**.
 This is a workflow prototype, not an operational alerting system.
 
+For the first formal review, complete [FIRST_TEST_CHECKLIST.md](./FIRST_TEST_CHECKLIST.md), then use
+the shorter timed [PRESENTATION_SCRIPT.md](./PRESENTATION_SCRIPT.md) and collect one
+[TEST_FEEDBACK_FORM.md](./TEST_FEEDBACK_FORM.md) per tester. This longer guide remains the detailed
+operator reference.
+
 ## Prepare
 
 1. Use the exact reviewed branch head recorded in `docs/ai/PROJECT_STATE.md`. Do not assume an
@@ -24,7 +29,7 @@ Opening sentence:
 
 | Time | Exact action | What to point out |
 |---|---|---|
-| 0:00 | Open **Dezurni**. Show the 52-member fictional overview, operating profile and seven navigation options. | The count matches the owner-reported scale but every person is invented. Vehicle count means recorded as in the base, not mechanically ready. |
+| 0:00 | Open **Dezurni**. Show the 52-member fictional overview, operating profile and seven navigation options. | The count matches the member-confirmed scale but every person is invented. Vehicle count means recorded as in the base, not mechanically ready. |
 | 0:45 | Enter title `Vjezba: provjera opreme`, instructions `Okupljanje u bazi DVD Tivat. Ponijeti zastitnu opremu.`, incident location `Probni poligon (izmisljeno)`. | The preview adds the base assembly point separately from the incident and reporter locations. |
 | 1:30 | Select **Nosioci IDA aparata**, then **Pregledaj i posalji**. Read the message and four recipients; confirm. | Review happens before recording the call. No recipient is automatically marked as answered or notified. |
 | 2:15 | In **Simulirani ucesnik**, choose **Ivan Radulovic**, open **Clan**, select **Dolazim**, then submit the response. | The screen states that coming means going to the base for equipment first. Only explicit submission records it. |
@@ -68,11 +73,11 @@ Use these after the core exercise, not as proof of an operational alert channel.
 4. Which responses, arrival bands, groups and vehicle fields fit their actual routine?
 5. What would make this more useful to them than continuing with the reference product?
 
-Also confirm every owner-reported item in [SOCIETY_PROFILE.md](./SOCIETY_PROFILE.md), especially the
-base-first rule and whether Viber remains the fallback during trial exercises.
+Use [SOCIETY_PROFILE.md](./SOCIETY_PROFILE.md) as the confirmed operating baseline. Ask about the
+separate product decisions listed there, especially operational permissions and pilot safeguards.
 
-Single-society use is the owner's current expectation, **not a confirmed requirement**. Keep the
-full questions in [PRODUCT_PLAN.md §G](./PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society).
+Single-society use is the confirmed current scope. Keep the full future-product questions in
+[PRODUCT_PLAN.md §G](./PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society).
 Do not promise a delivery date, alarm reliability, operating cost or store approval before those
 requirements are agreed. Record the meeting's decisions in `docs/ai/WORK_LOG.md` and update
 `docs/ai/PROJECT_STATE.md` so a new coding session can resume without this conversation.

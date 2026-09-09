@@ -1,6 +1,7 @@
 # DVD Tivat — Product plan
 
-Status: **draft for discussion with the society.** Nothing here is agreed with DVD Tivat yet.
+Status: **operating baseline confirmed by a DVD Tivat firefighter-rescuer; product rules remain a
+draft for an authorised decision.**
 Written 7 September 2026. Documentation language: English. Application labels: local language,
 without diacritics.
 
@@ -13,10 +14,10 @@ built), [PRODUCTION_ARCHITECTURE.md](./PRODUCTION_ARCHITECTURE.md) (the gated pa
 
 ## 0. One paragraph
 
-**Owner update, 2026-09-09:** the current expectation is that only DVD Tivat will use the app. The
-owner reports 52 members, no shifts, assembly at the base before deployment, a Viber group as the
-current alert channel, one MAN firefighting vehicle, one firefighting SUV, and both iPhone and
-Android phones. These facts remain **unconfirmed by the society**. They are recorded in
+**Member confirmation, 2026-09-09:** the prototype owner is a DVD Tivat firefighter-rescuer and
+confirmed that this product is for DVD Tivat, with 52 members, no shifts, assembly at the base before
+deployment, a Viber group as the current alert channel, one MAN firefighting vehicle, one
+firefighting SUV, and both iPhone and Android phones. These current operating facts are recorded in
 [SOCIETY_PROFILE.md](./SOCIETY_PROFILE.md); no organisation switcher or multi-tenant UI is added.
 
 A coordination tool for a volunteer fire society: someone authorised composes a call-out, chooses
@@ -94,9 +95,11 @@ It is not evidence of anything else. In particular it is not evidence that:
 
 Each of those is a separate piece of work with its own acceptance criteria, listed in §D.
 
-### A.5 Assumptions we made, which the society must confirm or correct
+### A.5 Confirmed operating facts and proposed product rules
 
-Each is a guess. Each is cheap to change now and expensive to change later.
+Items A7 and A11–A12 are confirmed current operating facts. The remaining items are proposed
+product rules that still need an authorised decision; each is cheap to change now and expensive to
+change later.
 
 1. **A1** — Internal call-out and response remains the operational core. Citizen reporting is now
    demonstrated only as a local requirements prototype; its real use is unconfirmed.
@@ -107,7 +110,8 @@ Each is a guess. Each is cheap to change now and expensive to change later.
 5. **A5** — Response categories map onto how Tivat actually works: coming / coming later / cannot.
    The 15/30/60-minute bands are taken from the reference product and are a placeholder.
 6. **A6** — The society wants a record afterwards (who was called, who answered, what went out).
-7. **A7** — The owner reports 52 members. DVD Tivat must confirm which are operational and active.
+7. **A7** — DVD Tivat currently has 52 members. The future production roster still needs an
+   authorised source of truth for who is active and operational.
 8. **A8** — There is no legal or institutional obligation forcing a particular dispatch system.
    **If this is wrong it can invalidate the whole project**, and it must be checked first.
 9. **A9** — Only one exercise or incident is open at a time. The prototype enforces this, because
@@ -421,13 +425,13 @@ station display hardware. Each is a separate decision. None is implied by anythi
    institutional obligation to use a particular system? *(Assumption A8 — check this first.)*
 2. Who may send, cancel and close a call-out? Is that the same person at 03:00 as at 15:00?
 3. What must a member see in the first two seconds, before scrolling?
-4. The owner reports a Viber group today. What happens when a member has no internet, does not
+4. DVD Tivat uses a Viber group today. What happens when a member has no internet, does not
    answer, or their phone fails, and will Viber stay in place during a pilot?
 
 **Shaping — they change scope and effort**
 
-5. Confirm the reported 52 members: how many are operational, which specialties, and what exact mix
-   of Android and iPhone needs physical testing?
+5. Of the confirmed 52 members, which are operational, which specialties should the production
+   roster record, and what exact mix of Android and iPhone needs physical testing?
 6. How is vehicle departure recorded today, and who does it?
 7. Should the station display show names, or only totals? Who walks past that screen?
 8. Are the response options right for Tivat, and are 15/30/60 minutes the right bands, or should

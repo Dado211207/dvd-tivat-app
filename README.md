@@ -14,10 +14,11 @@ Status: **Phase 1 — working prototype for discussion with the society.** Nothi
 here is agreed with DVD Tivat yet, and nothing here is ready to be relied on in
 an emergency.
 
-The current owner-reported profile is represented at realistic scale: 52 fictional roster rows,
+The member-confirmed operating profile is represented at realistic scale: 52 fictional roster rows,
 one fictional MAN vehicle record, one fictional firefighting SUV record, no shifts, assembly at
 the base before deployment, and layouts exercised at representative iPhone and Android sizes.
-See [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md); DVD Tivat still needs to confirm it.
+See [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md). Future permissions and formal adoption are
+still product decisions, not unresolved facts about current operations.
 
 ---
 
@@ -85,10 +86,14 @@ store policy and delivery acknowledgements, and it is a separate investigation
 | Document | Contents |
 |---|---|
 | [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) | Users, scope, assumptions, roles and permission matrix, data model, five phases with acceptance criteria, risks, questions for the society |
-| [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md) | Owner-reported membership, vehicles, assembly flow, phone mix and facts still awaiting society confirmation |
+| [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md) | Member-confirmed membership, vehicles, assembly flow and phone mix, separated from pending product decisions |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack choice and rejected alternatives, layering, the pure domain reducer, persistence limits, path to mobile |
 | [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) | Gated server, identity, notification and mobile architecture if DVD Tivat accepts the workflow |
 | [docs/FIREAPP_REVIEW.md](docs/FIREAPP_REVIEW.md) | What the reference product's public documentation says, per-claim, with what was and was not verified |
+| [docs/FIRST_TEST_CHECKLIST.md](docs/FIRST_TEST_CHECKLIST.md) | Exact simulation-only pass/fail checks for the owner's first desktop and phone test |
+| [docs/PRESENTATION_SCRIPT.md](docs/PRESENTATION_SCRIPT.md) | An 8–10 minute first presentation with honest spoken boundaries and decisions to collect |
+| [docs/TEST_FEEDBACK_FORM.md](docs/TEST_FEEDBACK_FORM.md) | A printable per-tester rating and issue form that excludes private and real incident data |
+| [docs/MEETING_DECISIONS.md](docs/MEETING_DECISIONS.md) | A role-only decision record so accepted rules survive conversation and session limits |
 | [docs/ai/PROJECT_STATE.md](docs/ai/PROJECT_STATE.md) | Current state and the rules for continuing this work |
 | [docs/ai/WORK_LOG.md](docs/ai/WORK_LOG.md) | What was done, verified, and what is next |
 | [docs/screenshots/](docs/screenshots) | The screens, with fictional data |

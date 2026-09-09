@@ -5,12 +5,51 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
-## 2026-09-09 — Apply the owner-reported DVD Tivat operating profile
+## 2026-09-09 — Prepare the first-test and presentation package
 
-**Owner facts, not yet society-confirmed:** 52 members; one MAN firefighting vehicle and one
-firefighting SUV; no shifts; members travel from home to the base for equipment before deployment;
-the current alert channel is a Viber group; both iPhone and Android are used; the product is expected
-to serve DVD Tivat only. The facts and the questions that remain are isolated in
+**Source clarification:** the prototype owner confirmed that he is a DVD Tivat
+firefighter-rescuer. The 52-member count, two vehicle categories, no-shift/base-first routine,
+Viber alert group, iPhone/Android mix and DVD-Tivat-only scope are therefore recorded as first-hand
+operating facts, not as facts awaiting another confirmation. Formal application permissions,
+pilot approval, data governance and emergency safeguards remain authorised product decisions.
+
+**Public context:** checked the society's public Instagram and Facebook presence. The public profile
+supports the name and the 2018 origin/history statement only; it is not used to infer operations.
+No social-media crest was imported because no approved original SVG or high-resolution transparent
+PNG was available.
+
+**Test package:** added `FIRST_TEST_CHECKLIST.md` with simulation safety gates, one complete
+call-out, vehicle/status separation, citizen-report and administration checks, persistence/reset,
+and explicit 390x844 and 412x915 phone passes. Added `TEST_FEEDBACK_FORM.md` with ratings, an issue
+template and a decision outcome. Both forbid real identities and incident data.
+
+**Presentation package:** added an 8–10 minute `PRESENTATION_SCRIPT.md` with exact fictional inputs,
+spoken opening/boundary/closing text, a timed demonstration and the product decisions to obtain.
+The detailed `DEMO_GUIDE.md` now routes presenters through the checklist and feedback form first.
+
+**Drift protection:** three new tests read the committed documents and require the same 52-member
+scale, base, Viber fallback, MAN-1, TERENAC-1, iPhone/Android targets, non-delivery statement and
+public-branding boundary used by the application. The first implementation failed because Vitest
+resolved an `import.meta.url` document path to `/docs`; the test now resolves from the project root.
+The next run correctly caught two copy mismatches (`Viber` versus `Viber grupa`, and `terenac`
+versus `TERENAC-1`); the documents were made exact and no assertion was weakened.
+
+**Local verification:** ESLint, 78 Vitest tests, strict TypeScript, the Vite production build and
+`git diff --check` pass. Hosted Chromium, accessibility and screenshot evidence still needs to be
+collected on the pushed exact head.
+
+**Next:** push the isolated branch, require first-attempt CI on the exact head, inspect the updated
+screenshots if application output changed, and keep PR #12 Draft and unmerged. Then the owner can
+run the first-test checklist before showing the prototype to DVD Tivat.
+
+---
+
+## 2026-09-09 — Apply the DVD Tivat operating profile
+
+**First-hand operating facts:** the owner, a DVD Tivat firefighter-rescuer, confirmed 52 members;
+one MAN firefighting vehicle and one firefighting SUV; no shifts; members travel from home to the
+base for equipment before deployment; the current alert channel is a Viber group; both iPhone and
+Android are used; and the product is for DVD Tivat only. Pending product decisions are isolated in
 `docs/SOCIETY_PROFILE.md`.
 
 **Public-data boundary:** the public repository still contains no real person, number, address,
@@ -54,7 +93,7 @@ this an operational alert system.
 
 **Owner direction:** continue independently while Claude is unavailable, add the remaining useful
 prototype functions, keep the experience personalised for DVD Tivat, and leave a reliable written
-handoff. Single-society use remains expected but unconfirmed.
+handoff. A later clarification records single-society use as the confirmed current scope.
 
 **Citizen-report evidence:** CI run `34304900877`, job `102319448025`, attempt 1, passed on exact
 head `b2c8065f18b82a9156a05aa48639b312f99efaa3`: lint, strict typecheck, 61 unit tests, production

@@ -27,7 +27,7 @@ export function StationOverview() {
         </span>
       </div>
       <dl className="station-overview__facts">
-        <div><dt>Clanovi</dt><dd data-testid="overview-members">{state.members.length}</dd><dd className="station-overview__fact-note">probnih zapisa / prijavljeno {SOCIETY_PROFILE.reportedMemberCount}</dd></div>
+        <div><dt>Clanovi</dt><dd data-testid="overview-members">{state.members.length}</dd><dd className="station-overview__fact-note">probnih zapisa / potvrdjeno {SOCIETY_PROFILE.confirmedMemberCount}</dd></div>
         <div><dt>Okupljanje</dt><dd className="station-overview__fact-value">Baza</dd><dd className="station-overview__fact-note">po opremu prije izlaska</dd></div>
         <div><dt>Vozila u bazi</dt><dd data-testid="overview-vehicles">{inStation}<span> / {state.vehicles.length}</span></dd><dd className="station-overview__fact-note">rucno evidentirano</dd></div>
       </dl>

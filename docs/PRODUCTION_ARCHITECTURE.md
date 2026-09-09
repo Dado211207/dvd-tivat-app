@@ -5,14 +5,15 @@ browser prototype. This document defines the safest sequence for turning an acce
 a real DVD Tivat product without pretending that accounts, delivery or emergency reliability
 already exist.
 
-The owner's current expectation is a single-society application for DVD Tivat. The society has not
-confirmed that constraint. Nothing below introduces multi-society routing, but the core records keep
-a `societyId` boundary so a later institutional requirement does not force unrelated members into
-one security domain.
+The prototype owner, a DVD Tivat firefighter-rescuer, confirmed a single-society application for
+DVD Tivat. Nothing below introduces multi-society routing, but the core records keep a `societyId`
+boundary so a later institutional requirement does not force unrelated members into one security
+domain.
 
-The owner reports that the current call-out channel is a Viber group and that members have both
-iPhones and Android phones. Viber remains a parallel fallback until DVD Tivat explicitly approves
-another tested arrangement. A responsive browser pass is not evidence of native alarm delivery.
+A DVD Tivat firefighter-rescuer confirmed that the current call-out channel is a Viber group and
+that members have both iPhones and Android phones. Viber remains a parallel fallback until an
+authorised decision approves another tested arrangement. A responsive browser pass is not evidence
+of native alarm delivery.
 
 ---
 

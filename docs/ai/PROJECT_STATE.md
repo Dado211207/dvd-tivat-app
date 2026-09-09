@@ -16,10 +16,18 @@ real data.
 The active isolated slice is Draft PR #12 on `codex/dvd-tivat-operational-profile`, stacked above
 Draft PR #11. Exact runtime head `f37994fc16a8aaa52d9eafef0b4cce89fd32a0e6` passed CI on its
 first attempt: 74 unit tests, 62 browser/accessibility scenarios and 3 screenshot scenarios. It
-applies the owner-reported DVD Tivat scale and workflow without adding any operational channel:
+applies the member-confirmed DVD Tivat scale and workflow without adding any operational channel:
 52 fictional member rows, two fictional vehicle records matching the reported categories, base-first
 assembly, Viber shown only as the existing fallback, recipient search, and explicit iPhone/Android
-layout checks. The society has not confirmed these facts; see [SOCIETY_PROFILE.md](../SOCIETY_PROFILE.md).
+layout checks. The prototype owner is a DVD Tivat firefighter-rescuer and confirmed these current
+operating facts first-hand; see [SOCIETY_PROFILE.md](../SOCIETY_PROFILE.md). Formal adoption,
+permissions and pilot rules remain separate product decisions.
+
+The same branch contains the complete first-review handoff: `FIRST_TEST_CHECKLIST.md`,
+`PRESENTATION_SCRIPT.md`, `TEST_FEEDBACK_FORM.md` and `MEETING_DECISIONS.md`. Four structural tests
+keep those documents aligned with the operating profile and the simulation/non-delivery boundary.
+The local gate passes with 78 unit tests; hosted browser and accessibility evidence on the final
+pushed head still needs to be recorded.
 
 ## Repository and branch
 
@@ -47,15 +55,15 @@ production build, 56 browser/accessibility scenarios and 3 screenshot scenarios.
 administration screenshot was visually inspected. See [WORK_LOG.md](./WORK_LOG.md) for exact
 evidence and [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
 
-The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
-on DVD Tivat; do not implement multi-society routing or treat this assumption as an agreed requirement.
+The confirmed current scope is **DVD Tivat only**. Keep the UI focused on DVD Tivat and do not
+implement multi-society routing unless a later authorised decision changes the product scope.
 Five key screenshots from artifact `10089211902` were visually inspected with no observed overlap
 or clipping in the overview, recipient search, member, vehicle or phone views.
 
-Owner-reported on 2026-09-09, still awaiting society confirmation: 52 members; no shifts; members
-come from home to the base for equipment before deployment; one MAN firefighting vehicle; one
-firefighting SUV; both iPhone and Android; Viber group currently used for alerts. Do not invent
-exceptions, real roster data, vehicle registrations or integration credentials.
+Confirmed first-hand on 2026-09-09 by the owner as a DVD Tivat firefighter-rescuer: 52 members; no
+shifts; members come from home to the base for equipment before deployment; one MAN firefighting
+vehicle; one firefighting SUV; both iPhone and Android; Viber group currently used for alerts. Do
+not invent exceptions, real roster data, vehicle registrations or integration credentials.
 
 Not deployed anywhere. No licence file. No real alert, account or member data exists.
 
@@ -124,11 +132,15 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Review the four Draft PRs and merge in stack order only with explicit owner approval: redesign (#9),
-citizen report (#10), local administration (#11), operational profile (#12). Retarget each next PR
-after its prerequisite lands and require a green exact-head CI result. After the UI and functions
-are accepted, replace the first promotional video with a new script, more natural narration and
-footage from the accepted interface.
+Complete [FIRST_TEST_CHECKLIST.md](../FIRST_TEST_CHECKLIST.md) on desktop and phone width. Fix any
+blocking prototype defect before presenting. Then use [PRESENTATION_SCRIPT.md](../PRESENTATION_SCRIPT.md)
+and collect [TEST_FEEDBACK_FORM.md](../TEST_FEEDBACK_FORM.md) responses. Review the four Draft PRs
+and merge in stack order only with explicit owner approval: redesign (#9), citizen report (#10),
+local administration (#11), operational profile (#12). Retarget each next PR after its prerequisite
+lands and require a green exact-head CI result.
+
+After the UI and functions are accepted, replace the first promotional video with a new script,
+more natural narration and footage from the accepted interface.
 
 Production Phase 2 still waits on
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society), especially
