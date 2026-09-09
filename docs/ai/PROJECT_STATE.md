@@ -31,13 +31,13 @@ Draft PR #10 on `codex/citizen-report-prototype`, stacked above that redesign. I
 scenarios and 3 screenshot scenarios. The intake is deliberately local-only and must not be
 described as a working alert channel.
 
-The next isolated slice is in progress on `codex/local-admin-prototype`: fictional local
+The next isolated slice is in Draft PR #11 on `codex/local-admin-prototype`: fictional local
 administration of members, groups and vehicles plus the production architecture decision document.
-It adds no account, permission boundary, backend, notification or real data. Local verification is
-green: lint, 71 unit tests, strict typecheck and production build. Browser, accessibility and
-screenshot evidence must come from GitHub CI because this environment could not obtain the
-Playwright Chromium binary. See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
-[DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
+It adds no account, permission boundary, backend, notification or real data. Exact runtime head
+`55b3c15b848d489e903577ce020795953d63d2c8` is green in CI: lint, strict typecheck, 71 unit tests,
+production build, 56 browser/accessibility scenarios and 3 screenshot scenarios. The generated
+administration screenshot was visually inspected. See [WORK_LOG.md](./WORK_LOG.md) for exact
+evidence and [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
 
 The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
 on DVD Tivat; do not implement multi-society routing or treat this assumption as an agreed requirement.
@@ -106,11 +106,10 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Commit and push the fictional local-administration slice on a branch above the citizen-report head,
-open a Draft PR, then run GitHub CI on its exact head and inspect its generated desktop and phone
-evidence. Review and merge in stack order only with explicit owner approval: redesign, citizen
-report, local administration. After the UI and functions are accepted, replace the first
-promotional video with a new script, more natural narration and footage from the accepted interface.
+Review the three Draft PRs and merge in stack order only with explicit owner approval: redesign,
+citizen report, local administration. Retarget each next PR after its prerequisite lands and require
+a green exact-head CI result. After the UI and functions are accepted, replace the first promotional
+video with a new script, more natural narration and footage from the accepted interface.
 
 Production Phase 2 still waits on
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society), especially

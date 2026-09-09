@@ -34,11 +34,20 @@ no backend, account, push service, upload endpoint, deployment or real data was 
 
 **Local verification:** `npm run verify` passed on the complete working tree: ESLint, 71 Vitest
 tests, strict TypeScript and the Vite production build. `git diff --check` is clean. Local Chromium
-remains unavailable, so the new admin browser and screenshot evidence must be obtained from GitHub
-CI on the exact pushed head rather than inferred.
+remains unavailable, so no local browser pass is claimed.
 
-**Next:** push the local-administration work on its own stacked branch, open a Draft PR and inspect
-the first GitHub CI result. Do not merge, deploy, publish or enter real people or operational data.
+**GitHub evidence:** Draft PR #11 targets `main` to test the complete stacked tree. CI run
+`34305679955`, job `102321763307`, attempt 1, passed on exact runtime head
+`55b3c15b848d489e903577ce020795953d63d2c8`: dependency install, lint, strict typecheck, 71 unit
+tests, production build, 56 Chromium browser/accessibility scenarios and 3 screenshot scenarios.
+Artifact `10086586979` contains 14 PNGs, is 4,107,485 bytes and has GitHub-recorded ZIP SHA-256
+`92af330186f3f0abe8ec4362efea6c932d158d40fb6aaee6aa24524fda9c8239`. The full-page fictional
+administration screenshot was visually inspected: the warning, forms, focusable controls, status
+chips and roster/group/vehicle tables are legible with no observed clipping or overlap.
+
+**Next:** review the stacked Draft PRs in order (#9, #10, #11). Merge only with explicit owner
+approval and re-run exact-head CI after each retarget. Do not deploy, publish or enter real people
+or operational data.
 
 ---
 
