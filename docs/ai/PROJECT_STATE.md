@@ -14,8 +14,9 @@ Tivat call-out, response and citizen-report intake. No server, no accounts, no n
 real data.
 
 The active isolated slice is Draft PR #12 on `codex/dvd-tivat-operational-profile`, stacked above
-Draft PR #11. Exact runtime head `f37994fc16a8aaa52d9eafef0b4cce89fd32a0e6` passed CI on its
-first attempt: 74 unit tests, 62 browser/accessibility scenarios and 3 screenshot scenarios. It
+Draft PR #11. Exact runtime-and-handoff head `0631119b8316cb390a654c70eaee6278e7dbee2e`
+passed CI on its first attempt: 78 unit tests, 62 browser/accessibility scenarios and 3 screenshot
+scenarios. It
 applies the member-confirmed DVD Tivat scale and workflow without adding any operational channel:
 52 fictional member rows, two fictional vehicle records matching the reported categories, base-first
 assembly, Viber shown only as the existing fallback, recipient search, and explicit iPhone/Android
@@ -26,8 +27,8 @@ permissions and pilot rules remain separate product decisions.
 The same branch contains the complete first-review handoff: `FIRST_TEST_CHECKLIST.md`,
 `PRESENTATION_SCRIPT.md`, `TEST_FEEDBACK_FORM.md` and `MEETING_DECISIONS.md`. Four structural tests
 keep those documents aligned with the operating profile and the simulation/non-delivery boundary.
-The local gate passes with 78 unit tests; hosted browser and accessibility evidence on the final
-pushed head still needs to be recorded.
+The local gate passes with 78 unit tests. Hosted Chromium, accessibility and screenshot evidence is
+recorded in the newest work-log entry.
 
 ## Repository and branch
 

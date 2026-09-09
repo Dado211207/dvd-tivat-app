@@ -34,13 +34,20 @@ resolved an `import.meta.url` document path to `/docs`; the test now resolves fr
 The next run correctly caught two copy mismatches (`Viber` versus `Viber grupa`, and `terenac`
 versus `TERENAC-1`); the documents were made exact and no assertion was weakened.
 
-**Local verification:** ESLint, 78 Vitest tests, strict TypeScript, the Vite production build and
-`git diff --check` pass. Hosted Chromium, accessibility and screenshot evidence still needs to be
-collected on the pushed exact head.
+**Verification:** ESLint, 78 Vitest tests, strict TypeScript, the Vite production build and
+`git diff --check` pass locally twice on the final tree. The private-data scan first matched CSS
+triplets such as `255 255 255`; after excluding CSS colour declarations, the targeted secret,
+telephone and email scan was clean.
 
-**Next:** push the isolated branch, require first-attempt CI on the exact head, inspect the updated
-screenshots if application output changed, and keep PR #12 Draft and unmerged. Then the owner can
-run the first-test checklist before showing the prototype to DVD Tivat.
+GitHub CI run `34333542412`, job `102407498984`, completed successfully at attempt 1 on exact head
+`0631119b8316cb390a654c70eaee6278e7dbee2e`: 78 unit tests, production build, 62 Chromium
+functional/accessibility scenarios and 3 screenshot scenarios. Screenshot artifact `10096819765`
+contains 14 PNGs, is 4,869,671 bytes and has GitHub-recorded ZIP SHA-256
+`dd632584a7fd27884f6f9297a998a7c16fab996ea4bc3401a2e79cc3d4c13893`.
+
+**Next:** keep PR #12 Draft and unmerged. The owner can now run the first-test checklist before
+showing the prototype to DVD Tivat. The only visual output changed in this slice is the profile note
+from pending confirmation to member-confirmed; the same screenshot suite passed on the exact head.
 
 ---
 
