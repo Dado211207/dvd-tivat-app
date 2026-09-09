@@ -539,6 +539,143 @@ export function applyCommand(state: AppState, command: Command, ctx: Ctx): Resul
     }
 
     // -----------------------------------------------------------------------
+    case 'SAVE_DEMO_MEMBER': {
+      if (isBlank(command.name)) return err('NEDOSTAJE_IME_CLANA', 'demoMemberName');
+      const existing = command.memberId === null
+        ? undefined
+        : state.members.find((member) => member.id === command.memberId);
+      if (command.memberId !== null && !existing) return err('CLAN_ZA_IZMJENU_NE_POSTOJI');
+      if (command.groupIds.some((id) => !state.groups.some((group) => group.id === id))) {
+        return err('NEPOZNATA_GRUPA', 'demoMemberGroups');
+      }
+
+      const memberId = existing?.id ?? ctx.id();
+      const groupIds = [...new Set(command.groupIds)];
+      const specialties = [...new Set(command.specialties)];
+      const member = {
+        id: memberId,
+        name: command.name.trim(),
+        roleProposed: command.roleProposed,
+        specialties,
+        groupIds,
+        contactLabel: existing?.contactLabel ?? `demo-kontakt-${String(state.members.length + 1).padStart(2, '0')}`,
+        active: command.active,
+      };
+
+      const members = existing
+        ? state.members.map((item) => (item.id === memberId ? member : item))
+        : [...state.members, member];
+      const groups = state.groups.map((group) => ({
+        ...group,
+        memberIds: groupIds.includes(group.id)
+          ? [...new Set([...group.memberIds, memberId])]
+          : group.memberIds.filter((id) => id !== memberId),
+      }));
+
+      return ok({
+        ...state,
+        members,
+        groups,
+        simulation: state.simulation.actorId === memberId
+          ? { ...state.simulation, viewRole: member.roleProposed }
+          : state.simulation,
+        activity: [
+          logEntry(
+            state,
+            ctx,
+            command.actorId,
+            'PROBNI_CLAN_SACUVAN',
+            `${existing ? 'Azuriran' : 'Dodat'} probni clan "${member.name}".`,
+            null,
+          ),
+          ...state.activity,
+        ],
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'SAVE_DEMO_GROUP': {
+      if (isBlank(command.name)) return err('NEDOSTAJE_NAZIV_GRUPE', 'demoGroupName');
+      const existing = command.groupId === null
+        ? undefined
+        : state.groups.find((group) => group.id === command.groupId);
+      if (command.groupId !== null && !existing) return err('GRUPA_ZA_IZMJENU_NE_POSTOJI');
+      const normalized = command.name.trim().toLocaleLowerCase('sr-Latn');
+      if (state.groups.some(
+        (group) => group.id !== existing?.id && group.name.toLocaleLowerCase('sr-Latn') === normalized,
+      )) {
+        return err('DUPLIKAT_NAZIVA_GRUPE', 'demoGroupName');
+      }
+
+      const group = {
+        id: existing?.id ?? ctx.id(),
+        name: command.name.trim(),
+        memberIds: existing ? [...existing.memberIds] : [],
+      };
+      return ok({
+        ...state,
+        groups: existing
+          ? state.groups.map((item) => (item.id === group.id ? group : item))
+          : [...state.groups, group],
+        activity: [
+          logEntry(
+            state,
+            ctx,
+            command.actorId,
+            'PROBNA_GRUPA_SACUVANA',
+            `${existing ? 'Azurirana' : 'Dodata'} probna grupa "${group.name}".`,
+            null,
+          ),
+          ...state.activity,
+        ],
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'SAVE_DEMO_VEHICLE': {
+      if (isBlank(command.callsign)) return err('NEDOSTAJE_OZNAKA_VOZILA', 'demoVehicleCallsign');
+      if (isBlank(command.name)) return err('NEDOSTAJE_NAZIV_VOZILA', 'demoVehicleName');
+      if (isBlank(command.vehicleType)) return err('NEDOSTAJE_VRSTA_VOZILA', 'demoVehicleType');
+      const existing = command.vehicleId === null
+        ? undefined
+        : state.vehicles.find((vehicle) => vehicle.id === command.vehicleId);
+      if (command.vehicleId !== null && !existing) return err('VOZILO_ZA_IZMJENU_NE_POSTOJI');
+      const normalized = command.callsign.trim().toLocaleLowerCase('sr-Latn');
+      if (state.vehicles.some(
+        (vehicle) => vehicle.id !== existing?.id && vehicle.callsign.toLocaleLowerCase('sr-Latn') === normalized,
+      )) {
+        return err('DUPLIKAT_OZNAKE_VOZILA', 'demoVehicleCallsign');
+      }
+
+      const vehicle = {
+        id: existing?.id ?? ctx.id(),
+        callsign: command.callsign.trim(),
+        name: command.name.trim(),
+        type: command.vehicleType.trim(),
+      };
+      return ok({
+        ...state,
+        vehicles: existing
+          ? state.vehicles.map((item) => (item.id === vehicle.id ? vehicle : item))
+          : [...state.vehicles, vehicle],
+        activity: [
+          logEntry(
+            state,
+            ctx,
+            command.actorId,
+            'PROBNO_VOZILO_SACUVANO',
+            `${existing ? 'Azurirano' : 'Dodato'} probno vozilo ${vehicle.callsign}.`,
+            null,
+          ),
+          ...state.activity,
+        ],
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
     case 'SET_SIMULATED_ACTOR': {
       const member = state.members.find((m) => m.id === command.memberId);
       if (!member) return err('CLAN_NE_POSTOJI');

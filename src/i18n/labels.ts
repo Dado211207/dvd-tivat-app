@@ -121,6 +121,9 @@ export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
   VJEZBA_OTKAZANA: 'Vjezba otkazana',
   VOZILO_IZASLO: 'Vozilo izaslo',
   VOZILO_VRACENO: 'Vozilo vraceno',
+  PROBNI_CLAN_SACUVAN: 'Probni clan sacuvan',
+  PROBNA_GRUPA_SACUVANA: 'Probna grupa sacuvana',
+  PROBNO_VOZILO_SACUVANO: 'Probno vozilo sacuvano',
   PODACI_RESETOVANI: 'Podaci resetovani',
 };
 

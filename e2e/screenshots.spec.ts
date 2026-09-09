@@ -88,6 +88,8 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     // 7. Roster.
     await goTo(page, 'clanovi');
     await capture(page, '07-clanovi.png');
+    await switchActor(page, 'Marko Perovic');
+    await capture(page, '07a-upravljanje-probnim-podacima.png');
 
     // 8. History and the activity log, after closing.
     await goTo(page, 'dezurni');

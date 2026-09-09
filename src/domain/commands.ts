@@ -18,6 +18,7 @@ import type {
   Id,
   ResponseAnswer,
   RoleId,
+  SpecialtyId,
 } from './types';
 
 interface Base {
@@ -101,6 +102,33 @@ export interface ReviewCitizenReport extends Base {
   reportId: Id;
 }
 
+/** Creates or updates a fictional member and keeps group membership symmetric. */
+export interface SaveDemoMember extends Base {
+  type: 'SAVE_DEMO_MEMBER';
+  memberId: Id | null;
+  name: string;
+  roleProposed: RoleId;
+  specialties: SpecialtyId[];
+  groupIds: Id[];
+  active: boolean;
+}
+
+/** Creates or renames a fictional group. Membership is edited through members. */
+export interface SaveDemoGroup extends Base {
+  type: 'SAVE_DEMO_GROUP';
+  groupId: Id | null;
+  name: string;
+}
+
+/** Creates or updates a fictional vehicle. Existing movement records keep its id. */
+export interface SaveDemoVehicle extends Base {
+  type: 'SAVE_DEMO_VEHICLE';
+  vehicleId: Id | null;
+  callsign: string;
+  name: string;
+  vehicleType: string;
+}
+
 /** Switches which fictional person the screen is pretending to be. Grants nothing. */
 export interface SetSimulatedActor extends Base {
   type: 'SET_SIMULATED_ACTOR';
@@ -124,6 +152,9 @@ export type Command =
   | ReturnVehicle
   | SubmitCitizenReport
   | ReviewCitizenReport
+  | SaveDemoMember
+  | SaveDemoGroup
+  | SaveDemoVehicle
   | SetSimulatedActor
   | ResetDemoData;
 

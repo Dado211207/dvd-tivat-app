@@ -126,6 +126,11 @@ One historically named key: `dvd-tivat-prototip:v1`. JSON, currently schema vers
 after each successful command, read once at start-up. The explicit version 1 to 2 migration adds
 only an empty citizen-report inbox; unknown versions are still refused rather than guessed at.
 
+The fictional member/group/vehicle editor uses the same command reducer and the same persisted
+state; it does not create a second administration store. Member updates write both
+`Member.groupIds` and every affected `Group.memberIds` in one pure transition, so the two indexes
+cannot drift. Records are deactivated rather than deleted where history may still reference them.
+
 Handled failures — all of them real in practice:
 
 | Failure | Behaviour |
@@ -174,6 +179,10 @@ The domain layer is plain TypeScript with no React and no browser API. It can be
 package and imported unchanged by a React Native or Expo client. That makes the mobile question a
 question about **delivery**, not about business rules — which is the right place for it, because
 delivery is where the risk is.
+
+The concrete server, identity, notification, media and mobile sequence is specified separately in
+[PRODUCTION_ARCHITECTURE.md](./PRODUCTION_ARCHITECTURE.md). That document is a gated path, not a
+claim that any production infrastructure exists.
 
 That framework choice stays open until Phase 3 answers what each platform actually permits. Choosing
 a mobile framework before knowing whether Critical Alerts, notification channels or an SMS fallback

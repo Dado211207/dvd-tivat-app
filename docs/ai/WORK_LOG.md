@@ -5,6 +5,43 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-09 — Add safe local administration and define the production boundary
+
+**Owner direction:** continue independently while Claude is unavailable, add the remaining useful
+prototype functions, keep the experience personalised for DVD Tivat, and leave a reliable written
+handoff. Single-society use remains expected but unconfirmed.
+
+**Citizen-report evidence:** CI run `34304900877`, job `102319448025`, attempt 1, passed on exact
+head `b2c8065f18b82a9156a05aa48639b312f99efaa3`: lint, strict typecheck, 61 unit tests, production
+build, 52 Chromium browser/accessibility scenarios and 3 screenshot scenarios. Artifact
+`10086318945` contains 13 PNGs and has GitHub-recorded ZIP SHA-256
+`4f69f5b6528b7a1264ff2cb484d2354c101e9ef8cf50f416965378093ef4c05d`. The preceding run failed
+only because one test selected both a visible location result and the same text in a hidden dialog;
+the selector was narrowed to the visible result without changing product behaviour or assertions.
+
+**Local administration:** added pure reducer commands and a simulated-admin panel for creating and
+updating invented members, groups and vehicles. Group membership is updated symmetrically on both
+records, duplicate group names and vehicle callsigns are rejected, deactivated members remain in
+history but are excluded from new recipient resolution, and repeated command ids are no-ops. The
+panel accepts no contact details and repeatedly warns that it is local demonstration data, not
+authentication or permission enforcement. Ten focused domain tests and browser/accessibility
+coverage guard the new paths.
+
+**Production boundary:** added `docs/PRODUCTION_ARCHITECTURE.md`. It records the server-owned data,
+identity, authorisation, realtime, notification, citizen-media, privacy, operations and staged
+physical-device evidence required after workflow approval. It is explicitly a decision document;
+no backend, account, push service, upload endpoint, deployment or real data was added.
+
+**Local verification:** `npm run verify` passed on the complete working tree: ESLint, 71 Vitest
+tests, strict TypeScript and the Vite production build. `git diff --check` is clean. Local Chromium
+remains unavailable, so the new admin browser and screenshot evidence must be obtained from GitHub
+CI on the exact pushed head rather than inferred.
+
+**Next:** push the local-administration work on its own stacked branch, open a Draft PR and inspect
+the first GitHub CI result. Do not merge, deploy, publish or enter real people or operational data.
+
+---
+
 ## 2026-09-08 — Simplify and modernise the interface before remaking the video
 
 **Owner direction:** the first cinematic demonstration was acceptable as a video, but its application

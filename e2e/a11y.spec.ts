@@ -105,6 +105,15 @@ test.describe('accessibility', () => {
     await expect(page.locator('[role="alert"]')).toContainText('Unesite naslov');
   });
 
+  test('the editable fictional-data administration panel passes an axe scan', async ({ page }) => {
+    await openApp(page, 'clanovi');
+    await switchActor(page, 'Marko Perovic');
+    await expect(page.getByRole('heading', { name: 'Upravljanje probnim podacima' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(RULESETS).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  });
+
   test('response state is not carried by colour alone', async ({ page }) => {
     await openApp(page);
     await createCall(page);

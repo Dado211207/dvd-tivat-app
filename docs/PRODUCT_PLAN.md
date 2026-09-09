@@ -6,7 +6,8 @@ without diacritics.
 
 Companion documents: [FIREAPP_REVIEW.md](./FIREAPP_REVIEW.md) (what the reference product
 documents and how well we verified it), [ARCHITECTURE.md](./ARCHITECTURE.md) (how the prototype is
-built), [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) (where the work currently stands).
+built), [PRODUCTION_ARCHITECTURE.md](./PRODUCTION_ARCHITECTURE.md) (the gated path after approval),
+[ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) (where the work currently stands).
 
 ---
 
@@ -54,6 +55,10 @@ Everything in this list is implemented and running in the repository.
 - A large-format station display view.
 - Roster, exercise history, a timestamped activity log naming the simulated actor, and a
   confirmed reset that clears only this prototype's own stored data.
+- A **local fictional-data editor** for an administrator simulation: create or update members,
+  maintain group membership, add or rename groups, add or update vehicles, and deactivate members
+  without deleting history. It stores only in this browser, accepts no phone/email field, and is
+  explicitly not authentication or real permission enforcement.
 - A **local citizen-report demonstration**: event type, description, typed place, optional
   device location requested only after an explicit press, optional in-session photo preview,
   exact review, local save, and a separate "reviewed in simulation" action for DVD Tivat.
@@ -290,6 +295,8 @@ Acceptance:
 - [x] Unit tests over the domain rules; browser tests over the whole flow at phone and desktop sizes; automated accessibility checks with material findings fixed.
 - [x] Citizen-report intake can be demonstrated end to end in one browser while structurally
       creating no exercise, call, delivery, member response or vehicle movement.
+- [x] Fictional members, groups and vehicles can be maintained locally while group membership stays
+      symmetric and inactive members are excluded from new recipient resolution.
 
 ### Phase 2 — Real accounts, server authorisation, shared data
 

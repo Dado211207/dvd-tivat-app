@@ -28,7 +28,18 @@ export type DomainErrorCode =
   | 'NEDOSTAJE_OPIS_PRIJAVE'
   | 'NEDOSTAJE_LOKACIJA_PRIJAVE'
   | 'NEISPRAVNE_KOORDINATE'
-  | 'PRIJAVA_NE_POSTOJI';
+  | 'PRIJAVA_NE_POSTOJI'
+  | 'NEDOSTAJE_IME_CLANA'
+  | 'CLAN_ZA_IZMJENU_NE_POSTOJI'
+  | 'NEPOZNATA_GRUPA'
+  | 'NEDOSTAJE_NAZIV_GRUPE'
+  | 'GRUPA_ZA_IZMJENU_NE_POSTOJI'
+  | 'DUPLIKAT_NAZIVA_GRUPE'
+  | 'NEDOSTAJE_OZNAKA_VOZILA'
+  | 'NEDOSTAJE_NAZIV_VOZILA'
+  | 'NEDOSTAJE_VRSTA_VOZILA'
+  | 'VOZILO_ZA_IZMJENU_NE_POSTOJI'
+  | 'DUPLIKAT_OZNAKE_VOZILA';
 
 export interface DomainError {
   code: DomainErrorCode;
@@ -62,6 +73,17 @@ const MESSAGES: Record<DomainErrorCode, string> = {
     'Unesite lokaciju dogadjaja ili izricito dozvolite pristup lokaciji uredjaja.',
   NEISPRAVNE_KOORDINATE: 'Lokacija uredjaja nije citljiva. Pokusajte ponovo ili unesite mjesto.',
   PRIJAVA_NE_POSTOJI: 'Probna prijava ne postoji.',
+  NEDOSTAJE_IME_CLANA: 'Unesite izmisljeno ime clana.',
+  CLAN_ZA_IZMJENU_NE_POSTOJI: 'Probni clan za izmjenu ne postoji.',
+  NEPOZNATA_GRUPA: 'Izabrana je grupa koja ne postoji.',
+  NEDOSTAJE_NAZIV_GRUPE: 'Unesite naziv probne grupe.',
+  GRUPA_ZA_IZMJENU_NE_POSTOJI: 'Probna grupa za izmjenu ne postoji.',
+  DUPLIKAT_NAZIVA_GRUPE: 'Probna grupa sa tim nazivom vec postoji.',
+  NEDOSTAJE_OZNAKA_VOZILA: 'Unesite oznaku probnog vozila.',
+  NEDOSTAJE_NAZIV_VOZILA: 'Unesite naziv probnog vozila.',
+  NEDOSTAJE_VRSTA_VOZILA: 'Unesite vrstu probnog vozila.',
+  VOZILO_ZA_IZMJENU_NE_POSTOJI: 'Probno vozilo za izmjenu ne postoji.',
+  DUPLIKAT_OZNAKE_VOZILA: 'Probno vozilo sa tom oznakom vec postoji.',
 };
 
 export function domainError(code: DomainErrorCode, field?: string): DomainError {

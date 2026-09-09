@@ -3,7 +3,7 @@
 Single source of truth for resuming this work without reading the conversation that produced it.
 **Update this file in the same commit as the change it describes.**
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ---
 
@@ -25,16 +25,18 @@ real data.
 
 ## Status
 
-**A citizen-report prototype is in progress on `codex/citizen-report-prototype`, stacked on the
-unmerged visual redesign `codex/modern-ui-ux`.** It adds a seventh route while preserving the
-redesign, confirmation flow and simulation disclosure. The intake is deliberately local-only and
-must not be described as a working alert channel. Neither branch may be merged and the promotional
-video must not be remade until owner review.
+The modern visual redesign is isolated in Draft PR #9. The citizen-report slice is isolated in
+Draft PR #10 on `codex/citizen-report-prototype`, stacked above that redesign. Its exact remote head
+`b2c8065f18b82a9156a05aa48639b312f99efaa3` is green in CI: 61 unit tests, 52 browser/accessibility
+scenarios and 3 screenshot scenarios. The intake is deliberately local-only and must not be
+described as a working alert channel.
 
-Local verification on the redesign passes lint, 50 unit tests, strict typecheck and the production
-build. Browser, accessibility and screenshot evidence must come from GitHub CI because this
-environment could not download the Playwright Chromium binary; that infrastructure limitation is
-not being presented as an application pass. See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
+The next isolated slice is in progress on `codex/local-admin-prototype`: fictional local
+administration of members, groups and vehicles plus the production architecture decision document.
+It adds no account, permission boundary, backend, notification or real data. Local verification is
+green: lint, 71 unit tests, strict typecheck and production build. Browser, accessibility and
+screenshot evidence must come from GitHub CI because this environment could not obtain the
+Playwright Chromium binary. See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
 [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
 
 The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
@@ -48,9 +50,9 @@ Not deployed anywhere. No licence file. No real alert, account or member data ex
 src/domain/      pure rules - types, errors, commands, reducer, selectors, seed, message
 src/storage/     one state key plus a namespaced write probe; known failures tested
 src/state/       React binding: injects the clock, ids and persistence
-src/ui/          seven views + shared components; hand-written CSS in src/styles
+src/ui/          seven views + local fictional-data editor; hand-written CSS in src/styles
 src/i18n/        shared labels; additional view copy lives in components; no diacritics
-e2e/             Playwright: flow, accessibility, screenshots (tagged @screenshots)
+e2e/             Playwright: flow, admin, accessibility, screenshots (tagged @screenshots)
 ```
 
 The rule that matters when changing anything: **`applyCommand` in `src/domain/reducer.ts` is the
@@ -104,10 +106,11 @@ The two that most affect the work:
 
 ## Next concrete action
 
-Complete the citizen-report slice, then run GitHub CI on its exact head and inspect the generated
-desktop and phone evidence. Keep it as a Draft stacked above the unmerged redesign. After the UI
-and functions are accepted, replace the first promotional video with a new script, more natural
-narration and footage captured from the accepted interface.
+Commit and push the fictional local-administration slice on a branch above the citizen-report head,
+open a Draft PR, then run GitHub CI on its exact head and inspect its generated desktop and phone
+evidence. Review and merge in stack order only with explicit owner approval: redesign, citizen
+report, local administration. After the UI and functions are accepted, replace the first
+promotional video with a new script, more natural narration and footage from the accepted interface.
 
 Production Phase 2 still waits on
 [PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society), especially

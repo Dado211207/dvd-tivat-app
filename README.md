@@ -53,8 +53,9 @@ already provides one, point at it with `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromi
 | **Clan** | Operational member | See a call addressed to them, answer *Dolazim* / *Dolazim kasnije* (15/30/60 min) / *Ne mogu*, flag going direct to the incident, change the answer |
 | **Vozila** | Anyone at the station | Log vehicle departures and returns as explicit, independent actions |
 | **Prikaz u domu** | Station wall display | Large read-only overview: incident, location, totals, answers, vehicles |
-| **Clanovi** | Everyone | The fictional roster, groups and vehicles |
+| **Clanovi** | Everyone; editable in the admin simulation | The fictional roster, groups and vehicles, with a local-only editor for invented demonstration records |
 | **Istorija** | Everyone | Past exercises, the timestamped activity log, and a confirmed demo reset |
+| **Dojava gradjana** | Citizen-workflow discussion | Locally review and save an untrusted fictional report; an authorised simulation may use it only to prefill the normal confirmed call flow |
 
 The application opens straight into the duty officer's screen. There is no
 landing page — the point of a prototype is to be driven.
@@ -67,7 +68,7 @@ landing page — the point of a prototype is to be driven.
 | Authentication or permissions | The role selector switches which fictional person the screen pretends to be. It protects nothing |
 | Shared data | State lives in one browser's `localStorage`. Two devices show two unrelated worlds, and clearing browser data deletes it |
 | Real member data | The repository is public. Everything is invented |
-| Citizen reporting, radius dispatch, door control, official integrations, location tracking | Out of scope at this stage — recorded as later possibilities only |
+| Real citizen-report delivery, radius dispatch, door control, official integrations, continuous location tracking | The prototype demonstrates local intake only. It contacts nobody and tracks nobody |
 
 **A browser prototype is not evidence that a locked Android or iPhone will raise
 an alarm.** Whether that is achievable at all depends on platform permissions,
@@ -80,6 +81,7 @@ store policy and delivery acknowledgements, and it is a separate investigation
 |---|---|
 | [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) | Users, scope, assumptions, roles and permission matrix, data model, five phases with acceptance criteria, risks, questions for the society |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack choice and rejected alternatives, layering, the pure domain reducer, persistence limits, path to mobile |
+| [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) | Gated server, identity, notification and mobile architecture if DVD Tivat accepts the workflow |
 | [docs/FIREAPP_REVIEW.md](docs/FIREAPP_REVIEW.md) | What the reference product's public documentation says, per-claim, with what was and was not verified |
 | [docs/ai/PROJECT_STATE.md](docs/ai/PROJECT_STATE.md) | Current state and the rules for continuing this work |
 | [docs/ai/WORK_LOG.md](docs/ai/WORK_LOG.md) | What was done, verified, and what is next |

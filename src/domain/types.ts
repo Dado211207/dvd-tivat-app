@@ -276,6 +276,9 @@ export type ActivityKind =
   | 'VJEZBA_OTKAZANA'
   | 'VOZILO_IZASLO'
   | 'VOZILO_VRACENO'
+  | 'PROBNI_CLAN_SACUVAN'
+  | 'PROBNA_GRUPA_SACUVANA'
+  | 'PROBNO_VOZILO_SACUVANO'
   | 'PODACI_RESETOVANI';
 
 export interface ActivityEntry {
