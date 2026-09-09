@@ -34,9 +34,19 @@ Vite production build. Local Playwright could not launch because this environmen
 the failed launch ran zero application assertions and is not counted as browser evidence. CI on the
 exact remote head remains required before review.
 
-**Next:** push this isolated branch, open a Draft PR, require one first-attempt green CI run including
-all browser and accessibility checks, and inspect its screenshot artifact. Do not merge, deploy,
-publish, enter real data or call this an operational alert system.
+**GitHub evidence:** Draft PR #12, runtime head
+`f37994fc16a8aaa52d9eafef0b4cce89fd32a0e6`, CI run `34313382766`, job `102344466690`, attempt 1,
+passed without a rerun: lint, strict typecheck, 74 unit tests, production build, 62 Chromium
+browser/accessibility scenarios and 3 screenshot scenarios. Artifact `10089211902` contains 14 PNGs,
+is 4,869,709 bytes and has GitHub-recorded ZIP SHA-256
+`2085185206a6198ff79bf53d1385a706d7f154aacec9dc5c3b8d2408f66a2678`. The overview, composed
+recipient search, member screen, two-vehicle board and 390x844 phone screenshot were visually
+inspected; no overlap or clipping was observed. The phone screenshot is responsive-browser evidence,
+not an iOS or Android native-device result.
+
+**Next:** review the stacked Draft PRs in order (#9 through #12). Merge only with explicit owner
+approval and reverify each retargeted exact head. Do not deploy, publish, enter real data or call
+this an operational alert system.
 
 ---
 
