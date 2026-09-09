@@ -10,6 +10,10 @@ confirmed that constraint. Nothing below introduces multi-society routing, but t
 a `societyId` boundary so a later institutional requirement does not force unrelated members into
 one security domain.
 
+The owner reports that the current call-out channel is a Viber group and that members have both
+iPhones and Android phones. Viber remains a parallel fallback until DVD Tivat explicitly approves
+another tested arrangement. A responsive browser pass is not evidence of native alarm delivery.
+
 ---
 
 ## 1. Entry conditions
@@ -34,7 +38,8 @@ fictional.
 
 The production product is four clients around one server-owned truth:
 
-- **member mobile app** — receives addressed calls, displays facts and records that member's answer;
+- **member mobile apps for iOS and Android** — receive addressed calls, display facts and record
+  that member's answer after physical-device acceptance on both platforms;
 - **duty/admin app** — reviews reports, composes calls, manages the roster and watches responses;
 - **station display** — read-only, minimum necessary information, revocable device registration;
 - **citizen intake** — a deliberately separate public surface if the society approves it;
@@ -122,6 +127,8 @@ fallback timing is a DVD Tivat operational decision and must not be invented in 
 Android and iOS need physical-device trials on locked screens, silent/Focus modes, battery saving,
 network loss, sign-out and device replacement. Store-policy permissions and any exceptional alert
 entitlement must be verified from current first-party documentation immediately before that phase.
+The existing Viber group runs in parallel during supervised exercises until the society accepts a
+documented fallback and rollback procedure.
 
 ---
 

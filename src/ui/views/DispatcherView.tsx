@@ -73,6 +73,7 @@ function Composer() {
   const [reporterLocation, setReporterLocation] = useState('');
   const [memberIds, setMemberIds] = useState<Id[]>([]);
   const [groupIds, setGroupIds] = useState<Id[]>([]);
+  const [memberQuery, setMemberQuery] = useState('');
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [preview, setPreview] = useState(false);
   /** Reset after a successful send so the next call gets a fresh id. */
@@ -86,6 +87,13 @@ function Composer() {
     () => resolveRecipients(state, memberIds, groupIds),
     [state, memberIds, groupIds],
   );
+
+  const visibleMembers = useMemo(() => {
+    const query = memberQuery.trim().toLocaleLowerCase('sr-Latn');
+    return state.members.filter(
+      (member) => member.active && (query === '' || member.name.toLocaleLowerCase('sr-Latn').includes(query)),
+    );
+  }, [memberQuery, state.members]);
 
   const messageText = composeMessage({ kind, title, instructions, incidentLocation, reporterLocation });
 
@@ -282,8 +290,21 @@ function Composer() {
 
         <fieldset>
           <legend>{T.recipientsIndividuals}</legend>
-          <div className="check-list check-list--2">
-            {state.members.map((member) => {
+          <div className="recipient-search">
+            <label htmlFor="member-search">Pretrazi probne clanove</label>
+            <input
+              id="member-search"
+              type="search"
+              value={memberQuery}
+              placeholder="Ime ili oznaka clana"
+              onChange={(event) => setMemberQuery(event.target.value)}
+            />
+            <p className="small muted" aria-live="polite">
+              Prikazano {visibleMembers.length} od {state.members.filter((member) => member.active).length} aktivnih.
+            </p>
+          </div>
+          <div className="check-list check-list--2 recipient-member-list" data-testid="recipient-member-list">
+            {visibleMembers.map((member) => {
               const viaGroup = !memberIds.includes(member.id) && resolved.includes(member.id);
               return (
                 <label className="check" key={member.id}>
@@ -299,6 +320,9 @@ function Composer() {
                 </label>
               );
             })}
+            {visibleMembers.length === 0 ? (
+              <p className="small muted recipient-search__empty">Nema aktivnog probnog clana za ovu pretragu.</p>
+            ) : null}
           </div>
         </fieldset>
 
@@ -517,7 +541,7 @@ function ActiveExercise() {
             </div>
 
             <p className="small muted" style={{ marginTop: 'var(--sp-3)' }}>
-              Direktno na lokaciju: <strong>{totals.direktnoNaLokaciju}</strong>
+              Clanovi koji dolaze prvo se okupljaju u bazi DVD Tivat radi preuzimanja opreme.
             </p>
 
             <ScrollRegion label="Primaoci poziva, stanje isporuke i dati odgovori">

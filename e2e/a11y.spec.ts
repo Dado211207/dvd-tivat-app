@@ -36,7 +36,7 @@ test.describe('accessibility', () => {
     await page.getByTestId('submit-response').click();
 
     await goTo(page, 'vozila');
-    await page.getByTestId('depart-NV-1').click();
+    await page.getByTestId('depart-MAN-1').click();
     await page.getByRole('button', { name: 'Potvrdi' }).click();
 
     for (const route of VIEWS) {

@@ -55,7 +55,7 @@ const ROUTE_DESCRIPTION: Record<Route, string> = {
   dezurni: 'Priprema poziva i pracenje odziva ekipe',
   clan: 'Poziv i odgovor iz ugla izabranog clana',
   vozila: 'Rucna evidencija izlaska i povratka vozila',
-  prikaz: 'Pregled stanja namijenjen ekranu u domu',
+  prikaz: 'Pregled stanja namijenjen ekranu u bazi',
   clanovi: 'Clanovi, uloge, grupe i osposobljenosti',
   istorija: 'Zavrsene vjezbe i hronologija promjena',
 };

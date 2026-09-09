@@ -479,6 +479,28 @@ body {
   white-space: normal;
 }
 
+.station-overview__facts dd.station-overview__fact-value {
+  font-size: 1.25rem;
+}
+
+.station-overview__profile {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  align-items: center;
+  padding: 12px 28px;
+  font-size: 0.74rem;
+  color: var(--c-ink-soft);
+  background: color-mix(in srgb, var(--c-accent-soft) 45%, var(--c-surface));
+  border-top: 1px solid var(--c-line);
+}
+
+.station-overview__profile small {
+  flex-basis: 100%;
+  color: var(--c-ink-faint);
+}
+
 /* -------------------------------------------------------------- work cards */
 
 .card {
@@ -561,6 +583,35 @@ body {
 
 .recipients-card fieldset:last-of-type {
   flex: 1;
+}
+
+.recipient-search {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.recipient-search label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--c-ink-soft);
+}
+
+.recipient-search input {
+  min-height: 46px;
+}
+
+.recipient-member-list {
+  max-height: 29rem;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.recipient-search__empty {
+  grid-column: 1 / -1;
+  padding: 14px;
 }
 
 .composer-action {

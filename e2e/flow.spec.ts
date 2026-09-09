@@ -84,7 +84,7 @@ test('full exercise: send, answer, change answer, vehicle, status, close, histor
 
   // --- compose -------------------------------------------------------------
   await page.getByLabel(/^Naslov/).fill('Vjezba: dimna komora');
-  await page.getByLabel(/^Uputstvo za clanove/).fill('Okupljanje u domu.');
+  await page.getByLabel(/^Uputstvo za clanove/).fill('Okupljanje u bazi DVD Tivat.');
   await page.getByLabel(/^Lokacija dogadjaja/).fill('Poligon (izmisljena lokacija)');
   await page.getByLabel(/^Lokacija prijavioca/).fill('Dom (izmisljeno)');
   await page.getByRole('checkbox', { name: /Nosioci IDA aparata/ }).check();
@@ -96,6 +96,7 @@ test('full exercise: send, answer, change answer, vehicle, status, close, histor
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(page.getByTestId('preview-message')).toContainText('[VJEZBA] Vjezba: dimna komora');
+  await expect(page.getByTestId('preview-message')).toContainText('Mjesto okupljanja: Baza DVD Tivat');
   await expect(page.getByTestId('preview-message')).toContainText('Lokacija dogadjaja: Poligon');
   await expect(page.getByTestId('preview-message')).toContainText('Lokacija prijavioca: Dom');
   await expect(page.getByTestId('preview-recipients').getByRole('listitem')).toHaveCount(4);
@@ -143,11 +144,11 @@ test('full exercise: send, answer, change answer, vehicle, status, close, histor
 
   // --- vehicles are independent of attendance -------------------------------
   await goTo(page, 'vozila');
-  await expect(page.getByTestId('vehicle-state-NV-1')).toContainText('U domu');
-  await page.getByTestId('depart-NV-1').click();
+  await expect(page.getByTestId('vehicle-state-MAN-1')).toContainText('U bazi');
+  await page.getByTestId('depart-MAN-1').click();
   await page.getByRole('button', { name: 'Potvrdi' }).click();
-  await expect(page.getByTestId('vehicle-state-NV-1')).toContainText('Izaslo');
-  await expect(page.getByTestId('vehicle-state-AC-1')).toContainText('U domu');
+  await expect(page.getByTestId('vehicle-state-MAN-1')).toContainText('Izaslo');
+  await expect(page.getByTestId('vehicle-state-TERENAC-1')).toContainText('U bazi');
 
   // --- status changes only when the officer says so -------------------------
   await goTo(page, 'dezurni');
@@ -188,31 +189,29 @@ test('a member reviews every answer and its details before submitting', async ({
   // member explicitly submits the answer after reviewing its details.
   await page.getByTestId('answer-DOLAZIM').click();
   await expect(page.getByTestId('current-answer')).toHaveCount(0);
-  await expect(page.getByTestId('direct-to-location')).toBeVisible();
+  await expect(page.getByText(/Dolazite u.*Baza DVD Tivat/)).toBeVisible();
   await page.getByTestId('submit-response').click();
   await expect(page.getByTestId('current-answer')).toContainText('Dolazim');
   await expect(page.getByTestId('current-answer')).not.toContainText('direktno na lokaciju');
 
-  // The same explicit confirmation applies while editing, including the
-  // direct-to-location choice.
+  // The same explicit confirmation applies while editing; the base-first
+  // route cannot be changed from the member screen.
   await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
   await page.getByTestId('answer-DOLAZIM').click();
-  await page.getByTestId('direct-to-location').check();
   await expect(page.getByTestId('current-answer')).toHaveCount(0);
   await page.getByTestId('submit-response').click();
-  await expect(page.getByTestId('current-answer')).toContainText('direktno na lokaciju');
+  await expect(page.getByTestId('current-answer')).toContainText('Dolazim');
+  await expect(page.getByTestId('current-answer')).not.toContainText('direktno na lokaciju');
 
   await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
   await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
   await page.getByTestId('eta-60').click();
-  await page.getByTestId('direct-to-location').uncheck();
   await page.getByTestId('submit-response').click();
   await expect(page.getByTestId('current-answer')).toContainText('60 min');
 
   // "Ne mogu" cannot retain a destination choice from an earlier answer.
   await page.getByRole('button', { name: 'Promijeni odgovor' }).click();
   await page.getByTestId('answer-NE_MOGU').click();
-  await expect(page.getByTestId('direct-to-location')).toHaveCount(0);
   await expect(page.getByTestId('current-answer')).toHaveCount(0);
   await page.getByTestId('submit-response').click();
   await expect(page.getByTestId('current-answer')).toContainText('Ne mogu');
@@ -227,15 +226,13 @@ test('an unsent member draft never crosses to another simulated actor', async ({
 
   await page.getByTestId('answer-DOLAZIM_KASNIJE').click();
   await page.getByTestId('eta-60').click();
-  await page.getByTestId('direct-to-location').check();
   await expect(page.getByTestId('submit-response')).toBeVisible();
 
   // Changing the simulated person represents a different user. Their form
-  // must begin empty and must not expose Ivan's unsent answer or destination.
+  // must begin empty and must not expose Ivan's unsent answer or ETA.
   await switchActor(page, 'Petar Krivokapic');
   await expect(page.getByTestId('current-member')).toHaveText('Petar Krivokapic');
   await expect(page.getByTestId('submit-response')).toHaveCount(0);
-  await expect(page.getByTestId('direct-to-location')).toHaveCount(0);
   await expect(page.getByTestId('eta-60')).toHaveCount(0);
   await expect(page.getByTestId('answer-DOLAZIM')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByTestId('answer-DOLAZIM_KASNIJE')).toHaveAttribute(
@@ -248,7 +245,6 @@ test('an unsent member draft never crosses to another simulated actor', async ({
   // when the first simulated person is selected again.
   await switchActor(page, 'Ivan Radulovic');
   await expect(page.getByTestId('submit-response')).toHaveCount(0);
-  await expect(page.getByTestId('direct-to-location')).toHaveCount(0);
 
   await switchActor(page, 'Ana Vukovic');
   await goTo(page, 'dezurni');

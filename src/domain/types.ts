@@ -235,7 +235,10 @@ export interface MemberResponse {
   answer: ResponseAnswer;
   /** Only meaningful with DOLAZIM_KASNIJE; null otherwise. */
   etaMinutes: EtaMinutes | null;
-  /** Going straight to the incident instead of to the station. Independent of `answer`. */
+  /**
+   * Legacy compatibility field. The DVD Tivat profile always writes false:
+   * members first assemble at the base to collect equipment.
+   */
   directToLocation: boolean;
   respondedAt: Timestamp;
   updatedAt: Timestamp;

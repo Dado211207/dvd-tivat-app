@@ -13,6 +13,12 @@ Phase 1 of [PRODUCT_PLAN.md](../PRODUCT_PLAN.md) — a **local browser exercise 
 Tivat call-out, response and citizen-report intake. No server, no accounts, no notifications, no
 real data.
 
+The active isolated slice is `codex/dvd-tivat-operational-profile`, stacked above Draft PR #11.
+It applies the owner-reported DVD Tivat scale and workflow without adding any operational channel:
+52 fictional member rows, two fictional vehicle records matching the reported categories, base-first
+assembly, Viber shown only as the existing fallback, recipient search, and explicit iPhone/Android
+layout checks. The society has not confirmed these facts; see [SOCIETY_PROFILE.md](../SOCIETY_PROFILE.md).
+
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public. Do not create another.
@@ -41,6 +47,11 @@ evidence and [DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisi
 
 The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
 on DVD Tivat; do not implement multi-society routing or treat this assumption as an agreed requirement.
+
+Owner-reported on 2026-09-09, still awaiting society confirmation: 52 members; no shifts; members
+come from home to the base for equipment before deployment; one MAN firefighting vehicle; one
+firefighting SUV; both iPhone and Android; Viber group currently used for alerts. Do not invent
+exceptions, real roster data, vehicle registrations or integration credentials.
 
 Not deployed anywhere. No licence file. No real alert, account or member data exists.
 
@@ -79,6 +90,9 @@ and one careless edit away from breaking.
    it is not known, it is an open question, not a default.
 9. Application labels: local language **without diacritics**. Repository documentation: English.
 10. If a check fails, fix the cause. Do not weaken assertions or re-run until it passes.
+11. The DVD Tivat profile is base-first. The legacy `directToLocation` field stays only for schema
+    compatibility and every new response records it as false unless the society later confirms a
+    different rule in writing.
 
 ## Known limitations (by design, not defects)
 

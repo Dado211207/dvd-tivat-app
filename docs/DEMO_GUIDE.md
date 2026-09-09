@@ -24,14 +24,14 @@ Opening sentence:
 
 | Time | Exact action | What to point out |
 |---|---|---|
-| 0:00 | Open **Dezurni**. Show the DVD Tivat overview and seven navigation options. | Counts refer to fictional records, not operational readiness. Vehicle count means recorded as in the station, not mechanically ready. |
-| 0:45 | Enter title `Vjezba: provjera opreme`, instructions `Okupljanje na probnom poligonu. Ponijeti zastitnu opremu.`, incident location `Probni poligon (izmisljeno)`. | Incident and reporter locations are separate. Neither is automatically obtained from GPS. |
+| 0:00 | Open **Dezurni**. Show the 52-member fictional overview, operating profile and seven navigation options. | The count matches the owner-reported scale but every person is invented. Vehicle count means recorded as in the base, not mechanically ready. |
+| 0:45 | Enter title `Vjezba: provjera opreme`, instructions `Okupljanje u bazi DVD Tivat. Ponijeti zastitnu opremu.`, incident location `Probni poligon (izmisljeno)`. | The preview adds the base assembly point separately from the incident and reporter locations. |
 | 1:30 | Select **Nosioci IDA aparata**, then **Pregledaj i posalji**. Read the message and four recipients; confirm. | Review happens before recording the call. No recipient is automatically marked as answered or notified. |
-| 2:15 | In **Simulirani ucesnik**, choose **Ivan Radulovic**, open **Clan**, select **Dolazim**, then submit the response. | Choosing an answer creates a draft. Only explicit submission records it in this browser. |
+| 2:15 | In **Simulirani ucesnik**, choose **Ivan Radulovic**, open **Clan**, select **Dolazim**, then submit the response. | The screen states that coming means going to the base for equipment first. Only explicit submission records it. |
 | 3:00 | Switch to **Petar Krivokapic**, choose **Dolazim kasnije**, select **30 min**, then submit. Leave two people unanswered. | Silence, refusal and delayed arrival are different facts. The time bands still need the society's confirmation. |
 | 3:45 | Return to **Dezurni**. | Show 1 coming, 1 delayed, 0 refusals, 2 unanswered. Delivery still reads **Isporuka nije pokusana**. |
-| 4:30 | Open **Vozila**. Record **NV-1** departure and confirm. Return to **Dezurni**, then separately select **Ekipa krenula** and show **Prikaz u domu**. | A person's answer, a vehicle departure and the exercise status are independent actions. |
-| 5:30 | Open **Vozila** and record NV-1's return. In **Dezurni**, choose **Zatvori vjezbu**, enter `Probna vjezba zavrsena`, and confirm. | Explain the confirmation before closing and the independent vehicle return. |
+| 4:30 | Open **Vozila**. Record **MAN-1** departure and confirm. Return to **Dezurni**, then separately select **Ekipa krenula** and show **Prikaz u bazi**. | A person's answer, a vehicle departure and the exercise status are independent actions. |
+| 5:30 | Open **Vozila** and record MAN-1's return. In **Dezurni**, choose **Zatvori vjezbu**, enter `Probna vjezba zavrsena`, and confirm. | Explain the confirmation before closing and the independent vehicle return. |
 | 6:15 | Open **Istorija** and inspect the exercise and activity log. Refresh once. | Saved local records survive a normal refresh. A second device still has its own unrelated data. |
 | 7:00 | Resize the browser to a phone width and show **Clan** and the seven-item menu. | This is responsive browser UI, not evidence of native push notifications or app-store readiness. |
 
@@ -67,6 +67,9 @@ Use these after the core exercise, not as proof of an operational alert channel.
 3. Which existing alerting/dispatch arrangements must the application work alongside?
 4. Which responses, arrival bands, groups and vehicle fields fit their actual routine?
 5. What would make this more useful to them than continuing with the reference product?
+
+Also confirm every owner-reported item in [SOCIETY_PROFILE.md](./SOCIETY_PROFILE.md), especially the
+base-first rule and whether Viber remains the fallback during trial exercises.
 
 Single-society use is the owner's current expectation, **not a confirmed requirement**. Keep the
 full questions in [PRODUCT_PLAN.md §G](./PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society).

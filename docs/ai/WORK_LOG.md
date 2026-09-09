@@ -5,6 +5,41 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-09 — Apply the owner-reported DVD Tivat operating profile
+
+**Owner facts, not yet society-confirmed:** 52 members; one MAN firefighting vehicle and one
+firefighting SUV; no shifts; members travel from home to the base for equipment before deployment;
+the current alert channel is a Viber group; both iPhone and Android are used; the product is expected
+to serve DVD Tivat only. The facts and the questions that remain are isolated in
+`docs/SOCIETY_PROFILE.md`.
+
+**Public-data boundary:** the public repository still contains no real person, number, address,
+registration, credential or incident. The seed now has 52 fictional member rows; rows 15–52 use
+generic names. The two vehicle callsigns are invented. No scraped crest is used: the available
+social profile image is not an approved, app-quality identity asset.
+
+**Workflow correction:** removed the member-facing direct-to-incident choice. Every new response is
+normalised by the pure reducer to `directToLocation: false`; the field remains only for compatibility.
+Every preview and stored message states `Mjesto okupljanja: Baza DVD Tivat` separately from the
+incident location. The duty overview names the no-shift/base-first model and Viber only as the
+existing fallback; no Viber integration or notification was added.
+
+**Scale and mobile UX:** the all-members group contains all 52 active fictional records. The duty
+composer adds accessible search and a bounded scrolling roster without losing hidden selections.
+Representative 390x844 iPhone and 412x915 Android checks assert no horizontal overflow and a 44px
+primary action. These are browser-layout checks, not native push or locked-screen evidence.
+
+**Local verification:** `npm run verify` passed: ESLint, 74 Vitest tests, strict TypeScript and a
+Vite production build. Local Playwright could not launch because this environment has no Chromium;
+the failed launch ran zero application assertions and is not counted as browser evidence. CI on the
+exact remote head remains required before review.
+
+**Next:** push this isolated branch, open a Draft PR, require one first-attempt green CI run including
+all browser and accessibility checks, and inspect its screenshot artifact. Do not merge, deploy,
+publish, enter real data or call this an operational alert system.
+
+---
+
 ## 2026-09-09 — Add safe local administration and define the production boundary
 
 **Owner direction:** continue independently while Claude is unavailable, add the remaining useful

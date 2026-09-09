@@ -30,7 +30,7 @@ export const NAV = {
   dezurni: 'Dezurni',
   clan: 'Clan',
   vozila: 'Vozila',
-  prikaz: 'Prikaz u domu',
+  prikaz: 'Prikaz u bazi',
   clanovi: 'Clanovi',
   istorija: 'Istorija',
   dojava: 'Prijava gradjana',
@@ -47,7 +47,7 @@ export const ROLE_LABEL: Record<RoleId, string> = {
   ADMIN: 'Administrator drustva',
   DEZURNI: 'Ovlasteni dezurni',
   CLAN: 'Operativni clan',
-  PRIKAZ: 'Prikaz u domu',
+  PRIKAZ: 'Prikaz u bazi',
 };
 
 export const SPECIALTY_LABEL: Record<SpecialtyId, string> = {
@@ -101,7 +101,7 @@ export const DELIVERY_LABEL: Record<DeliveryState, string> = {
 };
 
 export const VEHICLE_STATE_LABEL: Record<VehicleState, string> = {
-  U_DOMU: 'U domu',
+  U_DOMU: 'U bazi',
   NA_ZADATKU: 'Izaslo',
 };
 
@@ -173,7 +173,7 @@ export const T = {
   changeAnswer: 'Promijeni odgovor',
   etaQuestion: 'Za koliko stizete?',
   etaMinutes: 'minuta',
-  directToLocation: 'Idem direktno na lokaciju, ne u dom',
+  directToLocation: 'Naslijedjeno polje; DVD Tivat se prvo okuplja u bazi',
   answerRecorded: 'Odgovor je zabiljezen samo u ovom pregledacu.',
   openInMaps: 'Otvori lokaciju u mapama',
   openInMapsHint: 'Otvara vanjsku uslugu u novoj kartici.',
@@ -187,7 +187,7 @@ export const T = {
   purpose: 'Svrha',
 
   // Display
-  displayTitle: 'Prikaz u domu',
+  displayTitle: 'Prikaz u bazi',
   displayNote: 'Prikazuje samo ono sto je uneseno u simulaciju.',
 
   // Roster

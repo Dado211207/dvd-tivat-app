@@ -1,3 +1,4 @@
+import { SOCIETY_PROFILE } from '@/config/society';
 import { getOpenExercise, getVehicleBoard } from '@/domain/selectors';
 import { STATUS_LABEL } from '@/i18n/labels';
 import { useApp } from '@/state/AppStateContext';
@@ -26,10 +27,16 @@ export function StationOverview() {
         </span>
       </div>
       <dl className="station-overview__facts">
-        <div><dt>Clanovi</dt><dd data-testid="overview-members">{state.members.length}</dd><dd className="station-overview__fact-note">u demonstraciji</dd></div>
-        <div><dt>Grupe</dt><dd>{state.groups.length}</dd><dd className="station-overview__fact-note">probnih grupa</dd></div>
-        <div><dt>Vozila u domu</dt><dd data-testid="overview-vehicles">{inStation}<span> / {state.vehicles.length}</span></dd><dd className="station-overview__fact-note">rucno evidentirano</dd></div>
+        <div><dt>Clanovi</dt><dd data-testid="overview-members">{state.members.length}</dd><dd className="station-overview__fact-note">probnih zapisa / prijavljeno {SOCIETY_PROFILE.reportedMemberCount}</dd></div>
+        <div><dt>Okupljanje</dt><dd className="station-overview__fact-value">Baza</dd><dd className="station-overview__fact-note">po opremu prije izlaska</dd></div>
+        <div><dt>Vozila u bazi</dt><dd data-testid="overview-vehicles">{inStation}<span> / {state.vehicles.length}</span></dd><dd className="station-overview__fact-note">rucno evidentirano</dd></div>
       </dl>
+      <div className="station-overview__profile" data-testid="operating-profile">
+        <span><strong>Rad:</strong> bez smjena, poziv iz kuce u bazu</span>
+        <span><strong>Rezervni kanal:</strong> {SOCIETY_PROFILE.currentFallbackChannel}</span>
+        <span><strong>Telefoni:</strong> {SOCIETY_PROFILE.supportedPhoneFamilies.join(' i ')}</span>
+        <small>{SOCIETY_PROFILE.confirmation}</small>
+      </div>
     </section>
   );
 }

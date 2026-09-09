@@ -234,7 +234,7 @@ describe('fictional group and vehicle administration', () => {
         commandId: cid(),
         actorId: 'm-01',
         vehicleId: null,
-        callsign: ' nv-1 ',
+        callsign: ' man-1 ',
         name: 'Duplikat',
         vehicleType: 'Probno',
       },

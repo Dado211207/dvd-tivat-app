@@ -36,7 +36,7 @@ export interface CallInput {
 export async function createCall(page: Page, input: CallInput = {}) {
   const {
     title = 'Vjezba: provjera opreme',
-    instructions = 'Okupljanje u domu, ponijeti opremu.',
+    instructions = 'Okupljanje u bazi DVD Tivat, ponijeti opremu.',
     location = 'Poligon (izmisljena lokacija)',
     reporterLocation,
     group = 'Nosioci IDA aparata',

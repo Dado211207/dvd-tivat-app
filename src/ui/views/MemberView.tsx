@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { SOCIETY_PROFILE } from '@/config/society';
 import { KIND_LABEL } from '@/domain/message';
 import { getActiveCallForMember, getExerciseById, getResponse } from '@/domain/selectors';
 import { ETA_OPTIONS, type EtaMinutes, type ResponseAnswer } from '@/domain/types';
@@ -32,7 +33,6 @@ export function MemberView() {
   // Local draft: what the member has tapped but not yet sent.
   const [draft, setDraft] = useState<ResponseAnswer | null>(null);
   const [eta, setEta] = useState<EtaMinutes>(30);
-  const [direct, setDirect] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
@@ -47,7 +47,7 @@ export function MemberView() {
       memberId,
       answer,
       etaMinutes: answer === 'DOLAZIM_KASNIJE' ? eta : null,
-      directToLocation: answer === 'NE_MOGU' ? false : direct,
+      directToLocation: false,
     });
 
     if (!result.ok) {
@@ -140,7 +140,6 @@ export function MemberView() {
                     setEditing(true);
                     setDraft(existing.answer);
                     setEta(existing.etaMinutes ?? 30);
-                    setDirect(existing.directToLocation);
                   }}
                 >
                   {T.changeAnswer}
@@ -160,7 +159,6 @@ export function MemberView() {
                       data-testid={`answer-${answer}`}
                       onClick={() => {
                         setDraft(answer);
-                        if (answer === 'NE_MOGU') setDirect(false);
                       }}
                     >
                       <span className="answer-btn__sym" aria-hidden="true">
@@ -172,15 +170,10 @@ export function MemberView() {
                 </div>
 
                 {draft !== null && draft !== 'NE_MOGU' ? (
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={direct}
-                      data-testid="direct-to-location"
-                      onChange={(e) => setDirect(e.target.checked)}
-                    />
-                    <span className="check__body check__name">{T.directToLocation}</span>
-                  </label>
+                  <Notice tone="info">
+                    Dolazite u <strong>{SOCIETY_PROFILE.assemblyPoint}</strong> po opremu, a zatim
+                    ekipa organizovano izlazi na teren.
+                  </Notice>
                 ) : null}
 
                 {draft === 'DOLAZIM_KASNIJE' ? (

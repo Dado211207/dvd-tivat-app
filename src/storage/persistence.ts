@@ -14,7 +14,11 @@
 import { createSeedState } from '@/domain/seed';
 import { SCHEMA_VERSION, type AppState } from '@/domain/types';
 
-export const STORAGE_KEY = 'dvd-tivat-prototip:v1';
+// v2 starts the personalised DVD Tivat operating profile from a clean,
+// fictional dataset. The old key is deliberately left untouched: upgrading
+// must not rewrite or delete a previous local demonstration behind the user's
+// back.
+export const STORAGE_KEY = 'dvd-tivat-prototip:v2';
 
 export type LoadStatus =
   | 'UCITANO'

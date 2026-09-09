@@ -256,8 +256,10 @@ export function applyCommand(state: AppState, command: Command, ctx: Ctx): Resul
       }
       // An arrival band only means something with "dolazim kasnije".
       const etaMinutes = later ? command.etaMinutes : null;
-      // Nobody arrives directly at a location they said they are not going to.
-      const directToLocation = command.answer === 'NE_MOGU' ? false : command.directToLocation;
+      // DVD Tivat's reported operating model is base-first: members collect
+      // equipment at the base before deployment. Keep the stored field for
+      // schema compatibility, but never create a direct-to-location response.
+      const directToLocation = false;
 
       const at = ctx.now();
       const existing = state.responses.find(
@@ -325,9 +327,7 @@ export function applyCommand(state: AppState, command: Command, ctx: Ctx): Resul
             ctx,
             command.memberId,
             'ODGOVOR_DAT',
-            `Odgovor: ${command.answer}${etaMinutes ? ` (${etaMinutes} min)` : ''}${
-              directToLocation ? ', direktno na lokaciju' : ''
-            }.`,
+            `Odgovor: ${command.answer}${etaMinutes ? ` (${etaMinutes} min)` : ''}.`,
             exercise.id,
           ),
           ...state.activity,

@@ -29,7 +29,7 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.getByLabel(/^Naslov/).fill('Vjezba: dimna komora, rad sa IDA aparatima');
     await page
       .getByLabel(/^Uputstvo za clanove/)
-      .fill('Okupljanje u domu. Ponijeti licnu zastitnu opremu i IDA aparate.');
+      .fill('Okupljanje u bazi DVD Tivat. Ponijeti licnu zastitnu opremu i IDA aparate.');
     await page.getByLabel(/^Lokacija dogadjaja/).fill('Poligon za vjezbe (izmisljena lokacija)');
     await page.getByLabel(/^Lokacija prijavioca/).fill('Vatrogasni dom (izmisljeno)');
     await page.getByRole('checkbox', { name: /Nosioci IDA aparata/ }).check();
@@ -63,14 +63,13 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
 
     await switchActor(page, 'Luka Jovanovic');
     await page.getByTestId('answer-DOLAZIM').click();
-    await page.getByTestId('direct-to-location').check();
     await page.getByTestId('submit-response').click();
     // Nikola Djukic deliberately never answers: silence is a real state.
 
     // 4. Vehicles.
     await switchActor(page, 'Ana Vukovic');
     await goTo(page, 'vozila');
-    await page.getByTestId('depart-NV-1').click();
+    await page.getByTestId('depart-MAN-1').click();
     await page.getByLabel(/^Svrha/).fill('Vjezba - dovoz opreme');
     await page.getByRole('button', { name: 'Potvrdi' }).click();
     await capture(page, '05-vozila.png');
@@ -105,7 +104,7 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await openApp(page);
     await createCall(page, {
       title: 'Vjezba: dimna komora, rad sa IDA aparatima',
-      instructions: 'Okupljanje u domu. Ponijeti licnu zastitnu opremu i IDA aparate.',
+      instructions: 'Okupljanje u bazi DVD Tivat. Ponijeti licnu zastitnu opremu i IDA aparate.',
       location: 'Poligon za vjezbe (izmisljena lokacija)',
     });
 

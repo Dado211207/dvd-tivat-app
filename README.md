@@ -14,6 +14,11 @@ Status: **Phase 1 — working prototype for discussion with the society.** Nothi
 here is agreed with DVD Tivat yet, and nothing here is ready to be relied on in
 an emergency.
 
+The current owner-reported profile is represented at realistic scale: 52 fictional roster rows,
+one fictional MAN vehicle record, one fictional firefighting SUV record, no shifts, assembly at
+the base before deployment, and layouts exercised at representative iPhone and Android sizes.
+See [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md); DVD Tivat still needs to confirm it.
+
 ---
 
 ## Run it
@@ -50,9 +55,9 @@ already provides one, point at it with `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromi
 | Screen | For | What it does |
 |---|---|---|
 | **Dezurni** | Duty officer | Compose a call, review the exact message and recipients, confirm, watch answers, change status, close or cancel |
-| **Clan** | Operational member | See a call addressed to them, answer *Dolazim* / *Dolazim kasnije* (15/30/60 min) / *Ne mogu*, flag going direct to the incident, change the answer |
+| **Clan** | Operational member | See a call addressed to them, answer *Dolazim* / *Dolazim kasnije* (15/30/60 min) / *Ne mogu*, see the base assembly instruction, change the answer |
 | **Vozila** | Anyone at the station | Log vehicle departures and returns as explicit, independent actions |
-| **Prikaz u domu** | Station wall display | Large read-only overview: incident, location, totals, answers, vehicles |
+| **Prikaz u bazi** | Station wall display | Large read-only overview: incident, location, totals, answers, vehicles |
 | **Clanovi** | Everyone; editable in the admin simulation | The fictional roster, groups and vehicles, with a local-only editor for invented demonstration records |
 | **Istorija** | Everyone | Past exercises, the timestamped activity log, and a confirmed demo reset |
 | **Dojava gradjana** | Citizen-workflow discussion | Locally review and save an untrusted fictional report; an authorised simulation may use it only to prefill the normal confirmed call flow |
@@ -80,6 +85,7 @@ store policy and delivery acknowledgements, and it is a separate investigation
 | Document | Contents |
 |---|---|
 | [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) | Users, scope, assumptions, roles and permission matrix, data model, five phases with acceptance criteria, risks, questions for the society |
+| [docs/SOCIETY_PROFILE.md](docs/SOCIETY_PROFILE.md) | Owner-reported membership, vehicles, assembly flow, phone mix and facts still awaiting society confirmation |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack choice and rejected alternatives, layering, the pure domain reducer, persistence limits, path to mobile |
 | [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) | Gated server, identity, notification and mobile architecture if DVD Tivat accepts the workflow |
 | [docs/FIREAPP_REVIEW.md](docs/FIREAPP_REVIEW.md) | What the reference product's public documentation says, per-claim, with what was and was not verified |

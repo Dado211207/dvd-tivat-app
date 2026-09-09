@@ -19,6 +19,11 @@ import { SCHEMA_VERSION } from './types';
 /** Fixed reference day for the seeded history entry. */
 const D = (time: string): string => `2026-09-05T${time}:00.000Z`;
 
+const DEMO_MEMBER_IDS = Array.from(
+  { length: 52 },
+  (_, index) => `m-${String(index + 1).padStart(2, '0')}`,
+);
+
 export const GROUPS: Group[] = [
   { id: 'g-komanda', name: 'Komandni kadar', memberIds: ['m-01', 'm-02', 'm-03'] },
   { id: 'g-vozaci', name: 'Vozaci C kategorije', memberIds: ['m-03', 'm-05', 'm-08', 'm-11'] },
@@ -28,14 +33,11 @@ export const GROUPS: Group[] = [
   {
     id: 'g-svi',
     name: 'Svi operativni clanovi',
-    memberIds: [
-      'm-01', 'm-02', 'm-03', 'm-04', 'm-05', 'm-06', 'm-07',
-      'm-08', 'm-09', 'm-10', 'm-11', 'm-12', 'm-13', 'm-14',
-    ],
+    memberIds: DEMO_MEMBER_IDS,
   },
 ];
 
-export const MEMBERS: Member[] = [
+const READABLE_DEMO_MEMBERS: Member[] = [
   {
     id: 'm-01',
     name: 'Marko Perovic',
@@ -164,12 +166,29 @@ export const MEMBERS: Member[] = [
   },
 ];
 
+/**
+ * Fill the roster to the reported society size without inventing plausible
+ * personal identities. These generic rows exist only to exercise selection,
+ * administration and phone layouts with 52 records.
+ */
+const SCALE_DEMO_MEMBERS: Member[] = DEMO_MEMBER_IDS.slice(14).map((id, index) => {
+  const ordinal = String(index + 15).padStart(2, '0');
+  return {
+    id,
+    name: `Probni clan ${ordinal}`,
+    roleProposed: 'CLAN',
+    specialties: [],
+    groupIds: ['g-svi'],
+    contactLabel: `demo-kontakt-${ordinal}`,
+    active: true,
+  };
+});
+
+export const MEMBERS: Member[] = [...READABLE_DEMO_MEMBERS, ...SCALE_DEMO_MEMBERS];
+
 export const VEHICLES: Vehicle[] = [
-  { id: 'v-01', callsign: 'NV-1', name: 'Navalno vozilo', type: 'Navalno' },
-  { id: 'v-02', callsign: 'AC-1', name: 'Auto-cisterna', type: 'Cisterna' },
-  { id: 'v-03', callsign: 'TV-1', name: 'Tehnicko vozilo', type: 'Tehnicko' },
-  { id: 'v-04', callsign: 'SV-1', name: 'Sumsko vozilo', type: 'Terensko' },
-  { id: 'v-05', callsign: 'KV-1', name: 'Komandno vozilo', type: 'Komandno' },
+  { id: 'v-01', callsign: 'MAN-1', name: 'MAN vatrogasno vozilo', type: 'Vatrogasno vozilo' },
+  { id: 'v-02', callsign: 'TERENAC-1', name: 'Vatrogasni terenac', type: 'Terensko vozilo' },
 ];
 
 /**
@@ -195,7 +214,7 @@ function seededHistory(): Pick<
         id: exerciseId,
         kind: 'VJEZBA',
         title: 'Vjezba: dimna komora, rad sa IDA aparatima',
-        instructions: 'Okupljanje u domu. Ponijeti licnu zastitnu opremu i IDA aparate.',
+        instructions: 'Okupljanje u bazi DVD Tivat. Ponijeti licnu zastitnu opremu i IDA aparate.',
         incidentLocation: 'Poligon za vjezbe (izmisljena lokacija)',
         reporterLocation: '',
         status: 'ZAVRSENA',
@@ -212,7 +231,8 @@ function seededHistory(): Pick<
         exerciseId,
         messageText: [
           '[VJEZBA] Vjezba: dimna komora, rad sa IDA aparatima',
-          'Uputstvo: Okupljanje u domu. Ponijeti licnu zastitnu opremu i IDA aparate.',
+          'Uputstvo: Okupljanje u bazi DVD Tivat. Ponijeti licnu zastitnu opremu i IDA aparate.',
+          'Mjesto okupljanja: Baza DVD Tivat',
           'Lokacija dogadjaja: Poligon za vjezbe (izmisljena lokacija)',
           'Napomena: simulacija u prototipu. Poruka nije poslata nikome.',
         ].join('\n'),
@@ -253,7 +273,7 @@ function seededHistory(): Pick<
       },
       {
         id: 'r-seed-5', callId, memberId: 'm-12', answer: 'DOLAZIM', etaMinutes: null,
-        directToLocation: true, respondedAt: D('18:14'), updatedAt: D('18:14'), revision: 1,
+        directToLocation: false, respondedAt: D('18:14'), updatedAt: D('18:14'), revision: 1,
       },
       // m-03 deliberately never answered: "bez odgovora" is a real state and the
       // demonstration should show it rather than a full board.
@@ -272,8 +292,8 @@ function seededHistory(): Pick<
     ],
     activity: [
       { id: 'a-seed-7', at: D('19:40'), actorId: 'm-02', actorName: 'Ana Vukovic', kind: 'VJEZBA_ZATVORENA', summary: 'Vjezba zatvorena: Vjezba zavrsena po planu.', exerciseId },
-      { id: 'a-seed-6', at: D('19:35'), actorId: 'm-03', actorName: 'Nikola Djukic', kind: 'VOZILO_VRACENO', summary: 'Vozilo NV-1 evidentirano kao vraceno.', exerciseId },
-      { id: 'a-seed-5', at: D('18:25'), actorId: 'm-03', actorName: 'Nikola Djukic', kind: 'VOZILO_IZASLO', summary: 'Vozilo NV-1 evidentirano kao izaslo.', exerciseId },
+      { id: 'a-seed-6', at: D('19:35'), actorId: 'm-03', actorName: 'Nikola Djukic', kind: 'VOZILO_VRACENO', summary: 'Vozilo MAN-1 evidentirano kao vraceno.', exerciseId },
+      { id: 'a-seed-5', at: D('18:25'), actorId: 'm-03', actorName: 'Nikola Djukic', kind: 'VOZILO_IZASLO', summary: 'Vozilo MAN-1 evidentirano kao izaslo.', exerciseId },
       { id: 'a-seed-4', at: D('18:12'), actorId: 'm-05', actorName: 'Petar Krivokapic', kind: 'ODGOVOR_PROMIJENJEN', summary: 'Odgovor promijenjen: DOLAZIM -> DOLAZIM_KASNIJE.', exerciseId },
       { id: 'a-seed-3', at: D('18:09'), actorId: 'm-05', actorName: 'Petar Krivokapic', kind: 'ODGOVOR_DAT', summary: 'Odgovor: DOLAZIM.', exerciseId },
       { id: 'a-seed-2', at: D('18:05'), actorId: 'm-02', actorName: 'Ana Vukovic', kind: 'POZIV_POSLAT', summary: 'Poziv upucen za 6 clanova. Isporuka nije pokusana.', exerciseId },

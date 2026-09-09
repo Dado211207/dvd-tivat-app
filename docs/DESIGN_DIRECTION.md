@@ -20,6 +20,9 @@ society's workspace, with no organisation switcher or multi-society administrati
   Windows and system fonts only.
 - The overview shows counts derived from fictional members, groups and recorded vehicle movements.
   It never labels people or equipment as ready, connected or notified.
+- The 52-member scale is represented with generic fictional rows and a searchable recipient list.
+  Member actions and the seven-route shell are checked at 390x844 and 412x915 layouts, representing
+  common iPhone and Android pressures without claiming native-device certification.
 - The simple `D` text mark is an original placeholder, not an official crest or operational symbol.
   Replace it only with identity supplied and approved by the society.
 - System fonts, local SVG and CSS only. No new dependency, remote font, stock photograph,
@@ -39,6 +42,6 @@ Run `npm run screenshots` to regenerate images. CI runs the same screenshot spec
 and accessibility tests and attaches an artifact named for the reviewed head. Nothing is deployed
 and no image is automatically committed. See the latest PR for the exact run and artifact.
 
-Automated viewports cover desktop, phone, 320px, 720px and 1024px layout widths, with light and
-dark axe checks. These approximate layout pressure at different display scales; they do not prove
-actual iOS hardware, Windows display scaling or locked-phone behaviour.
+Automated viewports cover desktop, phone, explicit 390x844 iPhone and 412x915 Android dimensions,
+320px, 720px and 1024px widths, with light and dark axe checks. These approximate layout pressure;
+they do not prove actual iOS hardware, Windows display scaling or locked-phone behaviour.
