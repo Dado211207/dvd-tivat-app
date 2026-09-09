@@ -67,7 +67,10 @@ test('citizen location is requested only after an explicit action', async ({ pag
 
   await expect(page.getByText(/1\.234567/)).toHaveCount(0);
   await page.getByTestId('use-location').click();
-  await expect(page.getByText(/1\.234567, 2\.345678/)).toBeVisible();
+  // The same coordinates also exist in the closed review dialog's DOM. Target
+  // the visible live result so strict locators do not confuse hidden preview
+  // content with what the person can currently see.
+  await expect(page.locator('.report-location__result')).toContainText('1.234567, 2.345678');
 
   await page.getByLabel(/^Opis/).fill('Dim se vidi sa izmisljene lokacije.');
   await page.getByTestId('review-citizen-report').click();
