@@ -18,22 +18,20 @@
   color-scheme: light dark;
 
   /* Neutrals - cool graphite, readable under station lighting */
-  --c-ink: #10151b;
-  --c-ink-soft: #3d4956;
-  /* 5.2:1 on --c-canvas. An earlier, lighter grey measured 4.49:1 and failed
-     WCAG AA for small text - secondary text still has to be readable. */
-  --c-ink-faint: #5b6673;
-  --c-line: #d3dae1;
-  --c-line-strong: #a9b5c1;
+  --c-ink: #12202d;
+  --c-ink-soft: #405364;
+  --c-ink-faint: #596a78;
+  --c-line: #dce5eb;
+  --c-line-strong: #b8c7d1;
   --c-surface: #ffffff;
-  --c-surface-2: #f2f5f8;
-  --c-surface-3: #e6ebf0;
-  --c-canvas: #eef2f6;
+  --c-surface-2: #f5f8fa;
+  --c-surface-3: #eaf0f4;
+  --c-canvas: #edf3f6;
 
   /* Institutional accent */
-  --c-accent: #0d5c63;
-  --c-accent-strong: #084247;
-  --c-accent-soft: #d7ebec;
+  --c-accent: #077687;
+  --c-accent-strong: #075d6c;
+  --c-accent-soft: #e2f4f6;
   --c-accent-ink: #ffffff;
 
   /* Text placed on a strong, saturated fill. It must flip with the theme: the
@@ -62,9 +60,9 @@
   --c-sim-bg: #fff3cd;
   --c-sim-line: #d9b74a;
 
-  --r-sm: 8px;
-  --r-md: 14px;
-  --r-lg: 20px;
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 24px;
 
   --sp-1: 4px;
   --sp-2: 8px;
@@ -74,10 +72,11 @@
   --sp-6: 32px;
   --sp-7: 48px;
 
-  --shadow-1: 0 1px 2px rgb(16 21 27 / 8%), 0 2px 8px rgb(16 21 27 / 6%);
-  --shadow-2: 0 4px 16px rgb(16 21 27 / 12%);
+  --shadow-1: 0 1px 2px rgb(12 34 48 / 5%), 0 10px 30px rgb(12 34 48 / 5%);
+  --shadow-2: 0 18px 55px rgb(8 27 39 / 18%);
 
-  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
   /* Touch targets. The member's answer buttons are the largest control here on
@@ -91,19 +90,19 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --c-ink: #eef2f6;
-    --c-ink-soft: #b9c4cf;
-    --c-ink-faint: #8c98a5;
-    --c-line: #2b3540;
-    --c-line-strong: #3f4b57;
-    --c-surface: #161c23;
-    --c-surface-2: #1d242c;
-    --c-surface-3: #262f38;
-    --c-canvas: #0e1319;
+    --c-ink: #edf5f7;
+    --c-ink-soft: #bac8cf;
+    --c-ink-faint: #91a3ad;
+    --c-line: #263a45;
+    --c-line-strong: #3a5360;
+    --c-surface: #12232c;
+    --c-surface-2: #172b35;
+    --c-surface-3: #203842;
+    --c-canvas: #091820;
 
-    --c-accent: #4fc3cc;
-    --c-accent-strong: #7ad8de;
-    --c-accent-soft: #10353a;
+    --c-accent: #58d3df;
+    --c-accent-strong: #87e3ea;
+    --c-accent-soft: #103942;
     --c-accent-ink: #06222a;
 
     --c-ink-inverse: #10151b;

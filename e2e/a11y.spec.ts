@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test';
 import { createCall, goTo, openApp, switchActor } from './helpers';
 
 const RULESETS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
-const VIEWS = ['dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija'];
+const VIEWS = ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'nalozi', 'istorija'];
 
 test.describe('accessibility', () => {
   test('empty views pass an axe scan', async ({ page }) => {
@@ -36,7 +36,7 @@ test.describe('accessibility', () => {
     await page.getByTestId('submit-response').click();
 
     await goTo(page, 'vozila');
-    await page.getByTestId('depart-NV-1').click();
+    await page.getByTestId('depart-MAN-1').click();
     await page.getByRole('button', { name: 'Potvrdi' }).click();
 
     for (const route of VIEWS) {
@@ -103,6 +103,15 @@ test.describe('accessibility', () => {
 
     // The assertive live region carries the same message.
     await expect(page.locator('[role="alert"]')).toContainText('Unesite naslov');
+  });
+
+  test('the editable fictional-data administration panel passes an axe scan', async ({ page }) => {
+    await openApp(page, 'clanovi');
+    await switchActor(page, 'Marko Perovic');
+    await expect(page.getByRole('heading', { name: 'Upravljanje probnim podacima' })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).withTags(RULESETS).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
   });
 
   test('response state is not carried by colour alone', async ({ page }) => {

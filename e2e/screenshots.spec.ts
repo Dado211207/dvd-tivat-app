@@ -29,7 +29,7 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.getByLabel(/^Naslov/).fill('Vjezba: dimna komora, rad sa IDA aparatima');
     await page
       .getByLabel(/^Uputstvo za clanove/)
-      .fill('Okupljanje u domu. Ponijeti licnu zastitnu opremu i IDA aparate.');
+      .fill('Okupljanje u bazi DVD Tivat. Ponijeti licnu zastitnu opremu i IDA aparate.');
     await page.getByLabel(/^Lokacija dogadjaja/).fill('Poligon za vjezbe (izmisljena lokacija)');
     await page.getByLabel(/^Lokacija prijavioca/).fill('Vatrogasni dom (izmisljeno)');
     await page.getByRole('checkbox', { name: /Nosioci IDA aparata/ }).check();
@@ -63,14 +63,13 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
 
     await switchActor(page, 'Luka Jovanovic');
     await page.getByTestId('answer-DOLAZIM').click();
-    await page.getByTestId('direct-to-location').check();
     await page.getByTestId('submit-response').click();
     // Nikola Djukic deliberately never answers: silence is a real state.
 
     // 4. Vehicles.
     await switchActor(page, 'Ana Vukovic');
     await goTo(page, 'vozila');
-    await page.getByTestId('depart-NV-1').click();
+    await page.getByTestId('depart-MAN-1').click();
     await page.getByLabel(/^Svrha/).fill('Vjezba - dovoz opreme');
     await page.getByRole('button', { name: 'Potvrdi' }).click();
     await capture(page, '05-vozila.png');
@@ -88,6 +87,8 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     // 7. Roster.
     await goTo(page, 'clanovi');
     await capture(page, '07-clanovi.png');
+    await switchActor(page, 'Marko Perovic');
+    await capture(page, '07a-upravljanje-probnim-podacima.png');
 
     // 8. History and the activity log, after closing.
     await goTo(page, 'dezurni');
@@ -103,7 +104,7 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await openApp(page);
     await createCall(page, {
       title: 'Vjezba: dimna komora, rad sa IDA aparatima',
-      instructions: 'Okupljanje u domu. Ponijeti licnu zastitnu opremu i IDA aparate.',
+      instructions: 'Okupljanje u bazi DVD Tivat. Ponijeti licnu zastitnu opremu i IDA aparate.',
       location: 'Poligon za vjezbe (izmisljena lokacija)',
     });
 
@@ -117,5 +118,13 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.screenshot({ path: `${DIR}/10-clan-pregled-odgovora.png` });
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.screenshot({ path: `${DIR}/11-clan-tamna-tema.png` });
+  });
+
+  test('captures the citizen report intake at phone size', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openApp(page, 'dojava');
+    await page.getByLabel(/^Opis/).fill('Gust dim se vidi iza izmisljene zgrade.');
+    await page.getByLabel(/^Mjesto dogadjaja/).fill('Izmisljeni orijentir kod obale');
+    await capture(page, '12-prijava-gradjana-telefon.png');
   });
 });

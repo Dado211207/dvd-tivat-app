@@ -8,7 +8,8 @@
 
 import { ROLE_LABEL, SPECIALTY_LABEL, T } from '@/i18n/labels';
 import { useApp } from '@/state/AppStateContext';
-import { Notice, ScrollRegion } from '../components/primitives';
+import { AdminDataPanel } from '../components/AdminDataPanel';
+import { Chip, Notice, ScrollRegion } from '../components/primitives';
 
 export function RosterView() {
   const { state } = useApp();
@@ -16,6 +17,8 @@ export function RosterView() {
   return (
     <>
       <h1 className="sr-only">{T.rosterTitle}</h1>
+
+      <AdminDataPanel />
 
       <section className="card" aria-labelledby="roster-h">
         <div className="card__head">
@@ -39,6 +42,7 @@ export function RosterView() {
                 <th scope="col">{T.specialties}</th>
                 <th scope="col">{T.groups}</th>
                 <th scope="col">{T.contactLabel}</th>
+                <th scope="col">Aktivnost</th>
               </tr>
             </thead>
             <tbody data-testid="roster-rows">
@@ -61,6 +65,13 @@ export function RosterView() {
                     ))}
                   </td>
                   <td className="small muted mono">{member.contactLabel}</td>
+                  <td>
+                    {member.active ? (
+                      <Chip tone="yes" symbol="+">Aktivan</Chip>
+                    ) : (
+                      <Chip tone="neutral" symbol="-">Neaktivan</Chip>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -7,6 +7,7 @@
  * from the message that was recorded.
  */
 
+import { SOCIETY_PROFILE } from '@/config/society';
 import type { ExerciseKind } from './types';
 
 export const KIND_LABEL: Record<ExerciseKind, string> = {
@@ -27,6 +28,7 @@ export function composeMessage(input: MessageInput): string {
   const lines: string[] = [
     `[${KIND_LABEL[input.kind]}] ${input.title.trim()}`,
     `Uputstvo: ${input.instructions.trim()}`,
+    `Mjesto okupljanja: ${SOCIETY_PROFILE.assemblyPoint}`,
     `Lokacija dogadjaja: ${input.incidentLocation.trim()}`,
   ];
 

@@ -5,6 +5,10 @@ import type { Page } from '@playwright/test';
  * profile, so one test cannot leave state behind for another.
  */
 export async function openApp(page: Page, route = 'dezurni') {
+  // The public OSM tile service is not a test dependency. The application map
+  // and marker interactions still render; CI never sweeps community tile
+  // infrastructure on every navigation and screenshot.
+  await page.route('https://*.tile.openstreetmap.org/**', (request) => request.abort());
   await page.goto(`/#/${route}`);
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
@@ -36,7 +40,7 @@ export interface CallInput {
 export async function createCall(page: Page, input: CallInput = {}) {
   const {
     title = 'Vjezba: provjera opreme',
-    instructions = 'Okupljanje u domu, ponijeti opremu.',
+    instructions = 'Okupljanje u bazi DVD Tivat, ponijeti opremu.',
     location = 'Poligon (izmisljena lokacija)',
     reporterLocation,
     group = 'Nosioci IDA aparata',

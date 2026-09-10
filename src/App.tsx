@@ -10,7 +10,7 @@
  */
 
 import type { RoleId } from '@/domain/types';
-import { useRef } from 'react';
+import { lazy, Suspense, useRef, type ComponentType } from 'react';
 import {
   APP_NAME,
   APP_SUBTITLE,
@@ -25,7 +25,7 @@ import { makeId, useApp } from '@/state/AppStateContext';
 import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
-import { hrefFor, ROUTES, useRoute, type Route } from './ui/router';
+import { hrefFor, useRoute, type Route } from './ui/router';
 import { DispatcherView } from './ui/views/DispatcherView';
 import { DisplayView } from './ui/views/DisplayView';
 import { HistoryView } from './ui/views/HistoryView';
@@ -33,13 +33,49 @@ import { MemberView } from './ui/views/MemberView';
 import { RosterView } from './ui/views/RosterView';
 import { VehiclesView } from './ui/views/VehiclesView';
 
-const VIEWS: Record<Route, () => JSX.Element> = {
+const CitizenReportView = lazy(() =>
+  import('./ui/views/CitizenReportView').then((module) => ({ default: module.CitizenReportView })),
+);
+const AccountsView = lazy(() =>
+  import('./ui/views/AccountsView').then((module) => ({ default: module.AccountsView })),
+);
+
+const VIEWS: Record<Route, ComponentType> = {
+  dojava: CitizenReportView,
   dezurni: DispatcherView,
   clan: MemberView,
   vozila: VehiclesView,
   prikaz: DisplayView,
   clanovi: RosterView,
+  nalozi: AccountsView,
   istorija: HistoryView,
+};
+
+/**
+ * Navigation order follows the owner's decision of 9 September 2026: this is an
+ * INTERNAL mobilisation and intervention-record system. Citizen reporting is no
+ * longer part of the product promise, so it is not in the operational groups and
+ * is never the first thing the application offers. It stays reachable only under
+ * an explicitly experimental heading, because deleting it would discard reviewed
+ * work that may still be reused - but it must never read as a way to report a
+ * fire. Nobody may be encouraged to use this instead of calling the official
+ * emergency service.
+ */
+const NAV_GROUPS: { label: string; routes: Route[] }[] = [
+  { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
+  { label: 'Evidencija', routes: ['clanovi', 'nalozi', 'istorija'] },
+  { label: 'Istrazivanje (nije u upotrebi)', routes: ['dojava'] },
+];
+
+const ROUTE_DESCRIPTION: Record<Route, string> = {
+  dojava: 'Napusteni istrazivacki prototip. Nije kanal za prijavu hitnih slucajeva',
+  dezurni: 'Priprema poziva i pracenje odziva ekipe',
+  clan: 'Poziv i odgovor iz ugla izabranog clana',
+  vozila: 'Rucna evidencija izlaska i povratka vozila',
+  prikaz: 'Pregled stanja namijenjen ekranu u bazi',
+  clanovi: 'Clanovi, uloge, grupe i osposobljenosti',
+  nalozi: 'Registracija, potvrda emaila i vlasnicka dodjela pristupa',
+  istorija: 'Zavrsene vjezbe i hronologija promjena',
 };
 
 export function App() {
@@ -77,52 +113,65 @@ export function App() {
         <div className="masthead__identity">
           {/* Provisional text identity. No official logo is used. */}
           <div className="masthead__mark" aria-hidden="true">
-            DVD
+            D
           </div>
           <div>
             <div className="masthead__name">{APP_NAME}</div>
-            <div className="masthead__sub">Dobrovoljno vatrogasno drustvo</div>
+            <div className="masthead__sub">Operativni prototip</div>
           </div>
         </div>
-        <p className="rail-caption">RADNI PROSTOR</p>
         <nav className="nav" aria-label="Glavna navigacija">
-          {ROUTES.map((r) => (
-            <a key={r} className="nav__link" href={hrefFor(r)}
-              aria-current={route === r ? 'page' : undefined} data-testid={`nav-${r}`}>
-              <NavIcon route={r} />{NAV[r]}
-            </a>
+          {NAV_GROUPS.map((group) => (
+            <div className="nav__group" key={group.label}>
+              <p className="nav__label">{group.label}</p>
+              <div className="nav__items">
+                {group.routes.map((r) => (
+                  <a key={r} className="nav__link" href={hrefFor(r)}
+                    aria-current={route === r ? 'page' : undefined} data-testid={`nav-${r}`}>
+                    <span className="nav__icon"><NavIcon route={r} /></span>
+                    <span>{NAV[r]}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="rail-note">
-          <span className="rail-note__label">NAS DOM. NAS TIM.</span>
-          <p>Prostor za vjezbe DVD Tivat.</p>
-          <p className="rail-note__detail">Lokalna demonstracija sa izmisljenim podacima.</p>
+          <span className="rail-note__status" aria-hidden="true" />
+          <div>
+            <span className="rail-note__label">LOKALNA SIMULACIJA</span>
+            <p className="rail-note__detail">Bez stvarnih poziva i obavjestenja</p>
+          </div>
         </div>
       </aside>
 
       <header className="masthead">
         <div className="workspace-heading">
-          <p className="eyebrow">DVD TIVAT / PROTOTIP</p>
+          <p className="eyebrow">DVD TIVAT</p>
           <p className="workspace-heading__title">{NAV[route]}</p>
+          <p className="workspace-heading__description">{ROUTE_DESCRIPTION[route]}</p>
         </div>
 
-        <div className="actor-switch">
-          <label htmlFor="actor-select">
-            Simulirani ucesnik
-            <span className="sr-only"> - {T.simulateMemberHint}</span>
-          </label>
-          <select
-            id="actor-select"
-            data-testid="actor-select"
-            value={state.simulation.actorId}
-            onChange={(e) => switchActor(e.target.value)}
-          >
-            {state.members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name} - {ROLE_LABEL[member.roleProposed]}
-              </option>
-            ))}
-          </select>
+        <div className="masthead__tools">
+          <span className="local-pill"><span aria-hidden="true" /> Lokalni prototip</span>
+          <div className="actor-switch">
+            <label htmlFor="actor-select">
+              Simulirani ucesnik
+              <span className="sr-only"> - {T.simulateMemberHint}</span>
+            </label>
+            <select
+              id="actor-select"
+              data-testid="actor-select"
+              value={state.simulation.actorId}
+              onChange={(e) => switchActor(e.target.value)}
+            >
+              {state.members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} - {ROLE_LABEL[member.roleProposed]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </header>
 
@@ -140,7 +189,9 @@ export function App() {
         {/* A member form contains an unsent local draft. Remount only this view
             when the simulated person changes so one member can never inherit
             another member's answer, ETA, destination, error or edit state. */}
-        <View key={route === 'clan' ? state.simulation.actorId : route} />
+        <Suspense fallback={<p role="status">Ucitavanje prikaza...</p>}>
+          <View key={route === 'clan' ? state.simulation.actorId : route} />
+        </Suspense>
       </main>
 
       <footer className="foot">

@@ -159,6 +159,32 @@ describe('loading', () => {
     expect(result.status).toBe('NEPOZNATA_VERZIJA');
     expect(result.state.schemaVersion).toBe(SCHEMA_VERSION);
   });
+
+  it('migrates schema 1 by adding only an empty citizen-report inbox', () => {
+    const { store } = fakeStorage();
+    install(store);
+    const current = createSeedState();
+    const { citizenReports: _removed, ...legacy } = current;
+    store.setItem(STORAGE_KEY, JSON.stringify({ ...legacy, schemaVersion: 1 }));
+
+    const result = loadState();
+    expect(result.status).toBe('UCITANO');
+    expect(result.state.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(result.state.citizenReports).toEqual([]);
+    expect(result.state.members).toEqual(current.members);
+    expect(JSON.parse(store.getItem(STORAGE_KEY)!)).toMatchObject({
+      schemaVersion: SCHEMA_VERSION,
+      citizenReports: [],
+    });
+  });
+
+  it('rejects current-version data with no citizen-report inbox', () => {
+    const { store } = fakeStorage();
+    install(store);
+    const { citizenReports: _removed, ...invalid } = createSeedState();
+    store.setItem(STORAGE_KEY, JSON.stringify({ ...invalid, schemaVersion: SCHEMA_VERSION }));
+    expect(loadState().status).toBe('OSTECENI_PODACI');
+  });
 });
 
 describe('saving', () => {

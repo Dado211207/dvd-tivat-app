@@ -17,7 +17,7 @@ the path to a real system open. Anything described as future is not built.
 | Accessibility | **axe-core** via `@axe-core/playwright` | Automated checks inside the same browser run, against real rendered state |
 | Styling | **Hand-written CSS** with custom properties | The instruction is original styling for DVD Tivat. A utility framework would drag in someone else's visual language, and a design system is not needed for six screens |
 | Routing | ~40 lines of hash routing | Deep-linkable views for tests and demos, no server rewrite rules, no dependency |
-| Persistence | `localStorage`, one key | Explicitly permitted for a local demonstration. See §5 |
+| Persistence | `localStorage`, one key | Explicitly device-local demonstration state only. Real records and uploads require server storage. See §5 |
 | State | React context with `useState` and a current-state ref, invoking the **pure domain reducer** | See §3; the ref gives successive commands the latest state |
 
 **Runtime dependencies: `react` and `react-dom`. Nothing else.** Everything else is a dev
@@ -51,7 +51,7 @@ network calls of any kind at runtime.
 
   src/state/      React binding: context, dispatch, persistence side effects, live-region messages
 
-  src/ui/         components and the six views
+  src/ui/         components and the seven views
 
   src/i18n/       shared labels; view-specific copy also lives in components; no diacritics
 ```
@@ -113,6 +113,8 @@ The type system carries the separation described in [PRODUCT_PLAN.md §C](./PROD
   not receive them as arguments.
 - `Call.recipientIds` is frozen at send time rather than recomputed from groups, so history stays a
   record of what happened rather than a report of what would happen today.
+- `CitizenReport` is intake only. Saving or reviewing one cannot reach exercises, calls,
+  deliveries, responses or vehicles. Its status vocabulary cannot claim network delivery.
 
 These are not comments asking future maintainers to be careful. They are structural.
 
@@ -120,8 +122,14 @@ These are not comments asking future maintainers to be careful. They are structu
 
 ## 5. Persistence, and its limits
 
-One key: `dvd-tivat-prototip:v1`. JSON, schema-versioned. Written after each successful command,
-read once at start-up.
+One historically named key: `dvd-tivat-prototip:v1`. JSON, currently schema version 2. Written
+after each successful command, read once at start-up. The explicit version 1 to 2 migration adds
+only an empty citizen-report inbox; unknown versions are still refused rather than guessed at.
+
+The fictional member/group/vehicle editor uses the same command reducer and the same persisted
+state; it does not create a second administration store. Member updates write both
+`Member.groupIds` and every affected `Group.memberIds` in one pure transition, so the two indexes
+cannot drift. Records are deactivated rather than deleted where history may still reference them.
 
 Handled failures — all of them real in practice:
 
@@ -158,9 +166,10 @@ control. Status is always text plus symbol plus colour, never colour alone. All 
 **Responsive.** Mobile-first, breaking at 640px and 1024px. The station display scales with
 `clamp()` so one build serves a phone and a wall-mounted screen.
 
-**External maps.** A deliberate press on a labelled button, opening a search URL built from the typed
-incident text in a new tab. Never automatic, never on page load, and never using anyone's device
-location — the prototype requests no geolocation permission at all.
+**Location and photographs.** Existing map links still require a deliberate press. The citizen
+report view requests browser geolocation only after the person presses its labelled button. A
+photo is previewed with a temporary object URL; its bytes and local filename never enter the
+domain state or `localStorage`. Neither capability performs a network request in this prototype.
 
 ---
 
@@ -170,6 +179,10 @@ The domain layer is plain TypeScript with no React and no browser API. It can be
 package and imported unchanged by a React Native or Expo client. That makes the mobile question a
 question about **delivery**, not about business rules — which is the right place for it, because
 delivery is where the risk is.
+
+The concrete server, identity, notification, media and mobile sequence is specified separately in
+[PRODUCTION_ARCHITECTURE.md](./PRODUCTION_ARCHITECTURE.md). That document is a gated path, not a
+claim that any production infrastructure exists.
 
 That framework choice stays open until Phase 3 answers what each platform actually permits. Choosing
 a mobile framework before knowing whether Critical Alerts, notification channels or an SMS fallback

@@ -18,7 +18,7 @@ import {
   isDeliveryUnattempted,
 } from '@/domain/selectors';
 import { OPEN_STATUSES, type ExerciseKind, type ExerciseStatus, type Id } from '@/domain/types';
-import { ANSWER_LABEL, DELIVERY_LABEL, formatTime, STATUS_LABEL, T } from '@/i18n/labels';
+import { ANSWER_LABEL, CITIZEN_REPORT_KIND_LABEL, DELIVERY_LABEL, formatTime, STATUS_LABEL, T } from '@/i18n/labels';
 import { makeId, useApp, useStableCommandId } from '@/state/AppStateContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DeliveryNotice } from '../components/DeliveryNotice';
@@ -34,6 +34,7 @@ import {
   StatusChip,
   Total,
 } from '../components/primitives';
+import { readRouteParam } from '../router';
 
 const KINDS: ExerciseKind[] = ['VJEZBA', 'TEST', 'SIMULIRANA_INTERVENCIJA'];
 
@@ -57,13 +58,22 @@ export function DispatcherView() {
 function Composer() {
   const { state, run, check, announce } = useApp();
 
-  const [kind, setKind] = useState<ExerciseKind>('VJEZBA');
-  const [title, setTitle] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [incidentLocation, setIncidentLocation] = useState('');
+  const reportId = readRouteParam('dojava');
+  const sourceReport = state.citizenReports.find(
+    (report) => report.id === reportId && report.status === 'PREGLEDANA_U_SIMULACIJI',
+  );
+  const sourceLocation = sourceReport?.incidentLocation || (sourceReport?.coordinates
+    ? `${sourceReport.coordinates.latitude.toFixed(6)}, ${sourceReport.coordinates.longitude.toFixed(6)}`
+    : '');
+
+  const [kind, setKind] = useState<ExerciseKind>(sourceReport ? 'SIMULIRANA_INTERVENCIJA' : 'VJEZBA');
+  const [title, setTitle] = useState(sourceReport ? `Dojava: ${CITIZEN_REPORT_KIND_LABEL[sourceReport.kind]}` : '');
+  const [instructions, setInstructions] = useState(sourceReport?.description ?? '');
+  const [incidentLocation, setIncidentLocation] = useState(sourceLocation);
   const [reporterLocation, setReporterLocation] = useState('');
   const [memberIds, setMemberIds] = useState<Id[]>([]);
   const [groupIds, setGroupIds] = useState<Id[]>([]);
+  const [memberQuery, setMemberQuery] = useState('');
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [preview, setPreview] = useState(false);
   /** Reset after a successful send so the next call gets a fresh id. */
@@ -77,6 +87,13 @@ function Composer() {
     () => resolveRecipients(state, memberIds, groupIds),
     [state, memberIds, groupIds],
   );
+
+  const visibleMembers = useMemo(() => {
+    const query = memberQuery.trim().toLocaleLowerCase('sr-Latn');
+    return state.members.filter(
+      (member) => member.active && (query === '' || member.name.toLocaleLowerCase('sr-Latn').includes(query)),
+    );
+  }, [memberQuery, state.members]);
 
   const messageText = composeMessage({ kind, title, instructions, incidentLocation, reporterLocation });
 
@@ -134,13 +151,28 @@ function Composer() {
     error?.field === field ? error.message : undefined;
 
   return (
-    <div className="grid-2">
-      <section className="card" aria-labelledby="composer-h">
-        <div className="card__head">
-          <h2 id="composer-h">{T.newExercise}</h2>
+    <div className="grid-2 composer-grid">
+      <section className="card workflow-card" aria-labelledby="composer-h">
+        <div className="card__head card__head--step">
+          <span className="step-number" aria-hidden="true">01</span>
+          <div>
+            <p className="card__kicker">Detalji poziva</p>
+            <h2 id="composer-h">{T.newExercise}</h2>
+          </div>
         </div>
 
         {error && !error.field ? <Notice tone="error">{error.message}</Notice> : null}
+
+        {sourceReport ? (
+          <Notice tone="warn">
+            Polja su unaprijed popunjena iz lokalno pregledane probne prijave. Provjerite svaki
+            detalj i sami izaberite primaoce. Poziv jos nije kreiran niti poslat.
+          </Notice>
+        ) : reportId ? (
+          <Notice tone="error">
+            Probna prijava nije pronadjena ili jos nije oznacena kao pregledana. Nista nije kreirano.
+          </Notice>
+        ) : null}
 
         {/* No onSubmit: sending happens only from the preview dialog. */}
         <div>
@@ -220,10 +252,14 @@ function Composer() {
         </div>
       </section>
 
-      <section className="card" aria-labelledby="recipients-h">
-        <div className="card__head">
-          <h2 id="recipients-h">{T.recipients}</h2>
-          <p className="small" data-testid="selected-count">
+      <section className="card workflow-card recipients-card" aria-labelledby="recipients-h">
+        <div className="card__head card__head--step">
+          <span className="step-number" aria-hidden="true">02</span>
+          <div>
+            <p className="card__kicker">Kome ide poziv</p>
+            <h2 id="recipients-h">{T.recipients}</h2>
+          </div>
+          <p className="selected-count" data-testid="selected-count">
             {T.selectedCount}: <strong>{resolved.length}</strong>
           </p>
         </div>
@@ -254,8 +290,21 @@ function Composer() {
 
         <fieldset>
           <legend>{T.recipientsIndividuals}</legend>
-          <div className="check-list check-list--2">
-            {state.members.map((member) => {
+          <div className="recipient-search">
+            <label htmlFor="member-search">Pretrazi probne clanove</label>
+            <input
+              id="member-search"
+              type="search"
+              value={memberQuery}
+              placeholder="Ime ili oznaka clana"
+              onChange={(event) => setMemberQuery(event.target.value)}
+            />
+            <p className="small muted" aria-live="polite">
+              Prikazano {visibleMembers.length} od {state.members.filter((member) => member.active).length} aktivnih.
+            </p>
+          </div>
+          <div className="check-list check-list--2 recipient-member-list" data-testid="recipient-member-list">
+            {visibleMembers.map((member) => {
               const viaGroup = !memberIds.includes(member.id) && resolved.includes(member.id);
               return (
                 <label className="check" key={member.id}>
@@ -271,12 +320,18 @@ function Composer() {
                 </label>
               );
             })}
+            {visibleMembers.length === 0 ? (
+              <p className="small muted recipient-search__empty">Nema aktivnog probnog clana za ovu pretragu.</p>
+            ) : null}
           </div>
         </fieldset>
 
-        <button type="button" className="btn btn--primary btn--block" onClick={openPreview}>
-          {T.reviewAndSend}
-        </button>
+        <div className="composer-action">
+          <p><strong>{resolved.length}</strong> izabranih primalaca</p>
+          <button type="button" className="btn btn--primary" onClick={openPreview}>
+            {T.reviewAndSend}
+          </button>
+        </div>
       </section>
 
       <ConfirmDialog
@@ -486,7 +541,7 @@ function ActiveExercise() {
             </div>
 
             <p className="small muted" style={{ marginTop: 'var(--sp-3)' }}>
-              Direktno na lokaciju: <strong>{totals.direktnoNaLokaciju}</strong>
+              Clanovi koji dolaze prvo se okupljaju u bazi DVD Tivat radi preuzimanja opreme.
             </p>
 
             <ScrollRegion label="Primaoci poziva, stanje isporuke i dati odgovori">

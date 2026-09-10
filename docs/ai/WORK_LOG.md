@@ -5,6 +5,335 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-09 - Internal-operations direction, and a verified database contract
+
+**Product direction (highest priority of the brief).** Recorded the owner's decision that DVD Tivat
+is an internal mobilisation and intervention-record system and **not** a replacement for calling the
+official fire service. Citizen reporting was the FIRST item in primary navigation; it is now out of
+the operational groups, under an explicitly experimental heading, with a non-emergency notice and an
+"abandoned research" notice on the screen itself. The wording deliberately does not invent an
+emergency telephone number - that is blocker B4 for the owner.
+
+**Base chosen and reported.** Branched from `codex/access-map-research` (`f1111d5`), the newest
+coherent tree, rather than from `main`. Verified first that `main` is an ancestor of it and that the
+previous branch head `35a6416` (merged as PR #1) is contained in it, so nothing was discarded and no
+force-push was needed. The stack is linear: `main` -> #9 -> #10 -> #11 -> #12 -> `f1111d5`.
+
+**The database is now real, and tested.** This was the repository's largest unverified risk: a
+migration that had never been applied anywhere, with an access model that existed only on paper.
+
+- `202609090001` left **untouched**, so a database that already applied it converges with a clean
+  one. All repairs are additive in `202609090002`.
+- Repaired the confirmed defects: `current_dvd_role()` now requires an **active** grant AND a
+  **complete** profile AND one of the four operational roles (it previously checked none of that, so
+  a suspended or half-registered account kept its privileges); added `owner_set_account_active` with
+  a mandatory reason and a status audit (the owner could grant roles but never take access away);
+  enforced at most three images per report; tightened the report-insert policy from "any
+  authenticated user" to an active account.
+- Added `PENDING` as the default so an unapproved account holds nothing, and enforced **exactly one
+  owner** with a partial unique index rather than with application code that could be forgotten.
+- Added the internal-operations schema: members/groups/vehicles, interventions with an explicit
+  lifecycle, frozen recipient sets, an honest notification outbox with separate provider-attempt
+  rows, responses with retained revisions, vehicle movements, an operational audit, and
+  **attendance intervals** - the primary new capability.
+- All writes go through `security definer` commands; RLS grants reads only. There is no direct
+  insert or update path a client could use to forge an operational fact.
+
+**Attendance, per the brief's core requirement.** Several intervals per member per intervention;
+trusted server timestamps; user-reported times kept as separate columns that duration never reads;
+duration derived as the sum of closed intervals with open ones reported separately; corrections
+requiring a reason and preserving before/after immutably; and closing an intervention with open
+intervals refused unless command explicitly acknowledges it - the intervals are then left open
+rather than given an invented checkout time. A member being in two places at once is refused by an
+**exclusion constraint across all interventions**, so participation hours cannot be double-counted;
+that rule is documented as a decision in `docs/DATABASE.md`.
+
+**Resolved the location contract mismatch.** The interface allowed a coordinate-only report while
+the SQL demanded 2-300 characters, so a valid-looking submission would have failed at the database
+boundary. The contract is now one thing: typed text always required, coordinates optional and
+carrying their provenance and capture time. Both the accepted and the rejected path are tested.
+
+**Verified**
+
+| Check | Command | Result |
+|---|---|---|
+| Lint | `npm run lint` | Pass |
+| Types (strict) | `npm run typecheck` | Pass |
+| Unit | `npm run test` | **91 passed** |
+| Database + RLS | `npm run test:db` | **81 passed** |
+| Build | `npx vite build` | Pass |
+| Browser + axe | `npm run e2e` | **66 passed** |
+
+The database tests run against real PostgreSQL 16.13 - no Supabase project, no credentials, no paid
+service. Every test switches to the non-superuser `authenticated` role first; without that
+PostgreSQL would bypass RLS and the suite would pass while proving nothing. Added a `postgres:16`
+service container to CI so the same suite runs on a standard GitHub runner.
+
+**Three real defects found by these tests and fixed at the cause**
+
+1. `current_dvd_role()` returned `'PENDING'` for unapproved accounts. No permission leaked, because
+   `is_dvd_staff()` excluded it, but "no internal role" was not one unambiguous value and a policy
+   written later could have mistaken it for a role. It now returns NULL.
+2. `effective_eta not in (15, 30, 60)` is NULL when the ETA is NULL, so a missing arrival band fell
+   through the guard to the table constraint and the caller got an opaque error instead of
+   `ETA_REQUIRED`. Classic SQL NULL trap.
+3. `current_account_status()` was reachable by `anon`. Least privilege: an anonymous visitor already
+   knows it is anonymous and needs nothing from the operational schema.
+
+**Not done, and honestly not claimed**
+
+- **No application code uses the new schema.** The browser prototype still runs on device-local
+  state with a simulated actor. The schema is verified; the client is not connected to it.
+- No Supabase project exists, so registration, email verification, password reset, session
+  invalidation for suspended accounts, storage uploads and realtime remain unproven. Blocker B1.
+- The Supabase platform surface in the tests is emulated (`supabase/tests/00_supabase_stub.sql`). It
+  reproduces `auth.uid()` from JWT claims, the three database roles and the storage helpers; it does
+  not reproduce GoTrue, the API gateway or realtime.
+- No notification transport, no CSV export, no owner/admin write commands for members, groups and
+  vehicles, no PWA decision, no deployment, no device testing.
+
+**Next concrete action**
+
+Wire the application to the verified schema: a global auth/access state that loads profile, role and
+status before protected routes render, then real protected routes, then the commander publish flow
+and the attendance board. This needs blocker **B1** (a Supabase project) resolved first - the wiring
+cannot be honestly verified without one.
+
+---
+
+## 2026-09-09 — Accounts, owner roles and incident-map foundation
+
+**Requested workflow:** added the detailed design for email/password signup, a six-digit email
+verification code, name-and-surname completion, citizen-by-default access, and owner-only promotion
+to firefighter, commander or administrator. Names are display data; permissions bind to the
+authentication UUID. The owner role is deliberately absent from assignable roles.
+
+**Report workflow:** specified and tested that every active approved firefighter, commander,
+administrator and owner receives an informational `UNVERIFIED` report alert. This is separate from
+an authorised call-out. Citizens cannot see the member roster, account directory, other reports or
+operational details.
+
+**Prototype UI:** added an eighth `Nalozi i pristup` view with the five-step registration flow and
+a searchable fictional owner directory. It lets the owner simulation review role assignment without
+accepting real emails or claiming authentication. Added an interactive Leaflet/OpenStreetMap map to
+citizen intake: explicit device location and explicit map pin carry different sources, and stored
+prototype reports appear with labelled unverified/reviewed markers. CI blocks community tile requests
+rather than using the public tile service as test infrastructure.
+
+**Production foundation:** added a dormant Supabase client for signup, OTP verification, profile
+completion, sign-in and sign-out; a sample file containing only public browser configuration names;
+and a SQL migration for profiles, access grants, role audit, citizen reports and private-media
+metadata with RLS enabled. No project exists or is configured by this change, and the migration is
+not applied anywhere.
+
+**Research:** primary-source security, upload, geolocation, map-policy, push, storage and email limits
+are cited in `ACCOUNTS_REPORTS_MAP_PLAN.md`. Free service allowances are treated as prototype capacity,
+not reliability evidence. Custom SMTP, real role-policy tests, private storage, owner MFA and field
+notification measurements remain gates before involving real people.
+
+**Verification:** ESLint, 91 Vitest tests across eight files, strict TypeScript, production build and
+`git diff --check` pass on the final local tree. The initial build warned that the new map and auth
+libraries pushed one JavaScript chunk over 500 kB; the account and citizen-report views are now lazy
+chunks, reducing the initial bundle to about 230 kB (69 kB gzip). The local Playwright run was
+attempted and all 66 scenarios stopped before page launch because the required Chromium executable
+was absent. Four official CDN attempts then timed out or returned 502, so no browser pass is claimed
+locally. The complete tests remain committed for GitHub CI, which installs its own browser.
+
+**Next:** publish this isolated branch for review and require the exact-head GitHub browser and
+accessibility job to pass. The SQL migration has not been executed because this environment has no
+dedicated Supabase project or local PostgreSQL instance; apply it only after independent review. Do
+not configure a backend, deploy, send email or alert anyone as part of this slice.
+
+## 2026-09-09 — Prepare the first-test and presentation package
+
+**Source clarification:** the prototype owner confirmed that he is a DVD Tivat
+firefighter-rescuer. The 52-member count, two vehicle categories, no-shift/base-first routine,
+Viber alert group, iPhone/Android mix and DVD-Tivat-only scope are therefore recorded as first-hand
+operating facts, not as facts awaiting another confirmation. Formal application permissions,
+pilot approval, data governance and emergency safeguards remain authorised product decisions.
+
+**Public context:** checked the society's public Instagram and Facebook presence. The public profile
+supports the name and the 2018 origin/history statement only; it is not used to infer operations.
+No social-media crest was imported because no approved original SVG or high-resolution transparent
+PNG was available.
+
+**Test package:** added `FIRST_TEST_CHECKLIST.md` with simulation safety gates, one complete
+call-out, vehicle/status separation, citizen-report and administration checks, persistence/reset,
+and explicit 390x844 and 412x915 phone passes. Added `TEST_FEEDBACK_FORM.md` with ratings, an issue
+template and a decision outcome. Both forbid real identities and incident data.
+
+**Presentation package:** added an 8–10 minute `PRESENTATION_SCRIPT.md` with exact fictional inputs,
+spoken opening/boundary/closing text, a timed demonstration and the product decisions to obtain.
+The detailed `DEMO_GUIDE.md` now routes presenters through the checklist and feedback form first.
+
+**Drift protection:** three new tests read the committed documents and require the same 52-member
+scale, base, Viber fallback, MAN-1, TERENAC-1, iPhone/Android targets, non-delivery statement and
+public-branding boundary used by the application. The first implementation failed because Vitest
+resolved an `import.meta.url` document path to `/docs`; the test now resolves from the project root.
+The next run correctly caught two copy mismatches (`Viber` versus `Viber grupa`, and `terenac`
+versus `TERENAC-1`); the documents were made exact and no assertion was weakened.
+
+**Verification:** ESLint, 78 Vitest tests, strict TypeScript, the Vite production build and
+`git diff --check` pass locally twice on the final tree. The private-data scan first matched CSS
+triplets such as `255 255 255`; after excluding CSS colour declarations, the targeted secret,
+telephone and email scan was clean.
+
+GitHub CI run `34333542412`, job `102407498984`, completed successfully at attempt 1 on exact head
+`0631119b8316cb390a654c70eaee6278e7dbee2e`: 78 unit tests, production build, 62 Chromium
+functional/accessibility scenarios and 3 screenshot scenarios. Screenshot artifact `10096819765`
+contains 14 PNGs, is 4,869,671 bytes and has GitHub-recorded ZIP SHA-256
+`dd632584a7fd27884f6f9297a998a7c16fab996ea4bc3401a2e79cc3d4c13893`.
+
+**Next:** keep PR #12 Draft and unmerged. The owner can now run the first-test checklist before
+showing the prototype to DVD Tivat. The only visual output changed in this slice is the profile note
+from pending confirmation to member-confirmed; the same screenshot suite passed on the exact head.
+
+---
+
+## 2026-09-09 — Apply the DVD Tivat operating profile
+
+**First-hand operating facts:** the owner, a DVD Tivat firefighter-rescuer, confirmed 52 members;
+one MAN firefighting vehicle and one firefighting SUV; no shifts; members travel from home to the
+base for equipment before deployment; the current alert channel is a Viber group; both iPhone and
+Android are used; and the product is for DVD Tivat only. Pending product decisions are isolated in
+`docs/SOCIETY_PROFILE.md`.
+
+**Public-data boundary:** the public repository still contains no real person, number, address,
+registration, credential or incident. The seed now has 52 fictional member rows; rows 15–52 use
+generic names. The two vehicle callsigns are invented. No scraped crest is used: the available
+social profile image is not an approved, app-quality identity asset.
+
+**Workflow correction:** removed the member-facing direct-to-incident choice. Every new response is
+normalised by the pure reducer to `directToLocation: false`; the field remains only for compatibility.
+Every preview and stored message states `Mjesto okupljanja: Baza DVD Tivat` separately from the
+incident location. The duty overview names the no-shift/base-first model and Viber only as the
+existing fallback; no Viber integration or notification was added.
+
+**Scale and mobile UX:** the all-members group contains all 52 active fictional records. The duty
+composer adds accessible search and a bounded scrolling roster without losing hidden selections.
+Representative 390x844 iPhone and 412x915 Android checks assert no horizontal overflow and a 44px
+primary action. These are browser-layout checks, not native push or locked-screen evidence.
+
+**Local verification:** `npm run verify` passed: ESLint, 74 Vitest tests, strict TypeScript and a
+Vite production build. Local Playwright could not launch because this environment has no Chromium;
+the failed launch ran zero application assertions and is not counted as browser evidence. CI on the
+exact remote head remains required before review.
+
+**GitHub evidence:** Draft PR #12, runtime head
+`f37994fc16a8aaa52d9eafef0b4cce89fd32a0e6`, CI run `34313382766`, job `102344466690`, attempt 1,
+passed without a rerun: lint, strict typecheck, 74 unit tests, production build, 62 Chromium
+browser/accessibility scenarios and 3 screenshot scenarios. Artifact `10089211902` contains 14 PNGs,
+is 4,869,709 bytes and has GitHub-recorded ZIP SHA-256
+`2085185206a6198ff79bf53d1385a706d7f154aacec9dc5c3b8d2408f66a2678`. The overview, composed
+recipient search, member screen, two-vehicle board and 390x844 phone screenshot were visually
+inspected; no overlap or clipping was observed. The phone screenshot is responsive-browser evidence,
+not an iOS or Android native-device result.
+
+**Next:** review the stacked Draft PRs in order (#9 through #12). Merge only with explicit owner
+approval and reverify each retargeted exact head. Do not deploy, publish, enter real data or call
+this an operational alert system.
+
+---
+
+## 2026-09-09 — Add safe local administration and define the production boundary
+
+**Owner direction:** continue independently while Claude is unavailable, add the remaining useful
+prototype functions, keep the experience personalised for DVD Tivat, and leave a reliable written
+handoff. A later clarification records single-society use as the confirmed current scope.
+
+**Citizen-report evidence:** CI run `34304900877`, job `102319448025`, attempt 1, passed on exact
+head `b2c8065f18b82a9156a05aa48639b312f99efaa3`: lint, strict typecheck, 61 unit tests, production
+build, 52 Chromium browser/accessibility scenarios and 3 screenshot scenarios. Artifact
+`10086318945` contains 13 PNGs and has GitHub-recorded ZIP SHA-256
+`4f69f5b6528b7a1264ff2cb484d2354c101e9ef8cf50f416965378093ef4c05d`. The preceding run failed
+only because one test selected both a visible location result and the same text in a hidden dialog;
+the selector was narrowed to the visible result without changing product behaviour or assertions.
+
+**Local administration:** added pure reducer commands and a simulated-admin panel for creating and
+updating invented members, groups and vehicles. Group membership is updated symmetrically on both
+records, duplicate group names and vehicle callsigns are rejected, deactivated members remain in
+history but are excluded from new recipient resolution, and repeated command ids are no-ops. The
+panel accepts no contact details and repeatedly warns that it is local demonstration data, not
+authentication or permission enforcement. Ten focused domain tests and browser/accessibility
+coverage guard the new paths.
+
+**Production boundary:** added `docs/PRODUCTION_ARCHITECTURE.md`. It records the server-owned data,
+identity, authorisation, realtime, notification, citizen-media, privacy, operations and staged
+physical-device evidence required after workflow approval. It is explicitly a decision document;
+no backend, account, push service, upload endpoint, deployment or real data was added.
+
+**Local verification:** `npm run verify` passed on the complete working tree: ESLint, 71 Vitest
+tests, strict TypeScript and the Vite production build. `git diff --check` is clean. Local Chromium
+remains unavailable, so no local browser pass is claimed.
+
+**GitHub evidence:** Draft PR #11 targets `main` to test the complete stacked tree. CI run
+`34305679955`, job `102321763307`, attempt 1, passed on exact runtime head
+`55b3c15b848d489e903577ce020795953d63d2c8`: dependency install, lint, strict typecheck, 71 unit
+tests, production build, 56 Chromium browser/accessibility scenarios and 3 screenshot scenarios.
+Artifact `10086586979` contains 14 PNGs, is 4,107,485 bytes and has GitHub-recorded ZIP SHA-256
+`92af330186f3f0abe8ec4362efea6c932d158d40fb6aaee6aa24524fda9c8239`. The full-page fictional
+administration screenshot was visually inspected: the warning, forms, focusable controls, status
+chips and roster/group/vehicle tables are legible with no observed clipping or overlap.
+
+**Next:** review the stacked Draft PRs in order (#9, #10, #11). Merge only with explicit owner
+approval and re-run exact-head CI after each retarget. Do not deploy, publish or enter real people
+or operational data.
+
+---
+
+## 2026-09-08 — Simplify and modernise the interface before remaking the video
+
+**Owner direction:** the first cinematic demonstration was acceptable as a video, but its application
+interface was not. Do not revise the video yet. First produce a cleaner, simpler and more modern
+desktop and phone experience, preserve every function, let the owner review it, then write a better
+script and use more natural narration for the replacement video.
+
+**Branch and safety:** work is isolated on `codex/modern-ui-ux`, based on verified
+`main@9b4ba3fd22e83d30cb64c9718b673b5c19167a94`. No merge, deployment, real alert, real data,
+credential, paid service or new video is part of this change.
+
+**Interface correction:** removed the oversized decorative first-screen treatment and replaced it
+with a compact operational summary whose status and counts come from the existing fictional state.
+Grouped the six routes into operations and records, made the call composer a clear two-step workflow,
+kept diagnostics secondary, and replaced the two-row phone menu with a compact horizontally
+scrollable navigation row. Light and dark palettes now use calmer surfaces, stronger hierarchy,
+larger focus rings and local system typography. The simulation disclosure, actor selector, preview
+confirmation, validation, accessibility labels and every domain transition remain in place.
+
+**Local verification:** `npm run verify` passed: ESLint, 50 Vitest tests, strict TypeScript and the
+Vite production build. `git diff --check` passed. The repository Playwright command could not launch
+locally because its Chromium binary was absent. One installation attempt was made; the CDN timed out
+or returned 502, so it was not repeated. Browser, accessibility, responsive and screenshot evidence
+will come from the existing GitHub workflow on the exact branch head rather than being guessed.
+
+**First browser result and correction:** CI run `34233620774`, job `102085644202`, attempt 1,
+failed five accessibility scenarios while all functional browser scenarios passed. Axe found the
+new footer colour at 4.35:1 instead of the required 4.5:1 and found three explanatory `span`
+elements inside a definition-list group. The result was not rerun. The next commit darkens the
+shared faint-text token with a safety margin, increases footer text slightly, and represents each fact note
+as a proper `dd`; no accessibility assertion was changed.
+
+**Second browser result and correction:** CI run `34234136013`, job `102087384224`, attempt 1,
+passed 46 browser scenarios and failed the same active-vehicle contrast check on desktop and phone.
+The `Izaslo` chip measured 4.38:1 against its pale accent surface. That run was not rerun. The next
+commit changes the light-theme accent from `#087b8c` to `#077687`, a measured 4.68:1 on that surface;
+the existing dark-theme token is unchanged and no test or semantic status is changed.
+
+**First complete browser pass and visual finding:** CI run `34234493087`, job `102088592524`,
+attempt 1, passed all 50 unit tests, 48 browser/accessibility scenarios and two screenshot scenarios.
+Screenshot artifact `10059284486` matched GitHub's recorded ZIP SHA-256
+`4eb17435f0b4c307e62deb09a2f2b0c308329f037317babcb6e37c47f12585ac`. Visual inspection then
+found that the three summary fact notes rendered at the numeric `dd` size and were ellipsised. The
+cause was selector specificity after changing those notes from `span` to semantic `dd`. The next
+commit gives the note selector equal structural specificity and allows the short copy to wrap; this
+is a visual correction even though the automated suite was already green.
+
+**Next:** push one atomic branch commit, open a Draft PR, run the existing 48 browser/accessibility
+checks and two screenshot scenarios, then visually inspect the generated desktop and phone PNGs.
+Do not merge or create the replacement video before owner review.
+
+---
+
 ## 2026-09-08 — Final review, ordered merge and post-merge verification
 
 **Owner approval:** after the combined-tree review reported no blocker, the owner explicitly
@@ -390,3 +719,43 @@ can invalidate the plan, and the second decides whether it is worth doing.
 
 Scaffold the React + TypeScript + Vite project per `docs/ARCHITECTURE.md` §1, then implement
 `src/domain/` (types, errors, commands, pure reducer, selectors, fictional seed) before any UI.
+# 2026-09-08 — Citizen-report prototype, first slice
+
+**Scope**
+
+- Started `codex/citizen-report-prototype` from the exact tree under review in
+  `codex/modern-ui-ux`. Stable `main` and the redesign branch were not modified.
+- Added a seventh route for a citizen to describe a possible incident, attach an optional
+  session-only photo, type a landmark or explicitly request device coordinates, review the exact
+  record, and save it locally.
+- Added a separate DVD Tivat inbox action that can say only "reviewed in simulation". The domain
+  structurally prevents report submission or review from creating an exercise, call, delivery,
+  member response or vehicle movement.
+- A reviewed item may prefill the existing dispatcher composer. It selects no recipients and
+  creates nothing until the duty officer reviews and explicitly confirms the ordinary call flow.
+- Bumped the JSON schema to 2 with one explicit lossless migration from schema 1: add an empty
+  report inbox. Unknown versions are still rejected.
+
+**Privacy and safety boundary**
+
+- No backend, account, notification, upload or real alert channel was added.
+- Image bytes and the local filename never enter application state or local storage.
+- Device location is requested only after an explicit button press and remains in this browser.
+- Every report screen states that it is not an emergency channel and that nothing reaches DVD
+  Tivat or any service.
+
+**Verification so far**
+
+- TypeScript and ESLint pass.
+- 24 focused domain and persistence tests pass, including nine new report rules and explicit
+  schema migration coverage.
+- Local browser execution is not claimed: the Playwright Chromium download failed with repeated
+  CDN timeouts/502 responses. GitHub CI must execute the browser, mobile and accessibility checks
+  on the eventual pushed head.
+
+**Next concrete action**
+
+Run the complete local non-browser gate, finish browser-test coverage and push this isolated branch
+for a Draft stacked review. Do not merge or deploy it.
+
+---

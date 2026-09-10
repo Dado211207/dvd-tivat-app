@@ -20,9 +20,27 @@ permissions:
 
 jobs:
   verify:
-    name: Lint, typecheck, unit and browser tests
+    name: Lint, typecheck, unit, database and browser tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    # A standard GitHub-hosted service container, included in the runner at no
+    # extra cost. It gives the migrations and every row-level-security policy a
+    # real PostgreSQL to execute against, so the access model is verified rather
+    # than reviewed. No Supabase project, credentials or paid service involved.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +61,13 @@ jobs:
 
       - name: Unit tests
         run: npm run test
+
+      # Applies both migrations to an empty database and asserts the role
+      # matrix, intervention lifecycle and attendance invariants.
+      - name: Database and row-level-security tests
+        run: npm run test:db
+        env:
+          DVD_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
       - name: Build
         run: npx vite build

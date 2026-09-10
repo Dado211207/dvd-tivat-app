@@ -1,107 +1,184 @@
 # Project state
 
-Single source of truth for resuming this work without reading the conversation that produced it.
-**Update this file in the same commit as the change it describes.**
+Single source of truth for resuming this work without reading the conversation
+that produced it. **Update this file in the same commit as the change it
+describes.**
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ---
 
-## Current scope
+## Current product direction
 
-Phase 1 of [PRODUCT_PLAN.md](../PRODUCT_PLAN.md) — a **local browser exercise prototype** for DVD
-Tivat call-out and response. No server, no accounts, no notifications, no real data.
+**DVD Tivat is an INTERNAL mobilisation and intervention-record system.**
+
+Owner decision, 9 September 2026: the application must **not** be developed as a
+replacement for reporting a fire by calling the official fire service. Public
+citizen reporting is no longer the product focus.
+
+The core workflow:
+
+1. An authorised commander publishes an intervention with verified details and
+   an exact location.
+2. Approved firefighters receive it internally; those available respond.
+3. Response intent stays separate from attendance, vehicle movement and
+   intervention status.
+4. The system records who actually attended, where, when each person arrived and
+   left, and how long each interval lasted.
+5. Authorised users can later review reliable historical participation records.
+
+The citizen-report code is **abandoned research**. It is out of the operational
+navigation groups, behind an explicitly experimental heading, with a
+non-emergency notice on the screen. Do not promote it back without a new
+explicit owner decision.
 
 ## Repository and branch
 
-- Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public. Do not create another.
-- Verified application state: `main@5c9acb6853543d61d6219fe377ba466e83ddf897`.
-- PRs #1, #3, #4, #5, #6 and #7 were merged with merge commits, in that order, after the owner's
-  explicit approval. Their source branches were not rewritten or deleted.
-- PR #2 is separate historical continuity documentation. It is not part of the application stack
-  and remains unmerged pending closure as superseded.
-- No `LICENSE` file. The owner has not chosen a licence and one must not be added for them.
+- Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
+- `main`: `9b4ba3fd22e83d30cb64c9718b673b5c19167a94`
+- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, based on
+  `codex/access-map-research` (`f1111d56c0285c874534bfa356c9a4a411e1c89c`).
+  `main` is an ancestor of that commit and the previous branch head
+  (`35a6416`, merged as PR #1) is contained in it, so nothing was discarded and
+  no force-push was needed.
+- No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
-## Status
+### Pull requests — live state at 2026-09-09
 
-**Phase 1 prototype complete, merged and ready for supervised owner testing.** The final merged
-tree is byte-for-byte the reviewed PR #7 tree. Post-merge CI run `34204300780`, job
-`101990099552`, attempt 1, passed lint, strict typecheck, production build, 50 unit tests,
-48 browser/accessibility checks and 2 screenshot scenarios. The run produced 12 review PNGs in
-artifact `10047140105`. See [WORK_LOG.md](./WORK_LOG.md) for exact evidence and
-[DESIGN_DIRECTION.md](../DESIGN_DIRECTION.md) for the visual decisions.
+| PR | Branch | Head | State |
+|---|---|---|---|
+| #1 | `claude/dvd-tivat-app-dev-n8wctb` | `35a6416` | **Merged** 2026-09-08 |
+| #2 | `codex/project-continuity` | `f0d11a6` | **Closed, unmerged** (superseded) |
+| #3–#8 | various `codex/*` | — | **Merged** 2026-09-08 |
+| #9 | `codex/modern-ui-ux` | `43d7f48` | Open / Draft |
+| #10 | `codex/citizen-report-prototype` | `b2c8065` | Open / Draft |
+| #11 | `codex/local-admin-prototype` | `034b77b` | Open / Draft |
+| #12 | `codex/dvd-tivat-operational-profile` | `8096b1e` | Open / Draft |
+| none | `codex/access-map-research` | `f1111d5` | Pushed, **no PR, never CI-verified** |
 
-The owner expects **DVD Tivat only**, but the society has not confirmed that. Keep the UI focused
-on DVD Tivat; do not implement multi-society routing or treat this assumption as an agreed requirement.
+Verified ancestry: the stack is linear — `main` → #9 → #10 → #11 → #12 →
+`f1111d5`. Each is 0 commits behind the next. `f1111d5` is 14 ahead of `main`.
 
-Not deployed anywhere. No licence file. No real alert, account or member data exists.
+**Merge order if authorised:** #9 → #10 → #11 → #12 → `f1111d5` → this branch.
+Because the stack is linear and all of it is contained in this branch, merging
+this branch alone would bring everything.
+
+## Status of this slice
+
+Complete and verified: the product-direction correction, the database schema for
+internal operations, and its integration tests.
+
+| Check | Result |
+|---|---|
+| `npm run lint` | Pass |
+| `npm run typecheck` | Pass |
+| `npm run test` (unit) | **91 passed** |
+| `npm run test:db` (PostgreSQL 16 + RLS) | **81 passed** |
+| `npx vite build` | Pass |
+| `npm run e2e` (browser + axe) | **66 passed** |
 
 ## Where things are
 
 ```
-src/domain/      pure rules - types, errors, commands, reducer, selectors, seed, message
-src/storage/     one state key plus a namespaced write probe; known failures tested
-src/state/       React binding: injects the clock, ids and persistence
-src/ui/          six views + shared components; hand-written CSS in src/styles
-src/i18n/        shared labels; additional view copy lives in components; no diacritics
-e2e/             Playwright: flow, accessibility, screenshots (tagged @screenshots)
+src/domain/        pure prototype rules (local, simulated actor)
+src/access/        pure account-role policy (not yet wired to the router)
+src/auth/          Supabase client - dormant, no project configured
+supabase/migrations/
+  202609090001_accounts_reports.sql    accounts, roles, abandoned citizen reports
+  202609090002_internal_operations.sql THE INTERNAL OPERATIONS SCHEMA
+supabase/tests/    TEST-ONLY Supabase platform stub - never apply to a real project
+db-tests/          integration tests: role matrix, lifecycle, attendance
+docs/ACCESS_MODEL.md   the role and RLS contract, and what is not enforced yet
+docs/DATABASE.md       schema semantics and how to run the DB tests
 ```
-
-The rule that matters when changing anything: **`applyCommand` in `src/domain/reducer.ts` is the
-only place state changes.** Adding a rule in a component instead puts it out of reach of the tests
-and one careless edit away from breaking.
 
 ## Non-negotiable rules for anyone continuing this work
 
-1. **The repository is public.** No real member names, phone numbers, addresses, incident records,
-   credentials, or private locations — not in code, fixtures, tests, screenshots, logs or CI
-   artifacts. Everything is invented and labelled as such.
-2. **Never fabricate a delivery or a response.** Sending a call creates zero responses and zero
-   delivery confirmations. `DeliveryAttempt.state` is `NIJE_POKUSANO` and nothing else while there
-   is no notification service. There is a unit test guarding this; do not relax it.
-3. **The role selector is a simulation, not authentication.** It must be labelled as such wherever
-   it appears and must never be demonstrated as a login.
-4. **Six facts stay separate**: call composed, service accepted, device acknowledged, person
-   answered, vehicle departed, incident closed. Never collapse them into one "success".
-5. **No official DVD Tivat logo or branding** unless the society supplies and approves it.
-6. **Do not copy FireApp** source, branding, assets or screen layouts. Documented workflow concepts
-   only, cited in [FIREAPP_REVIEW.md](../FIREAPP_REVIEW.md).
-7. **No public deployment**, no app store submission, no real alerts, no contacting anyone.
-8. **Do not invent** the society's escalation timing, operational authority or dispatch rules. Where
-   it is not known, it is an open question, not a default.
-9. Application labels: local language **without diacritics**. Repository documentation: English.
-10. If a check fails, fix the cause. Do not weaken assertions or re-run until it passes.
+1. **The repository is public.** No real member names, phone numbers, addresses,
+   incident records, credentials or private locations — not in code, fixtures,
+   tests, screenshots, logs or CI artifacts.
+2. **Never fabricate a delivery, a response or an attendance.** Publishing
+   creates a `QUEUED` outbox row and nothing else. No row may say "delivered"
+   while there is no transport. Guarded by tests; do not relax them.
+3. **Nine facts stay separate** — see
+   [ACCESS_MODEL.md §7](../ACCESS_MODEL.md#7-facts-that-are-never-inferred-from-each-other).
+   `DOLAZIM` never creates attendance. A vehicle departure never checks anybody in.
+4. **Authority is server-side.** RLS grants reads only; every operational write
+   goes through a `security definer` command. Do not add a client-writable path.
+5. **The role selector in the browser is a simulation, not authentication.** It
+   must stay labelled as such and must never be demonstrated as a login.
+6. **This is not a public emergency channel.** Never encourage anyone to use it
+   instead of calling the official fire service.
+7. **No official DVD Tivat logo or branding** unless the society supplies it.
+8. **No public deployment**, no app-store submission, no real alerts, no
+   contacting anyone, no service purchases.
+9. Application labels: local language **without diacritics**. Repository
+   documentation: English.
+10. If a check fails, fix the cause. Do not weaken assertions or re-run until
+    it passes.
+11. **Do not apply `supabase/tests/00_supabase_stub.sql` to a real project.**
 
-## Known limitations (by design, not defects)
+## Confirmed operating facts
 
-- Data lives in one browser's `localStorage`; nothing is shared between devices or users.
-- Use one demonstration tab. Concurrent tabs can overwrite each other's local records; there is no sync.
-- Stored JSON receives a top-level shape check, not complete nested schema validation; do not hand-edit it.
-- No authentication and no permission enforcement anywhere.
-- No notification is sent by any code path.
-- The 15/30/60-minute arrival bands are taken from the reference product and are unconfirmed
-  placeholders for Tivat.
-- A browser prototype is **no evidence** that a locked Android or iOS device will raise an alarm.
+From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
-## Outstanding questions
+| Fact | Value |
+|---|---|
+| Organisation | DVD Tivat only, not multi-tenant |
+| Members | 52 |
+| Shifts | None |
+| Assembly | From home to the base, collect equipment, then deploy |
+| Vehicles | One MAN firefighting vehicle, one firefighting SUV |
+| Existing alert channel | A Viber group — context only, no integration approved |
+| Phones | Both iPhone and Android |
+| Prototype data | All member rows and vehicle callsigns are fictional |
 
-Blocking, shaping and decisive questions for the society are listed in
-[PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society).
-The two that most affect the work:
+## Known limitations (accurate, not aspirational)
 
-- **A8/Q1** — is there any obligation to use a particular dispatch system? If yes, much of this plan
-  changes.
-- **Q12** — what does a custom build give DVD Tivat that an existing product at a published ~3 EUR
-  per operational member per year does not?
+- **No application code uses the new schema.** The browser prototype still runs
+  on device-local state with a simulated actor. The schema is verified; the
+  client is not connected to it.
+- **No Supabase project exists.** The migrations have never run against a hosted
+  database — only PostgreSQL 16, locally and in CI.
+- No notification transport of any kind. No push, SMS, email or call.
+- No session invalidation for a suspended account: suspension removes the role
+  immediately so every request is refused, but an already-issued JWT stays
+  syntactically valid until expiry.
+- No media upload pipeline, EXIF stripping or byte-signature validation.
+- No CSV export yet.
+- No owner/admin write commands for members, groups and vehicles yet.
+- A browser prototype is **no evidence** that a locked Android or iPhone will
+  raise an alarm.
+- No native application, no PWA decision made, no deployment.
+
+## Blockers needing an owner decision
+
+| # | Blocker | What is needed |
+|---|---|---|
+| B1 | No Supabase project | Approval to create one, and who pays above the free tier. Holds personal data, so it is a privacy decision too |
+| B2 | Email verification | A configurable SMTP provider. Supabase's default sender only reaches project-team addresses and is rate-limited; it cannot serve real registration |
+| B3 | Notification transport | PWA Web Push vs native must be investigated per platform before anything is promised. Apple Critical Alerts need an entitlement; Google Play restricts SMS permissions |
+| B4 | Emergency number to display | The non-emergency notice deliberately does not invent one. Confirm the exact number, or confirm that generic wording is preferred |
+| B5 | Response visibility | Currently every member called to an intervention sees the others' responses. Confirm, or restrict to command |
+| B6 | Second break-glass owner | Exactly one owner is enforced by a unique index. Decide whether a documented recovery owner is wanted |
+| B7 | Real roster and vehicle data | Still fictional. Needs approved data, and a private place to put it |
+| B8 | Merging the PR stack | #9–#12 and `f1111d5` are unmerged. Owner decides whether to merge the stack or this branch alone |
 
 ## Next concrete action
 
-The owner should run the merged prototype locally from `main`, using
-[DEMO_GUIDE.md](../DEMO_GUIDE.md), and record each issue with the screen, exact steps, expected
-result and actual result. Fix confirmed defects on a new branch, then use the same guide for the
-society meeting and answer
-[PRODUCT_PLAN.md §G](../PRODUCT_PLAN.md#g-questions-for-the-meeting-with-the-society). Do not begin
-Phase 2 until Q1 and Q12 are answered — the first can invalidate the plan, the second decides
-whether the project is worth continuing at all.
+Connect the application to the verified schema, in this order:
 
-See the last entry of [WORK_LOG.md](./WORK_LOG.md) for detail.
+1. A global authentication and access state that loads the profile, role and
+   status **before** protected routes render, replacing
+   `AccountAccessSetup`'s local `READY` step (which still switches on sign-in
+   alone without loading the server profile).
+2. Real protected routes driven by `current_dvd_role()`, replacing the
+   simulated actor selector on operational screens.
+3. The commander draft → review → publish flow against
+   `publish_intervention`.
+4. Check-in / check-out and the attendance board against the attendance
+   commands.
+
+Steps 1–2 need **B1** resolved first. Everything up to and including the schema
+is done and tested; what remains is wiring, and it cannot be honestly verified
+without a project.

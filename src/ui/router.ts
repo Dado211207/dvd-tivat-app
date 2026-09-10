@@ -8,15 +8,21 @@
 
 import { useEffect, useState } from 'react';
 
-export const ROUTES = ['dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija'] as const;
+export const ROUTES = ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'nalozi', 'istorija'] as const;
 export type Route = (typeof ROUTES)[number];
 
 /** The application opens into the duty officer's working screen, not a landing page. */
 export const DEFAULT_ROUTE: Route = 'dezurni';
 
 function readHash(): Route {
-  const raw = window.location.hash.replace(/^#\/?/, '');
+  const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0] ?? '';
   return (ROUTES as readonly string[]).includes(raw) ? (raw as Route) : DEFAULT_ROUTE;
+}
+
+/** Reads a non-secret draft hint from the hash. It is never an authority check. */
+export function readRouteParam(name: string): string | null {
+  const query = window.location.hash.split('?')[1];
+  return new URLSearchParams(query ?? '').get(name);
 }
 
 export function useRoute(): Route {

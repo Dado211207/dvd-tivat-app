@@ -11,12 +11,14 @@
  */
 
 import type {
+  CitizenReportKind,
   EtaMinutes,
   ExerciseKind,
   ExerciseStatus,
   Id,
   ResponseAnswer,
   RoleId,
+  SpecialtyId,
 } from './types';
 
 interface Base {
@@ -84,6 +86,55 @@ export interface ReturnVehicle extends Base {
   vehicleId: Id;
 }
 
+/** Saves a citizen report in this browser only. It sends nothing. */
+export interface SubmitCitizenReport extends Base {
+  type: 'SUBMIT_CITIZEN_REPORT';
+  kind: CitizenReportKind;
+  description: string;
+  incidentLocation: string;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number | null;
+    source?: 'DEVICE' | 'MAP_PIN';
+    capturedAt?: string;
+  } | null;
+  photoIncluded: boolean;
+}
+
+/** Marks the locally visible report as reviewed in the simulation. */
+export interface ReviewCitizenReport extends Base {
+  type: 'REVIEW_CITIZEN_REPORT';
+  reportId: Id;
+}
+
+/** Creates or updates a fictional member and keeps group membership symmetric. */
+export interface SaveDemoMember extends Base {
+  type: 'SAVE_DEMO_MEMBER';
+  memberId: Id | null;
+  name: string;
+  roleProposed: RoleId;
+  specialties: SpecialtyId[];
+  groupIds: Id[];
+  active: boolean;
+}
+
+/** Creates or renames a fictional group. Membership is edited through members. */
+export interface SaveDemoGroup extends Base {
+  type: 'SAVE_DEMO_GROUP';
+  groupId: Id | null;
+  name: string;
+}
+
+/** Creates or updates a fictional vehicle. Existing movement records keep its id. */
+export interface SaveDemoVehicle extends Base {
+  type: 'SAVE_DEMO_VEHICLE';
+  vehicleId: Id | null;
+  callsign: string;
+  name: string;
+  vehicleType: string;
+}
+
 /** Switches which fictional person the screen is pretending to be. Grants nothing. */
 export interface SetSimulatedActor extends Base {
   type: 'SET_SIMULATED_ACTOR';
@@ -105,6 +156,11 @@ export type Command =
   | CancelExercise
   | DepartVehicle
   | ReturnVehicle
+  | SubmitCitizenReport
+  | ReviewCitizenReport
+  | SaveDemoMember
+  | SaveDemoGroup
+  | SaveDemoVehicle
   | SetSimulatedActor
   | ResetDemoData;
 

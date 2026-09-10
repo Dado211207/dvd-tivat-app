@@ -33,7 +33,7 @@ function createCall(
       actorId: 'm-02',
       kind: 'VJEZBA',
       title: 'Vjezba: provjera opreme',
-      instructions: 'Okupljanje u domu.',
+      instructions: 'Okupljanje u bazi DVD Tivat.',
       incidentLocation: 'Poligon (izmisljena lokacija)',
       reporterLocation: '',
       memberIds: overrides.memberIds ?? [],
@@ -291,17 +291,17 @@ describe('responses and totals', () => {
     expect(state.responses[0]!.etaMinutes).toBeNull();
   });
 
-  it('keeps "direct to location" independent of the answer, but not with "ne mogu"', () => {
+  it('normalizes every response to the base-first DVD Tivat route', () => {
     const { ctx } = makeCtx();
     let state = createCall(emptyState(), ctx);
     const call = firstCall(state);
 
     state = must(state, { type: 'SUBMIT_RESPONSE', commandId: cid(), actorId: 'm-04', callId: call.id, memberId: 'm-04', answer: 'DOLAZIM', etaMinutes: null, directToLocation: true }, ctx);
-    expect(state.responses.find((r) => r.memberId === 'm-04')!.directToLocation).toBe(true);
+    expect(state.responses.find((r) => r.memberId === 'm-04')!.directToLocation).toBe(false);
 
     state = must(state, { type: 'SUBMIT_RESPONSE', commandId: cid(), actorId: 'm-05', callId: call.id, memberId: 'm-05', answer: 'NE_MOGU', etaMinutes: null, directToLocation: true }, ctx);
     expect(state.responses.find((r) => r.memberId === 'm-05')!.directToLocation).toBe(false);
-    expect(getResponseTotals(state, call.id).direktnoNaLokaciju).toBe(1);
+    expect(getResponseTotals(state, call.id).direktnoNaLokaciju).toBe(0);
   });
 });
 

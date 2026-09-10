@@ -1,22 +1,26 @@
 # DVD Tivat — Product plan
 
-Status: **draft for discussion with the society.** Nothing here is agreed with DVD Tivat yet.
+Status: **operating baseline confirmed by a DVD Tivat firefighter-rescuer; product rules remain a
+draft for an authorised decision.**
 Written 7 September 2026. Documentation language: English. Application labels: local language,
 without diacritics.
 
 Companion documents: [FIREAPP_REVIEW.md](./FIREAPP_REVIEW.md) (what the reference product
 documents and how well we verified it), [ARCHITECTURE.md](./ARCHITECTURE.md) (how the prototype is
-built), [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) (where the work currently stands).
+built), [PRODUCTION_ARCHITECTURE.md](./PRODUCTION_ARCHITECTURE.md) (the gated path after approval),
+[ACCOUNTS_REPORTS_MAP_PLAN.md](./ACCOUNTS_REPORTS_MAP_PLAN.md) (the detailed verified-account,
+owner-controlled role, report, photo and map design),
+[ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) (where the work currently stands).
 
 ---
 
 ## 0. One paragraph
 
-**Owner update, 2026-09-07:** the current expectation is that only DVD Tivat will use the app.
-This remains **unconfirmed by the society**. Personalise Phase 1 for DVD Tivat; do not add an
-organisation switcher, neighbouring-society routing or multi-tenant administration. Ask the society
-to confirm this at the meeting before treating it as a production constraint. See
-[DESIGN_DIRECTION.md](./DESIGN_DIRECTION.md) and [DEMO_GUIDE.md](./DEMO_GUIDE.md).
+**Member confirmation, 2026-09-09:** the prototype owner is a DVD Tivat firefighter-rescuer and
+confirmed that this product is for DVD Tivat, with 52 members, no shifts, assembly at the base before
+deployment, a Viber group as the current alert channel, one MAN firefighting vehicle, one
+firefighting SUV, and both iPhone and Android phones. These current operating facts are recorded in
+[SOCIETY_PROFILE.md](./SOCIETY_PROFILE.md); no organisation switcher or multi-tenant UI is added.
 
 A coordination tool for a volunteer fire society: someone authorised composes a call-out, chooses
 exactly who it goes to, confirms it, and then watches real answers arrive — while vehicle
@@ -36,7 +40,7 @@ that limitation visible rather than to hide it.
 | **Duty officer / dispatcher** (*ovlasteni dezurni*) | Turn a phone call at 03:00 into a call-out that reaches the right people, in under a minute, without waking the whole roster for a chimney fire | Sends to the wrong group; cannot tell who is actually coming; has to keep a tally on paper |
 | **Operational member** (*operativni clan*) | Be woken up, understand in one screen what and where, answer honestly (including "not this time"), and correct that answer when circumstances change | Alarm does not wake the phone; cannot find the address; answered "coming" then got stuck and had no way to say so |
 | **Society administrator** (*administrator drustva*) | Keep the roster, groups, specialties and vehicles correct; see the record afterwards | Roster drifts out of date, so calls go to people who left |
-| **Station display** (*prikaz u domu*) | Show whoever walks into the station, from across the room, who is coming and what is out | Shows a number that is not true; or needs someone to log in and operate it |
+| **Station display** (*prikaz u bazi*) | Show whoever walks into the station, from across the room, who is coming and what is out | Shows a number that is not true; or needs someone to log in and operate it |
 | *(Future, not in scope)* Society leadership | Statistics and reports for the annual record | — |
 
 ### A.2 What the prototype does today
@@ -47,13 +51,25 @@ Everything in this list is implemented and running in the repository.
 - Select recipients as individuals, as predefined groups, or both — deduplicated.
 - **Review the exact message text and the exact recipient list**, then confirm as a separate act.
 - Watch responses arrive from simulated members; nothing is answered on their behalf.
-- Members answer *Dolazim* / *Dolazim kasnije* (with a 15/30/60-minute band) / *Ne mogu*, with an
-  independent "direct to the location" flag, and can change their answer while the exercise is open.
+- Members answer *Dolazim* / *Dolazim kasnije* (with a 15/30/60-minute band) / *Ne mogu*, see the
+  base assembly instruction, and can change their answer while the exercise is open.
+- Scale and navigation are exercised with 52 fictional members, a searchable recipient roster,
+  two fictional vehicle records and representative iPhone and Android viewport sizes.
 - Explicitly move the exercise between operational statuses; cancel or close it behind a confirmation.
 - Log vehicle departures and returns as explicit, independent actions.
 - A large-format station display view.
 - Roster, exercise history, a timestamped activity log naming the simulated actor, and a
   confirmed reset that clears only this prototype's own stored data.
+- A **local fictional-data editor** for an administrator simulation: create or update members,
+  maintain group membership, add or rename groups, add or update vehicles, and deactivate members
+  without deleting history. It stores only in this browser, accepts no phone/email field, and is
+  explicitly not authentication or real permission enforcement.
+- A **local citizen-report demonstration**: event type, description, typed place, optional
+  device location requested only after an explicit press, optional in-session photo preview,
+  exact review, local save, and a separate "reviewed in simulation" action for DVD Tivat.
+  A reviewed report can prefill a dispatcher draft, but the duty officer must still choose
+  recipients and confirm the normal preview. It sends nothing and cannot itself create a
+  call-out, delivery, response or vehicle movement.
 
 ### A.3 What the prototype deliberately does **not** do
 
@@ -66,7 +82,7 @@ Not "not yet built" — **deliberately absent, because pretending would be the f
 | Shared data between devices | Data lives in one browser's `localStorage`. Two phones running the prototype see two unrelated worlds |
 | Live personnel tracking | Out of scope by instruction, and a significant privacy decision the society has not made |
 | Real member data of any kind | The repository is public. Every person, phone label, vehicle and address in it is invented |
-| Citizen reporting, radius dispatch, door control, official system integration | Out of scope for this stage; recorded in §D as later possibilities only |
+| Real citizen-report delivery, radius dispatch, door control, official system integration | The prototype now demonstrates local intake only. No report reaches DVD Tivat or any service |
 
 ### A.4 The gap between prototype and production, stated plainly
 
@@ -81,11 +97,14 @@ It is not evidence of anything else. In particular it is not evidence that:
 
 Each of those is a separate piece of work with its own acceptance criteria, listed in §D.
 
-### A.5 Assumptions we made, which the society must confirm or correct
+### A.5 Confirmed operating facts and proposed product rules
 
-Each is a guess. Each is cheap to change now and expensive to change later.
+Items A7 and A11–A12 are confirmed current operating facts. The remaining items are proposed
+product rules that still need an authorised decision; each is cheap to change now and expensive to
+change later.
 
-1. **A1** — The first useful thing is *internal call-out and response*, not citizen reporting.
+1. **A1** — Internal call-out and response remains the operational core. Citizen reporting is now
+   demonstrated only as a local requirements prototype; its real use is unconfirmed.
 2. **A2** — Someone at the society is authorised to call people out; there is a human decision, not
    an automatic trigger.
 3. **A3** — Members answer on their own phones, in the local language.
@@ -93,8 +112,8 @@ Each is a guess. Each is cheap to change now and expensive to change later.
 5. **A5** — Response categories map onto how Tivat actually works: coming / coming later / cannot.
    The 15/30/60-minute bands are taken from the reference product and are a placeholder.
 6. **A6** — The society wants a record afterwards (who was called, who answered, what went out).
-7. **A7** — Roughly 20–60 operational members; this is a guess and changes nothing structural, but
-   it does change hosting cost.
+7. **A7** — DVD Tivat currently has 52 members. The future production roster still needs an
+   authorised source of truth for who is active and operational.
 8. **A8** — There is no legal or institutional obligation forcing a particular dispatch system.
    **If this is wrong it can invalidate the whole project**, and it must be checked first.
 9. **A9** — Only one exercise or incident is open at a time. The prototype enforces this, because
@@ -103,6 +122,10 @@ Each is a guess. Each is cheap to change now and expensive to change later.
    the rule in `applyCommand`, but it changes the station display and the member's screen too.
 10. **A10** — Members are called out by group and by name from a roster the society maintains
     itself; there is no automatic selection by availability, skill or proximity.
+11. **A11** — There are no shifts. Called members travel from home to the base, collect equipment,
+    then deploy. The prototype therefore creates no direct-to-incident response.
+12. **A12** — The existing Viber group remains a trusted parallel fallback during any pilot; the
+    custom application does not silently replace it.
 
 ### A.6 Deliberate non-goals for the whole product, not just the prototype
 
@@ -115,6 +138,12 @@ already trusts must remain in place.
 
 ## B. Roles and permissions
 
+The four-role matrix below is retained as the original call-out prototype chronology. The proposed
+production account model now has five roles (`OWNER`, `ADMIN`, `COMMANDER`, `FIREFIGHTER`,
+`CITIZEN`) and is authoritative in [ACCOUNTS_REPORTS_MAP_PLAN.md §3](./ACCOUNTS_REPORTS_MAP_PLAN.md#3-roles-and-permissions).
+In particular, every new verified account starts as a citizen and only the owner can grant a higher
+role. The role selector in this prototype remains a simulation and grants nothing.
+
 ### B.1 The four roles
 
 | Role | Local label | Purpose |
@@ -122,7 +151,7 @@ already trusts must remain in place.
 | Administrator | *Administrator drustva* | Roster, groups, specialties, vehicles, and the society's record |
 | Authorised dispatcher | *Ovlasteni dezurni* | May raise, change status of, cancel and close a call-out |
 | Operational member | *Operativni clan* | Sees calls addressed to them; answers; logs vehicle movement |
-| Station display | *Prikaz u domu* | Read-only wall display, no interaction, minimum information |
+| Station display | *Prikaz u bazi* | Read-only wall display, no interaction, minimum information |
 
 ### B.2 Proposed permission matrix
 
@@ -223,7 +252,8 @@ The full set is modelled so that the shape is right for later. **In the prototyp
 `NIJE_POKUSANO` is ever produced**, with `channel: NEMA`. This is enforced by a unit test.
 
 **`MemberResponse`** — `id`, `callId`, `memberId`, `answer ∈ { DOLAZIM, DOLAZIM_KASNIJE, NE_MOGU }`,
-`etaMinutes` (only with `DOLAZIM_KASNIJE`), `directToLocation` (boolean, independent of the answer),
+`etaMinutes` (only with `DOLAZIM_KASNIJE`), `directToLocation` (legacy compatibility boolean; the
+DVD Tivat profile always records `false` because assembly is at the base),
 `respondedAt`, `updatedAt`, `revision`.
 
 At most one response per `(callId, memberId)`. Changing an answer updates that row, increments
@@ -233,6 +263,12 @@ another member.
 **`VehicleMovement`** — `id`, `exerciseId`, `vehicleId`, `purpose`, `departedAt`, `departedBy`,
 `returnedAt`, `returnedBy`. A vehicle's state is *derived* — out if it has a movement with no
 `returnedAt`, otherwise in the station. Derived from movements only, never from responses.
+
+**`CitizenReport`** — a local intake record kept separate from every operational fact. `kind`,
+`description`, typed `incidentLocation`, optional coordinates captured only after explicit browser
+permission, `photoIncluded` (boolean only), `status`, `createdAt`, `reviewedAt`, `reviewedBy`.
+The photograph's bytes and local filename are never persisted. `status` can only say
+`SACUVANA_LOKALNO` or `PREGLEDANA_U_SIMULACIJI`; neither claims delivery, acceptance or dispatch.
 
 **`ActivityEntry`** — append-only. `id`, `at`, `actorId`, `actorName`, `kind`, `summary`,
 `exerciseId`. Every state change writes one. Nothing rewrites or deletes them except the explicit
@@ -275,6 +311,10 @@ Acceptance:
 - [x] No real people, no real numbers, no real addresses anywhere in the repository.
 - [x] Simulation and non-delivery are visible on screen, not only in documentation.
 - [x] Unit tests over the domain rules; browser tests over the whole flow at phone and desktop sizes; automated accessibility checks with material findings fixed.
+- [x] Citizen-report intake can be demonstrated end to end in one browser while structurally
+      creating no exercise, call, delivery, member response or vehicle movement.
+- [x] Fictional members, groups and vehicles can be maintained locally while group membership stays
+      symmetric and inactive members are excluded from new recipient resolution.
 
 ### Phase 2 — Real accounts, server authorisation, shared data
 
@@ -349,7 +389,7 @@ Entry conditions, all of which must hold before this phase is even planned:
 
 ### Later possibilities, recorded but not planned
 
-Citizen reporting; automatic regional dispatch; hydrant and AED map layers; availability scheduling;
+Real citizen-report delivery; automatic regional dispatch; hydrant and AED map layers; availability scheduling;
 station door control; integration with official dispatch systems; statistics and annual reports;
 station display hardware. Each is a separate decision. None is implied by anything built so far.
 
@@ -393,12 +433,13 @@ station display hardware. Each is a separate decision. None is implied by anythi
    institutional obligation to use a particular system? *(Assumption A8 — check this first.)*
 2. Who may send, cancel and close a call-out? Is that the same person at 03:00 as at 15:00?
 3. What must a member see in the first two seconds, before scrolling?
-4. What happens today when a member has no internet, does not answer, or their phone fails? What is
-   the fallback, and would it stay in place?
+4. DVD Tivat uses a Viber group today. What happens when a member has no internet, does not
+   answer, or their phone fails, and will Viber stay in place during a pilot?
 
 **Shaping — they change scope and effort**
 
-5. How many operational members, which specialties, and roughly what mix of Android and iPhone?
+5. Of the confirmed 52 members, which are operational, which specialties should the production
+   roster record, and what exact mix of Android and iPhone needs physical testing?
 6. How is vehicle departure recorded today, and who does it?
 7. Should the station display show names, or only totals? Who walks past that screen?
 8. Are the response options right for Tivat, and are 15/30/60 minutes the right bands, or should

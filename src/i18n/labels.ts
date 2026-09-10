@@ -30,16 +30,34 @@ export const NAV = {
   dezurni: 'Dezurni',
   clan: 'Clan',
   vozila: 'Vozila',
-  prikaz: 'Prikaz u domu',
+  prikaz: 'Prikaz u bazi',
   clanovi: 'Clanovi',
+  nalozi: 'Nalozi i pristup',
   istorija: 'Istorija',
+  dojava: 'Prijava gradjana (istrazivanje)',
+} as const;
+
+/**
+ * Shown wherever the abandoned citizen-report research is reachable. The
+ * application must never compete with the official emergency service, and the
+ * exact number to display is an owner decision (see docs/ai/PROJECT_STATE.md),
+ * so this wording does not invent one.
+ */
+export const NOT_AN_EMERGENCY_CHANNEL =
+  'Ovo nije kanal za prijavu hitnih slucajeva. Kod pozara ili nesrece odmah pozovite zvanicnu vatrogasnu sluzbu telefonom. Ovaj ekran je napusteni istrazivacki prototip: nista se ne salje niti stize do DVD Tivat-a.';
+
+export const CITIZEN_REPORT_KIND_LABEL = {
+  POZAR_ILI_DIM: 'Pozar ili dim',
+  SAOBRACAJNA_NEZGODA: 'Saobracajna nezgoda',
+  TEHNICKA_POMOC: 'Tehnicka pomoc',
+  DRUGO: 'Drugo',
 } as const;
 
 export const ROLE_LABEL: Record<RoleId, string> = {
   ADMIN: 'Administrator drustva',
   DEZURNI: 'Ovlasteni dezurni',
   CLAN: 'Operativni clan',
-  PRIKAZ: 'Prikaz u domu',
+  PRIKAZ: 'Prikaz u bazi',
 };
 
 export const SPECIALTY_LABEL: Record<SpecialtyId, string> = {
@@ -93,7 +111,7 @@ export const DELIVERY_LABEL: Record<DeliveryState, string> = {
 };
 
 export const VEHICLE_STATE_LABEL: Record<VehicleState, string> = {
-  U_DOMU: 'U domu',
+  U_DOMU: 'U bazi',
   NA_ZADATKU: 'Izaslo',
 };
 
@@ -113,6 +131,9 @@ export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
   VJEZBA_OTKAZANA: 'Vjezba otkazana',
   VOZILO_IZASLO: 'Vozilo izaslo',
   VOZILO_VRACENO: 'Vozilo vraceno',
+  PROBNI_CLAN_SACUVAN: 'Probni clan sacuvan',
+  PROBNA_GRUPA_SACUVANA: 'Probna grupa sacuvana',
+  PROBNO_VOZILO_SACUVANO: 'Probno vozilo sacuvano',
   PODACI_RESETOVANI: 'Podaci resetovani',
 };
 
@@ -162,7 +183,7 @@ export const T = {
   changeAnswer: 'Promijeni odgovor',
   etaQuestion: 'Za koliko stizete?',
   etaMinutes: 'minuta',
-  directToLocation: 'Idem direktno na lokaciju, ne u dom',
+  directToLocation: 'Naslijedjeno polje; DVD Tivat se prvo okuplja u bazi',
   answerRecorded: 'Odgovor je zabiljezen samo u ovom pregledacu.',
   openInMaps: 'Otvori lokaciju u mapama',
   openInMapsHint: 'Otvara vanjsku uslugu u novoj kartici.',
@@ -176,7 +197,7 @@ export const T = {
   purpose: 'Svrha',
 
   // Display
-  displayTitle: 'Prikaz u domu',
+  displayTitle: 'Prikaz u bazi',
   displayNote: 'Prikazuje samo ono sto je uneseno u simulaciju.',
 
   // Roster

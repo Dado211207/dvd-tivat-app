@@ -72,6 +72,52 @@ export interface Vehicle {
 }
 
 // ---------------------------------------------------------------------------
+// Citizen report (prototype intake only)
+// ---------------------------------------------------------------------------
+
+/** Unconfirmed categories for the prototype intake form. DVD Tivat must approve them. */
+export type CitizenReportKind =
+  | 'POZAR_ILI_DIM'
+  | 'SAOBRACAJNA_NEZGODA'
+  | 'TEHNICKA_POMOC'
+  | 'DRUGO';
+
+/**
+ * Honest local states. Neither value claims that a network request, push alert
+ * or emergency dispatch happened. The prototype has no such channel.
+ */
+export type CitizenReportStatus = 'SACUVANA_LOKALNO' | 'PREGLEDANA_U_SIMULACIJI';
+
+export interface ReportCoordinates {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number | null;
+  /** How this point was selected. Device position is not automatically the incident. */
+  source?: 'DEVICE' | 'MAP_PIN';
+  /** ISO timestamp supplied by the browser at the explicit selection action. */
+  capturedAt?: Timestamp;
+}
+
+export interface CitizenReport {
+  id: Id;
+  kind: CitizenReportKind;
+  description: string;
+  /** A landmark or address typed by the reporting person. */
+  incidentLocation: string;
+  /** Present only after the person explicitly allowed browser location access. */
+  coordinates: ReportCoordinates | null;
+  /**
+   * Only the fact that a photo was included is retained. Image bytes and the
+   * local filename stay in the form session and never enter localStorage.
+   */
+  photoIncluded: boolean;
+  status: CitizenReportStatus;
+  createdAt: Timestamp;
+  reviewedAt: Timestamp | null;
+  reviewedBy: Id | null;
+}
+
+// ---------------------------------------------------------------------------
 // Exercise (the incident itself)
 // ---------------------------------------------------------------------------
 
@@ -193,7 +239,10 @@ export interface MemberResponse {
   answer: ResponseAnswer;
   /** Only meaningful with DOLAZIM_KASNIJE; null otherwise. */
   etaMinutes: EtaMinutes | null;
-  /** Going straight to the incident instead of to the station. Independent of `answer`. */
+  /**
+   * Legacy compatibility field. The DVD Tivat profile always writes false:
+   * members first assemble at the base to collect equipment.
+   */
   directToLocation: boolean;
   respondedAt: Timestamp;
   updatedAt: Timestamp;
@@ -234,6 +283,9 @@ export type ActivityKind =
   | 'VJEZBA_OTKAZANA'
   | 'VOZILO_IZASLO'
   | 'VOZILO_VRACENO'
+  | 'PROBNI_CLAN_SACUVAN'
+  | 'PROBNA_GRUPA_SACUVANA'
+  | 'PROBNO_VOZILO_SACUVANO'
   | 'PODACI_RESETOVANI';
 
 export interface ActivityEntry {
@@ -259,13 +311,14 @@ export interface SimulationState {
   viewRole: RoleId;
 }
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface AppState {
   schemaVersion: number;
   members: Member[];
   groups: Group[];
   vehicles: Vehicle[];
+  citizenReports: CitizenReport[];
   exercises: Exercise[];
   calls: Call[];
   deliveryAttempts: DeliveryAttempt[];

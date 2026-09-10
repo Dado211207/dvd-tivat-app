@@ -56,7 +56,6 @@ export function AnswerChip({ response }: { response: MemberResponse | undefined 
 
   const detail = [
     response.etaMinutes ? `${response.etaMinutes} min` : null,
-    response.directToLocation ? 'direktno na lokaciju' : null,
   ]
     .filter(Boolean)
     .join(', ');

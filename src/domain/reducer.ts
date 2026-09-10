@@ -25,6 +25,7 @@ import {
   type ActivityKind,
   type AppState,
   type Call,
+  type CitizenReport,
   type DeliveryAttempt,
   type Exercise,
   type Id,
@@ -89,6 +90,37 @@ export function resolveRecipients(state: AppState, memberIds: Id[], groupIds: Id
 
 const openMovementFor = (state: AppState, vehicleId: Id): VehicleMovement | undefined =>
   state.vehicleMovements.find((m) => m.vehicleId === vehicleId && m.returnedAt === null);
+
+function coordinatesAreValid(
+  coordinates: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number | null;
+    source?: 'DEVICE' | 'MAP_PIN';
+    capturedAt?: string;
+  },
+): boolean {
+  const sourceValid = coordinates.source === undefined ||
+    coordinates.source === 'DEVICE' || coordinates.source === 'MAP_PIN';
+  const timestampValid = coordinates.capturedAt === undefined ||
+    Number.isFinite(Date.parse(coordinates.capturedAt));
+  const provenanceComplete =
+    (coordinates.source === undefined && coordinates.capturedAt === undefined) ||
+    (coordinates.source !== undefined && coordinates.capturedAt !== undefined);
+  return (
+    Number.isFinite(coordinates.latitude) &&
+    Number.isFinite(coordinates.longitude) &&
+    coordinates.latitude >= -90 &&
+    coordinates.latitude <= 90 &&
+    coordinates.longitude >= -180 &&
+    coordinates.longitude <= 180 &&
+    (coordinates.accuracyMeters === null ||
+      (Number.isFinite(coordinates.accuracyMeters) && coordinates.accuracyMeters >= 0))
+    && sourceValid
+    && timestampValid
+    && provenanceComplete
+  );
+}
 
 // ---------------------------------------------------------------------------
 // applyCommand
@@ -240,8 +272,10 @@ export function applyCommand(state: AppState, command: Command, ctx: Ctx): Resul
       }
       // An arrival band only means something with "dolazim kasnije".
       const etaMinutes = later ? command.etaMinutes : null;
-      // Nobody arrives directly at a location they said they are not going to.
-      const directToLocation = command.answer === 'NE_MOGU' ? false : command.directToLocation;
+      // DVD Tivat's reported operating model is base-first: members collect
+      // equipment at the base before deployment. Keep the stored field for
+      // schema compatibility, but never create a direct-to-location response.
+      const directToLocation = false;
 
       const at = ctx.now();
       const existing = state.responses.find(
@@ -309,9 +343,7 @@ export function applyCommand(state: AppState, command: Command, ctx: Ctx): Resul
             ctx,
             command.memberId,
             'ODGOVOR_DAT',
-            `Odgovor: ${command.answer}${etaMinutes ? ` (${etaMinutes} min)` : ''}${
-              directToLocation ? ', direktno na lokaciju' : ''
-            }.`,
+            `Odgovor: ${command.answer}${etaMinutes ? ` (${etaMinutes} min)` : ''}.`,
             exercise.id,
           ),
           ...state.activity,
@@ -458,6 +490,200 @@ export function applyCommand(state: AppState, command: Command, ctx: Ctx): Resul
             'VOZILO_VRACENO',
             `Vozilo ${vehicle.callsign} evidentirano kao vraceno.`,
             movement.exerciseId,
+          ),
+          ...state.activity,
+        ],
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'SUBMIT_CITIZEN_REPORT': {
+      if (isBlank(command.description)) return err('NEDOSTAJE_OPIS_PRIJAVE', 'reportDescription');
+      if (isBlank(command.incidentLocation) && command.coordinates === null) {
+        return err('NEDOSTAJE_LOKACIJA_PRIJAVE', 'reportLocation');
+      }
+      if (command.coordinates !== null && !coordinatesAreValid(command.coordinates)) {
+        return err('NEISPRAVNE_KOORDINATE', 'reportLocation');
+      }
+
+      const report: CitizenReport = {
+        id: ctx.id(),
+        kind: command.kind,
+        description: command.description.trim(),
+        incidentLocation: command.incidentLocation.trim(),
+        coordinates: command.coordinates ? { ...command.coordinates } : null,
+        photoIncluded: command.photoIncluded,
+        status: 'SACUVANA_LOKALNO',
+        createdAt: ctx.now(),
+        reviewedAt: null,
+        reviewedBy: null,
+      };
+
+      return ok({
+        ...state,
+        citizenReports: [report, ...state.citizenReports],
+        // A report is intake data only. It creates no exercise, call, delivery
+        // attempt, response or vehicle movement.
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'REVIEW_CITIZEN_REPORT': {
+      const report = state.citizenReports.find((item) => item.id === command.reportId);
+      if (!report) return err('PRIJAVA_NE_POSTOJI');
+      if (report.status === 'PREGLEDANA_U_SIMULACIJI') {
+        return ok({ ...state, appliedCommandIds: remember(state, command.commandId) });
+      }
+      const at = ctx.now();
+      return ok({
+        ...state,
+        citizenReports: state.citizenReports.map((item) =>
+          item.id === report.id
+            ? {
+                ...item,
+                status: 'PREGLEDANA_U_SIMULACIJI' as const,
+                reviewedAt: at,
+                reviewedBy: command.actorId,
+              }
+            : item,
+        ),
+        // Reviewing is not accepting an incident and does not dispatch anyone.
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'SAVE_DEMO_MEMBER': {
+      if (isBlank(command.name)) return err('NEDOSTAJE_IME_CLANA', 'demoMemberName');
+      const existing = command.memberId === null
+        ? undefined
+        : state.members.find((member) => member.id === command.memberId);
+      if (command.memberId !== null && !existing) return err('CLAN_ZA_IZMJENU_NE_POSTOJI');
+      if (command.groupIds.some((id) => !state.groups.some((group) => group.id === id))) {
+        return err('NEPOZNATA_GRUPA', 'demoMemberGroups');
+      }
+
+      const memberId = existing?.id ?? ctx.id();
+      const groupIds = [...new Set(command.groupIds)];
+      const specialties = [...new Set(command.specialties)];
+      const member = {
+        id: memberId,
+        name: command.name.trim(),
+        roleProposed: command.roleProposed,
+        specialties,
+        groupIds,
+        contactLabel: existing?.contactLabel ?? `demo-kontakt-${String(state.members.length + 1).padStart(2, '0')}`,
+        active: command.active,
+      };
+
+      const members = existing
+        ? state.members.map((item) => (item.id === memberId ? member : item))
+        : [...state.members, member];
+      const groups = state.groups.map((group) => ({
+        ...group,
+        memberIds: groupIds.includes(group.id)
+          ? [...new Set([...group.memberIds, memberId])]
+          : group.memberIds.filter((id) => id !== memberId),
+      }));
+
+      return ok({
+        ...state,
+        members,
+        groups,
+        simulation: state.simulation.actorId === memberId
+          ? { ...state.simulation, viewRole: member.roleProposed }
+          : state.simulation,
+        activity: [
+          logEntry(
+            state,
+            ctx,
+            command.actorId,
+            'PROBNI_CLAN_SACUVAN',
+            `${existing ? 'Azuriran' : 'Dodat'} probni clan "${member.name}".`,
+            null,
+          ),
+          ...state.activity,
+        ],
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'SAVE_DEMO_GROUP': {
+      if (isBlank(command.name)) return err('NEDOSTAJE_NAZIV_GRUPE', 'demoGroupName');
+      const existing = command.groupId === null
+        ? undefined
+        : state.groups.find((group) => group.id === command.groupId);
+      if (command.groupId !== null && !existing) return err('GRUPA_ZA_IZMJENU_NE_POSTOJI');
+      const normalized = command.name.trim().toLocaleLowerCase('sr-Latn');
+      if (state.groups.some(
+        (group) => group.id !== existing?.id && group.name.toLocaleLowerCase('sr-Latn') === normalized,
+      )) {
+        return err('DUPLIKAT_NAZIVA_GRUPE', 'demoGroupName');
+      }
+
+      const group = {
+        id: existing?.id ?? ctx.id(),
+        name: command.name.trim(),
+        memberIds: existing ? [...existing.memberIds] : [],
+      };
+      return ok({
+        ...state,
+        groups: existing
+          ? state.groups.map((item) => (item.id === group.id ? group : item))
+          : [...state.groups, group],
+        activity: [
+          logEntry(
+            state,
+            ctx,
+            command.actorId,
+            'PROBNA_GRUPA_SACUVANA',
+            `${existing ? 'Azurirana' : 'Dodata'} probna grupa "${group.name}".`,
+            null,
+          ),
+          ...state.activity,
+        ],
+        appliedCommandIds: remember(state, command.commandId),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    case 'SAVE_DEMO_VEHICLE': {
+      if (isBlank(command.callsign)) return err('NEDOSTAJE_OZNAKA_VOZILA', 'demoVehicleCallsign');
+      if (isBlank(command.name)) return err('NEDOSTAJE_NAZIV_VOZILA', 'demoVehicleName');
+      if (isBlank(command.vehicleType)) return err('NEDOSTAJE_VRSTA_VOZILA', 'demoVehicleType');
+      const existing = command.vehicleId === null
+        ? undefined
+        : state.vehicles.find((vehicle) => vehicle.id === command.vehicleId);
+      if (command.vehicleId !== null && !existing) return err('VOZILO_ZA_IZMJENU_NE_POSTOJI');
+      const normalized = command.callsign.trim().toLocaleLowerCase('sr-Latn');
+      if (state.vehicles.some(
+        (vehicle) => vehicle.id !== existing?.id && vehicle.callsign.toLocaleLowerCase('sr-Latn') === normalized,
+      )) {
+        return err('DUPLIKAT_OZNAKE_VOZILA', 'demoVehicleCallsign');
+      }
+
+      const vehicle = {
+        id: existing?.id ?? ctx.id(),
+        callsign: command.callsign.trim(),
+        name: command.name.trim(),
+        type: command.vehicleType.trim(),
+      };
+      return ok({
+        ...state,
+        vehicles: existing
+          ? state.vehicles.map((item) => (item.id === vehicle.id ? vehicle : item))
+          : [...state.vehicles, vehicle],
+        activity: [
+          logEntry(
+            state,
+            ctx,
+            command.actorId,
+            'PROBNO_VOZILO_SACUVANO',
+            `${existing ? 'Azurirano' : 'Dodato'} probno vozilo ${vehicle.callsign}.`,
+            null,
           ),
           ...state.activity,
         ],
