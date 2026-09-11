@@ -90,6 +90,12 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await switchActor(page, 'Marko Perovic');
     await capture(page, '07a-upravljanje-probnim-podacima.png');
 
+    // 7b. The one server-backed screen. This build has no project configured -
+    // which is exactly what CI and a fresh checkout see - so it shows the honest
+    // "not configured" state rather than a signed-in session that does not exist.
+    await goTo(page, 'nalozi');
+    await capture(page, '07b-nalozi-i-pristup.png');
+
     // 8. History and the activity log, after closing.
     await goTo(page, 'dezurni');
     await page.getByRole('button', { name: 'Zatvori vjezbu' }).click();

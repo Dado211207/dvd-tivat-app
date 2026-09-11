@@ -75,17 +75,24 @@ caller cannot execute it at all.
 
 ### Owner bootstrap and recovery
 
-Deliberately manual and one-time. After the owner's account exists and its
-profile is complete, an operator with database access runs:
+Deliberately manual and one-time, in the Supabase dashboard. The full procedure,
+written for somebody who is not a developer, is
+[OWNER_BOOTSTRAP.md](./OWNER_BOOTSTRAP.md) — including what the single-owner
+index's rejection looks like and how to transfer ownership without ever leaving
+the system with two owners or none.
 
-```sql
-update public.access_grants set role = 'OWNER' where user_id = '<the exact auth.users uuid>';
-```
+That document is not merely checked, it is **executed**: `db-tests/bootstrap.test.ts`
+reads the SQL out of the markdown and runs it against a schema built from zero.
+A runbook that has quietly stopped working is worse than no runbook, because the
+person following it concludes the system is broken rather than the instructions.
 
-Recovery uses the same statement. There is no in-application path to owner, by
-design. **Open owner decision:** whether a documented second break-glass owner
-is wanted; a multi-owner design needs the single-owner index relaxed and a
-separate review.
+There is no in-application path to owner, by design. Whoever controls the
+Supabase dashboard controls this system, which is stated in the runbook rather
+than left for somebody to work out.
+
+**Owner decision, recorded:** exactly one owner, no documented second break-glass
+owner (blocker B6). A multi-owner design needs the single-owner index relaxed and
+its reporting and audit consequences decided first.
 
 ## 4. What the roles *cannot* do
 
@@ -100,9 +107,35 @@ Enforced and tested:
 
 ## 5. Writes are impossible from a client
 
-**RLS grants reads only.** Every operational write goes through a
-`security definer` function, so there is no direct `INSERT`/`UPDATE` path a
-client could use to forge a fact:
+Two independent layers have to agree before anything is written.
+
+**Layer one: privileges.** `authenticated` holds `SELECT` on every table and
+`INSERT` on exactly three — the three that have an `INSERT` policy. It holds no
+`UPDATE`, no `DELETE` and no `TRUNCATE` anywhere. `anon` holds nothing at all:
+no table privilege, and no `EXECUTE` on any function this project defines.
+
+**Layer two: row level security.** Enabled on every table, with `SELECT`
+policies only apart from those same three inserts, so even a privilege granted
+by mistake yields no rows.
+
+> **Fixed here.** A Supabase project ships with
+> `alter default privileges in schema public grant all on tables to anon,
+> authenticated, service_role`, so every table these migrations create arrived on
+> the hosted project with `INSERT`, `UPDATE`, `DELETE` and `TRUNCATE` already
+> granted to `authenticated`. `202609090002` revoked them from `anon` but for
+> `authenticated` only *added* `select`, because on a bare PostgreSQL instance
+> the write privileges were never there to take. Layer one was therefore missing
+> on the real platform, and **row level security does not apply to `TRUNCATE`** —
+> a signed-in account with no role at all could empty a table. `DELETE` and
+> `UPDATE` were still filtered to zero rows by the policies, so no data was ever
+> reachable through the REST API, which does not expose `TRUNCATE` either.
+> `202609110003` restores layer one; `202609110004` removes the PUBLIC `EXECUTE`
+> grant that `anon` was riding on. Both are asserted by
+> *"client roles hold only the privileges their policies need"*, which reads the
+> grants themselves rather than trusting the statements that wrote them.
+
+Every operational write goes through a `security definer` function, so there is
+no direct `INSERT`/`UPDATE` path a client could use to forge a fact:
 
 | Command | Authority required |
 |---|---|
@@ -123,7 +156,14 @@ an attendance record, editing a response and deleting from the audit trail are
 all refused with `permission denied`.
 
 Every function is `security definer` with a fixed `search_path` and explicit
-`revoke from public` / `grant execute to authenticated`. `anon` holds nothing.
+`revoke from public` / `grant execute to authenticated`.
+
+The command functions being callable by `authenticated` is the design, not an
+oversight: they *are* the write surface, and each one begins with its own
+authority check (`COMMAND_REQUIRED`, `OWNER_REQUIRED`, `NOT_A_RECIPIENT`, …)
+evaluated against `auth.uid()`. Supabase's linter reports them as
+"signed-in users can execute a `security definer` function" and that report is
+accurate; it is what a server-side command model looks like.
 
 ## 6. Who can see an intervention
 
@@ -169,14 +209,22 @@ transport, and the outbox cannot leave `QUEUED` without one.
 
 Honest list of what this slice does **not** do:
 
-- **No application code uses any of this.** The browser prototype still runs on
-  device-local state with a simulated actor selector. The schema is verified;
-  the client is not connected to it.
-- **No Supabase project exists.** The migrations have never been applied to a
-  hosted database — only to PostgreSQL 16, locally and in CI.
-- **Registration, verification and password reset are not proven.** They need a
-  real project and configured email; see the blockers in
-  `docs/ai/PROJECT_STATE.md`.
+- **Only identity and access are connected.** Sign-in, registration, profile
+  completion, the role and status load, the owner's account directory and its two
+  commands all run against the real project. **Interventions, responses, vehicle
+  movements and attendance do not** — those screens still run on device-local
+  fictional state with the actor selector, and each one says so on itself.
+- **Password reset is not implemented**, and is shown as unavailable with the
+  reason rather than offered as a form that would send nothing. It needs a
+  configured mail provider (blocker B2).
+- **Email confirmation is expected to be off** on the project for now, for the
+  same reason. Registration therefore produces a usable account immediately.
+- **`btree_gist` is installed in the `public` schema**, which Supabase's linter
+  flags (`extension_in_public`, WARN). Its functions take `internal` arguments
+  and cannot be called through the REST API, so this is namespace hygiene rather
+  than an exposure. Remediation, when it is worth a migration:
+  `alter extension btree_gist set schema extensions;` — the exclusion
+  constraints reference the operator classes by OID and keep working.
 - **Session invalidation for a suspended account is not implemented.**
   Suspension removes the role immediately, so every policy and command refuses
   the caller on their next request — but any already-issued JWT stays

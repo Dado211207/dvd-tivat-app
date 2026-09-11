@@ -32,9 +32,11 @@ Each run applies, from an empty database:
 1. `supabase/tests/00_supabase_stub.sql` — **test-only** emulation of the
    Supabase platform surface;
 2. `supabase/migrations/202609090001_accounts_reports.sql`;
-3. `supabase/migrations/202609090002_internal_operations.sql`.
+3. `supabase/migrations/202609090002_internal_operations.sql`;
+4. `supabase/migrations/202609110003_client_role_privileges.sql`;
+5. `supabase/migrations/202609110004_function_execute_privileges.sql`.
 
-So "the migrations run on a clean database" is checked on every run: if either
+So "the migrations run on a clean database" is checked on every run: if any
 migration is not runnable from zero, every test fails.
 
 Every test acts through `asUser()`, which sets the same `request.jwt.claims` GUC
@@ -44,34 +46,58 @@ bypasses every policy, and a suite written without it would pass while proving
 nothing.
 
 The stub reproduces `auth.uid()` from JWT claims, the `anon` / `authenticated` /
-`service_role` roles, `auth.users`, and the storage helpers. It does **not**
-reproduce GoTrue signup and OTP, the API gateway, storage upload handling, or
-realtime. Those need a real project and are listed as blockers in
+`service_role` roles, `auth.users`, the storage helpers, and — importantly —
+Supabase's **default privileges**, which grant every client role full access to
+each new table in `public`. Without that last part the local database would be
+*stricter* than the real platform and the suite would keep proving a
+least-privilege property the hosted project did not have. See
+[ACCESS_MODEL.md §5](./ACCESS_MODEL.md#5-writes-are-impossible-from-a-client) for
+the defect this actually uncovered.
+
+It does **not** reproduce GoTrue signup and OTP, the API gateway, storage upload
+handling, or realtime. Those need a real project and are listed as blockers in
 [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md).
 
 ## 2. Migration strategy
 
-`202609090001` is left **untouched**. It had never been applied to any database,
-but leaving it alone means a database that *did* apply it converges to the same
-place as a clean one, which is the only migration discipline worth having.
+Every migration that has been applied anywhere is left **untouched**. A database
+that applied an earlier one converges to the same place as a clean one, which is
+the only migration discipline worth having — so a defect is repaired by a new
+migration, never by editing an old one.
 
-`202609090002` is additive: it repairs the first migration's defects with
-`alter` / `create or replace`, then adds the internal-operations schema.
+| File | What it does |
+|---|---|
+| `202609090001_accounts_reports.sql` | Accounts, roles, the abandoned citizen-report tables |
+| `202609090002_internal_operations.sql` | Repairs the first migration's defects with `alter` / `create or replace`, then adds the whole internal-operations schema |
+| `202609110003_client_role_privileges.sql` | Takes back the table privileges Supabase's project defaults hand to `anon` and `authenticated`, and grants back only what the policies need |
+| `202609110004_function_execute_privileges.sql` | Removes the PUBLIC `EXECUTE` grant that left eight `security definer` helpers callable without signing in |
 
-## 3. Applying to a real Supabase project
+The last two exist because of a defect only a real project could reveal; both are
+explained in
+[ACCESS_MODEL.md §5](./ACCESS_MODEL.md#5-writes-are-impossible-from-a-client).
 
-Not done, and it needs an owner decision first (a project costs money above the
-free tier and holds personal data). When approved:
+## 3. The real Supabase project
 
-```bash
-supabase link --project-ref <ref>
-supabase db push          # applies both migrations in order
-# then, once, with the owner's real user id:
-#   update public.access_grants set role = 'OWNER' where user_id = '<uuid>';
-```
+**Applied.** All four migrations have been applied, in order, to the owner's
+project (`dvd-tivat-app`, region `eu-central-1`, PostgreSQL 17). The `public`
+schema was empty beforehand.
+
+The result was verified rather than assumed: a structural fingerprint of the
+hosted schema — tables and their RLS flags, every column with type, nullability
+and default, every constraint definition, every index definition, every policy
+with its `using` and `with check` expressions, every trigger, every table grant,
+and an md5 of every function body — was compared against the same fingerprint
+taken from a local PostgreSQL 16 that had applied the same files. **Every section
+matches byte for byte**, with one expected exception: the hosted database also
+carries Supabase's own platform function `rls_auto_enable()`, which the local
+stub does not provide.
 
 Do **not** apply `supabase/tests/00_supabase_stub.sql` to a real project. It
 would collide with the platform's own `auth` and `storage` schemas.
+
+CI cannot reach the hosted project — that would need a secret in CI, which this
+repository deliberately does not have — so the local PostgreSQL suite remains the
+authoritative automated evidence. Nothing here claims CI tested the live project.
 
 ## 4. What the schema keeps separate
 

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -38,9 +39,62 @@ describe('account and report production foundation', () => {
     expect(migration).not.toContain('policy reports_leader_update');
   });
 
-  it('never places a service credential in a browser variable', () => {
+  it('asks only for the two public values, and says why the third is absent', () => {
     const environment = read('.env.example');
-    expect(environment).toContain('VITE_SUPABASE_ANON_KEY');
-    expect(environment).not.toMatch(/VITE_.*SERVICE_ROLE/);
+    expect(environment).toContain('VITE_SUPABASE_URL');
+    expect(environment).toContain('VITE_SUPABASE_PUBLISHABLE_KEY');
+    // Vite inlines every VITE_ variable into the bundle, so a secret given one
+    // of those names is published to every visitor.
+    expect(environment).not.toMatch(/VITE_[A-Z_]*(SERVICE_ROLE|SECRET)/);
+  });
+
+  it('keeps the example file to placeholders rather than real values', () => {
+    const environment = read('.env.example');
+    expect(environment).toContain('https://YOUR_PROJECT_REF.supabase.co');
+    expect(environment).toContain('sb_publishable_YOUR_PUBLISHABLE_KEY');
+  });
+
+  it('has no secret key anywhere in a tracked file', () => {
+    // The whole-repository check, not just the one file somebody remembered.
+    // A secret key is `sb_secret_...`; the older form is a JWT whose payload
+    // names the service_role. Neither may ever be committed.
+    const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+      .split('\0')
+      .filter((path) => path.length > 0);
+    expect(tracked.length).toBeGreaterThan(20);
+
+    // Two files necessarily contain the SHAPES of a secret, because detecting
+    // them is what they are for: this test and the bundle scanner. They are
+    // exempt from the shape rules only - the value rule below still applies to
+    // them, so a real key pasted into either is still caught. The list is
+    // asserted so a third exemption cannot be added quietly.
+    const patternFiles = ['scripts/check-bundle-secrets.mjs', 'src/config/accountReadiness.test.ts'];
+    expect(patternFiles.every((path) => tracked.includes(path))).toBe(true);
+
+    const offenders: string[] = [];
+    for (const path of tracked) {
+      let contents: string;
+      try {
+        contents = read(path);
+      } catch {
+        continue; // Binary or unreadable; nothing to match in it either way.
+      }
+      // A value rule: applies everywhere, no exemptions.
+      if (/sb_secret_[A-Za-z0-9_-]{10,}/.test(contents)) offenders.push(`${path}: sb_secret_`);
+
+      if (patternFiles.includes(path)) continue;
+
+      if (/"role"\s*:\s*"service_role"/.test(contents)) offenders.push(`${path}: service_role JWT`);
+      if (/\bSUPABASE_SERVICE_ROLE_KEY\s*=\s*\S/.test(contents)) {
+        offenders.push(`${path}: assigned service role key`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('never reads a secret key in application code', () => {
+    const client = read('src/auth/supabaseClient.ts');
+    expect(client).toContain('VITE_SUPABASE_PUBLISHABLE_KEY');
+    expect(client).not.toMatch(/import\.meta\.env\.[A-Z_]*(SECRET|SERVICE_ROLE)/);
   });
 });

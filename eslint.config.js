@@ -38,6 +38,15 @@ export default tseslint.config(
     },
   },
   {
+    // Build and verification scripts run in Node, not a browser.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node },
+    },
+  },
+  {
     // The domain layer is pure: no browser, no clock, no randomness.
     files: ['src/domain/**/*.ts'],
     ignores: ['src/domain/**/*.test.ts'],

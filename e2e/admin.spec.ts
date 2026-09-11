@@ -2,18 +2,53 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { openApp, switchActor } from './helpers';
 
-test('only the owner simulation can open the account directory and assign a role', async ({ page }) => {
+/**
+ * The account directory used to be reachable by choosing "administrator" in the
+ * actor selector, which made the most sensitive screen in the application the
+ * easiest one to open. The selector is a costume; it must not move access.
+ *
+ * This build has no project configured (CI has no `.env.local`, deliberately),
+ * so the screen reports exactly that instead of pretending to be signed in.
+ */
+test('the account directory cannot be reached through the simulation selector', async ({ page }) => {
   await openApp(page, 'nalozi');
-  await expect(page.getByText('Ovaj spisak je sakriven.')).toBeVisible();
 
-  await switchActor(page, 'Marko Perovic');
-  await expect(page.getByRole('heading', { name: 'Svi registrovani nalozi' })).toBeVisible();
+  await expect(page.getByText('Server nije podesen u ovoj verziji')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Svi registrovani nalozi' })).toHaveCount(0);
 
-  const role = page.getByLabel('Uloga za Probni Korisnik 01');
-  await expect(role).toHaveValue('CITIZEN');
-  await role.selectOption('FIREFIGHTER');
-  await expect(role).toHaveValue('FIREFIGHTER');
-  await expect(page.locator('[aria-live="polite"]')).toContainText('Vatrogasac');
+  // Every simulated actor, including the one that used to unlock the panel.
+  for (const actor of ['Marko Perovic', 'Ana Vukovic', 'Nikola Djukic']) {
+    await switchActor(page, actor);
+    await expect(page.getByRole('heading', { name: 'Svi registrovani nalozi' })).toHaveCount(0);
+    // No role selector, no suspend button, no account rows - nothing that would
+    // suggest this actor holds owner rights.
+    await expect(page.getByRole('button', { name: 'Ukini pristup' })).toHaveCount(0);
+  }
+
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+});
+
+test('the accounts screen never claims a role it has not been given', async ({ page }) => {
+  await openApp(page, 'nalozi');
+
+  // Nothing on the screen reads as a signed-in person: no server-confirmed
+  // identity, no role, and none of the owner-only controls.
+  await expect(page.getByText('Uloga sa servera')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Odjavi se' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Ukini pristup' })).toHaveCount(0);
+  await expect(page.getByLabel('Email')).toHaveCount(0);
+});
+
+test('an operational screen says it is still a local simulation', async ({ page }) => {
+  await openApp(page, 'dezurni');
+  await expect(page.getByText('Ovaj ekran jos radi na lokalnoj simulaciji')).toBeVisible();
+
+  // The one screen backed by the server does not carry that warning.
+  await openApp(page, 'nalozi');
+  await expect(page.getByText('Ovaj ekran jos radi na lokalnoj simulaciji')).toHaveCount(0);
 });
 
 test('an administrator can maintain fictional members, groups and vehicles locally', async ({ page }) => {
