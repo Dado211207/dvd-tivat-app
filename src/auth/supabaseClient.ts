@@ -163,10 +163,14 @@ export const supabaseAccessGateway: AccessGateway = {
     return user ? { id: user.id, email: user.email ?? '' } : null;
   },
 
-  async fetchProfile() {
+  async fetchProfile(userId: string) {
+    // Filtered on the id rather than left to row level security: the owner can
+    // read every profile, so an unfiltered `maybeSingle()` would fail for the
+    // one account that matters most as soon as a second account exists.
     const { data, error } = await accountBackend()
       .from('profiles')
       .select('full_name, profile_complete')
+      .eq('user_id', userId)
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;

@@ -39,6 +39,21 @@ describe('loading the access snapshot', () => {
     expect(profileReads).toBe(0);
   });
 
+  it('asks for the profile by id rather than trusting the query to return one row', async () => {
+    // The owner's `profiles_owner_read` policy lets them read EVERY profile, so
+    // an unfiltered single-row read works for everybody except the one account
+    // that matters most - and only once a second account exists, which is the
+    // worst possible time to find out.
+    let askedFor: string | null = null;
+    await load({
+      fetchProfile: async (userId) => {
+        askedFor = userId;
+        return { fullName: 'Probni Korisnik', profileComplete: true };
+      },
+    });
+    expect(askedFor).toBe('user-1');
+  });
+
   it('loads role and status from the server for an approved account', async () => {
     const access = await load();
     expect(access).toEqual({

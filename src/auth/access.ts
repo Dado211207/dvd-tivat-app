@@ -54,8 +54,15 @@ export type Access =
 export interface AccessGateway {
   /** The authenticated user, or null when there is no session. */
   currentUser(): Promise<{ id: string; email: string } | null>;
-  /** The caller's own profile row, read under `profiles_self_read`. */
-  fetchProfile(): Promise<{ fullName: string | null; profileComplete: boolean } | null>;
+  /**
+   * The caller's own profile row.
+   *
+   * Takes the id explicitly and filters on it. Relying on row level security to
+   * narrow this to one row would work for everybody except the owner, whose
+   * `profiles_owner_read` policy lets them read EVERY profile - so "the only row
+   * I can see" stops being one row the moment a second account exists.
+   */
+  fetchProfile(userId: string): Promise<{ fullName: string | null; profileComplete: boolean } | null>;
   /** `public.current_dvd_role()` - raw, because the server may return anything. */
   fetchRole(): Promise<string | null>;
   /** `public.current_account_status()` - raw, for the same reason. */
@@ -103,7 +110,7 @@ export async function loadAccess(
   let rawStatus: string | null;
   try {
     [profile, rawRole, rawStatus] = await Promise.all([
-      gateway.fetchProfile(),
+      gateway.fetchProfile(user.id),
       gateway.fetchRole(),
       gateway.fetchAccountStatus(),
     ]);
