@@ -75,17 +75,24 @@ caller cannot execute it at all.
 
 ### Owner bootstrap and recovery
 
-Deliberately manual and one-time. After the owner's account exists and its
-profile is complete, an operator with database access runs:
+Deliberately manual and one-time, in the Supabase dashboard. The full procedure,
+written for somebody who is not a developer, is
+[OWNER_BOOTSTRAP.md](./OWNER_BOOTSTRAP.md) — including what the single-owner
+index's rejection looks like and how to transfer ownership without ever leaving
+the system with two owners or none.
 
-```sql
-update public.access_grants set role = 'OWNER' where user_id = '<the exact auth.users uuid>';
-```
+That document is not merely checked, it is **executed**: `db-tests/bootstrap.test.ts`
+reads the SQL out of the markdown and runs it against a schema built from zero.
+A runbook that has quietly stopped working is worse than no runbook, because the
+person following it concludes the system is broken rather than the instructions.
 
-Recovery uses the same statement. There is no in-application path to owner, by
-design. **Open owner decision:** whether a documented second break-glass owner
-is wanted; a multi-owner design needs the single-owner index relaxed and a
-separate review.
+There is no in-application path to owner, by design. Whoever controls the
+Supabase dashboard controls this system, which is stated in the runbook rather
+than left for somebody to work out.
+
+**Owner decision, recorded:** exactly one owner, no documented second break-glass
+owner (blocker B6). A multi-owner design needs the single-owner index relaxed and
+its reporting and audit consequences decided first.
 
 ## 4. What the roles *cannot* do
 
@@ -202,11 +209,16 @@ transport, and the outbox cannot leave `QUEUED` without one.
 
 Honest list of what this slice does **not** do:
 
-- **No application code uses any of this yet.** The browser prototype still runs
-  on device-local state with a simulated actor selector. The schema is verified
-  and now applied to a real project; the client is not connected to it.
-- **Registration, verification and password reset are not proven.** They need
-  configured email; see the blockers in `docs/ai/PROJECT_STATE.md`.
+- **Only identity and access are connected.** Sign-in, registration, profile
+  completion, the role and status load, the owner's account directory and its two
+  commands all run against the real project. **Interventions, responses, vehicle
+  movements and attendance do not** — those screens still run on device-local
+  fictional state with the actor selector, and each one says so on itself.
+- **Password reset is not implemented**, and is shown as unavailable with the
+  reason rather than offered as a form that would send nothing. It needs a
+  configured mail provider (blocker B2).
+- **Email confirmation is expected to be off** on the project for now, for the
+  same reason. Registration therefore produces a usable account immediately.
 - **`btree_gist` is installed in the `public` schema**, which Supabase's linter
   flags (`extension_in_public`, WARN). Its functions take `internal` arguments
   and cannot be called through the REST API, so this is namespace hygiene rather

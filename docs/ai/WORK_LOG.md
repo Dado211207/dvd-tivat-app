@@ -5,6 +5,88 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-11 - Real accounts: the simulated actor stops moving access
+
+**The defect this slice existed to fix.** `AccountAccessSetup` switched to a local `READY` step the
+moment `signInWithPassword` resolved. That proved one thing - a password was correct - and was then
+treated as though it proved three more: that the account was approved, that its profile was
+finished, and that it had not been suspended. Separately, the account directory (the most sensitive
+screen in the application) was unlocked by choosing "administrator" in the actor selector, which made
+it the easiest screen to reach rather than the hardest.
+
+**Configuration.** Two public build-time values, read in one module. `.env.example` keeps
+placeholders only - the standing instruction is to use placeholder configuration values, and putting
+the real project URL in a public repository would lower the bar to creating accounts on it for no
+benefit, since the owner copies them from the dashboard anyway. Real values live in a git-ignored
+`.env.local`. `VITE_SUPABASE_ANON_KEY` was renamed to `VITE_SUPABASE_PUBLISHABLE_KEY` so the name
+says what the value is.
+
+**The access snapshot.** `src/auth/access.ts` is pure and takes an injected gateway: it reads the
+profile row, `current_dvd_role()` and `current_account_status()` and produces one value. Two rules
+in it are worth naming, because both are the kind of thing that is easy to get backwards:
+
+- An unreachable server is `UNAVAILABLE`, never a signed-in state with a null role. "We could not
+  ask" must not be actionable as "you have no role" - and equally must not grant anything.
+- A role string the client does not recognise is not authority. If the server grows a fifth role,
+  this fails towards no access rather than towards some.
+
+`AccessProvider` holds `LOADING` until that load returns, and reloads on every auth-state change. A
+token refresh matters as much as a sign-in: it is the moment a suspension made while a tab was open
+becomes visible.
+
+**The owner directory is real.** It lists actual accounts and calls `owner_set_role` and
+`owner_set_account_active`, reason mandatory, with both audit trails shown beneath. The simulated
+`ADMIN` -> `OWNER` shortcut is gone.
+
+**Non-enumerating errors.** One message for every failed credential attempt, including rate-limit
+and network failures, and the same outcome whether an address was new or already registered. A
+sign-in form that answers differently for a known address is a membership oracle for a volunteer
+fire society. Password reset is stated as unavailable with the reason, rather than offered as a form
+that would send nothing (B2).
+
+**`docs/OWNER_BOOTSTRAP.md`, and a test that executes it.** The runbook is written for somebody who
+is not a developer: what to check first, five numbered steps, what `0 rows affected` means, what the
+single-owner index's rejection looks like, and how to transfer ownership without ever leaving the
+system with two owners or none. `db-tests/bootstrap.test.ts` **reads the SQL out of the markdown and
+runs it** against a schema built from zero. A runbook that has quietly stopped working is worse than
+no runbook, because the person following it concludes the system is broken rather than the
+instructions. Confirmed by breaking the document deliberately: four tests fail.
+
+**Every other screen says it is simulated**, in a banner on itself, and the real identity control is
+deliberately shaped unlike the actor selector beside it.
+
+**Verified**
+
+- `npm run lint`, `npm run typecheck`: pass.
+- `npm run test` (unit): **116 passed**, up from 91. Includes six provider rendering tests, confirmed
+  to fail against a deliberately broken guard, and the one that matters most: protected content does
+  not render while the server has not yet answered.
+- `npm run test:db`: **100 passed**, up from 87. The new file covers a PENDING account having zero
+  access, bootstrap succeeding once and a second attempt being refused by the index, a role change
+  changing what the server actually returns, and a suspension taking effect on the very next request
+  with no new session involved.
+- `npx vite build`: pass. `npm run verify:bundle`: pass - and confirmed it catches a planted
+  `sb_secret_` key, an encoded `service_role` JWT, and refuses to pass on an empty directory.
+- `npm run e2e`: **70 passed**, up from 66, including axe on the accounts screen.
+
+**Honest limits of this slice**
+
+- Only identity and access are connected. Interventions, responses, vehicle movements and attendance
+  are still device-local fictional state.
+- CI builds with no project configured, so the browser suite exercises the "not configured" states.
+  The signed-in paths are covered by unit tests against a fake gateway, not by a browser against the
+  live project - and a manual owner checklist is in `PROJECT_STATE.md` for what neither can reach.
+- A suspended account's already-issued JWT stays syntactically valid until it expires. Every request
+  is refused because the role is re-read, but the token is not revoked.
+
+**Next concrete action**
+
+Owner/admin write commands for `members`, `groups` and `vehicles`, then linking an account to a
+member record. An intervention cannot be published to recipients who do not exist as server-side
+members, so that comes before the publish flow.
+
+---
+
 ## 2026-09-11 - PR #13 merged, the schema applied to a real project, and a privilege defect it exposed
 
 **PR #13 merged.** A normal merge, not a squash, so the fifteen individual commits keep their own

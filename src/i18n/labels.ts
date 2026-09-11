@@ -23,6 +23,16 @@ export const SIM_BANNER_TITLE = 'SIMULACIJA';
 export const SIM_BANNER_TEXT =
   'Izmisljeni podaci. Nema push, SMS ni telefonskih poziva. Uloge su simulirane; ovo nije prijava na nalog.';
 
+/**
+ * The accounts screen runs on the server, so the simulation wording above would
+ * be false there - it would say roles are simulated on the one screen where
+ * they are not. A banner that is wrong in that direction is worse than no
+ * banner, because it teaches people to ignore it everywhere else.
+ */
+export const SERVER_BANNER_TITLE = 'STVARNI NALOZI';
+export const SERVER_BANNER_TEXT =
+  'Ovaj ekran radi na serveru. Prijava, uloga i pristup su stvarni i provjeravaju se pri svakom zahtjevu. Izbor simuliranog ucesnika ovdje ne mijenja nista.';
+
 export const LOCAL_DATA_NOTE =
   'Podaci se cuvaju samo u ovom pregledacu, na ovom uredjaju. Nista se ne sinhronizuje izmedju uredjaja niti se salje na server. Brisanje podataka pregledaca brise i ovo.';
 
@@ -34,7 +44,7 @@ export const NAV = {
   clanovi: 'Clanovi',
   nalozi: 'Nalozi i pristup',
   istorija: 'Istorija',
-  dojava: 'Prijava gradjana (istrazivanje)',
+  dojava: 'Prijava gradjana',
 } as const;
 
 /**

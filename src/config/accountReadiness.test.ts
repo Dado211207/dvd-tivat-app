@@ -63,6 +63,14 @@ describe('account and report production foundation', () => {
       .filter((path) => path.length > 0);
     expect(tracked.length).toBeGreaterThan(20);
 
+    // Two files necessarily contain the SHAPES of a secret, because detecting
+    // them is what they are for: this test and the bundle scanner. They are
+    // exempt from the shape rules only - the value rule below still applies to
+    // them, so a real key pasted into either is still caught. The list is
+    // asserted so a third exemption cannot be added quietly.
+    const patternFiles = ['scripts/check-bundle-secrets.mjs', 'src/config/accountReadiness.test.ts'];
+    expect(patternFiles.every((path) => tracked.includes(path))).toBe(true);
+
     const offenders: string[] = [];
     for (const path of tracked) {
       let contents: string;
@@ -71,7 +79,11 @@ describe('account and report production foundation', () => {
       } catch {
         continue; // Binary or unreadable; nothing to match in it either way.
       }
+      // A value rule: applies everywhere, no exemptions.
       if (/sb_secret_[A-Za-z0-9_-]{10,}/.test(contents)) offenders.push(`${path}: sb_secret_`);
+
+      if (patternFiles.includes(path)) continue;
+
       if (/"role"\s*:\s*"service_role"/.test(contents)) offenders.push(`${path}: service_role JWT`);
       if (/\bSUPABASE_SERVICE_ROLE_KEY\s*=\s*\S/.test(contents)) {
         offenders.push(`${path}: assigned service role key`);

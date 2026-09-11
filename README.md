@@ -15,16 +15,19 @@ facts that no single action is allowed to fake**.
 > 2026. The earlier citizen-report screen is abandoned research, kept only
 > behind an explicitly experimental heading.
 
-> **The application is still a local prototype.** It runs in one browser, it
-> sends **no push notification, no SMS and no phone call to anyone**, and its
-> role selector is a demonstration control, not a login. Every member, contact
+> **Most of the application is still a local prototype.** It sends **no push
+> notification, no SMS and no phone call to anyone**, and every member, contact
 > label, vehicle and location in this repository is invented.
 >
-> The **database schema** is a step ahead of the application: it is written,
-> integration-tested against real PostgreSQL, and now applied to a real Supabase
-> project — but **no application code is connected to it yet**. See
-> [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) for exactly
-> what is and is not enforced.
+> **One screen is real.** *Nalozi i pristup* signs in against a real Supabase
+> project, loads the account's role and status from the server before showing
+> anything, and lets the owner grant and withdraw access for real accounts. Every
+> other screen still runs on device-local fictional state driven by the actor
+> selector — and says so, in a banner on itself.
+>
+> The actor selector is a demonstration control, **not a login**. The two are
+> deliberately shaped differently in the interface so a demonstration cannot
+> blur them.
 
 Status: **prototype plus a verified server contract.** Nothing is agreed with
 DVD Tivat yet, nothing is deployed, and nothing here is ready to be relied on in
@@ -62,6 +65,7 @@ npm run typecheck    # tsc --noEmit, strict
 npm run test         # Vitest - domain rules and storage failure handling
 npm run test:db      # PostgreSQL - migrations, role matrix, RLS, attendance
 npm run e2e          # Playwright - full flow, keyboard, axe accessibility
+npm run verify:bundle # reads the built output: no secret may reach the browser
 npm run screenshots  # regenerates docs/screenshots/ (writes into the repo)
 ```
 
@@ -82,9 +86,9 @@ recreates schemas, so point it only at a scratch database.
 | **Vozila** | Anyone at the station | Log vehicle departures and returns as explicit, independent actions |
 | **Prikaz u bazi** | Station wall display | Large read-only overview: incident, location, totals, answers, vehicles |
 | **Clanovi** | Everyone; editable in the admin simulation | The fictional roster, groups and vehicles, with a local-only editor for invented demonstration records |
-| **Nalozi i pristup** | Owner-workflow discussion | Shows email verification, citizen-by-default registration and owner-only role assignment with fictional local rows |
+| **Nalozi i pristup** | **Real accounts** | Sign in and register against the real project; the owner sees every registered account and can assign a role or withdraw access with a mandatory reason, with a permanent audit beneath |
 | **Istorija** | Everyone | Past exercises, the timestamped activity log, and a confirmed demo reset |
-| **Prijava gradjana (istrazivanje)** | **Abandoned research, not part of the product** | Out of the operational navigation groups. Retained only so reviewed work can be reused, behind an explicitly experimental heading and a non-emergency notice |
+| **Prijava gradjana** (under the *Nije u upotrebi* heading) | **Abandoned research, not part of the product** | Out of the operational navigation groups. Retained only so reviewed work can be reused, behind an explicitly experimental heading and a non-emergency notice |
 
 The application opens straight into the duty officer's screen. There is no
 landing page — the point of a prototype is to be driven.
@@ -94,12 +98,13 @@ landing page — the point of a prototype is to be driven.
 | Absent | Why |
 |---|---|
 | Any real notification | Nobody may be alerted by a demonstration. Delivery is recorded as `NIJE_POKUSANO` and never anything else, enforced by a test |
-| Authentication or permissions | The role selector switches which fictional person the screen pretends to be. It protects nothing |
-| Shared data | State lives in one browser's `localStorage`. Two devices show two unrelated worlds, and clearing browser data deletes it |
+| Authentication on the operational screens | Only the accounts screen is authenticated. The actor selector switches which fictional person the other screens pretend to be, and protects nothing — which is why each of them says so on itself |
+| Shared operational data | Interventions, responses, vehicles and history still live in one browser's `localStorage`. Two devices show two unrelated worlds, and clearing browser data deletes it. Accounts and roles are the exception: those are on the server |
 | Real member data | The repository is public. Everything is invented |
 | Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
 | Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
-| A connected server | The schema is written, tested and applied to a real project, but no application code uses it yet. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
+| Password reset | No mail provider is configured, so a reset form would send nothing while looking as though it had. The screen says that instead of offering one |
+| A connected server for operations | The schema is applied and tested, and identity and access now use it. Interventions, responses and attendance do not yet. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
 
 **A browser prototype is not evidence that a locked Android or iPhone will raise
 an alarm.** Whether that is achievable at all depends on platform permissions,
@@ -115,6 +120,7 @@ store policy and delivery acknowledgements, and it is a separate investigation
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack choice and rejected alternatives, layering, the pure domain reducer, persistence limits, path to mobile |
 | [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) | Gated server, identity, notification and mobile architecture if DVD Tivat accepts the workflow |
 | [docs/ACCESS_MODEL.md](docs/ACCESS_MODEL.md) | **The account, role and row-level-security contract, and exactly what is not enforced yet** |
+| [docs/OWNER_BOOTSTRAP.md](docs/OWNER_BOOTSTRAP.md) | **How the one owner account is created, step by step, by somebody who is not a developer** |
 | [docs/DATABASE.md](docs/DATABASE.md) | **Schema semantics, the attendance rules, and how to run the database tests** |
 | [docs/ACCOUNTS_REPORTS_MAP_PLAN.md](docs/ACCOUNTS_REPORTS_MAP_PLAN.md) | Earlier account, email-code, owner access, incident map and photo plan. Superseded on citizen reporting by the internal-operations decision |
 | [docs/FIREAPP_REVIEW.md](docs/FIREAPP_REVIEW.md) | What the reference product's public documentation says, per-claim, with what was and was not verified |
@@ -128,10 +134,10 @@ store policy and delivery acknowledgements, and it is a separate investigation
 
 ## Built with
 
-TypeScript, React and Vite; Vitest, Playwright and axe-core for verification.
-The local prototype has no connected backend or paid service. Supabase and Leaflet client libraries
-are now present for the isolated account/map foundation, but no real project credentials are stored
-and no production channel is active. Reasoning and rejected alternatives in
+TypeScript, React and Vite; Vitest, Playwright and axe-core for verification; PostgreSQL for the
+row-level-security suite. Identity and access run on Supabase; the operational screens still have no
+backend. Only the project URL and the publishable key are configured, both public by design and both
+kept out of tracked files - see [.env.example](.env.example). Reasoning and rejected alternatives in
 [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Licence

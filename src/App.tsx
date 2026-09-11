@@ -17,6 +17,8 @@ import {
   LOCAL_DATA_NOTE,
   NAV,
   ROLE_LABEL,
+  SERVER_BANNER_TEXT,
+  SERVER_BANNER_TITLE,
   SIM_BANNER_TEXT,
   SIM_BANNER_TITLE,
   T,
@@ -66,7 +68,7 @@ const VIEWS: Record<Route, ComponentType> = {
 const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
   { label: 'Evidencija', routes: ['clanovi', 'nalozi', 'istorija'] },
-  { label: 'Istrazivanje (nije u upotrebi)', routes: ['dojava'] },
+  { label: 'Nije u upotrebi', routes: ['dojava'] },
 ];
 
 /**
@@ -183,7 +185,7 @@ export function App() {
                   <a key={r} className="nav__link" href={hrefFor(r)}
                     aria-current={route === r ? 'page' : undefined} data-testid={`nav-${r}`}>
                     <span className="nav__icon"><NavIcon route={r} /></span>
-                    <span>{NAV[r]}</span>
+                    <span className="nav__link__text">{NAV[r]}</span>
                   </a>
                 ))}
               </div>
@@ -229,11 +231,21 @@ export function App() {
         </div>
       </header>
 
-      {/* Always visible, including the station display. This is not a login. */}
-      <div className="sim-bar">
-        <span className="sim-bar__tag">{SIM_BANNER_TITLE}</span>
-        <span className="sim-bar__text">{SIM_BANNER_TEXT}</span>
-      </div>
+      {/* Always visible, including the station display - but it must tell the
+          truth about the screen underneath it. Saying "roles are simulated" on
+          the one screen where they are not would teach people to ignore this
+          strip everywhere else. */}
+      {ROUTE_BACKING[route] === 'SERVER' ? (
+        <div className="sim-bar sim-bar--server">
+          <span className="sim-bar__tag">{SERVER_BANNER_TITLE}</span>
+          <span className="sim-bar__text">{SERVER_BANNER_TEXT}</span>
+        </div>
+      ) : (
+        <div className="sim-bar">
+          <span className="sim-bar__tag">{SIM_BANNER_TITLE}</span>
+          <span className="sim-bar__text">{SIM_BANNER_TEXT}</span>
+        </div>
+      )}
 
       <LiveRegion />
 

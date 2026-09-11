@@ -60,27 +60,38 @@ once and none of those branches has unmerged work left.
 
 ## Status of this slice
 
-In progress: real accounts, authentication and access.
+**Slice 2 - real accounts, authentication and access.** Complete.
 
-Done so far: PR #13 merged; all four migrations applied to the live project and
-verified against the locally-tested schema; the client-role privilege defect that
-only a real project could reveal found, fixed and covered by tests.
+- PR #13 merged (normal merge); `main` = `3133d00`.
+- All four migrations applied to the live project and verified against the
+  locally-tested schema, byte for byte.
+- The client-role privilege defect that only a real project could reveal: found,
+  fixed in two new migrations, and covered by tests that detect it.
+- The simulated actor no longer moves any access. Identity, role and status are
+  loaded from the server before anything protected renders.
+- The owner's account directory is real, and the bootstrap runbook is executed
+  by the test suite rather than merely written.
 
 | Check | Result |
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm run test` (unit) | **91 passed** |
-| `npm run test:db` (PostgreSQL 16 + RLS) | **87 passed** |
+| `npm run test` (unit) | **116 passed** |
+| `npm run test:db` (PostgreSQL 16 + RLS) | **100 passed** |
 | `npx vite build` | Pass |
-| `npm run e2e` (browser + axe) | 66 passed as of PR #13; re-run before the next PR |
+| `npm run verify:bundle` | Pass - no secret in the built output |
+| `npm run e2e` (browser + axe) | **70 passed** |
 
 ## Where things are
 
 ```
 src/domain/        pure prototype rules (local, simulated actor)
-src/access/        pure account-role policy (not yet wired to the router)
-src/auth/          Supabase client - dormant, no project configured
+src/access/        the permission matrix, DISPLAY ONLY - authority is the server
+src/auth/access.ts         pure access-snapshot loader (injected gateway, unit-tested)
+src/auth/AccessProvider.tsx  global state: LOADING until the server answers
+src/auth/supabaseClient.ts   the only module that talks to Supabase
+src/auth/directory.ts        owner-only account reads and the two owner commands
+src/ui/components/RequireRole.tsx  the role guard used by the owner directory
 supabase/migrations/
   202609090001_accounts_reports.sql       accounts, roles, abandoned citizen reports
   202609090002_internal_operations.sql    THE INTERNAL OPERATIONS SCHEMA
@@ -90,7 +101,17 @@ supabase/tests/    TEST-ONLY Supabase platform stub - never apply to a real proj
 db-tests/          integration tests: role matrix, lifecycle, attendance, privileges
 docs/ACCESS_MODEL.md   the role and RLS contract, and what is not enforced yet
 docs/DATABASE.md       schema semantics, the live project, how to run the DB tests
+docs/OWNER_BOOTSTRAP.md the one-time owner procedure - EXECUTED by db-tests/bootstrap.test.ts
+scripts/check-bundle-secrets.mjs  reads the built artifact; no secret may ship
 ```
+
+### Which screens are real
+
+| Screen | Backed by |
+|---|---|
+| `nalozi` (Nalozi i pristup) | **The server.** Sign-in, registration, profile, role, status, the owner directory and its two commands |
+| `dezurni`, `clan`, `vozila`, `prikaz`, `clanovi`, `istorija` | Device-local fictional state and the actor selector. Each carries a banner saying so |
+| `dojava` | Abandoned research, local only |
 
 ## Non-negotiable rules for anyone continuing this work
 
@@ -105,8 +126,9 @@ docs/DATABASE.md       schema semantics, the live project, how to run the DB tes
    `DOLAZIM` never creates attendance. A vehicle departure never checks anybody in.
 4. **Authority is server-side.** RLS grants reads only; every operational write
    goes through a `security definer` command. Do not add a client-writable path.
-5. **The role selector in the browser is a simulation, not authentication.** It
-   must stay labelled as such and must never be demonstrated as a login.
+5. **The actor selector is a simulation, not authentication.** It must never
+   move any access, must stay visibly unlike the real identity control, and
+   every screen it drives must say on itself that it is simulated.
 6. **This is not a public emergency channel.** Never encourage anyone to use it
    instead of calling the official fire service.
 7. **No official DVD Tivat logo or branding** unless the society supplies it.
@@ -154,9 +176,10 @@ says the hosted project itself was tested by CI.
 
 ## Known limitations (accurate, not aspirational)
 
-- **No application code uses the new schema yet.** The browser prototype still
-  runs on device-local state with a simulated actor. The schema is verified and
-  applied; the client is not connected to it.
+- **Only identity and access use the schema.** Interventions, responses, vehicle
+  movements and attendance are still device-local fictional state.
+- **No password reset**, and email confirmation is expected to be off. Both need
+  a configured mail provider (B2).
 - No notification transport of any kind. No push, SMS, email or call.
 - No session invalidation for a suspended account: suspension removes the role
   immediately so every request is refused, but an already-issued JWT stays
@@ -193,25 +216,47 @@ Things only the owner can do, recorded so they are not silently assumed done:
 
 ## Next concrete action
 
-Connect the application to the verified schema, in this order:
+Identity and access are done. The operational screens are not. Next slice, in
+this order:
 
-1. Configuration: `.env.example` with the project URL and publishable key, a
-   git-ignored `.env.local` for local runs, and nothing secret in either.
-2. A global authentication and access state that loads the profile, role and
-   status **before** protected routes render, replacing
-   `AccountAccessSetup`'s local `READY` step (which still switches on sign-in
-   alone without loading the server profile).
-3. `docs/OWNER_BOOTSTRAP.md`: the one-time, manual, copy-pasteable path to
-   making the owner's account `OWNER`, executable by a non-developer, including
-   what to do if the single-owner unique index rejects it.
-4. An owner-only account directory wired to `owner_set_role` and
-   `owner_set_account_active`, with a mandatory reason and an audit trail —
-   replacing the simulated `ADMIN` → `OWNER` shortcut.
-5. Real route guards keyed off the loaded role and status, replacing the
-   simulated actor selector on operational screens.
-6. Then, in a later slice: the commander draft → review → publish flow against
-   `publish_intervention`, and check-in / check-out against the attendance
-   commands.
+1. Members and vehicles as **server** records: owner/admin write commands for
+   `members`, `groups` and `vehicles`, which the schema has read policies for but
+   no write path to. The roster screen then stops being fictional local state.
+2. Link an account to a member record (`members.user_id`), without which a
+   signed-in firefighter cannot be a recipient, respond, or check in.
+3. The commander draft → review → publish flow against `publish_intervention`,
+   including the frozen recipient list and the `QUEUED`-only outbox.
+4. Member response against `submit_response`, then check-in / check-out and the
+   attendance board against the attendance commands.
+5. Only then consider notification transport (**B3**), which is a separate
+   investigation and must not be promised before it is done.
 
-**B1 is resolved** — the project exists and the schema is on it. What remains is
-wiring, and it can now be verified honestly.
+Do not start (3) before (1) and (2): an intervention cannot be published to
+recipients who do not exist as server-side members.
+
+## Manual owner checklist
+
+Automated tests cannot cover the dashboard or a real browser session. Run this
+once, by hand, and record the result here.
+
+Follow [OWNER_BOOTSTRAP.md](../OWNER_BOOTSTRAP.md) first.
+
+| # | Check | Expected | Done |
+|---|---|---|---|
+| 1 | "Confirm email" is off in the dashboard | Registration produces a usable account immediately | ☐ |
+| 2 | Register a brand-new address in the application | Asked for a name, then told the account is waiting for approval | ☐ |
+| 3 | While waiting for approval, look at every screen | Nothing operational is offered; the accounts screen says "no rights yet" | ☐ |
+| 4 | Run the bootstrap SQL for your own account | `1 row affected`; the verification query returns exactly your address | ☐ |
+| 5 | Press **Provjeri pristup ponovo** | The account directory appears, listing the real accounts | ☐ |
+| 6 | Try the bootstrap SQL again for a second account | Refused: `access_grants_single_owner` | ☐ |
+| 7 | Give the test account `Vatrogasac`, then reload its session | It sees what a firefighter sees, and no more | ☐ |
+| 8 | Withdraw its access with a reason, then reload **its** session | Refused on the next request; the reason appears in the audit list | ☐ |
+| 9 | Try to change your own role or access in the directory | No control is offered; the row says the owner's account is not changed from here | ☐ |
+| 10 | Sign out, then reopen the application | Signed out, and no screen claims a role | ☐ |
+| 11 | Open the browser's developer tools, Network tab, and sign in | No `sb_secret_` value anywhere in any request or response | ☐ |
+
+If any of these behaves differently from the expected column, that is a defect —
+record it here rather than working around it.
+
+**B1 is resolved** — the project exists, the schema is on it, and identity and
+access run against it.
