@@ -21,6 +21,8 @@ import {
   SIM_BANNER_TITLE,
   T,
 } from '@/i18n/labels';
+import { accessObstacle } from '@/auth/access';
+import { useAccess } from '@/auth/AccessProvider';
 import { makeId, useApp } from '@/state/AppStateContext';
 import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
@@ -67,6 +69,25 @@ const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Istrazivanje (nije u upotrebi)', routes: ['dojava'] },
 ];
 
+/**
+ * Which screens are real, and which are still the local simulation.
+ *
+ * This slice connected identity and access. Everything else still runs on
+ * device-local fictional state with the actor selector - and the interface has
+ * to say so on every one of those screens rather than letting a demonstration
+ * imply that a server is involved.
+ */
+const ROUTE_BACKING: Record<Route, 'SERVER' | 'SIMULATED'> = {
+  nalozi: 'SERVER',
+  dojava: 'SIMULATED',
+  dezurni: 'SIMULATED',
+  clan: 'SIMULATED',
+  vozila: 'SIMULATED',
+  prikaz: 'SIMULATED',
+  clanovi: 'SIMULATED',
+  istorija: 'SIMULATED',
+};
+
 const ROUTE_DESCRIPTION: Record<Route, string> = {
   dojava: 'Napusteni istrazivacki prototip. Nije kanal za prijavu hitnih slucajeva',
   dezurni: 'Priprema poziva i pracenje odziva ekipe',
@@ -74,9 +95,42 @@ const ROUTE_DESCRIPTION: Record<Route, string> = {
   vozila: 'Rucna evidencija izlaska i povratka vozila',
   prikaz: 'Pregled stanja namijenjen ekranu u bazi',
   clanovi: 'Clanovi, uloge, grupe i osposobljenosti',
-  nalozi: 'Registracija, potvrda emaila i vlasnicka dodjela pristupa',
+  nalozi: 'Stvarni nalozi na serveru: prijava, uloge i ukidanje pristupa',
   istorija: 'Zavrsene vjezbe i hronologija promjena',
 };
+
+/**
+ * The real signed-in account, shown next to - and deliberately unlike - the
+ * simulation control beside it. One of them is a server-confirmed identity; the
+ * other switches which fictional person the local prototype pretends to be. They
+ * must never look like the same kind of thing.
+ */
+function SignedInIdentity() {
+  const { access } = useAccess();
+  const obstacle = accessObstacle(access);
+
+  if (obstacle === 'NOT_CONFIGURED') {
+    return <span className="local-pill"><span aria-hidden="true" /> Lokalni prototip</span>;
+  }
+  if (obstacle === 'LOADING') {
+    return <span className="identity-pill" role="status">Provjera pristupa...</span>;
+  }
+  if (access.kind === 'SIGNED_IN') {
+    return (
+      <a className="identity-pill identity-pill--in" href={hrefFor('nalozi')}>
+        <span className="identity-pill__who">{access.fullName ?? access.email}</span>
+        <span className="identity-pill__role">
+          {access.role ?? (obstacle === 'SUSPENDED' ? 'Pristup ukinut' : 'Bez uloge')}
+        </span>
+      </a>
+    );
+  }
+  return (
+    <a className="identity-pill" href={hrefFor('nalozi')}>
+      {obstacle === 'SERVER_UNREACHABLE' ? 'Server nedostupan' : 'Niste prijavljeni'}
+    </a>
+  );
+}
 
 export function App() {
   const route = useRoute();
@@ -153,7 +207,7 @@ export function App() {
         </div>
 
         <div className="masthead__tools">
-          <span className="local-pill"><span aria-hidden="true" /> Lokalni prototip</span>
+          <SignedInIdentity />
           <div className="actor-switch">
             <label htmlFor="actor-select">
               Simulirani ucesnik
@@ -189,6 +243,13 @@ export function App() {
         {/* A member form contains an unsent local draft. Remount only this view
             when the simulated person changes so one member can never inherit
             another member's answer, ETA, destination, error or edit state. */}
+        {ROUTE_BACKING[route] === 'SIMULATED' ? (
+          <Notice tone="warn">
+            Ovaj ekran jos radi na lokalnoj simulaciji: podaci su izmisljeni, cuvaju se samo u ovom
+            pregledacu i biraju se preko izbora simuliranog ucesnika. Server ne ucestvuje i ovdje
+            nema provjere prava. Stvarni nalozi su na ekranu <strong>Nalozi i pristup</strong>.
+          </Notice>
+        ) : null}
         <Suspense fallback={<p role="status">Ucitavanje prikaza...</p>}>
           <View key={route === 'clan' ? state.simulation.actorId : route} />
         </Suspense>

@@ -17,12 +17,24 @@ const account = (
 ): AccountSummary => ({ id, role, status, fullName: `Probni Korisnik ${id}` });
 
 describe('account access policy', () => {
-  it('gives every new registration the citizen role', () => {
-    expect(defaultRegistrationRole()).toBe('CITIZEN');
+  it('gives every new registration no access at all', () => {
+    // PENDING is what the database trigger writes. The client saying CITIZEN
+    // here would have contradicted the server, which is the one mistake this
+    // display-only module must never make.
+    expect(defaultRegistrationRole()).toBe('PENDING');
   });
 
-  it('does not let a citizen, firefighter, commander or admin grant roles', () => {
-    for (const role of ['CITIZEN', 'FIREFIGHTER', 'COMMANDER', 'ADMIN'] as const) {
+  it('gives neither no-access role a single operational permission', () => {
+    for (const role of ['PENDING', 'CITIZEN'] as const) {
+      expect(hasPermission(account(role, role), 'RESPOND_TO_CALLOUT')).toBe(false);
+      expect(hasPermission(account(role, role), 'SEND_CALLOUT')).toBe(false);
+      expect(hasPermission(account(role, role), 'VIEW_ACCOUNT_DIRECTORY')).toBe(false);
+      expect(hasPermission(account(role, role), 'VIEW_UNVERIFIED_REPORTS')).toBe(false);
+    }
+  });
+
+  it('does not let anybody but the owner grant roles', () => {
+    for (const role of ['PENDING', 'CITIZEN', 'FIREFIGHTER', 'COMMANDER', 'ADMIN'] as const) {
       expect(canAssignRole(account(role, role), 'FIREFIGHTER')).toBe(false);
     }
   });
@@ -36,20 +48,20 @@ describe('account access policy', () => {
   });
 
   it('does not mistake hidden navigation for authorization', () => {
-    expect(hasPermission(account('citizen', 'CITIZEN'), 'VIEW_ACCOUNT_DIRECTORY')).toBe(false);
+    expect(hasPermission(account('pending', 'PENDING'), 'VIEW_ACCOUNT_DIRECTORY')).toBe(false);
     expect(hasPermission(account('admin', 'ADMIN'), 'MANAGE_ROLES')).toBe(false);
     expect(hasPermission(account('owner', 'OWNER'), 'MANAGE_ROLES')).toBe(true);
   });
 
   it('alerts every active operational account about an unverified report', () => {
     const recipients = reportAlertRecipientIds([
-      account('citizen', 'CITIZEN'),
+      account('pending', 'PENDING'),
       account('firefighter', 'FIREFIGHTER'),
       account('commander', 'COMMANDER'),
       account('admin', 'ADMIN'),
       account('owner', 'OWNER'),
       account('suspended', 'FIREFIGHTER', 'SUSPENDED'),
-      account('unverified', 'COMMANDER', 'EMAIL_UNVERIFIED'),
+      account('unfinished', 'COMMANDER', 'PROFILE_REQUIRED'),
     ]);
 
     expect(recipients).toEqual(['firefighter', 'commander', 'admin', 'owner']);

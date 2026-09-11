@@ -62,8 +62,15 @@ jobs:
       - name: Unit tests
         run: npm run test
 
-      # Applies both migrations to an empty database and asserts the role
-      # matrix, intervention lifecycle and attendance invariants.
+      # Applies every migration to an empty database and asserts the role
+      # matrix, intervention lifecycle, attendance invariants and the table and
+      # function privileges the client roles hold.
+      #
+      # This is the authoritative automated evidence for the access model. It
+      # runs against this service container and NEVER against the owner's hosted
+      # Supabase project - reaching that would need a secret in CI, which this
+      # repository deliberately does not have. No result here is a claim about
+      # the hosted project.
       - name: Database and row-level-security tests
         run: npm run test:db
         env:
@@ -71,6 +78,12 @@ jobs:
 
       - name: Build
         run: npx vite build
+
+      # Vite inlines every VITE_* variable into the output, silently. This reads
+      # the artifact that would actually ship, which is the only place that
+      # mistake becomes real.
+      - name: Check no secret reached the bundle
+        run: npm run verify:bundle
 
       # Chromium only: installing three engines costs minutes on a hosted
       # runner for no extra signal at this stage.

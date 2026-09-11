@@ -275,6 +275,47 @@ body {
   border-radius: 50%;
 }
 
+/* The real, server-confirmed account. Deliberately shaped unlike the simulation
+   control beside it: one is an identity, the other is a costume. */
+.identity-pill {
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 34px;
+  padding: 6px 13px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--c-ink);
+  text-decoration: none;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 8px;
+}
+
+.identity-pill:hover,
+.identity-pill:focus-visible {
+  border-color: var(--c-ink-soft);
+}
+
+.identity-pill--in {
+  border-left: 3px solid var(--c-accent);
+}
+
+.identity-pill__who {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-pill__role {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--c-ink-faint);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
 .actor-switch {
   display: grid;
   gap: 4px;
@@ -1016,19 +1057,97 @@ fieldset {
   border-bottom: 1px solid var(--c-line);
 }
 
-.account-table th {
+/* Column headers only. The first cell of each row is a row header holding a
+   person's name, which must keep its real casing and stay readable. */
+.account-table thead th {
   font-size: 0.7rem;
   color: var(--c-ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.account-table td:first-child {
+.account-table tbody th {
   display: grid;
   gap: 4px;
+  font-weight: 650;
+  color: var(--c-ink);
 }
 
-.account-table td small {
+.account-table td small,
+.account-table tbody th small {
+  color: var(--c-ink-faint);
+}
+
+/* The reason field and the suspend control travel together: the server refuses
+   a status change without a reason, so the interface must never present the
+   button on its own. */
+.account-access-cell {
+  display: grid;
+  gap: 8px;
+  min-width: 190px;
+}
+
+.account-access-cell input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 11px;
+  font: inherit;
+  color: var(--c-ink);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 10px;
+}
+
+.account-identity {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0 0 12px;
+}
+
+.account-identity div {
+  display: grid;
+  gap: 2px;
+}
+
+.account-identity dt {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--c-ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.account-identity dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-identity__note {
+  margin: 0 0 14px;
+  font-size: 0.84rem;
+  color: var(--c-ink-soft);
+}
+
+.audit-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.audit-list li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.audit-list small {
   color: var(--c-ink-faint);
 }
 
