@@ -35,8 +35,8 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- `main`: `3133d004c6615704278f999384e942b615b96f29` — the merge commit of PR #13.
-- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, restarted from that `main`.
+- `main`: `bd79f7f0d3c0467b5c7bfbed2dfdc66185fdb898` — the merge commit of PR #14.
+- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, merged into that `main`.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-11
@@ -50,6 +50,10 @@ That merge also closed out the whole earlier stack: #9–#12 and
 `codex/access-map-research` were linear ancestors of #13, so all of it landed at
 once and none of those branches has unmerged work left.
 
+PR #14 was merged on 2026-09-11 the same way, on the owner's approval, keeping
+its four commits. `main`'s tree is byte-identical to PR #14's head `35383a5`
+(`479b732`), confirmed by `git diff` and by comparing tree hashes.
+
 | PR | State |
 |---|---|
 | #1 | **Merged** 2026-09-08 |
@@ -57,12 +61,13 @@ once and none of those branches has unmerged work left.
 | #3–#8 | **Merged** 2026-09-08 |
 | #9–#12 | Contained in #13; merged with it |
 | #13 | **Merged** 2026-09-11 into `3133d00` |
+| #14 | **Merged** 2026-09-11 into `bd79f7f` |
 
 ## Status of this slice
 
 **Slice 2 - real accounts, authentication and access.** Complete.
 
-- PR #13 merged (normal merge); `main` = `3133d00`.
+- PR #13 and PR #14 merged (normal merges); `main` = `bd79f7f`.
 - All four migrations applied to the live project and verified against the
   locally-tested schema, byte for byte.
 - The client-role privilege defect that only a real project could reveal: found,
@@ -178,6 +183,12 @@ says the hosted project itself was tested by CI.
 
 - **Only identity and access use the schema.** Interventions, responses, vehicle
   movements and attendance are still device-local fictional state.
+- Real sign-up through the app's own registration form, with a real deliverable
+  email, has not yet been exercised end-to-end — every verification so far either
+  used privileged SQL to create accounts directly, or the app's internal modules
+  driven by a test harness, never a human clicking through the actual sign-up UI.
+  Close this the first time a real registration flow is built or manually
+  exercised, before any real DVD Tivat member is invited.
 - **No password reset**, and email confirmation is expected to be off. Both need
   a configured mail provider (B2).
 - No notification transport of any kind. No push, SMS, email or call.
