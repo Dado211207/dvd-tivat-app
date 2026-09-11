@@ -21,6 +21,8 @@ const MIGRATIONS = [
   'supabase/tests/00_supabase_stub.sql',
   'supabase/migrations/202609090001_accounts_reports.sql',
   'supabase/migrations/202609090002_internal_operations.sql',
+  'supabase/migrations/202609110003_client_role_privileges.sql',
+  'supabase/migrations/202609110004_function_execute_privileges.sql',
 ];
 
 export const DATABASE_URL =

@@ -4,7 +4,7 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-09
+Last updated: 2026-09-11
 
 ---
 
@@ -35,47 +35,45 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- `main`: `9b4ba3fd22e83d30cb64c9718b673b5c19167a94`
-- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, based on
-  `codex/access-map-research` (`f1111d56c0285c874534bfa356c9a4a411e1c89c`).
-  `main` is an ancestor of that commit and the previous branch head
-  (`35a6416`, merged as PR #1) is contained in it, so nothing was discarded and
-  no force-push was needed.
+- `main`: `3133d004c6615704278f999384e942b615b96f29` — the merge commit of PR #13.
+- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, restarted from that `main`.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
-### Pull requests — live state at 2026-09-09
+### Pull requests — live state at 2026-09-11
 
-| PR | Branch | Head | State |
-|---|---|---|---|
-| #1 | `claude/dvd-tivat-app-dev-n8wctb` | `35a6416` | **Merged** 2026-09-08 |
-| #2 | `codex/project-continuity` | `f0d11a6` | **Closed, unmerged** (superseded) |
-| #3–#8 | various `codex/*` | — | **Merged** 2026-09-08 |
-| #9 | `codex/modern-ui-ux` | `43d7f48` | Open / Draft |
-| #10 | `codex/citizen-report-prototype` | `b2c8065` | Open / Draft |
-| #11 | `codex/local-admin-prototype` | `034b77b` | Open / Draft |
-| #12 | `codex/dvd-tivat-operational-profile` | `8096b1e` | Open / Draft |
-| none | `codex/access-map-research` | `f1111d5` | Pushed, **no PR, never CI-verified** |
+PR #13 was merged on 2026-09-11 with a **normal merge, not a squash**, so the
+fifteen individual commits keep their own history and authorship — including the
+work that arrived through the `codex/*` stack. `main`'s tree is byte-identical to
+PR #13's head `110e57b`, confirmed by `git diff`.
 
-Verified ancestry: the stack is linear — `main` → #9 → #10 → #11 → #12 →
-`f1111d5`. Each is 0 commits behind the next. `f1111d5` is 14 ahead of `main`.
+That merge also closed out the whole earlier stack: #9–#12 and
+`codex/access-map-research` were linear ancestors of #13, so all of it landed at
+once and none of those branches has unmerged work left.
 
-**Merge order if authorised:** #9 → #10 → #11 → #12 → `f1111d5` → this branch.
-Because the stack is linear and all of it is contained in this branch, merging
-this branch alone would bring everything.
+| PR | State |
+|---|---|
+| #1 | **Merged** 2026-09-08 |
+| #2 | **Closed, unmerged** (superseded) |
+| #3–#8 | **Merged** 2026-09-08 |
+| #9–#12 | Contained in #13; merged with it |
+| #13 | **Merged** 2026-09-11 into `3133d00` |
 
 ## Status of this slice
 
-Complete and verified: the product-direction correction, the database schema for
-internal operations, and its integration tests.
+In progress: real accounts, authentication and access.
+
+Done so far: PR #13 merged; all four migrations applied to the live project and
+verified against the locally-tested schema; the client-role privilege defect that
+only a real project could reveal found, fixed and covered by tests.
 
 | Check | Result |
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
 | `npm run test` (unit) | **91 passed** |
-| `npm run test:db` (PostgreSQL 16 + RLS) | **81 passed** |
+| `npm run test:db` (PostgreSQL 16 + RLS) | **87 passed** |
 | `npx vite build` | Pass |
-| `npm run e2e` (browser + axe) | **66 passed** |
+| `npm run e2e` (browser + axe) | 66 passed as of PR #13; re-run before the next PR |
 
 ## Where things are
 
@@ -84,12 +82,14 @@ src/domain/        pure prototype rules (local, simulated actor)
 src/access/        pure account-role policy (not yet wired to the router)
 src/auth/          Supabase client - dormant, no project configured
 supabase/migrations/
-  202609090001_accounts_reports.sql    accounts, roles, abandoned citizen reports
-  202609090002_internal_operations.sql THE INTERNAL OPERATIONS SCHEMA
+  202609090001_accounts_reports.sql       accounts, roles, abandoned citizen reports
+  202609090002_internal_operations.sql    THE INTERNAL OPERATIONS SCHEMA
+  202609110003_client_role_privileges.sql least privilege for anon/authenticated
+  202609110004_function_execute_privileges.sql  removes the PUBLIC execute grant
 supabase/tests/    TEST-ONLY Supabase platform stub - never apply to a real project
-db-tests/          integration tests: role matrix, lifecycle, attendance
+db-tests/          integration tests: role matrix, lifecycle, attendance, privileges
 docs/ACCESS_MODEL.md   the role and RLS contract, and what is not enforced yet
-docs/DATABASE.md       schema semantics and how to run the DB tests
+docs/DATABASE.md       schema semantics, the live project, how to run the DB tests
 ```
 
 ## Non-negotiable rules for anyone continuing this work
@@ -133,13 +133,30 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 | Phones | Both iPhone and Android |
 | Prototype data | All member rows and vehicle callsigns are fictional |
 
+## The live Supabase project
+
+A project exists and all four migrations are applied to it. Recorded here so
+nobody has to rediscover it:
+
+| Fact | Value |
+|---|---|
+| Project | `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, `eu-central-1` |
+| PostgreSQL | 17 (the tests run against 16 locally and in CI) |
+| State before | `public` schema completely empty — no migration had ever run |
+| Applied | `202609090001`, `202609090002`, `202609110003`, `202609110004`, in order |
+| Verified | Structural fingerprint matches the locally-tested schema byte for byte — see [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
+| Publishable key | Safe in the client bundle by design; it is **not** a secret |
+| Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
+
+**CI does not and must not reach this project.** That would need a secret in CI.
+The local PostgreSQL suite is the authoritative automated evidence; no claim here
+says the hosted project itself was tested by CI.
+
 ## Known limitations (accurate, not aspirational)
 
-- **No application code uses the new schema.** The browser prototype still runs
-  on device-local state with a simulated actor. The schema is verified; the
-  client is not connected to it.
-- **No Supabase project exists.** The migrations have never run against a hosted
-  database — only PostgreSQL 16, locally and in CI.
+- **No application code uses the new schema yet.** The browser prototype still
+  runs on device-local state with a simulated actor. The schema is verified and
+  applied; the client is not connected to it.
 - No notification transport of any kind. No push, SMS, email or call.
 - No session invalidation for a suspended account: suspension removes the role
   immediately so every request is refused, but an already-issued JWT stays
@@ -153,32 +170,48 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
 ## Blockers needing an owner decision
 
-| # | Blocker | What is needed |
+| # | Blocker | State |
 |---|---|---|
-| B1 | No Supabase project | Approval to create one, and who pays above the free tier. Holds personal data, so it is a privacy decision too |
-| B2 | Email verification | A configurable SMTP provider. Supabase's default sender only reaches project-team addresses and is rate-limited; it cannot serve real registration |
-| B3 | Notification transport | PWA Web Push vs native must be investigated per platform before anything is promised. Apple Critical Alerts need an entitlement; Google Play restricts SMS permissions |
-| B4 | Emergency number to display | The non-emergency notice deliberately does not invent one. Confirm the exact number, or confirm that generic wording is preferred |
-| B5 | Response visibility | Currently every member called to an intervention sees the others' responses. Confirm, or restrict to command |
-| B6 | Second break-glass owner | Exactly one owner is enforced by a unique index. Decide whether a documented recovery owner is wanted |
-| B7 | Real roster and vehicle data | Still fictional. Needs approved data, and a private place to put it |
-| B8 | Merging the PR stack | #9–#12 and `f1111d5` are unmerged. Owner decides whether to merge the stack or this branch alone |
+| B1 | Supabase project | **Resolved.** The owner created one and approved its use; migrations applied and verified |
+| B2 | Email verification | **Decided:** "Confirm email" is to be turned **off** in the Supabase dashboard for now, so an account is usable immediately. An SMTP provider is still needed before real registration at scale — Supabase's default sender only reaches project-team addresses and is rate-limited |
+| B3 | Notification transport | Open. PWA Web Push vs native must be investigated per platform before anything is promised. Apple Critical Alerts need an entitlement; Google Play restricts SMS permissions |
+| B4 | Emergency number to display | **Resolved: 112.** The non-emergency notice names it rather than inventing one |
+| B5 | Response visibility | **Resolved:** every member called to an intervention may see the others' responses. That is how a crew coordinates |
+| B6 | Second break-glass owner | **Resolved:** one owner only, enforced by the unique index. No second owner for now |
+| B7 | Real roster and vehicle data | Open, and a hard rule: real member and vehicle data **never** enters this repository — not in code, fixtures, seed data, tests or documentation |
+| B8 | Merging the PR stack | **Resolved.** PR #13 merged 2026-09-11 as a normal merge; the whole stack landed with it |
+
+### Owner action items
+
+Things only the owner can do, recorded so they are not silently assumed done:
+
+1. **Rotate the Supabase secret key.** It may have been exposed earlier. Nothing
+   built here needs it at runtime, so rotating it breaks nothing in this app.
+2. **Turn off "Confirm email"** in the Supabase dashboard (Authentication →
+   Sign In / Providers). There is no API or MCP access to auth configuration
+   from here, so this cannot be done for them.
 
 ## Next concrete action
 
 Connect the application to the verified schema, in this order:
 
-1. A global authentication and access state that loads the profile, role and
+1. Configuration: `.env.example` with the project URL and publishable key, a
+   git-ignored `.env.local` for local runs, and nothing secret in either.
+2. A global authentication and access state that loads the profile, role and
    status **before** protected routes render, replacing
    `AccountAccessSetup`'s local `READY` step (which still switches on sign-in
    alone without loading the server profile).
-2. Real protected routes driven by `current_dvd_role()`, replacing the
+3. `docs/OWNER_BOOTSTRAP.md`: the one-time, manual, copy-pasteable path to
+   making the owner's account `OWNER`, executable by a non-developer, including
+   what to do if the single-owner unique index rejects it.
+4. An owner-only account directory wired to `owner_set_role` and
+   `owner_set_account_active`, with a mandatory reason and an audit trail —
+   replacing the simulated `ADMIN` → `OWNER` shortcut.
+5. Real route guards keyed off the loaded role and status, replacing the
    simulated actor selector on operational screens.
-3. The commander draft → review → publish flow against
-   `publish_intervention`.
-4. Check-in / check-out and the attendance board against the attendance
+6. Then, in a later slice: the commander draft → review → publish flow against
+   `publish_intervention`, and check-in / check-out against the attendance
    commands.
 
-Steps 1–2 need **B1** resolved first. Everything up to and including the schema
-is done and tested; what remains is wiring, and it cannot be honestly verified
-without a project.
+**B1 is resolved** — the project exists and the schema is on it. What remains is
+wiring, and it can now be verified honestly.

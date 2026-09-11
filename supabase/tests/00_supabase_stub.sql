@@ -35,6 +35,16 @@ grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema auth to anon, authenticated, service_role;
 grant usage on schema storage to anon, authenticated, service_role;
 
+-- A Supabase project ships with these default privileges, so EVERY table and
+-- function created in `public` arrives with full access already granted to the
+-- client roles. Reproducing that is not decoration: without it this database
+-- would be stricter than the real platform, and the suite would keep proving a
+-- least-privilege property the hosted project does not actually have. They are
+-- the reason 202609110003_client_role_privileges.sql exists.
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,

@@ -5,6 +5,89 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-11 - PR #13 merged, the schema applied to a real project, and a privilege defect it exposed
+
+**PR #13 merged.** A normal merge, not a squash, so the fifteen individual commits keep their own
+history and authorship - including the work contributed through the `codex/*` stack (#9-#12), which
+was linear in it and landed at the same time. `main` is now `3133d00` and its tree is byte-identical
+to PR #13's head `110e57b`, confirmed with `git diff`. The working branch was restarted from that
+`main`.
+
+**Migrations applied to the owner's Supabase project.** The `public` schema was completely empty
+beforehand - the migrations had never run there. `202609090001` and `202609090002` were applied in
+order, then the two new ones below.
+
+**Verified rather than assumed.** A structural fingerprint of the hosted schema was compared against
+the same fingerprint taken from a local PostgreSQL 16 that had applied the same files: tables and
+their RLS flags, every column with type, nullability and default, every constraint definition, every
+index definition, every policy with its `using` and `with check` expressions, every trigger, every
+table grant, and an md5 of every function body. **Every section matches byte for byte.** The single
+difference is Supabase's own platform function `rls_auto_enable()`, which the local stub does not
+provide. This check is what makes "the live project runs the schema the tests cover" a statement of
+fact rather than of intent.
+
+**The defect that only a real project could reveal.** A Supabase project ships with
+`alter default privileges in schema public grant all on tables to anon, authenticated, service_role`.
+Every table these migrations create therefore arrived on the hosted project with `INSERT`, `UPDATE`,
+`DELETE` and `TRUNCATE` already granted to `authenticated`. `202609090002` revoked them from `anon`,
+but for `authenticated` it only *added* `select` - on a bare PostgreSQL instance the write privileges
+were never there to take, so the local suite could not see the gap and passed while proving less than
+it claimed.
+
+Consequence, established by running it rather than by reasoning about it: **row level security does
+not apply to `TRUNCATE`**, so a signed-in account with no operational role at all could empty a table.
+`DELETE` and `UPDATE` were still filtered to zero rows by the policies. No data was ever reachable
+through the REST API, which exposes no `TRUNCATE`, and the project holds no data yet - but the access
+model claimed two layers and had one.
+
+A second, smaller finding from Supabase's own linter: `revoke all on all functions ... from anon` does
+not remove PostgreSQL's default `PUBLIC` grant, so eight `security definer` helpers were callable
+without signing in. They all key on `auth.uid()` and returned NULL or false, so nothing leaked - but
+`docs/ACCESS_MODEL.md` said "`anon` holds nothing", and that was not true.
+
+**Fixed, in new migrations rather than by editing applied ones:**
+
+- `202609110003_client_role_privileges.sql` - takes every privilege back from both client roles, then
+  grants `select` on all tables and `insert` on exactly the three that have an `INSERT` policy.
+- `202609110004_function_execute_privileges.sql` - revokes the `PUBLIC` execute grant from the eight
+  helpers and grants `execute` to `authenticated` explicitly, which policy evaluation requires.
+
+**Fixed the test suite so it can no longer miss this.** `supabase/tests/00_supabase_stub.sql` now
+reproduces Supabase's default privileges. Without that the local database was *stricter* than the
+real platform. Confirmed the tests actually detect the gap: removing `202609110003` from the harness
+makes four tests fail. Four new tests read the grants themselves - anon holds nothing, authenticated
+holds `select` everywhere and `insert` only where a policy backs it, no function is anon-executable,
+and `TRUNCATE` is refused - so a table or function added later without its own revoke fails CI.
+
+**Verified**
+
+- `npm run lint`, `npm run typecheck`: pass.
+- `npm run test` (unit): 91 passed.
+- `npm run test:db` (PostgreSQL 16 + RLS): 87 passed, up from 81.
+- Supabase security advisors: anon-executable `security definer` findings went from 9 to 1, and the
+  remaining one is Supabase's own `rls_auto_enable()`, not this project's.
+
+**Not fixed, deliberately.** The advisor also reports `btree_gist` installed in the `public` schema
+(WARN, `extension_in_public`). Its functions take `internal` arguments and cannot be called through
+the REST API, so this is namespace hygiene rather than exposure. Remediation is recorded in
+`docs/ACCESS_MODEL.md` §8: `alter extension btree_gist set schema extensions;`. Left alone for now
+because moving it would make the local and hosted schemas diverge, which is the property that made
+the verification above worth anything.
+
+**Owner action items** (only the owner can do these):
+
+1. **Rotate the Supabase secret key.** It may have been exposed earlier. Nothing built here uses it
+   at runtime, so rotating it breaks nothing in this application.
+2. **Turn off "Confirm email"** in the Supabase dashboard (Authentication -> Sign In / Providers).
+   There is no API or MCP access to auth configuration from here.
+
+**Next concrete action**
+
+`.env.example` plus a git-ignored `.env.local`, then the global authentication and access state that
+loads session, profile, role and status **before** any protected route renders.
+
+---
+
 ## 2026-09-09 - Internal-operations direction, and a verified database contract
 
 **Product direction (highest priority of the brief).** Recorded the owner's decision that DVD Tivat

@@ -20,9 +20,9 @@ facts that no single action is allowed to fake**.
 > role selector is a demonstration control, not a login. Every member, contact
 > label, vehicle and location in this repository is invented.
 >
-> The **database schema** is a step ahead of the application: it is written and
-> integration-tested against real PostgreSQL, but no Supabase project exists and
-> no application code is connected to it yet. See
+> The **database schema** is a step ahead of the application: it is written,
+> integration-tested against real PostgreSQL, and now applied to a real Supabase
+> project — but **no application code is connected to it yet**. See
 > [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) for exactly
 > what is and is not enforced.
 
@@ -69,9 +69,9 @@ npm run screenshots  # regenerates docs/screenshots/ (writes into the repo)
 already provides one, point at it with `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromium`.
 
 `npm run test:db` needs a real PostgreSQL 16 - no Supabase project, credentials
-or paid service. `npm run db:start` provides a throwaway one; see
-[docs/DATABASE.md](docs/DATABASE.md). It drops and recreates schemas, so point it
-only at a scratch database.
+or paid service, and it never touches the hosted project. `npm run db:start`
+provides a throwaway one; see [docs/DATABASE.md](docs/DATABASE.md). It drops and
+recreates schemas, so point it only at a scratch database.
 
 ## The screens
 
@@ -99,7 +99,7 @@ landing page — the point of a prototype is to be driven.
 | Real member data | The repository is public. Everything is invented |
 | Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
 | Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
-| A connected server | The schema is written and tested, but no Supabase project exists and no application code uses it. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
+| A connected server | The schema is written, tested and applied to a real project, but no application code uses it yet. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
 
 **A browser prototype is not evidence that a locked Android or iPhone will raise
 an alarm.** Whether that is achievable at all depends on platform permissions,
