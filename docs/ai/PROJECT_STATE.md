@@ -116,8 +116,8 @@ Proposed and owner-approved sequencing, smallest reviewable PR first:
 
 | # | Slice | State |
 |---|---|---|
-| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Merged in PR #16. Migration `202609120005` is not applied to the hosted project** |
-| **3b-0** | **Attendance truth** — provenance, confirmation/rejection, the two write paths that were missing entirely (acknowledgement, vehicle movements), and the withdrawn-account identity fix | **Merged in PR #18. Migration `202609130006` is not applied to the hosted project** |
+| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Merged in PR #16. Migration `202609120005` applied to the hosted project 2026-09-12** |
+| **3b-0** | **Attendance truth** — provenance, confirmation/rejection, the two write paths that were missing entirely (acknowledgement, vehicle movements), and the withdrawn-account identity fix | **Merged in PR #18. Migration `202609130006` applied to the hosted project 2026-09-12 and smoke-tested there** |
 | 3b | General availability (C2), journey progress (C3) and the member-facing response flow on real data | Next |
 | 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | Before push, not after |
 | 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | |
@@ -256,11 +256,11 @@ still pending.**
 - PR #13, #14, #15, #16 and #17 all merged with normal merge commits (B8);
   latest product-code checkpoint is `55fdb093`, latest merge of any kind is
   `7d00d9bb` (documentation only).
-- Migrations `...0001` to `...0004` are applied to the hosted project and were
-  verified against the locally-tested schema byte for byte. **`202609120005`
-  (slice 3a) and `202609130006` (slice 3b-0) are not applied there**, so the
-  hosted schema is **two migrations behind `main`**. Both are now merged; only
-  the hosted application of them is outstanding.
+- **All six migrations are applied to the hosted project** and verified against
+  the locally-tested schema byte for byte. `202609120005` and `202609130006`
+  were applied on 2026-09-12, in that order, with the owner's conditional
+  authorisation and after a non-destructive preflight. The hosted schema is
+  **level with `main`**.
 - Slice 3a closed the gap that the schema could publish a call-out while nothing
   could create one — and that a hundred passing tests missed it, because the test
   helper created drafts as the superuser.
@@ -332,7 +332,7 @@ scripts/check-bundle-secrets.mjs  reads the built artifact; no secret may ship
 | Screen | Backed by |
 |---|---|
 | `nalozi` (Nalozi i pristup) | **The server.** Sign-in, registration, profile, role, status, the owner directory and its two commands |
-| `evidencija` (Evidencija drustva) | **The server**, from slice 3a. The society's real members, groups and vehicles, and the account-to-member link. ADMIN or OWNER only. **Works against `main`'s schema, not yet against the hosted project** — `202609120005` is unapplied there, so on the live project today every one of its commands fails with `function ... does not exist` |
+| `evidencija` (Evidencija drustva) | **The server**, from slice 3a. The society's real members, groups and vehicles, and the account-to-member link. ADMIN or OWNER only. **Usable against the hosted project since `202609120005` was applied on 2026-09-12** |
 | `clanovi` (Clanovi) | Device-local **fictional** roster with the actor selector. Easy to confuse with `evidencija` and must not be: this one edits invented demonstration data and touches no server record |
 | `dezurni`, `clan`, `vozila`, `prikaz`, `istorija` | Device-local fictional state and the actor selector. Each carries a banner saying so |
 | `dojava` | Abandoned research, local only |
@@ -386,19 +386,18 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
 ## The live Supabase project
 
-A project exists and the **first four** migrations are applied to it. The fifth
-(`202609120005`, slice 3a, merged into `main`) and the sixth (`202609130006`,
-slice 3b-0) are not — see the limitations above. Both are merged into `main`;
-neither has been applied to the hosted project. Recorded
-here so nobody has to rediscover it:
+A project exists and **all six migrations are applied to it**, verified by a
+structural fingerprint that matches a local PostgreSQL 16 built from the same
+files. Recorded here so nobody has to rediscover it:
 
 | Fact | Value |
 |---|---|
-| Project | `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, `eu-central-1` |
+| Project | `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, **`eu-west-1`** (the docs said `eu-central-1`; the Management API reports `eu-west-1`, so the documented value was wrong) |
 | PostgreSQL | 17 (the tests run against 16 locally and in CI) |
 | State before | `public` schema completely empty — no migration had ever run |
 | Applied | `202609090001`, `202609090002`, `202609110003`, `202609110004`, in order |
-| **Not applied** | `202609120005` (slice 3a) and `202609130006` (slice 3b-0). Both are merged into `main`; the hosted schema is **two migrations behind `main`** until they are applied, in that order |
+| **Applied** | All six. `202609120005` and `202609130006` were applied on 2026-09-12 with the owner's conditional authorisation, in that order, after a non-destructive preflight |
+| **Verified** | Structural fingerprint matches a local PostgreSQL 16 with the same seven files — **all seven sections identical**, functions `907cb555d29b28616a57807d3503f55a` |
 | Verified | Structural fingerprint matches the locally-tested schema byte for byte — see [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
 | Publishable key | Safe in the client bundle by design; it is **not** a secret |
 | Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
@@ -433,12 +432,12 @@ says the hosted project itself was tested by CI.
 - **No screen publishes a real call-out.** `create_intervention_draft`,
   `update_intervention_draft` and `discard_intervention_draft` exist and are
   tested, but the dispatcher screen still writes device-local state. Slice 3b.
-- **Two migrations are not applied to the hosted project.** `202609120005`
-  (slice 3a) and `202609130006` (slice 3b-0) are proven against local PostgreSQL
-  16 and CI's `postgres:16` service only. Applying them needs owner
-  authorisation. Until then the hosted database still carries the attendance
-  defect `...0006` fixes, and every organisational and attendance command would
-  fail there with `function ... does not exist`.
+- ~~Two migrations are not applied to the hosted project.~~ **Resolved
+  2026-09-12: all six are applied and fingerprint-verified.** Both defects
+  slice 3b-0 fixed are now fixed on the live database too, and the whole
+  operational journey was exercised there against disposable fictional data.
+  What is still missing on the hosted project is **data and screens**, not
+  schema.
 - A browser prototype is **no evidence** that a locked Android or iPhone will
   raise an alarm.
 - **PWA only** is decided (C1); the PWA itself is not built. No manifest, no
@@ -516,19 +515,17 @@ project still needs `202609120005` before those paths exist there, and
 2. ~~Merge PR #18 (slice 3b-0).~~ **Done — merged normally on 2026-09-12 into
    `45d53640`, after the owner's nine-point pre-merge checklist was verified
    point by point.**
-3. **Apply `202609120005` then `202609130006`** to the hosted project, in that
-   order. **Still not authorised** — merging the code was explicitly not
-   authorisation to touch the hosted project, and the owner said so. `...0005` is purely additive; **`...0006` is not
-   — it replaces the return contract of `attendance_totals(timestamptz,
-   timestamptz)`**, which is why the order matters and why
-   [DATABASE.md](../DATABASE.md) carries a preflight and verification procedure
-   for it rather than a one-line "additive" claim. The hosted database still
-   has the attendance defect that `...0006` fixes.
-4. Smoke-check `Evidencija drustva` against the hosted project with **disposable
-   data only**, cleaning up with before/after row counts.
-5. Then slice 3b proper: availability, journey progress, and the real commander
-   and firefighter screens, including the batch-confirmation requirement
-   recorded below.
+3. ~~Apply `202609120005` then `202609130006` to the hosted project.~~ **Done —
+   2026-09-12, in that order, after the §3.1 preflight. Fingerprint-verified
+   against a local PostgreSQL built from the same files.**
+4. ~~Smoke-check the hosted project with disposable data only.~~ **Done — the
+   whole journey (draft, publish, acknowledge, respond, check in, vehicle out,
+   check out, vehicle back, confirm, reject, close) plus every role boundary,
+   cleaned up by exact identifier back to zero rows in every table.**
+5. **Slice 3b proper: the real operational interface.** Availability, journey
+   progress, and the commander and firefighter screens on real authenticated
+   server data, including the batch-confirmation requirement recorded below.
+   **This is the remaining work before the presentation.**
 
 ## Manual owner checklist
 
@@ -554,7 +551,8 @@ Follow [OWNER_BOOTSTRAP.md](../OWNER_BOOTSTRAP.md) first.
 If any of these behaves differently from the expected column, that is a defect —
 record it here rather than working around it.
 
-**B1 is resolved** — the project exists, the first four migrations are on it, and
-identity and access run against it. `202609120005` and `202609130006` are not applied
-there, so this checklist covers identity and access only; the roster screen
-cannot be exercised against the live project until that migration is applied.
+**B1 is resolved** — the project exists, **all six migrations are on it**, and
+identity, access, the roster and the whole operational journey have been
+exercised against it with disposable fictional data. The hosted project holds
+**no data at all** between demonstrations: every table was empty before the
+smoke test and empty again after it.

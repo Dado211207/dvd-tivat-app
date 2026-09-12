@@ -371,8 +371,8 @@ Honest list of what this slice does **not** do:
   | Capability | Implemented and tested | Usable on the hosted project |
   |---|---|---|
   | Sign-in, registration, profile completion, role and status load, owner account directory | Yes | **Yes** — migrations `...0001`–`...0004` are applied there |
-  | Roster screen `Evidencija drustva`: members, groups, vehicles, account-to-member link | Yes — against local PostgreSQL 16 and CI's `postgres:16`, from a schema built from zero | **No.** Migration `202609120005` is **not applied** to the hosted project, so every one of these commands would fail there with `function ... does not exist` |
-  | Attendance provenance and confirmation, acknowledgement, vehicle departure and return | Yes, as **server commands with no screen** — against local PostgreSQL 16 and CI's `postgres:16`, and merged into `main` | **No.** Migration `202609130006` is **not applied** there. The hosted `attendance_totals()` is still the version that counts a self-declared claim as participation, and the hosted `current_member_id()` still resolves for a withdrawn account |
+  | Roster screen `Evidencija drustva`: members, groups, vehicles, account-to-member link | Yes — against local PostgreSQL 16 and CI's `postgres:16`, from a schema built from zero | **Yes** — `202609120005` applied 2026-09-12 |
+  | Attendance provenance and confirmation, acknowledgement, vehicle departure and return | Yes, as **server commands** — against local PostgreSQL 16, CI's `postgres:16`, and now the hosted project itself | **Yes** — `202609130006` applied 2026-09-12 and smoke-tested there: provenance, confirmation, rejection, the withdrawn-account lockout and the confirmed-only totals all behaved as specified. **No screen calls them yet** |
 
   Applying `202609120005` and then `202609130006` to the hosted project, in that
   order, is a deliberate, separate, owner-authorised step **that has not been

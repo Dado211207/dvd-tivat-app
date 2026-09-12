@@ -5,6 +5,84 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-12 - Both migrations applied to the hosted project, and the journey exercised there
+
+**Applied, in order, with the owner's conditional authorisation.** `202609120005` then
+`202609130006` on `dvd-tivat-app` (ref `yskhdzrdbywrpfowckpn`, `eu-west-1`, PostgreSQL 17.6).
+`list_migrations` now returns six.
+
+**The preflight mattered more than usual, and one of its answers changed the risk picture
+completely: the hosted project held NO DATA AT ALL.** Zero rows in `auth.users`, `profiles`,
+`access_grants`, `members`, `interventions`, `attendance_intervals`. Everything earlier
+verification passes created had been cleaned up properly. So the drop-and-recreate of
+`attendance_totals` could not lose anybody's record, because there were no records - and the
+recovery artifact is simply the repository, which reproduces the state exactly.
+
+The rest of the preflight, per DATABASE.md 3.1: four-migration starting point confirmed by probing
+for `is_dvd_admin`, `organisation_audit`, the draft commands and the attendance commands (all
+absent, as required); the OLD five-column `attendance_totals` contract **read rather than assumed**
+(body md5 `34a0d02c...`, grants `postgres | authenticated | service_role`, no anon, no PUBLIC); and
+a `pg_depend` check for dependent views returning **zero rows**.
+
+**Post-migration verification passed every check**, including the one the documentation singles out
+as easiest to forget: dropping a function drops its grants, so `attendance_totals` was re-granted -
+`authenticated` can execute, `anon` cannot. Exactly one overload exists, with the eight-column
+contract. The identity fix is present in the hosted body. `attendance_correct` no longer sets
+`verified`.
+
+**A fingerprint mismatch I caused, found by checking rather than by assuming.** Six of seven
+fingerprint sections matched the local schema immediately; `functions` did not, though the count was
+identical at 43. Thirteen bodies differed - exactly the ones where I had stripped inline comments to
+keep the apply request manageable. `pg_get_functiondef` stores a body verbatim, so the hashes
+differed even though the code did not. Proven cosmetic by comparing comment- and
+whitespace-normalised hashes, then **fixed properly by re-applying the exact repository text**
+rather than documenting a thirteen-function exception list. A fingerprint with expected differences
+cannot detect an unexpected one. All seven sections now match: functions
+`907cb555d29b28616a57807d3503f55a`.
+
+**The whole operational journey was then exercised on the hosted project** with eight disposable
+fictional accounts on `example.invalid`, one fictional vehicle and one fictional exercise call-out.
+Highlights, all observed rather than reasoned about:
+
+- The role contract resolves correctly for OWNER, ADMIN, COMMANDER and FIREFIGHTER, and to NULL for
+  PENDING, SUSPENDED and incomplete-profile - **including no member identity**, so the
+  `current_member_id()` fix is live.
+- COMMANDER is refused all four roster commands (`ADMIN_REQUIRED`) and role assignment
+  (`OWNER_REQUIRED`), and allowed drafting. ADMIN is allowed both roster and command work and
+  refused role assignment and suspension - the owner's decision, enforced.
+- FIREFIGHTER may acknowledge, respond, check themselves in and move a vehicle; and is refused
+  confirming their own attendance, checking anybody else in, and closing the intervention.
+- A SUSPENDED account whose member row is still on the recipient list is refused every write and
+  **sees zero rows** in `interventions`, `attendance_intervals` and `members`. That is the read leak
+  closed, verified on the live database rather than only locally.
+- Anonymous is refused at the privilege layer on every table and function tried.
+- Provenance: the firefighter's own check-in recorded `SELF_DECLARED`; the commander recording
+  somebody else recorded `COMMAND_RECORDED`. Both landed unconfirmed.
+- Rejection demands a reason and confirmation does not, so batch confirmation stays possible.
+  Confirming twice is a retry. Rejecting a confirmed interval is refused.
+- **The central claim held on the live database**: after one confirm and one reject,
+  `attendance_totals()` reported 83.18 confirmed seconds for the confirmed member and **nothing at
+  all** for the rejected one, which appears only as `rejected_intervals = 1`.
+- Publishing produced two recipients and two outbox rows, **none of them anything but `QUEUED`**.
+  Retried publish and retried draft were both no-ops.
+- An eleven-event audit trail records the whole journey in order, and the confirm and reject rows
+  carry the provenance of what was decided about.
+
+**One design consequence worth writing down for the interface.** Check-in and check-out cannot
+happen in the same database transaction: `now()` is the transaction's start time, so both timestamps
+would be equal and `attendance_interval_order` (`ended_at > started_at`) correctly refuses it. An
+interval must have duration. The application must therefore never batch a check-in and its check-out
+into one request - which it would have no reason to do, but it is better recorded than rediscovered.
+
+**Cleanup was by exact identifier, and verified.** Every disposable row was deleted in foreign-key
+order with predicates naming the smoke ids, the probe helper function was dropped, and every table
+counted back to **zero**. The hosted project is once again schema-only with no data.
+
+**Not done here:** no screen calls any of this yet, no real notification transport exists, and no
+real person was contacted. Next: slice 3b proper, the real operational interface.
+
+---
+
 ## 2026-09-12 - PR #18 merged, and ADMIN command authority decided
 
 **Merged.** PR #18 (slice 3b-0) merged into `main` with a normal merge commit,

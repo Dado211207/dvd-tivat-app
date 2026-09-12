@@ -97,33 +97,44 @@ order, and what to do if it fails halfway. Read it before applying either file.
 
 ## 3. The real Supabase project
 
-**Partially applied, and the gap matters.**
+**Fully applied and fingerprint-verified.**
 
 | Migration | On the hosted project |
 |---|---|
-| `202609090001` · `202609090002` · `202609110003` · `202609110004` | **Applied**, in order |
-| `202609120005_organisational_writes.sql` | **Not applied** |
-| `202609130006_attendance_truth.sql` | **Not applied** |
+| `202609090001` · `202609090002` · `202609110003` · `202609110004` | **Applied** 2026-09-11, in order |
+| `202609120005_organisational_writes.sql` | **Applied** 2026-09-12 |
+| `202609130006_attendance_truth.sql` | **Applied** 2026-09-12 |
 
-The first four were applied to the owner's project (`dvd-tivat-app`, region
-`eu-central-1`, PostgreSQL 17), whose `public` schema was empty beforehand.
+The project is `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, region `eu-west-1`,
+PostgreSQL 17. Its `public` schema was empty before the first four.
 
-**The hosted schema is therefore two migrations behind `main`.** Every
-function `202609120005` defines — the three intervention-draft commands, the
-member, group and vehicle commands, `admin_link_member_account`,
-`is_dvd_admin()` — and the `organisation_audit` table do not exist there.
-Neither does anything from `202609130006`: the attendance confirmation commands,
-the `source` and rejection columns, `acknowledge_intervention`, the vehicle
-movement commands, or the new `attendance_totals()` shape. Calling any of them
-against the hosted project fails. Applying them is a deliberate,
-owner-authorised step that has not been taken.
+`...0005` and `...0006` were applied with the owner's conditional authorisation
+after the §3.1 preflight: the four-migration starting point confirmed, neither
+pending migration partly applied, the old five-column `attendance_totals`
+contract read rather than assumed, **zero dependent views** (`pg_depend`), and
+every table empty. The recovery position was that the repository's own
+migrations reproduce the state exactly, because there was no data to lose.
 
-**The hosted project still has the attendance defect.** Its
-`attendance_totals()` is the original version with no `verified` filter, so on
-that database a self-declared claim would still be summed as participation.
-Nothing reads it there yet — no screen uses attendance against the server — but
-it is the reason to apply `202609130006` rather than leave it pending
-indefinitely.
+Post-migration verification passed every check in §3.1, including the one most
+easily forgotten: **the `EXECUTE` grant survived the drop-and-recreate**
+(`authenticated` yes, `anon` no), and exactly one `attendance_totals` overload
+exists with the eight-column contract.
+
+**The hosted schema is now level with `main`, and that was verified rather than
+assumed.** A structural fingerprint — functions, columns, constraints, indexes,
+policies, client grants and RLS flags — was taken on the hosted project and on a
+local PostgreSQL 16 that had applied the same seven files from zero. **All seven
+sections matched**, functions at `907cb555d29b28616a57807d3503f55a` across 43
+functions.
+
+> One wrinkle worth recording, because it nearly became a silent exception. The
+> first apply stripped the inline comments out of thirteen function bodies to
+> keep the request manageable. `pg_get_functiondef` stores a body verbatim, so
+> those thirteen hashed differently even though the code was identical — proven
+> identical by comparing comment- and whitespace-normalised hashes before
+> anything was changed. Rather than document a thirteen-function exception list
+> that would rot, the exact repository text was re-applied. A fingerprint with
+> a list of "expected differences" stops being able to detect a real one.
 
 The result of those first four was verified rather than assumed: a structural
 fingerprint of the hosted schema — tables and their RLS flags, every column with

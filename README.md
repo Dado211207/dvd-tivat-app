@@ -29,13 +29,11 @@ facts that no single action is allowed to fake**.
 > operational screens still run on device-local fictional state driven by the
 > actor selector and say so in a banner.
 >
-> **Two migrations are pending on the hosted project**, not one: `202609120005`
-> (the organisational write paths, merged) and `202609130006` (attendance
-> provenance and confirmation). Both are merged into `main`. The second adds
-> server commands
-> only — no screen uses attendance against the server yet. Both need the owner's
-> separate authorisation, and `202609130006` is **not** a purely additive
-> migration; see [docs/DATABASE.md §3.1](docs/DATABASE.md#31-applying-the-two-pending-migrations--and-why-both-are-additive-is-wrong).
+> **All six migrations are applied to the hosted project** as of 12 September
+> 2026, and the whole operational journey has been exercised there against
+> disposable fictional data. What the server still lacks is **screens**, not
+> schema: no interface yet calls the attendance, acknowledgement or vehicle
+> commands.
 >
 > The actor selector is a demonstration control, **not a login**. The two are
 > deliberately shaped differently in the interface so a demonstration cannot
@@ -117,7 +115,7 @@ landing page — the point of a prototype is to be driven.
 | Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
 | Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
 | Password reset | No mail provider is configured, so a reset form would send nothing while looking as though it had. The screen says that instead of offering one |
-| A fully connected operational server | Identity and access use the hosted project. The organisational and attendance commands are merged and tested, but **neither migration is applied there**. No screen yet reads interventions, responses, attendance or vehicle movements from the server, and notification delivery does not exist. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
+| A fully connected operational server | Identity, access and the society's records use the hosted project, and every operational command exists and is applied there. What is missing is the **interface**: no screen yet reads interventions, responses, attendance or vehicle movements from the server, and notification delivery does not exist at all. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
 
 **A browser prototype is not evidence that a locked Android or iPhone will raise
 an alarm.** Whether that is achievable at all depends on platform permissions,
