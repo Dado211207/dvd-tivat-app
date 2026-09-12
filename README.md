@@ -19,11 +19,22 @@ facts that no single action is allowed to fake**.
 > notification, no SMS and no phone call to anyone**, and every member, contact
 > label, vehicle and location in this repository is invented.
 >
-> **One screen is real.** *Nalozi i pristup* signs in against a real Supabase
+> **Two server-backed areas now exist in the code, but only one is active on the
+> hosted project.** *Nalozi i pristup* signs in against the hosted Supabase
 > project, loads the account's role and status from the server before showing
-> anything, and lets the owner grant and withdraw access for real accounts. Every
-> other screen still runs on device-local fictional state driven by the actor
-> selector — and says so, in a banner on itself.
+> anything, and lets the owner grant and withdraw access for real accounts.
+> *Evidencija drustva* manages members, groups, vehicles and account links through
+> tested server commands, but migration `202609120005` has not yet been applied
+> to the hosted project, so that screen is not usable there yet. The remaining
+> operational screens still run on device-local fictional state driven by the
+> actor selector and say so in a banner.
+>
+> **Two migrations are pending on the hosted project**, not one: `202609120005`
+> (the organisational write paths, merged) and `202609130006` (attendance
+> provenance and confirmation, on a branch). The second adds server commands
+> only — no screen uses attendance against the server yet. Both need the owner's
+> separate authorisation, and `202609130006` is **not** a purely additive
+> migration; see [docs/DATABASE.md §3.1](docs/DATABASE.md#31-applying-the-two-pending-migrations--and-why-both-are-additive-is-wrong).
 >
 > The actor selector is a demonstration control, **not a login**. The two are
 > deliberately shaped differently in the interface so a demonstration cannot
@@ -86,6 +97,7 @@ recreates schemas, so point it only at a scratch database.
 | **Vozila** | Anyone at the station | Log vehicle departures and returns as explicit, independent actions |
 | **Prikaz u bazi** | Station wall display | Large read-only overview: incident, location, totals, answers, vehicles |
 | **Clanovi** | Everyone; editable in the admin simulation | The fictional roster, groups and vehicles, with a local-only editor for invented demonstration records |
+| **Evidencija drustva** | Owner and administrator | Server-backed member, group, vehicle and account-link administration. Implemented and tested; unavailable on the hosted project until migration `202609120005` is applied |
 | **Nalozi i pristup** | **Real accounts** | Sign in and register against the real project; the owner sees every registered account and can assign a role or withdraw access with a mandatory reason, with a permanent audit beneath |
 | **Istorija** | Everyone | Past exercises, the timestamped activity log, and a confirmed demo reset |
 | **Prijava gradjana** (under the *Nije u upotrebi* heading) | **Abandoned research, not part of the product** | Out of the operational navigation groups. Retained only so reviewed work can be reused, behind an explicitly experimental heading and a non-emergency notice |
@@ -98,13 +110,13 @@ landing page — the point of a prototype is to be driven.
 | Absent | Why |
 |---|---|
 | Any real notification | Nobody may be alerted by a demonstration. Delivery is recorded as `NIJE_POKUSANO` and never anything else, enforced by a test |
-| Authentication on the operational screens | Only the accounts screen is authenticated. The actor selector switches which fictional person the other screens pretend to be, and protects nothing — which is why each of them says so on itself |
-| Shared operational data | Interventions, responses, vehicles and history still live in one browser's `localStorage`. Two devices show two unrelated worlds, and clearing browser data deletes it. Accounts and roles are the exception: those are on the server |
+| Authentication on the operational screens | *Nalozi i pristup* and *Evidencija drustva* use real authenticated access. The actor selector switches only the remaining fictional prototype screens and protects nothing — which is why each of those screens says so on itself |
+| Shared operational data | Interventions, responses, vehicle movements and history still live in one browser's `localStorage`. Accounts and roles use the hosted server. Shared member/group/vehicle administration is implemented, but remains unavailable on the hosted project until migration `202609120005` is applied |
 | Real member data | The repository is public. Everything is invented |
 | Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
 | Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
 | Password reset | No mail provider is configured, so a reset form would send nothing while looking as though it had. The screen says that instead of offering one |
-| A connected server for operations | The schema is applied and tested, and identity and access now use it. Interventions, responses and attendance do not yet. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
+| A fully connected operational server | Identity and access use the hosted project. Organisational commands are merged and tested, and the attendance confirmation commands are tested on a branch, but neither migration is applied there. No screen yet reads interventions, responses, attendance or vehicle movements from the server, and notification delivery does not exist. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
 
 **A browser prototype is not evidence that a locked Android or iPhone will raise
 an alarm.** Whether that is achievable at all depends on platform permissions,
@@ -135,8 +147,9 @@ store policy and delivery acknowledgements, and it is a separate investigation
 ## Built with
 
 TypeScript, React and Vite; Vitest, Playwright and axe-core for verification; PostgreSQL for the
-row-level-security suite. Identity and access run on Supabase; the operational screens still have no
-backend. Only the project URL and the publishable key are configured, both public by design and both
+row-level-security suite. Identity and access run on Supabase; organisational administration has a
+tested server path awaiting hosted migration `202609120005`; the incident, response, attendance and
+notification screens still have no connected backend. Only the project URL and the publishable key are configured, both public by design and both
 kept out of tracked files - see [.env.example](.env.example). Reasoning and rejected alternatives in
 [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

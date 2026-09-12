@@ -36,6 +36,35 @@
 --
 -- Nothing is deleted and no fact is rewritten: a rejected claim stays on the
 -- record as rejected, with a reason, and simply stops counting.
+--
+-- ---------------------------------------------------------------------------
+-- THIS MIGRATION IS NOT PURELY ADDITIVE. READ THIS BEFORE APPLYING IT.
+--
+-- Its table changes are additive (four new columns, three new constraints, one
+-- new index, six new functions). But it also DROPS AND RECREATES
+-- `public.attendance_totals(timestamptz, timestamptz)` with DIFFERENT RESULT
+-- COLUMNS - five before, eight after - because `create or replace function`
+-- cannot change a function's output contract. That is a breaking change to a
+-- callable interface.
+--
+-- It is safe today only because nothing calls that function outside this
+-- repository's own test suite: no application module, no view, no other
+-- function. Verified by enumerating every `.rpc()` call site in `src/` and
+-- every reference in `supabase/`. It will NOT be safe once a history screen or
+-- CSV export selects named columns from it.
+--
+-- Apply `202609120005` FIRST. This file assumes that schema. Apply this file
+-- inside ONE transaction (`supabase db push`, or `psql --single-transaction`,
+-- or a hand-written `begin;`/`commit;` around a dashboard paste) so a failure
+-- between the drop and the create cannot leave the function missing.
+--
+-- Dropping a function drops its privileges with it, so the execute grant is
+-- re-issued in the final block of this file. Do not remove that.
+--
+-- Preflight checks, post-migration verification and the forward-fix path if
+-- this file fails after `202609120005` has applied: docs/DATABASE.md section
+-- 3.1.
+-- ---------------------------------------------------------------------------
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------

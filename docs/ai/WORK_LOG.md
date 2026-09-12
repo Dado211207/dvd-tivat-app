@@ -67,15 +67,67 @@ Checked against deliberately broken code, not only working code: removing the `v
 `COMMAND_RECORDED` fails 3; putting `verified = true` back into `attendance_correct` fails 2; dropping
 the `revoke ... from public` block fails 4.
 
-**Not applied anywhere.** `202609130006` is local and CI evidence only. The hosted project is now two
-migrations behind `main` and **still carries this defect** - nothing reads it there yet, because no
-screen uses attendance against the server, but that is the reason to apply it rather than leave it
-pending.
+**Not applied anywhere.** `202609130006` is local and CI evidence only. The hosted project is two
+migrations behind this branch, one behind `main`, and **still carries this defect** - nothing reads it
+there yet, because no screen uses attendance against the server, but that is the reason to apply it
+rather than leave it pending.
+
+**`202609130006` is not purely additive, and the first version of this entry should have said so.**
+It drops and recreates `public.attendance_totals(timestamptz, timestamptz)` with different result
+columns, because `create or replace function` cannot change a function's output contract. That makes
+it a **breaking replacement of a callable interface**, additive only in its table and column changes.
+No consumer calls it today - no application module, no view, no other function - which is why the
+replacement is safe *now* and would not be later. The order `202609120005` then `202609130006` is
+required, the execute grant has to be re-issued after the recreate, and
+[DATABASE.md](../DATABASE.md) §1 carries the preflight checks, the post-migration verification and the
+forward-fix path if `...0006` fails after `...0005` has already applied.
+
+**PR #17 merged first, as recommended, then merged into this branch.** #17's own commits keep their
+authorship; the overlapping documentation was resolved by hand, keeping both sides. Conflicts were in
+`docs/ai/PROJECT_STATE.md` (six hunks) and `docs/ai/WORK_LOG.md` (one hunk, this entry against #17's);
+`docs/DATABASE.md` auto-merged.
 
 **Next concrete action:** slice 3b proper - availability, journey progress, and the real commander and
-firefighter screens. Note that PR #17 overlaps this branch on `PROJECT_STATE.md` and `DATABASE.md`;
-recommended order is to merge #17 first, then merge `main` in here and resolve, which keeps #17's
-authorship rather than absorbing it.
+firefighter screens, including the batch-confirmation requirement now recorded in PROJECT_STATE.md.
+Merging PR #18 and applying either migration to the hosted project each need separate owner
+authorisation and neither has it.
+
+---
+
+## 2026-09-12 - Post-merge documentation synchronization
+
+**Done**
+
+- PR #16 was marked ready and merged normally with explicit owner authorisation.
+  Merge commit: `55fdb093e65692ddcb430f1f3383ce329944bb0a`; comparison to live `main`
+  returned identical at the checkpoint.
+- Re-read the repository-facing continuation documents after the merge. Updated
+  `README.md`, `OWNER_BOOTSTRAP.md`, `DATABASE.md` and `PROJECT_STATE.md` so
+  they distinguish merged code, hosted activation and fictional prototype screens.
+- Kept the email-confirmation decision separate from the unresolved hosted
+  dashboard setting.
+
+**Boundary**
+
+- No application code, test, migration or schema changed.
+- Migration `202609120005` is still not applied to the hosted project. This
+  workspace has no authenticated Supabase dashboard/CLI access, so no honest
+  hosted smoke test can be claimed.
+- Slice 3b has not started.
+
+**Next concrete action**
+
+Review and merge this documentation-only synchronization after CI. Then, with
+separate owner authorisation and authenticated Supabase access, apply migration
+`202609120005` and smoke-check `Evidencija drustva` with disposable data before
+starting Slice 3b.
+
+*Recorded afterwards, so this historical entry is not read as current: the merge
+named above happened later the same day as PR #17, merge commit `7d00d9bb`. The
+hosted migration and the smoke test are still outstanding and still need
+separate owner authorisation. Slice 3b-0 had already started on its own branch
+by the time this entry was merged, so the entry's "Slice 3b has not started"
+was true when written and is not true now.*
 
 ---
 

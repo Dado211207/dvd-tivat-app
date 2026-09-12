@@ -23,16 +23,20 @@ You need:
   and fill in the two values from **Project Settings → API**);
 - **five minutes**, once.
 
-One setting to check first, in **Authentication → Sign In / Providers → Email**:
+One setting to read first, in **Authentication → Sign In / Providers → Email**:
 
-> **Confirm email** should be **off**.
+> The owner decision is that **Confirm email should be off for now**, but the
+> project's current setting is not independently confirmed. Read the dashboard
+> value and record it under blocker **B2** in
+> [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md). If it is on, change it only if
+> you are following that recorded owner decision.
 >
-> With it on, Supabase tries to send a confirmation message, and its built-in
-> sender only delivers to addresses on the project team and is rate limited. An
-> ordinary member would register and then wait for an email that never arrives.
-> Turning it back on is the right thing to do later, once a real mail provider is
-> configured — see blocker **B2** in
-> [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md).
+> With confirmation on, Supabase tries to send a message. Its built-in sender is
+> restricted and rate limited, so an ordinary member may not receive it.
+> Registration must not be described as producing an immediately usable session
+> until both the dashboard setting and one real deliverable-email flow have been
+> verified. A proper mail provider is still required before confirmation can be
+> enabled for real use at scale.
 
 ---
 

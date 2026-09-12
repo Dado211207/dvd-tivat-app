@@ -113,7 +113,7 @@ Enforced and tested:
 - an unapproved account recording a vehicle movement → `STAFF_REQUIRED`;
 - an unapproved account reading the roster, an intervention, or attendance → zero rows;
 - an anonymous caller reading anything in the operational schema → `permission denied`,
-  including every command added by `202609120005`.
+  including every command added by `202609120005` and `202609130006`.
 
 ## 5. Writes are impossible from a client
 
@@ -266,13 +266,20 @@ Honest list of what this slice does **not** do:
   |---|---|---|
   | Sign-in, registration, profile completion, role and status load, owner account directory | Yes | **Yes** — migrations `...0001`–`...0004` are applied there |
   | Roster screen `Evidencija drustva`: members, groups, vehicles, account-to-member link | Yes — against local PostgreSQL 16 and CI's `postgres:16`, from a schema built from zero | **No.** Migration `202609120005` is **not applied** to the hosted project, so every one of these commands would fail there with `function ... does not exist` |
+  | Attendance provenance and confirmation, acknowledgement, vehicle departure and return | Yes, as **server commands with no screen** — against local PostgreSQL 16 and CI's `postgres:16` | **No.** Migration `202609130006` is **not applied** there, and is on a branch rather than `main`. The hosted `attendance_totals()` is still the version that counts a self-declared claim as participation |
 
-  Applying `202609120005` to the hosted project is a deliberate, separate,
-  owner-authorised step. Until it happens, the roster screen is proven code
-  against an unproven target.
-- **Interventions, responses, vehicle movements and attendance are not connected
-  at all** — those screens still run on device-local fictional state with the
-  actor selector, and each one says so on itself.
+  Applying `202609120005` and then `202609130006` to the hosted project, in that
+  order, is a deliberate, separate, owner-authorised step. Until it happens the
+  roster screen is proven code against an unproven target, and the attendance
+  fix exists nowhere a real member could benefit from it. `202609130006` is not
+  a purely additive migration — see
+  [DATABASE.md §3.1](./DATABASE.md#31-applying-the-two-pending-migrations--and-why-both-are-additive-is-wrong).
+- **No screen is connected to interventions, responses, vehicle movements or
+  attendance** — those screens still run on device-local fictional state with the
+  actor selector, and each one says so on itself. Since `202609130006` the
+  *commands* behind attendance, acknowledgement and vehicle movement all exist
+  and are tested; what is missing is any interface that calls them, which is why
+  none of this is usable by a member yet.
 - **Drafting a call-out has a server path but no server screen, and no hosted
   database.** `create_intervention_draft`, `update_intervention_draft` and
   `discard_intervention_draft` exist and are tested locally and in CI, but the
