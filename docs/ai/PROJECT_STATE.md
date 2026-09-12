@@ -35,15 +35,16 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- Latest product-code merge checkpoint: `55fdb093e65692ddcb430f1f3383ce329944bb0a` —
-  the normal merge commit of PR #16. No merge since then has changed product
-  code.
-- Latest merge commit of any kind: `7d00d9bb9240beb71ecc9ecd4a3676cd24652db0` —
-  the normal merge commit of PR #17, documentation only. **Check GitHub for the
-  moving live `main` rather than trusting either SHA above as current** (see the
-  note under the PR table).
-- Working branch: `claude/slice-3b-attendance-truth`, cut from the `55fdb093`
-  checkpoint, carrying slice 3b-0, and since merged up to `7d00d9bb`.
+- Latest product-code merge checkpoint:
+  `45d53640568a75478c875cdc0aa64ca81911c2eb` — the normal merge commit of
+  PR #18, slice 3b-0. Parents `7d00d9bb` (previous `main`) and `dc0134c5`
+  (PR #18's head); its tree is byte-identical to that head.
+- Earlier checkpoints, still nameable because they are history: `55fdb093`
+  (PR #16, slice 3a) and `7d00d9bb` (PR #17, documentation only).
+  **Check GitHub for the moving live `main` rather than trusting any SHA here
+  as current** (see the note under the PR table).
+- No active implementation branch. `claude/slice-3b-attendance-truth` is merged
+  and finished; slice 3b proper starts from a fresh branch off live `main`.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-12
@@ -68,17 +69,27 @@ and by comparing tree hashes.
 
 PR #15 was merged the same day, again as a normal merge. PR #16 was then merged
 normally on 2026-09-12 with explicit owner authorisation, producing product-code
-checkpoint `55fdb093` — the checkpoint this branch is cut from. **That
-checkpoint contains #13–#16 and is therefore not byte-identical to any head
-named above.**
+checkpoint `55fdb093`. **That checkpoint contains #13–#16 and is therefore not
+byte-identical to any head named above.**
 
 PR #17 was merged normally on 2026-09-12 with explicit owner authorisation,
 after its preconditions were checked one by one: head unchanged at `81e9bda`,
 all five changed files `.md`, CI green on that exact head, `mergeable_state:
 clean`, and no unresolved review threads. Its merge commit is
 `7d00d9bb9240beb71ecc9ecd4a3676cd24652db0`, with parents `55fdb093` and
-`81e9bda`, keeping all five of its commits. It changed documentation only, so
-`55fdb093` is still the latest **product-code** checkpoint.
+`81e9bda`, keeping all five of its commits. It changed documentation only.
+
+PR #18 was merged normally on 2026-09-12 with explicit owner authorisation,
+against a written nine-point checklist the owner supplied: PR open and Draft;
+head still exactly `dc0134c5`; base still `7d00d9bb`; `mergeable_state: clean`;
+CI run `34707230240` successful on that exact head (`run_attempt: 1`, not a
+re-run); no review threads and no reviews; no new commit, file, secret,
+personal data, deployment change or hosted migration since the report; the
+changed-file set still exactly the reviewed ten; and the ADMIN authority matrix
+matching the owner's decision. Its merge commit is
+`45d53640568a75478c875cdc0aa64ca81911c2eb`, with parents `7d00d9bb` and
+`dc0134c5`, keeping all three of its commits, and its tree is byte-identical to
+`dc0134c5`. **That merge made `45d53640` the latest product-code checkpoint.**
 
 | PR | State |
 |---|---|
@@ -91,7 +102,7 @@ clean`, and no unresolved review threads. Its merge commit is
 | #15 | **Merged** 2026-09-11 into `dc3aade` |
 | #16 | **Merged normally** 2026-09-12 into `55fdb093`, by the owner. Slice 3a. Implementation checkpoint `cb074eb`; final reviewed head `a5821f4` |
 | #17 | **Merged normally** 2026-09-12 into `7d00d9bb`, on the owner's authorisation. Documentation-only post-merge synchronisation, from `codex/post-merge-slice-3a-docs`. Not authored by this session. Merged head `81e9bda` |
-| #18 | **Open, Draft.** Slice 3b-0, this branch. Read its live head on GitHub |
+| #18 | **Merged normally** 2026-09-12 into `45d53640`, on the owner's authorisation. Slice 3b-0: attendance truth and the withdrawn-account identity fix. Merged head `dc0134c5` |
 
 > **Why this table names checkpoints and not "the current head".** A branch head
 > moves; a line in a file does not. Writing one here is exactly how `main` came to
@@ -106,7 +117,7 @@ Proposed and owner-approved sequencing, smallest reviewable PR first:
 | # | Slice | State |
 |---|---|---|
 | 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Merged in PR #16. Migration `202609120005` is not applied to the hosted project** |
-| **3b-0** | **Attendance truth** — provenance, confirmation/rejection, and the two write paths that were missing entirely (acknowledgement, vehicle movements) | **Built and tested on this branch, in Draft PR #18. Not merged. Migration `202609130006` is not applied to the hosted project** |
+| **3b-0** | **Attendance truth** — provenance, confirmation/rejection, the two write paths that were missing entirely (acknowledgement, vehicle movements), and the withdrawn-account identity fix | **Merged in PR #18. Migration `202609130006` is not applied to the hosted project** |
 | 3b | General availability (C2), journey progress (C3) and the member-facing response flow on real data | Next |
 | 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | Before push, not after |
 | 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | |
@@ -155,15 +166,23 @@ against ten account states** and declares an expectation for all 110 rather than
 testing the states somebody thought of. Full account in
 [ACCESS_MODEL.md §2](../ACCESS_MODEL.md#identity-is-not-separable-from-authority).
 
-**And one thing left deliberately unchanged, for the owner to decide.** `ADMIN`
-has held full command authority since `202609090002` (`is_dvd_command()` returns
-true for `OWNER`, `ADMIN`, `COMMANDER`), while the documented role table implied
-administrators only manage records. The separation of duties runs one way only:
-a COMMANDER is refused the roster commands, an ADMIN is not refused the command
-ones. The behaviour is now documented and tested rather than altered — in a
-52-member society the administrator is probably also an officer, and refusing
-them a call-out to honour a textbook rule would be the worse failure. **Decide
-whether to keep it.**
+**And one thing left deliberately unchanged, then decided by the owner.**
+`ADMIN` has held full command authority since `202609090002`
+(`is_dvd_command()` returns true for `OWNER`, `ADMIN`, `COMMANDER`), while the
+documented role table implied administrators only manage records. It was
+surfaced rather than altered, and put to the owner.
+
+**Owner decision, 12 September 2026: ADMIN retains full command authority.**
+Not an accidental hierarchy — a deliberate choice for the current product
+model, because the society is small, each account carries **one effective
+role**, and the person who administers the roster may also need to act
+operationally. Removing command authority from ADMIN would stop them serving
+both functions without first introducing a multi-role or capability model, and
+that model is explicitly out of scope for this slice. `OWNER` remains the only
+role that may assign roles or suspend and restore access. The full decision,
+its reasoning, the one-directional separation-of-duties table and the future
+design note are in
+[ACCESS_MODEL.md §3](../ACCESS_MODEL.md#3-roles).
 
 ### The conservative model is deliberate, and the UI must absorb its cost
 
@@ -239,9 +258,9 @@ still pending.**
   `7d00d9bb` (documentation only).
 - Migrations `...0001` to `...0004` are applied to the hosted project and were
   verified against the locally-tested schema byte for byte. **`202609120005`
-  (slice 3a, merged) and `202609130006` (slice 3b-0, on this branch only) are
-  not applied there**, so the hosted schema is two migrations behind this
-  branch and one behind `main`.
+  (slice 3a) and `202609130006` (slice 3b-0) are not applied there**, so the
+  hosted schema is **two migrations behind `main`**. Both are now merged; only
+  the hosted application of them is outstanding.
 - Slice 3a closed the gap that the schema could publish a call-out while nothing
   could create one — and that a hundred passing tests missed it, because the test
   helper created drafts as the superuser.
@@ -256,18 +275,19 @@ Two sets of totals, because they are not the same number and conflating them is
 how a documented figure stops being true. Read the right column for the question
 you are asking.
 
-| Check | On `main` (through PR #17) | On this branch (slice 3b-0) |
+| Check | On `main` before PR #18 (i.e. at `7d00d9bb`) | On `main` now (at `45d53640`) |
 |---|---|---|
 | `npm run lint` | Pass | Pass |
 | `npm run typecheck` | Pass | Pass |
-| `npm run test` (unit) | **128 passed** | **128 passed** — this slice adds no client code |
-| `npm run test:db` (PostgreSQL 16 + RLS) | **135 passed** | **160 passed** |
+| `npm run test` (unit) | **128 passed** | **128 passed** — slice 3b-0 added no client code |
+| `npm run test:db` (PostgreSQL 16 + RLS) | **135 passed** | **277 passed** |
 | `npx vite build` | Pass | Pass |
 | `npm run verify:bundle` | Pass - no secret in the built output | Pass |
 | `npm run e2e` (browser + axe) | **74 passed** | **74 passed** |
 
-The branch column is re-measured on every push and the figure here is only as
-current as the commit that wrote it; CI on the pull request is the live answer.
+Both columns are checkpoint measurements, not live ones. The right-hand column
+was measured on `45d53640` itself; CI on `main` is the live answer, and any
+figure here is only as current as the commit that wrote it.
 
 ## Where things are
 
@@ -368,7 +388,8 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
 A project exists and the **first four** migrations are applied to it. The fifth
 (`202609120005`, slice 3a, merged into `main`) and the sixth (`202609130006`,
-slice 3b-0, on this branch only) are not — see the limitations above. Recorded
+slice 3b-0) are not — see the limitations above. Both are merged into `main`;
+neither has been applied to the hosted project. Recorded
 here so nobody has to rediscover it:
 
 | Fact | Value |
@@ -377,7 +398,7 @@ here so nobody has to rediscover it:
 | PostgreSQL | 17 (the tests run against 16 locally and in CI) |
 | State before | `public` schema completely empty — no migration had ever run |
 | Applied | `202609090001`, `202609090002`, `202609110003`, `202609110004`, in order |
-| **Not applied** | `202609120005` (slice 3a, in `main`) and `202609130006` (slice 3b-0, on this branch only). The hosted schema is **one migration behind `main` and two behind this branch** until they are applied, in that order |
+| **Not applied** | `202609120005` (slice 3a) and `202609130006` (slice 3b-0). Both are merged into `main`; the hosted schema is **two migrations behind `main`** until they are applied, in that order |
 | Verified | Structural fingerprint matches the locally-tested schema byte for byte — see [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
 | Publishable key | Safe in the client bundle by design; it is **not** a secret |
 | Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
@@ -492,9 +513,12 @@ project still needs `202609120005` before those paths exist there, and
 1. ~~Resolve PR #17 (documentation-only).~~ **Done — merged normally on
    2026-09-12 into `7d00d9bb`, then merged into this branch, so #17 keeps its
    own authorship rather than being absorbed.**
-2. **Merge PR #18** (slice 3b-0). Not authorised yet.
+2. ~~Merge PR #18 (slice 3b-0).~~ **Done — merged normally on 2026-09-12 into
+   `45d53640`, after the owner's nine-point pre-merge checklist was verified
+   point by point.**
 3. **Apply `202609120005` then `202609130006`** to the hosted project, in that
-   order. Not authorised yet. `...0005` is purely additive; **`...0006` is not
+   order. **Still not authorised** — merging the code was explicitly not
+   authorisation to touch the hosted project, and the owner said so. `...0005` is purely additive; **`...0006` is not
    — it replaces the return contract of `attendance_totals(timestamptz,
    timestamptz)`**, which is why the order matters and why
    [DATABASE.md](../DATABASE.md) carries a preflight and verification procedure

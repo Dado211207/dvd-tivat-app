@@ -101,31 +101,56 @@ caller cannot execute it at all.
 | Role | May |
 |---|---|
 | **OWNER** | Everything below, plus: read every account, assign `ADMIN`/`COMMANDER`/`FIREFIGHTER`/`PENDING`, suspend and restore access, read the role and status audit |
-| **ADMIN** | Manage organisational records — members, groups, vehicles and the account-to-member link (`is_dvd_admin()`). **Also holds full command authority** — see the note below. **Cannot** assign roles or create an owner |
+| **ADMIN** | Manage organisational records — members, groups, vehicles and the account-to-member link (`is_dvd_admin()`). **Also holds full command authority, by explicit owner decision** — see the note below. **Cannot** assign roles, suspend or restore access, or create an owner |
 | **COMMANDER** | Create, publish, update, change status of, close and cancel interventions; see responses and attendance; check members in and out; correct attendance with a reason; confirm, reject and withdraw confirmation of attendance |
 | **FIREFIGHTER** | See interventions addressed to them; respond; check themselves in and out; request a correction of their own record; record a vehicle departure and return |
 | **PENDING** *(default)* | Nothing operational at all |
 | **CITIZEN** *(legacy)* | Nothing operational at all. Retained only so rows written by the first migration stay valid |
 
-> **ADMIN holds command authority, and this table used to imply otherwise.**
-> `is_dvd_command()` has resolved `('OWNER', 'ADMIN', 'COMMANDER')` since
-> `202609090002`, so an administrator can publish a call-out, check members in
-> and out, correct attendance and confirm or reject it. The separation of duties
-> runs in **one direction only**: a `COMMANDER` is refused the roster commands
-> (`ADMIN_REQUIRED`), but an `ADMIN` is not refused the command ones.
+> ### ADMIN holds command authority — an explicit owner decision, not an accident
 >
-> That asymmetry was never stated here, which is how a reader could conclude the
-> opposite. It is now pinned by `db-tests/authority_matrix.test.ts`, which
-> asserts the ADMIN cell of every command, so the documented model and the
-> enforced model cannot drift apart again.
+> **Decided by the owner on 12 September 2026.** `ADMIN` retains full command
+> authority in the current product model. This is a deliberate design choice,
+> recorded so nobody later reads it as an oversight and "fixes" it.
 >
-> **Whether it is right is an owner decision, not a defect to fix quietly.**
-> In a 52-member society the administrator is very likely also an officer, and
-> refusing them a call-out at 03:00 to honour a textbook separation of duties
-> would be worse than the exposure it prevents. Nothing was changed here; the
-> enforced behaviour is simply now documented and tested. If the owner wants
-> real separation, `is_dvd_command()` drops `ADMIN` in a new migration and the
-> matrix's ADMIN column is updated with it.
+> `is_dvd_command()` resolves `('OWNER', 'ADMIN', 'COMMANDER')`, so an
+> administrator can publish a call-out, check members in and out, correct
+> attendance, and confirm, reject or withdraw confirmation of it.
+>
+> **The owner's reasoning, in their own terms:**
+>
+> - DVD Tivat is a relatively small volunteer organisation.
+> - The current account model assigns **one effective role per account**.
+> - A person responsible for administration may also need to act operationally.
+> - Removing command authority from `ADMIN` would stop that person serving both
+>   functions without first introducing a multi-role or capability model.
+> - `OWNER` remains the only role that may assign roles, or suspend and restore
+>   access.
+>
+> **The separation of duties therefore runs in one direction, on purpose:**
+>
+> | | May run call-outs | May manage the society's records | May assign roles and suspend accounts |
+> |---|---|---|---|
+> | `OWNER` | Yes | Yes | **Yes — only this role** |
+> | `ADMIN` | **Yes** | Yes | No |
+> | `COMMANDER` | Yes | **No** (`ADMIN_REQUIRED`) | No |
+> | `FIREFIGHTER` | No (`COMMAND_REQUIRED`) | No | No |
+>
+> A `COMMANDER` is refused the roster commands; an `ADMIN` is **not** refused the
+> command ones. That asymmetry is the decision.
+>
+> Pinned by `db-tests/authority_matrix.test.ts`, which asserts the ADMIN cell of
+> every command, so the documented model and the enforced model cannot drift
+> apart. Changing this is a schema change plus a matrix change, and both would
+> fail loudly if only one were done.
+>
+> **Future design note, not a plan.** If DVD Tivat ever needs a *clerical*
+> administrator — somebody who maintains the roster but must **not** receive
+> operational command authority — then a multi-role or capability model becomes
+> worth considering, because the one-role-per-account model cannot express it.
+> That is explicitly **out of scope for this slice** and needs its own owner
+> decision, covering how a second role is assigned, how the audit records it,
+> and what the interface shows. Do not build it speculatively.
 
 ### Owner protections
 
@@ -347,12 +372,14 @@ Honest list of what this slice does **not** do:
   |---|---|---|
   | Sign-in, registration, profile completion, role and status load, owner account directory | Yes | **Yes** — migrations `...0001`–`...0004` are applied there |
   | Roster screen `Evidencija drustva`: members, groups, vehicles, account-to-member link | Yes — against local PostgreSQL 16 and CI's `postgres:16`, from a schema built from zero | **No.** Migration `202609120005` is **not applied** to the hosted project, so every one of these commands would fail there with `function ... does not exist` |
-  | Attendance provenance and confirmation, acknowledgement, vehicle departure and return | Yes, as **server commands with no screen** — against local PostgreSQL 16 and CI's `postgres:16` | **No.** Migration `202609130006` is **not applied** there, and is on a branch rather than `main`. The hosted `attendance_totals()` is still the version that counts a self-declared claim as participation |
+  | Attendance provenance and confirmation, acknowledgement, vehicle departure and return | Yes, as **server commands with no screen** — against local PostgreSQL 16 and CI's `postgres:16`, and merged into `main` | **No.** Migration `202609130006` is **not applied** there. The hosted `attendance_totals()` is still the version that counts a self-declared claim as participation, and the hosted `current_member_id()` still resolves for a withdrawn account |
 
   Applying `202609120005` and then `202609130006` to the hosted project, in that
-  order, is a deliberate, separate, owner-authorised step. Until it happens the
-  roster screen is proven code against an unproven target, and the attendance
-  fix exists nowhere a real member could benefit from it. `202609130006` is not
+  order, is a deliberate, separate, owner-authorised step **that has not been
+  taken**. Merging the code was explicitly not authorisation to touch the hosted
+  project; the owner separated the two. Until it happens the roster screen is
+  proven code against an unproven target, and the attendance and identity fixes
+  exist nowhere a real member could benefit from them. `202609130006` is not
   a purely additive migration — see
   [DATABASE.md §3.1](./DATABASE.md#31-applying-the-two-pending-migrations--and-why-both-are-additive-is-wrong).
 - **No screen is connected to interventions, responses, vehicle movements or

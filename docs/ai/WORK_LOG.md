@@ -5,6 +5,60 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-12 - PR #18 merged, and ADMIN command authority decided
+
+**Merged.** PR #18 (slice 3b-0) merged into `main` with a normal merge commit,
+`45d53640568a75478c875cdc0aa64ca81911c2eb`, parents `7d00d9bb` (previous `main`) and
+`dc0134c5` (PR #18's head). All three commits keep their own history and authorship; the merged tree
+is byte-identical to `dc0134c5`, so the merge introduced nothing. PR #17 and PR #18 are both
+ancestors of live `main`, confirmed with `git merge-base --is-ancestor`.
+
+The owner supplied a nine-point pre-merge checklist and it was worked point by point before anything
+was touched: PR open and Draft; head still exactly `dc0134c5`; base still `7d00d9bb`;
+`mergeable_state: clean`; CI run `34707230240` successful **on that exact head**, `run_attempt: 1`
+so not a re-run that hid an earlier failure; no review threads and no reviews; no new commit, changed
+file, secret, personal-data, deployment change or hosted migration since the final report; the
+changed-file set still exactly the reviewed ten; and the ADMIN column of the authority matrix
+matching the decision below.
+
+**Owner decision: ADMIN retains full command authority.** `is_dvd_command()` keeps resolving
+`OWNER, ADMIN, COMMANDER`, and this is now recorded as an **explicit design choice rather than an
+accidental hierarchy** - which is the point, because the next reader would otherwise find the
+asymmetry and "fix" it. The reasoning is the owner's: a small volunteer society, one effective role
+per account, and an administrator who may also need to act operationally. Stripping command authority
+from ADMIN would stop that person serving both functions without first introducing a multi-role or
+capability model, which is out of scope here.
+
+The separation of duties therefore runs one way on purpose: a COMMANDER is refused the roster
+commands (`ADMIN_REQUIRED`); an ADMIN is not refused the command ones; and OWNER remains the only
+role that may assign roles or suspend and restore access. Pinned by the ADMIN column of
+`db-tests/authority_matrix.test.ts`, so the documented model and the enforced model cannot drift.
+
+**Future design note, deliberately not a plan.** If DVD Tivat ever needs a *clerical* administrator -
+somebody who maintains the roster but must not receive operational command authority - a multi-role
+or capability model becomes worth considering, because one-role-per-account cannot express it. That
+needs its own owner decision covering assignment, audit and interface. Do not build it
+speculatively.
+
+**Documentation corrected to merged reality** rather than left claiming a branch. The checkpoint
+block, the PR table, the slice table, the hosted-project table, the limitations and the
+next-action list all said PR #18 was an open Draft and that the hosted schema was "one migration
+behind `main`, two behind this branch". Both migrations are now in `main`, so it is **two behind
+`main`**, full stop. The test-totals table still carried **160** for the database suite in its
+second column - a figure from before the authority matrix existed. Re-measured on the merged
+checkpoint rather than corrected from memory: unit **128 passed**, database **277 passed**.
+
+**No hosted migration was applied and nothing was deployed.** The owner separated the two
+authorisations explicitly, and merging the code was not authorisation to touch the hosted project.
+`202609120005` and `202609130006` both remain unapplied there, so the live database still counts a
+self-declared claim as participation and still resolves member identity for a withdrawn account.
+
+**Next concrete action:** nothing without a further explicit authorisation. Applying the two
+migrations needs the preflight in [DATABASE.md](../DATABASE.md) §3.1 followed rather than a bare
+`db push`, and slice 3b's user interface has not been authorised to start.
+
+---
+
 ## 2026-09-12 - Slice 3b-0: a self-declared claim was already counting as participation
 
 **The defect, found by reading the code rather than the documentation.** DATABASE.md called attendance
@@ -126,6 +180,10 @@ recorded further down this entry.
 migrations behind this branch, one behind `main`, and **still carries this defect** - nothing reads it
 there yet, because no screen uses attendance against the server, but that is the reason to apply it
 rather than leave it pending.
+
+*Recorded afterwards so this historical entry is not read as current: PR #18 has since merged, so
+both migrations are in `main` and the hosted project is **two migrations behind `main`**. It is still
+not applied there and still carries both defects.*
 
 **`202609130006` is not purely additive, and the first version of this entry should have said so.**
 It drops and recreates `public.attendance_totals(timestamptz, timestamptz)` with different result

@@ -108,7 +108,7 @@ order, and what to do if it fails halfway. Read it before applying either file.
 The first four were applied to the owner's project (`dvd-tivat-app`, region
 `eu-central-1`, PostgreSQL 17), whose `public` schema was empty beforehand.
 
-**The hosted schema is therefore two migrations behind this branch.** Every
+**The hosted schema is therefore two migrations behind `main`.** Every
 function `202609120005` defines — the three intervention-draft commands, the
 member, group and vehicle commands, `admin_link_member_account`,
 `is_dvd_admin()` — and the `organisation_audit` table do not exist there.
