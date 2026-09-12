@@ -5,6 +5,36 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-12 - Post-merge documentation synchronization
+
+**Done**
+
+- PR #16 was marked ready and merged normally with explicit owner authorisation.
+  Merge commit: `55fdb093e65692ddcb430f1f3383ce329944bb0a`; comparison to live `main`
+  returned identical at the checkpoint.
+- Re-read the repository-facing continuation documents after the merge. Updated
+  `README.md`, `OWNER_BOOTSTRAP.md`, `DATABASE.md` and `PROJECT_STATE.md` so
+  they distinguish merged code, hosted activation and fictional prototype screens.
+- Kept the email-confirmation decision separate from the unresolved hosted
+  dashboard setting.
+
+**Boundary**
+
+- No application code, test, migration or schema changed.
+- Migration `202609120005` is still not applied to the hosted project. This
+  workspace has no authenticated Supabase dashboard/CLI access, so no honest
+  hosted smoke test can be claimed.
+- Slice 3b has not started.
+
+**Next concrete action**
+
+Review and merge this documentation-only synchronization after CI. Then, with
+separate owner authorisation and authenticated Supabase access, apply migration
+`202609120005` and smoke-check `Evidencija drustva` with disposable data before
+starting Slice 3b.
+
+---
+
 ## 2026-09-12 - Slice 3a: the write paths the response system never had
 
 **The gap, found by reading the schema instead of the brief.** `202609090002` built a complete

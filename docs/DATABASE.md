@@ -253,7 +253,7 @@ UTC. No duration is ever computed from a formatted string.
 Stated as a boundary rather than a list of absences, because the interesting part
 is where "built" stops and "usable" starts.
 
-**Built, tested, and on this branch only:**
+**Built and tested on merged `main`, but not yet activated on the hosted project:**
 
 - Admin write commands for `members`, `groups`, `group_members` and `vehicles`,
   the account-to-member link, the three intervention-draft commands, the

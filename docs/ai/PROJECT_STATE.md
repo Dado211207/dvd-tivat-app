@@ -35,9 +35,11 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- `main`: `dc3aadee8543002a7f4ef5c288b8db1600c59f16` — the merge commit of PR #15.
-- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, restarted from that `main`
-  and currently carrying slice 3a as Draft PR #16.
+- Latest product-code merge checkpoint: `55fdb093e65692ddcb430f1f3383ce329944bb0a` —
+  the normal merge commit of PR #16. Check GitHub for the moving live `main`
+  rather than copying a branch-head SHA into this static file.
+- No active implementation branch. The post-merge documentation sync is isolated
+  from Slice 3b.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-12
@@ -60,9 +62,10 @@ its four commits. *At that merge*, `main` was `bd79f7f` and its tree was
 byte-identical to PR #14's head `35383a5` (`479b732`), confirmed by `git diff`
 and by comparing tree hashes.
 
-PR #15 was merged the same day, again a normal merge, producing the `main` this
-branch is built on. **Current `main` contains PR #15 and is therefore not
-byte-identical to either head named above.**
+PR #15 was merged the same day, again as a normal merge. PR #16 was then merged
+normally on 2026-09-12 with explicit owner authorisation, producing product-code
+checkpoint `55fdb093`. That checkpoint contains #13–#16 and is not
+byte-identical to either earlier head named above.
 
 | PR | State |
 |---|---|
@@ -73,7 +76,7 @@ byte-identical to either head named above.**
 | #13 | **Merged** 2026-09-11 into `3133d00` |
 | #14 | **Merged** 2026-09-11 into `bd79f7f` |
 | #15 | **Merged** 2026-09-11 into `dc3aade` |
-| #16 | **Open, Draft.** Slice 3a. Checkpoints: `cb074eb` the implementation commit, `e7df6fc` the first documentation correction. **The live head is whatever PR #16 currently shows — read it there, not here** |
+| #16 | **Merged normally** 2026-09-12 into `55fdb093`. Implementation checkpoint `cb074eb`; final reviewed head `a5821f4` |
 
 > **Why this table names checkpoints and not "the current head".** A branch head
 > moves; a line in a file does not. Writing one here is exactly how `main` came to
@@ -87,7 +90,7 @@ Proposed and owner-approved sequencing, smallest reviewable PR first:
 
 | # | Slice | State |
 |---|---|---|
-| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Built, in Draft PR #16. Not merged, not applied to the live project** |
+| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Merged in PR #16. Migration `202609120005` is not applied to the hosted project** |
 | 3b | General availability (C2) and the member-facing response flow on real data | Next |
 | 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | Before push, not after |
 | 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | |
@@ -132,12 +135,13 @@ iPhone, so getting this wrong is not a small matter: a call-out that does not
 wake somebody is the failure mode this whole application exists to avoid — which
 is also why C8's Viber and telephone fallback is not optional.
 
-## Status of the last merged slice
+## Status of the latest merged slice
 
-**Slice 2 - real accounts, authentication and access.** Complete and merged.
-Slice 3a is built but **not merged**; its state is the table above.
+**Slice 3a - organisational write paths and intervention drafts.** Complete and
+merged as PR #16. Hosted activation is still pending.
 
-- PR #13, #14 and #15 merged (normal merges); `main` = `dc3aade`.
+- PR #13, #14, #15 and #16 merged with normal merge commits; latest product-code
+  checkpoint is `55fdb093`.
 - **That slice's** four migrations (`...0001` to `...0004`) applied to the live
   project and verified against the locally-tested schema, byte for byte. Slice
   3a added a fifth, `202609120005`, which is **not** applied there.
@@ -152,11 +156,11 @@ Slice 3a is built but **not merged**; its state is the table above.
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm run test` (unit) | **117 passed** |
-| `npm run test:db` (PostgreSQL 16 + RLS) | **100 passed** |
+| `npm run test` (unit) | **128 passed** |
+| `npm run test:db` (PostgreSQL 16 + RLS) | **135 passed** |
 | `npx vite build` | Pass |
 | `npm run verify:bundle` | Pass - no secret in the built output |
-| `npm run e2e` (browser + axe) | **70 passed** |
+| `npm run e2e` (browser + axe) | **74 passed** |
 
 ## Where things are
 
@@ -361,12 +365,12 @@ not. Next, in this order:
    it is built and tested on a real device.
 
 Do not start (3) before (1) and (2): an intervention cannot be published to
-recipients who do not exist as server-side members. Both are now done, so (3) is
-unblocked once PR #16 merges.
+recipients who do not exist as server-side members. Both are merged. The hosted
+project still needs migration `202609120005` before those paths exist there.
 
-**Immediately next:** merge PR #16 when the owner authorises it (normal merge,
-per B8), then apply `202609120005` to the hosted project and smoke-check the
-roster screen against it with disposable data. Then slice 3b.
+**Immediately next:** with separate owner authorisation, apply
+`202609120005` to the hosted project and smoke-check the roster screen with
+disposable data. Then begin Slice 3b on a new branch from live `main`.
 
 ## Manual owner checklist
 
