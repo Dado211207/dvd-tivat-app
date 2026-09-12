@@ -47,6 +47,51 @@ derived from that one function, so the rule lives in exactly one place.
 > its privileges. Tested by *"gives a SUSPENDED account no role"* and *"gives an
 > account with an incomplete profile no role"*.
 
+### Identity is not separable from authority
+
+`public.current_member_id()` answers a different question — *which member is
+acting* — and it now requires the same effective role:
+
+```sql
+select member_row.id from public.members member_row
+where member_row.user_id = auth.uid()
+  and member_row.active = true
+  and public.current_dvd_role() is not null
+```
+
+Both conditions matter and they are not the same thing. `members.active` is
+whether **the society** still counts this person as a member.
+`current_dvd_role()` is whether **the account** still has standing. A person can
+be on the roster while their account is suspended, and that account must then be
+nobody operationally.
+
+> **Fixed here, and it was live on the hosted project.** Until `202609130006`
+> the function checked only `members.active`. Identity therefore **survived the
+> loss of authority**: a `SUSPENDED`, `PENDING` or incomplete-profile account
+> whose linked member was on an intervention's recipient list could still
+>
+> - read rows through the seven policies that route identity through this
+>   function — `interventions` (recipient read), `intervention_updates`,
+>   `intervention_recipients`, `intervention_responses`,
+>   `intervention_acknowledgements`, `attendance_intervals` and
+>   `notification_outbox`;
+> - **answer a call-out**, because `submit_response` checks only that
+>   `current_member_id()` is not NULL;
+> - close its own attendance interval through `attendance_check_out`.
+>
+> Nothing reached it through the application — no screen reads any of this from
+> the server — so it was a schema defect, not a live exposure. It still
+> contradicted what this project documents about suspension, and the
+> member-facing screen is the next slice.
+>
+> **It was found by a test, not by reading.** `db-tests/authority_matrix.test.ts`
+> calls every command as every account state instead of the states somebody
+> thought to try, and reported that a suspended account could acknowledge an
+> intervention and could read 51 attendance intervals. Three tests now pin the
+> fix from different angles, one pins that it did **not** over-tighten (an
+> approved recipient still sees their own call-out), and reverting the one-line
+> fix fails all three.
+
 `public.current_account_status()` reports `SUSPENDED` / `PROFILE_REQUIRED` /
 `ACTIVE` for the interface. It is never used for authorisation, and an anonymous
 caller cannot execute it at all.
@@ -56,11 +101,31 @@ caller cannot execute it at all.
 | Role | May |
 |---|---|
 | **OWNER** | Everything below, plus: read every account, assign `ADMIN`/`COMMANDER`/`FIREFIGHTER`/`PENDING`, suspend and restore access, read the role and status audit |
-| **ADMIN** | Read operational data; manage organisational records — members, groups, vehicles and the account-to-member link (`is_dvd_admin()`). **Cannot** assign roles or create an owner |
-| **COMMANDER** | Create, publish, update, change status of, close and cancel interventions; see responses and attendance; check members in and out; correct attendance with a reason |
-| **FIREFIGHTER** | See interventions addressed to them; respond; check themselves in and out; request a correction of their own record |
+| **ADMIN** | Manage organisational records — members, groups, vehicles and the account-to-member link (`is_dvd_admin()`). **Also holds full command authority** — see the note below. **Cannot** assign roles or create an owner |
+| **COMMANDER** | Create, publish, update, change status of, close and cancel interventions; see responses and attendance; check members in and out; correct attendance with a reason; confirm, reject and withdraw confirmation of attendance |
+| **FIREFIGHTER** | See interventions addressed to them; respond; check themselves in and out; request a correction of their own record; record a vehicle departure and return |
 | **PENDING** *(default)* | Nothing operational at all |
 | **CITIZEN** *(legacy)* | Nothing operational at all. Retained only so rows written by the first migration stay valid |
+
+> **ADMIN holds command authority, and this table used to imply otherwise.**
+> `is_dvd_command()` has resolved `('OWNER', 'ADMIN', 'COMMANDER')` since
+> `202609090002`, so an administrator can publish a call-out, check members in
+> and out, correct attendance and confirm or reject it. The separation of duties
+> runs in **one direction only**: a `COMMANDER` is refused the roster commands
+> (`ADMIN_REQUIRED`), but an `ADMIN` is not refused the command ones.
+>
+> That asymmetry was never stated here, which is how a reader could conclude the
+> opposite. It is now pinned by `db-tests/authority_matrix.test.ts`, which
+> asserts the ADMIN cell of every command, so the documented model and the
+> enforced model cannot drift apart again.
+>
+> **Whether it is right is an owner decision, not a defect to fix quietly.**
+> In a 52-member society the administrator is very likely also an officer, and
+> refusing them a call-out at 03:00 to honour a textbook separation of duties
+> would be worse than the exposure it prevents. Nothing was changed here; the
+> enforced behaviour is simply now documented and tested. If the owner wants
+> real separation, `is_dvd_command()` drops `ADMIN` in a new migration and the
+> matrix's ADMIN column is updated with it.
 
 ### Owner protections
 
@@ -106,9 +171,30 @@ Enforced and tested:
   member, group or vehicle, or linking an account to a member → `ADMIN_REQUIRED`.
   Command authority runs call-outs; it does not edit who is in the society;
 - a `FIREFIGHTER` drafting, editing or discarding an intervention → `COMMAND_REQUIRED`;
+- a `FIREFIGHTER` confirming, rejecting or unconfirming attendance — **including
+  their own** → `COMMAND_REQUIRED`. Declaring your presence and vouching for it
+  cannot be the same act by the same person;
+- a member acknowledging an intervention they were not called to → `NOT_A_RECIPIENT`;
+- an unapproved account recording a vehicle movement → `STAFF_REQUIRED`;
 - an unapproved account reading the roster, an intervention, or attendance → zero rows;
+- a **`SUSPENDED`, `PENDING` or incomplete-profile** account acknowledging,
+  checking in, checking out, or recording a vehicle movement → `STAFF_REQUIRED`,
+  **even when its linked member is on the recipient list**. Being addressed is
+  not standing;
+- an approved account with **no linked member record** acting as a member →
+  `MEMBER_RECORD_REQUIRED`, which is a different refusal from the one above and
+  deliberately worded differently: one has lost standing, the other never had
+  an operational identity;
 - an anonymous caller reading anything in the operational schema → `permission denied`,
-  including every command added by `202609120005`.
+  including every command added by `202609120005` and `202609130006`.
+
+Every line above is one cell of
+[`db-tests/authority_matrix.test.ts`](../db-tests/authority_matrix.test.ts),
+which runs **eleven commands against ten account states** and declares an
+expectation for all 110. The point of generating the cases rather than choosing
+them is that a state nobody thought to try still gets tried: that is how the
+`current_member_id()` defect above was found, after a hand-written suite had
+passed over it a hundred and sixty times.
 
 ## 5. Writes are impossible from a client
 
@@ -154,7 +240,12 @@ no direct `INSERT`/`UPDATE` path a client could use to forge a fact:
 | `close_intervention` | command |
 | `submit_response` | the authenticated member, and only if they are a recipient |
 | `attendance_check_in` / `_out` | self (staff), or command acting for somebody else |
-| `attendance_correct` | command, with a reason |
+| `attendance_correct` | command, with a reason. **Does not confirm** |
+| `attendance_confirm` | command. Stands behind the record; a note is optional |
+| `attendance_reject` | command, with a reason |
+| `attendance_unconfirm` | command, with a reason. Returns the record to pending |
+| `acknowledge_intervention` | the authenticated recipient. Opening is not responding |
+| `record_vehicle_departure` / `record_vehicle_return` | staff |
 | `owner_set_role` / `owner_set_account_active` | owner, with a reason for status changes |
 
 The one direct write a member has is inserting an
@@ -215,7 +306,9 @@ visible only to command, the `responses_recipient_read` and
 
 ## 7. Facts that are never inferred from each other
 
-Nine separate records, in schema, in the interface and in tests:
+**Ten** separate records, in schema, in the interface and in tests. It was nine
+until `202609130006` split the last attendance fact in two, which is the whole
+subject of [DATABASE.md §6](./DATABASE.md#6-attendance--the-primary-capability):
 
 1. a commander **published** an intervention → `interventions.status`
 2. the server **queued** a notification → `notification_outbox.state = 'QUEUED'`
@@ -223,14 +316,21 @@ Nine separate records, in schema, in the interface and in tests:
 4. a device **acknowledged** receipt → `notification_outbox.state`
 5. a member **opened** it → `intervention_acknowledgements`
 6. a member **stated an intention** → `intervention_responses`
-7. a member **actually attended** → `attendance_intervals`
-8. a vehicle **departed** → `vehicle_movements`
-9. command **changed the status** → `interventions.status`
+7. a member **says they attended** → `attendance_intervals`, `source =
+   'SELF_DECLARED'`, pending
+8. **command stands behind that claim** → the same row, `verified = true`
+9. a vehicle **departed** → `vehicle_movements`
+10. command **changed the status** → `interventions.status`
+
+Facts 7 and 8 are the pair that was previously collapsed into one, and
+collapsing them is what let a self-declared claim be reported as participation.
 
 Tested: publishing creates a `QUEUED` outbox row **and nothing else** — no
 response, no acknowledgement, no attendance, no delivery attempt. Answering
-`DOLAZIM` creates **no** attendance. A vehicle departure creates **no**
-attendance.
+`DOLAZIM` creates **no** attendance. Opening creates **no** response and no
+attendance. A vehicle departure creates **no** attendance. A self-declared
+interval contributes **nothing** to `confirmed_seconds` until command confirms
+it, and a rejected one contributes nothing ever.
 
 Nothing in this system may report `delivered`. There is no notification
 transport, and the outbox cannot leave `QUEUED` without one.
@@ -247,13 +347,20 @@ Honest list of what this slice does **not** do:
   |---|---|---|
   | Sign-in, registration, profile completion, role and status load, owner account directory | Yes | **Yes** — migrations `...0001`–`...0004` are applied there |
   | Roster screen `Evidencija drustva`: members, groups, vehicles, account-to-member link | Yes — against local PostgreSQL 16 and CI's `postgres:16`, from a schema built from zero | **No.** Migration `202609120005` is **not applied** to the hosted project, so every one of these commands would fail there with `function ... does not exist` |
+  | Attendance provenance and confirmation, acknowledgement, vehicle departure and return | Yes, as **server commands with no screen** — against local PostgreSQL 16 and CI's `postgres:16` | **No.** Migration `202609130006` is **not applied** there, and is on a branch rather than `main`. The hosted `attendance_totals()` is still the version that counts a self-declared claim as participation |
 
-  Applying `202609120005` to the hosted project is a deliberate, separate,
-  owner-authorised step. Until it happens, the roster screen is proven code
-  against an unproven target.
-- **Interventions, responses, vehicle movements and attendance are not connected
-  at all** — those screens still run on device-local fictional state with the
-  actor selector, and each one says so on itself.
+  Applying `202609120005` and then `202609130006` to the hosted project, in that
+  order, is a deliberate, separate, owner-authorised step. Until it happens the
+  roster screen is proven code against an unproven target, and the attendance
+  fix exists nowhere a real member could benefit from it. `202609130006` is not
+  a purely additive migration — see
+  [DATABASE.md §3.1](./DATABASE.md#31-applying-the-two-pending-migrations--and-why-both-are-additive-is-wrong).
+- **No screen is connected to interventions, responses, vehicle movements or
+  attendance** — those screens still run on device-local fictional state with the
+  actor selector, and each one says so on itself. Since `202609130006` the
+  *commands* behind attendance, acknowledgement and vehicle movement all exist
+  and are tested; what is missing is any interface that calls them, which is why
+  none of this is usable by a member yet.
 - **Drafting a call-out has a server path but no server screen, and no hosted
   database.** `create_intervention_draft`, `update_intervention_draft` and
   `discard_intervention_draft` exist and are tested locally and in CI, but the

@@ -5,6 +5,150 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-12 - Slice 3b-0: a self-declared claim was already counting as participation
+
+**The defect, found by reading the code rather than the documentation.** DATABASE.md called attendance
+"the primary capability" and the nine-facts contract promised that "a member **actually attended**" was
+its own separate record. It was not. Three facts, each verified in the migration source:
+
+1. `attendance_check_in(intervention)` with no target member required only `is_dvd_staff()`, so a
+   FIREFIGHTER created their own interval (`202609090002:894`).
+2. The row landed `verified = false`, which *looked* like a safeguard (`:487`).
+3. **`attendance_totals()` never filtered on `verified`** (`:536`). It summed every closed interval.
+
+So self-declared presence flowed straight into participation totals. And `verified = true` was set in
+exactly one place - inside `attendance_correct()` (`:994`) - as a **side effect of a commander
+correcting the times**. Confirmation was not a decision anybody made; it was something that happened
+to a record when somebody fixed its clock. Nothing read the column at all.
+
+The owner's recorded rule for slice 3 - "`ON_SCENE` may create an **unverified** interval; it must
+never write verified attendance" - was therefore already violated, before journey progress existed to
+violate it.
+
+**The single test touching `verified` asserted the defect.** It expected `verified: true` after a
+correction. That assertion has been replaced with its opposite, and the commit says so plainly: this
+is not weakening a test to get green, it is removing a test that pinned a bug.
+
+**The design chosen**, of the two the owner offered: **intervals with an explicit `source` and a
+three-state confirmation**, not a separate claims table. The claims table would have had to duplicate
+the cross-intervention overlap exclusion constraint, which is the hard part and already correct, and
+would have left history and CSV unioning two tables. `source` and confirmation are independent: a
+commander recording somebody else is `COMMAND_RECORDED` and **still unconfirmed**, because "I wrote it
+down" and "I stand behind it" are different claims by the same person.
+
+`source` is decided inside the command from `auth.uid()` and is deliberately **not a parameter** - a
+client must not be able to label its own claim as command-recorded. Tested by passing your own member
+id explicitly and getting `SELF_DECLARED` anyway.
+
+**Rejection needs a reason; confirmation does not.** Rejecting overrides what a member said about
+their own presence and has to be explainable. Confirmation is the expected outcome, and demanding
+boilerplate from a commander working through thirty records after an incident would produce thirty
+meaningless strings. Both are audited with actor and server time regardless.
+
+**Two more write gaps, the same shape as slice 3a's.** `intervention_acknowledgements` and
+`vehicle_movements` have both existed since `202609090002` with a table, constraints, RLS and a read
+policy - and **no write path at all**. "Opened" was unrecordable, which is exactly the distinction a
+commander needs (somebody who has not opened the call-out is a different problem from somebody who
+opened it and has not answered). Both now have commands. Acknowledging is idempotent and never moves
+the first-seen timestamp, because "when did they see it" must stay answerable.
+
+**Also corrected while here:** the nine-facts list is now ten, since fact 7 split into "says they
+attended" and "command stands behind it". Four stale "nine facts" references were updated across
+ACCESS_MODEL.md, DATABASE.md, the new migration and the new test; two remaining mentions are
+deliberately historical.
+
+**A second defect, found by generating the test cases instead of choosing them.** Revalidating the
+authority model produced `db-tests/authority_matrix.test.ts`: eleven commands x ten account states,
+110 declared cells. 96 of the first hundred matched the intended model. Four did not, and they shared
+one cause.
+
+`current_member_id()` (`202609090002:289`) read `members.active` - whether the SOCIETY still counts
+the person - and never `current_dvd_role()` - whether the ACCOUNT still has standing. So **member
+identity survived the loss of authority.** A SUSPENDED, PENDING or incomplete-profile account whose
+linked member sat on an intervention's recipient list could read through seven policies
+(`interventions`, `intervention_updates`, `intervention_recipients`, `intervention_responses`,
+`intervention_acknowledgements`, `attendance_intervals`, `notification_outbox`), **answer a
+call-out** through `submit_response`, close its own interval through `attendance_check_out`, and - new
+in this slice - acknowledge an intervention. The matrix reported a suspended account reading 51
+attendance intervals and 82 interventions.
+
+This is live on the hosted project, not only on this branch. It is not reachable through the
+application - no screen reads any of it from the server - so it is a schema defect rather than an
+exposure. It is fixed now because the member-facing screen is the next slice and it directly
+contradicts what this project documents about suspension.
+
+Fixed at the root: one added condition in `current_member_id()`, and every consumer - seven policies
+and three commands - tightens with it. `acknowledge_intervention`, `attendance_check_in` and
+`attendance_check_out` additionally check `is_dvd_staff()` FIRST, so a withdrawn account is refused
+with `STAFF_REQUIRED` rather than `MEMBER_RECORD_REQUIRED`, which would be untrue - they have a
+member record, they have lost standing to use it.
+
+**`submit_response` was deliberately left alone**, and the first attempt at it is worth recording as
+a warning. I re-created it to add the same staff check and wrote the body from memory rather than
+copying the original: wrong signature, wrong return type, two wrong table names, one wrong column
+name, a dropped no-op-on-unchanged-answer branch, and an error code changed from `ETA_REQUIRED` to
+`INVALID_ETA`. Caught by diffing my version against the real one before running anything. Since the
+root fix already closes the hole there and only the message is imperfect, the whole block was
+removed. A seventy-line merged function is not worth re-creating to improve one error string.
+
+**Nine mutations, each from a byte-identical pristine copy, each restored and re-verified afterwards
+(`sha256sum -c` after every one):** removing the `verified` filter from totals fails 3; forcing every
+interval `COMMAND_RECORDED` fails 3; dropping `revoke ... from public` fails 10 (was 4 - the matrix's
+anonymous cells detect it independently now); reverting the `current_member_id` fix fails 3, each
+from a different angle; removing the staff gate from `acknowledge_intervention` fails 3, on the
+message rather than on access, which is the defence-in-depth story working; from `attendance_check_in`
+fails 6; from `attendance_check_out` fails 3; putting `verified = true` back in `attendance_correct`
+fails 2; and **over-tightening** - making `current_member_id()` always NULL - fails 60, which is the
+check that the fix does not simply deny everything.
+
+**Mutation testing found a gap in my own work.** The staff gate added to `attendance_check_out` could
+be deleted with all 267 tests still passing, because that command was not one of the nine and so had
+no row in the matrix. It has one now, and removing the gate fails 3. A line of authority code with no
+failing test behind it is a claim, not a safeguard.
+
+**One thing deliberately not changed, because it is the owner's call.** `ADMIN` has held full command
+authority since `202609090002`, while the role table implied administrators only manage records - the
+separation of duties runs one way only. Documented and pinned by the matrix rather than altered: in a
+52-member society the administrator is probably also an officer, and refusing them a call-out at
+03:00 to honour a textbook rule is the worse failure. Recorded in PROJECT_STATE.md as a decision to
+take.
+
+**Verified.** Lint, strict typecheck, `vite build` and the bundle secret scan pass. Unit **128
+passed** (unchanged - this slice adds no client code). Database **277 passed**, up from 135 on `main`:
++25 for attendance truth, +110 for the authority matrix, +7 for the identity fix and the states it
+covers. Browser and accessibility **74 passed**, run with `.env.local` moved aside as CI does and
+restored byte-identically.
+
+Checked against deliberately broken code, not only working code - the full mutation battery is
+recorded further down this entry.
+
+**Not applied anywhere.** `202609130006` is local and CI evidence only. The hosted project is two
+migrations behind this branch, one behind `main`, and **still carries this defect** - nothing reads it
+there yet, because no screen uses attendance against the server, but that is the reason to apply it
+rather than leave it pending.
+
+**`202609130006` is not purely additive, and the first version of this entry should have said so.**
+It drops and recreates `public.attendance_totals(timestamptz, timestamptz)` with different result
+columns, because `create or replace function` cannot change a function's output contract. That makes
+it a **breaking replacement of a callable interface**, additive only in its table and column changes.
+No consumer calls it today - no application module, no view, no other function - which is why the
+replacement is safe *now* and would not be later. The order `202609120005` then `202609130006` is
+required, the execute grant has to be re-issued after the recreate, and
+[DATABASE.md](../DATABASE.md) §1 carries the preflight checks, the post-migration verification and the
+forward-fix path if `...0006` fails after `...0005` has already applied.
+
+**PR #17 merged first, as recommended, then merged into this branch.** #17's own commits keep their
+authorship; the overlapping documentation was resolved by hand, keeping both sides. Conflicts were in
+`docs/ai/PROJECT_STATE.md` (six hunks) and `docs/ai/WORK_LOG.md` (one hunk, this entry against #17's);
+`docs/DATABASE.md` auto-merged.
+
+**Next concrete action:** slice 3b proper - availability, journey progress, and the real commander and
+firefighter screens, including the batch-confirmation requirement now recorded in PROJECT_STATE.md.
+Merging PR #18 and applying either migration to the hosted project each need separate owner
+authorisation and neither has it.
+
+---
+
 ## 2026-09-12 - Post-merge documentation synchronization
 
 **Done**
@@ -32,6 +176,13 @@ Review and merge this documentation-only synchronization after CI. Then, with
 separate owner authorisation and authenticated Supabase access, apply migration
 `202609120005` and smoke-check `Evidencija drustva` with disposable data before
 starting Slice 3b.
+
+*Recorded afterwards, so this historical entry is not read as current: the merge
+named above happened later the same day as PR #17, merge commit `7d00d9bb`. The
+hosted migration and the smoke test are still outstanding and still need
+separate owner authorisation. Slice 3b-0 had already started on its own branch
+by the time this entry was merged, so the entry's "Slice 3b has not started"
+was true when written and is not true now.*
 
 ---
 
