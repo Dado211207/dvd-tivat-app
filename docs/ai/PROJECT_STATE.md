@@ -42,18 +42,27 @@ explicit owner decision.
 
 ### Pull requests — live state at 2026-09-12
 
+Each of these is a **checkpoint statement, true at the moment of that merge**.
+`main` has moved on since, so none of them describes `main` today.
+
 PR #13 was merged on 2026-09-11 with a **normal merge, not a squash**, so the
 fifteen individual commits keep their own history and authorship — including the
-work that arrived through the `codex/*` stack. `main`'s tree is byte-identical to
-PR #13's head `110e57b`, confirmed by `git diff`.
+work that arrived through the `codex/*` stack. *At that merge*, `main` was
+`3133d00` and its tree was byte-identical to PR #13's head `110e57b`, confirmed
+by `git diff`.
 
 That merge also closed out the whole earlier stack: #9–#12 and
 `codex/access-map-research` were linear ancestors of #13, so all of it landed at
 once and none of those branches has unmerged work left.
 
 PR #14 was merged on 2026-09-11 the same way, on the owner's approval, keeping
-its four commits. `main`'s tree is byte-identical to PR #14's head `35383a5`
-(`479b732`), confirmed by `git diff` and by comparing tree hashes.
+its four commits. *At that merge*, `main` was `bd79f7f` and its tree was
+byte-identical to PR #14's head `35383a5` (`479b732`), confirmed by `git diff`
+and by comparing tree hashes.
+
+PR #15 was merged the same day, again a normal merge, producing the `main` this
+branch is built on. **Current `main` contains PR #15 and is therefore not
+byte-identical to either head named above.**
 
 | PR | State |
 |---|---|
@@ -64,7 +73,13 @@ its four commits. `main`'s tree is byte-identical to PR #14's head `35383a5`
 | #13 | **Merged** 2026-09-11 into `3133d00` |
 | #14 | **Merged** 2026-09-11 into `bd79f7f` |
 | #15 | **Merged** 2026-09-11 into `dc3aade` |
-| #16 | **Open, Draft.** Slice 3a, head `cb074eb`, one commit ahead of `main` and zero behind. CI run `34686856387` green |
+| #16 | **Open, Draft.** Slice 3a. Checkpoints: `cb074eb` the implementation commit, `e7df6fc` the first documentation correction. **The live head is whatever PR #16 currently shows — read it there, not here** |
+
+> **Why this table names checkpoints and not "the current head".** A branch head
+> moves; a line in a file does not. Writing one here is exactly how `main` came to
+> be recorded as `bd79f7f` two merges after it stopped being true, and how this
+> table came to call `cb074eb` the head after `e7df6fc` was pushed. Commits that
+> are already history can be named safely; a moving reference cannot.
 
 ## Slice 3 — incident dispatch, availability and public visibility
 
@@ -72,7 +87,7 @@ Proposed and owner-approved sequencing, smallest reviewable PR first:
 
 | # | Slice | State |
 |---|---|---|
-| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **This PR** |
+| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Built, in Draft PR #16. Not merged, not applied to the live project** |
 | 3b | General availability (C2) and the member-facing response flow on real data | Next |
 | 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | Before push, not after |
 | 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | |
@@ -123,8 +138,9 @@ is also why C8's Viber and telephone fallback is not optional.
 Slice 3a is built but **not merged**; its state is the table above.
 
 - PR #13, #14 and #15 merged (normal merges); `main` = `dc3aade`.
-- All four migrations applied to the live project and verified against the
-  locally-tested schema, byte for byte.
+- **That slice's** four migrations (`...0001` to `...0004`) applied to the live
+  project and verified against the locally-tested schema, byte for byte. Slice
+  3a added a fifth, `202609120005`, which is **not** applied there.
 - The client-role privilege defect that only a real project could reveal: found,
   fixed in two new migrations, and covered by tests that detect it.
 - The simulated actor no longer moves any access. Identity, role and status are
@@ -136,7 +152,7 @@ Slice 3a is built but **not merged**; its state is the table above.
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm run test` (unit) | **116 passed** |
+| `npm run test` (unit) | **117 passed** |
 | `npm run test:db` (PostgreSQL 16 + RLS) | **100 passed** |
 | `npx vite build` | Pass |
 | `npm run verify:bundle` | Pass - no secret in the built output |
@@ -151,14 +167,23 @@ src/auth/access.ts         pure access-snapshot loader (injected gateway, unit-t
 src/auth/AccessProvider.tsx  global state: LOADING until the server answers
 src/auth/supabaseClient.ts   the only module that talks to Supabase
 src/auth/directory.ts        owner-only account reads and the two owner commands
+src/auth/roster.ts           admin reads and commands for members, groups, vehicles
+                             and the account-to-member link; pure helpers unit-tested
+src/ui/views/OrganisationView.tsx  the Evidencija drustva screen (ADMIN/OWNER) where
+                             the society's real records are entered
 src/ui/components/RequireRole.tsx  the role guard used by the owner directory
 supabase/migrations/
   202609090001_accounts_reports.sql       accounts, roles, abandoned citizen reports
   202609090002_internal_operations.sql    THE INTERNAL OPERATIONS SCHEMA
   202609110003_client_role_privileges.sql least privilege for anon/authenticated
   202609110004_function_execute_privileges.sql  removes the PUBLIC execute grant
+  202609120005_organisational_writes.sql  the WRITE PATHS the schema never had:
+                             intervention drafts (command), member/group/vehicle
+                             CRUD and account linking (admin), is_dvd_admin(),
+                             organisation_audit. NOT yet applied to the live project
 supabase/tests/    TEST-ONLY Supabase platform stub - never apply to a real project
 db-tests/          integration tests: role matrix, lifecycle, attendance, privileges
+  organisation.test.ts       admin-vs-command authority, linking, drafts, audit reads
 docs/ACCESS_MODEL.md   the role and RLS contract, and what is not enforced yet
 docs/DATABASE.md       schema semantics, the live project, how to run the DB tests
 docs/OWNER_BOOTSTRAP.md the one-time owner procedure - EXECUTED by db-tests/bootstrap.test.ts
@@ -170,8 +195,14 @@ scripts/check-bundle-secrets.mjs  reads the built artifact; no secret may ship
 | Screen | Backed by |
 |---|---|
 | `nalozi` (Nalozi i pristup) | **The server.** Sign-in, registration, profile, role, status, the owner directory and its two commands |
-| `dezurni`, `clan`, `vozila`, `prikaz`, `clanovi`, `istorija` | Device-local fictional state and the actor selector. Each carries a banner saying so |
+| `evidencija` (Evidencija drustva) | **The server**, from slice 3a. The society's real members, groups and vehicles, and the account-to-member link. ADMIN or OWNER only |
+| `clanovi` (Clanovi) | Device-local **fictional** roster with the actor selector. Easy to confuse with `evidencija` and must not be: this one edits invented demonstration data and touches no server record |
+| `dezurni`, `clan`, `vozila`, `prikaz`, `istorija` | Device-local fictional state and the actor selector. Each carries a banner saying so |
 | `dojava` | Abandoned research, local only |
+
+Two screens now show members, and only one of them is real. `evidencija` is where
+DVD Tivat's actual roster is entered; `clanovi` remains the prototype's invented
+roster and stays that way until a later slice replaces it.
 
 ## Non-negotiable rules for anyone continuing this work
 
@@ -217,8 +248,9 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
 ## The live Supabase project
 
-A project exists and all four migrations are applied to it. Recorded here so
-nobody has to rediscover it:
+A project exists and the **first four** migrations are applied to it. The fifth,
+`202609120005` from slice 3a, is not — see the limitations above. Recorded here
+so nobody has to rediscover it:
 
 | Fact | Value |
 |---|---|
@@ -226,6 +258,7 @@ nobody has to rediscover it:
 | PostgreSQL | 17 (the tests run against 16 locally and in CI) |
 | State before | `public` schema completely empty — no migration had ever run |
 | Applied | `202609090001`, `202609090002`, `202609110003`, `202609110004`, in order |
+| **Not applied** | `202609120005` (slice 3a). The hosted schema is therefore **behind** this branch until it is applied |
 | Verified | Structural fingerprint matches the locally-tested schema byte for byte — see [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
 | Publishable key | Safe in the client bundle by design; it is **not** a secret |
 | Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
@@ -248,8 +281,9 @@ says the hosted project itself was tested by CI.
   driven by a test harness, never a human clicking through the actual sign-up UI.
   Close this the first time a real registration flow is built or manually
   exercised, before any real DVD Tivat member is invited.
-- **No password reset**, and email confirmation is expected to be off. Both need
-  a configured mail provider (B2).
+- **No password reset.** It needs a configured mail provider (B2). Whether email
+  confirmation is currently on or off is **unresolved** — two conflicting
+  observations are recorded under Owner action items; do not assume either.
 - No notification transport of any kind. No push, SMS, email or call.
 - No session invalidation for a suspended account: suspension removes the role
   immediately so every request is refused, but an already-issued JWT stays
@@ -271,9 +305,9 @@ says the hosted project itself was tested by CI.
 
 | # | Blocker | State |
 |---|---|---|
-| B1 | Supabase project | **Resolved.** The owner created one and approved its use; migrations applied and verified |
-| B2 | Email verification | **Decided:** "Confirm email" is to be turned **off** in the Supabase dashboard for now, so an account is usable immediately. An SMTP provider is still needed before real registration at scale — Supabase's default sender only reaches project-team addresses and is rate-limited |
-| B3 | Notification transport | **Decided and now active work, not deferred.** PWA Web Push, server-sent from an Edge Function (C1, C8) — slice 3d. Still unbuilt and unproven: nothing may be promised about delivery. iOS needs the PWA installed to the home screen and ignores custom sound and `vibrate` entirely; Apple Critical Alerts need an entitlement a PWA cannot hold |
+| B1 | Supabase project | **Resolved.** The owner created one and approved its use; the first four migrations are applied and verified there. `202609120005` is not — see the limitations above |
+| B2 | Email verification | **Decided:** "Confirm email" is to be turned **off** in the Supabase dashboard for now, so an account is usable immediately. **Whether it actually is off is unresolved** — two conflicting observations are recorded under Owner action items. An SMTP provider is still needed before real registration at scale: Supabase's default sender only reaches project-team addresses and is rate-limited |
+| B3 | Notification transport | **Decided and now active work, not deferred.** PWA Web Push, server-sent from an Edge Function (C1, C8) — slice 3d. Still unbuilt and unproven: nothing may be promised about delivery. **Every platform claim below is UNVERIFIED** and must be checked against Apple/W3C documentation and a real device before it is relied on: that iOS requires the PWA on the home screen, that iOS ignores application-controlled sound and `vibrate`, and that Apple Critical Alerts need an entitlement a PWA cannot hold. See the paragraph under "Slice 3" — these were asserted from general knowledge, not read from an official source |
 | B4 | Emergency number to display | **Resolved: 112.** The non-emergency notice names it rather than inventing one |
 | B5 | Response visibility | **Resolved:** every member called to an intervention may see the others' responses. That is how a crew coordinates |
 | B6 | Second break-glass owner | **Resolved:** one owner only, enforced by the unique index. No second owner for now |
@@ -311,8 +345,8 @@ these concern a private hosted project that this repository's tests cannot reach
 
 ## Next concrete action
 
-Identity and access are done. The operational screens are not. Next slice, in
-this order:
+Identity, access and the society's records are done. The **incident** path is
+not. Next, in this order:
 
 1. ~~Owner/admin write commands for `members`, `groups` and `vehicles`.~~
    **Done — slice 3a, PR #16.**
@@ -343,7 +377,7 @@ Follow [OWNER_BOOTSTRAP.md](../OWNER_BOOTSTRAP.md) first.
 
 | # | Check | Expected | Done |
 |---|---|---|---|
-| 1 | "Confirm email" is off in the dashboard | Registration produces a usable account immediately | ☐ |
+| 1 | **Read** whether "Confirm email" is on or off, and write the answer into Owner action item 2 | Whichever it is, it is now recorded instead of assumed. Off means registration produces a usable account immediately | ☐ |
 | 2 | Register a brand-new address in the application | Asked for a name, then told the account is waiting for approval | ☐ |
 | 3 | While waiting for approval, look at every screen | Nothing operational is offered; the accounts screen says "no rights yet" | ☐ |
 | 4 | Run the bootstrap SQL for your own account | `1 row affected`; the verification query returns exactly your address | ☐ |
@@ -358,5 +392,7 @@ Follow [OWNER_BOOTSTRAP.md](../OWNER_BOOTSTRAP.md) first.
 If any of these behaves differently from the expected column, that is a defect —
 record it here rather than working around it.
 
-**B1 is resolved** — the project exists, the schema is on it, and identity and
-access run against it.
+**B1 is resolved** — the project exists, the first four migrations are on it, and
+identity and access run against it. Slice 3a's `202609120005` is not applied
+there, so this checklist covers identity and access only; the roster screen
+cannot be exercised against the live project until that migration is applied.

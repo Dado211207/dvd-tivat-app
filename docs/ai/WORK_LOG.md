@@ -114,6 +114,40 @@ since a push that does not wake somebody is the failure this application exists 
 
 Documentation only: no source file, migration, test or schema object changed.
 
+### Second correction, same day: the first correction was not a full reread
+
+A second independent reread found six more inconsistencies. The first correction had fixed the
+items it was pointed at and had **not** re-read the whole file - which is the exact failure it
+claimed to have learned from, one commit earlier. Recording that plainly, because the pattern is
+now three deep: PR #15 fixed a stale SHA, `e7df6fc` fixed what that missed, and this fixes what
+`e7df6fc` missed.
+
+| Found | Fix |
+|---|---|
+| The PR table called `cb074eb` the current head of #16, citing the superseded CI run - a self-referential stale SHA created *by* the correction commit | The table now names `cb074eb` and `e7df6fc` as checkpoints and sends readers to PR #16 for the live head, with a note saying why a moving reference must never be written here |
+| B3 still asserted iOS ignores sound and `vibrate` as established fact, contradicting the downgraded paragraph directly above it | Every platform claim in B3 is now marked UNVERIFIED pending Apple/W3C evidence and a device test |
+| The slice-2 verification table said 116 unit tests | **117.** Verified by checking out PR #14's head `35383a5` in a throwaway worktree and running the suite: `Tests 117 passed (117)` |
+| "Which screens are real" omitted `evidencija` | Added, and `clanovi` split onto its own row saying plainly that it is the fictional roster and must not be confused with the real one |
+| The repository map stopped at `202609110004` | Added `202609120005`, `src/auth/roster.ts`, `src/ui/views/OrganisationView.tsx` and `db-tests/organisation.test.ts` with their actual roles |
+| The PR #13 and #14 paragraphs said in the present tense that `main` is byte-identical to those heads | Both rewritten as checkpoint statements, with an explicit line that current `main` contains PR #15 and matches neither |
+
+**Four more found by reading the whole file rather than only the listed items:**
+
+- "All four migrations applied to the live project" read as *all* migrations now that a fifth
+  exists. Scoped to that slice's four, in three places, plus a **Not applied** row in the live-project
+  table so a scanner cannot miss it.
+- "email confirmation is expected to be off" contradicted the unresolved conflict recorded two
+  sections below. Now says unresolved, and B2 says so too.
+- "Identity and access are done" understated what slice 3a did and misdescribed what remains.
+- The manual checklist told the owner to confirm "Confirm email" is off - assuming the answer to
+  the very question that is open. It now says to **read** it and write down whichever it is.
+
+**The lesson, stated so it is not learned a fourth time:** this file is read top to bottom by whoever
+resumes, so it must be edited top to bottom. Fixing named items is not the same as making the file
+true.
+
+Documentation only: no source file, migration, test or schema object changed.
+
 ---
 
 ## 2026-09-11 - Real accounts: the simulated actor stops moving access
