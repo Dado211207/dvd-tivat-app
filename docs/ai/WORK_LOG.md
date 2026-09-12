@@ -72,6 +72,48 @@ byte-identically. Worth knowing before somebody treats it as a regression.
 and the member response flow on real data, including the progress column decided alongside the
 existing answer vocabulary.
 
+### Correction, same day: the state file contradicted the slice it shipped in
+
+An independent review of PR #16's exact head found `docs/ai/PROJECT_STATE.md` internally stale, and
+it was right on every point. Verified against the file rather than taken on trust, then fixed:
+
+| Stale claim | Reality |
+|---|---|
+| `Last updated: 2026-09-11`, and the same date on the PR section heading | 2026-09-12 |
+| ``main`` = `bd79f7f` (the PR #14 merge) | `dc3aade`, the PR #15 merge |
+| PR table ended at #14 | #15 merged, #16 open as Draft |
+| "No owner/admin write commands for members, groups and vehicles yet" | **This PR adds them** |
+| "no PWA decision made" | C1 decided PWA-only; the PWA itself is still unbuilt |
+| "Only identity and access use the schema" | The society's records now do too |
+| Next-action items 1 and 2 | Both completed by this slice |
+| B3 "Open ... PWA Web Push vs native must be investigated" | Decided (C1/C8) and now active slice-3d work |
+
+**The worst one was "no owner/admin write commands ... yet" sitting inside the diff that adds them.**
+When the Slice 3 section was added, the rest of the file was not swept for claims the slice had just
+invalidated. That is the same failure as the stale `main` SHA corrected in PR #15, and the lesson
+from that one was not generalised: **updating this file means re-reading all of it, not appending to
+it.** A state file that contradicts its own commit is worse than no state file, because the next
+agent trusts it.
+
+**Two things were deliberately NOT marked resolved**, because they concern a private hosted project
+this repository cannot reach and "reported done" is not "verified done":
+
+- **Secret rotation** is reported by the owner as complete. It stays on the action list until the
+  owner confirms it directly. Removing an undone item would leave a possibly-exposed key rotated only
+  in a document; leaving a done one costs a moment.
+- **"Confirm email"** has two conflicting observations now recorded side by side with their dates and
+  provenance: read directly from `GET /auth/v1/settings` on 11 September as `mailer_autoconfirm:
+  false` (confirmation ON), and reported on 12 September as `true` (OFF). It may simply have been
+  changed between them. Neither was picked over the other.
+
+**One claim of mine was downgraded.** That iOS Web Push ignores application-controlled sound and
+`vibrate` was asserted from general knowledge, not read from Apple or W3C documentation and not
+observed on a device. It is now recorded as needing confirmation before anything is promised about
+how a call-out gets noticed - which is exactly the kind of claim that must not be taken on trust,
+since a push that does not wake somebody is the failure this application exists to prevent.
+
+Documentation only: no source file, migration, test or schema object changed.
+
 ---
 
 ## 2026-09-11 - Real accounts: the simulated actor stops moving access

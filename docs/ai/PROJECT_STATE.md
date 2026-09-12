@@ -4,7 +4,7 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-11
+Last updated: 2026-09-12
 
 ---
 
@@ -35,11 +35,12 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- `main`: `bd79f7f0d3c0467b5c7bfbed2dfdc66185fdb898` — the merge commit of PR #14.
-- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, merged into that `main`.
+- `main`: `dc3aadee8543002a7f4ef5c288b8db1600c59f16` — the merge commit of PR #15.
+- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, restarted from that `main`
+  and currently carrying slice 3a as Draft PR #16.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
-### Pull requests — live state at 2026-09-11
+### Pull requests — live state at 2026-09-12
 
 PR #13 was merged on 2026-09-11 with a **normal merge, not a squash**, so the
 fifteen individual commits keep their own history and authorship — including the
@@ -62,6 +63,8 @@ its four commits. `main`'s tree is byte-identical to PR #14's head `35383a5`
 | #9–#12 | Contained in #13; merged with it |
 | #13 | **Merged** 2026-09-11 into `3133d00` |
 | #14 | **Merged** 2026-09-11 into `bd79f7f` |
+| #15 | **Merged** 2026-09-11 into `dc3aade` |
+| #16 | **Open, Draft.** Slice 3a, head `cb074eb`, one commit ahead of `main` and zero behind. CI run `34686856387` green |
 
 ## Slice 3 — incident dispatch, availability and public visibility
 
@@ -102,16 +105,24 @@ database tests never noticed, because the test helper inserted drafts as the
 **Deferred idea, not a requirement (C9):** public notification opt-in, where a
 citizen subscribes to be pushed when a new incident opens.
 
-**Constraint to carry into 3c/3d:** iOS Web Push ignores custom sounds and
-`vibrate` patterns entirely. An incident push can be made visually distinct on
-every platform and audibly distinct only on Android. The owner's primary test
-device is an iPhone, so this should be designed for rather than discovered.
+**Constraint to carry into 3c/3d, and to confirm before relying on it:** iOS Web
+Push is understood to ignore application-controlled sound and `vibrate`, so an
+incident push would be visually distinct on every platform and audibly distinct
+only on Android. **This was asserted from general knowledge, not read from Apple
+or W3C documentation, and has not been observed on a device.** Check it against
+an official source and the owner's own iPhone before any claim about how an
+alarm will be noticed, and get the owner's explicit acceptance of
+system-controlled alerting if it holds. The owner's primary test device is an
+iPhone, so getting this wrong is not a small matter: a call-out that does not
+wake somebody is the failure mode this whole application exists to avoid — which
+is also why C8's Viber and telephone fallback is not optional.
 
-## Status of this slice
+## Status of the last merged slice
 
-**Slice 2 - real accounts, authentication and access.** Complete.
+**Slice 2 - real accounts, authentication and access.** Complete and merged.
+Slice 3a is built but **not merged**; its state is the table above.
 
-- PR #13 and PR #14 merged (normal merges); `main` = `bd79f7f`.
+- PR #13, #14 and #15 merged (normal merges); `main` = `dc3aade`.
 - All four migrations applied to the live project and verified against the
   locally-tested schema, byte for byte.
 - The client-role privilege defect that only a real project could reveal: found,
@@ -225,8 +236,12 @@ says the hosted project itself was tested by CI.
 
 ## Known limitations (accurate, not aspirational)
 
-- **Only identity and access use the schema.** Interventions, responses, vehicle
-  movements and attendance are still device-local fictional state.
+- **Identity, access and the society's records use the schema; the incident path
+  does not.** Members, groups, vehicles and the account-to-member link are real
+  server records with a real screen (`Evidencija drustva`, slice 3a). Drafting a
+  call-out has a tested server command but no screen yet. Interventions,
+  responses, vehicle movements and attendance are still device-local fictional
+  state, and each of those screens says so on itself.
 - Real sign-up through the app's own registration form, with a real deliverable
   email, has not yet been exercised end-to-end — every verification so far either
   used privileged SQL to create accounts directly, or the app's internal modules
@@ -241,10 +256,16 @@ says the hosted project itself was tested by CI.
   syntactically valid until expiry.
 - No media upload pipeline, EXIF stripping or byte-signature validation.
 - No CSV export yet.
-- No owner/admin write commands for members, groups and vehicles yet.
+- **No screen publishes a real call-out.** `create_intervention_draft`,
+  `update_intervention_draft` and `discard_intervention_draft` exist and are
+  tested, but the dispatcher screen still writes device-local state. Slice 3b.
+- **Slice 3a's migration is not applied to the hosted project.** `202609120005`
+  is proven against local PostgreSQL 16 and on CI's `postgres:16` service only.
+  Applying it to the owner's project is a post-merge step needing authorisation.
 - A browser prototype is **no evidence** that a locked Android or iPhone will
   raise an alarm.
-- No native application, no PWA decision made, no deployment.
+- **PWA only** is decided (C1); the PWA itself is not built. No manifest, no
+  service worker, no installability, no native application, no deployment.
 
 ## Blockers needing an owner decision
 
@@ -252,42 +273,66 @@ says the hosted project itself was tested by CI.
 |---|---|---|
 | B1 | Supabase project | **Resolved.** The owner created one and approved its use; migrations applied and verified |
 | B2 | Email verification | **Decided:** "Confirm email" is to be turned **off** in the Supabase dashboard for now, so an account is usable immediately. An SMTP provider is still needed before real registration at scale — Supabase's default sender only reaches project-team addresses and is rate-limited |
-| B3 | Notification transport | Open. PWA Web Push vs native must be investigated per platform before anything is promised. Apple Critical Alerts need an entitlement; Google Play restricts SMS permissions |
+| B3 | Notification transport | **Decided and now active work, not deferred.** PWA Web Push, server-sent from an Edge Function (C1, C8) — slice 3d. Still unbuilt and unproven: nothing may be promised about delivery. iOS needs the PWA installed to the home screen and ignores custom sound and `vibrate` entirely; Apple Critical Alerts need an entitlement a PWA cannot hold |
 | B4 | Emergency number to display | **Resolved: 112.** The non-emergency notice names it rather than inventing one |
 | B5 | Response visibility | **Resolved:** every member called to an intervention may see the others' responses. That is how a crew coordinates |
 | B6 | Second break-glass owner | **Resolved:** one owner only, enforced by the unique index. No second owner for now |
 | B7 | Real roster and vehicle data | Open, and a hard rule: real member and vehicle data **never** enters this repository — not in code, fixtures, seed data, tests or documentation |
-| B8 | Merging the PR stack | **Resolved.** PR #13 merged 2026-09-11 as a normal merge; the whole stack landed with it |
+| B8 | Merge convention | **Resolved: normal merge commits, never squash.** Followed for #1, #3–#8, #13, #14 and #15, so each PR's commits keep their own history and authorship |
 
 ### Owner action items
 
-Things only the owner can do, recorded so they are not silently assumed done:
+Things only the owner can do, recorded so they are not silently assumed done.
+**Reported done is not verified done**, and the distinction is kept deliberately:
+these concern a private hosted project that this repository's tests cannot reach.
 
 1. **Rotate the Supabase secret key.** It may have been exposed earlier. Nothing
    built here needs it at runtime, so rotating it breaks nothing in this app.
-2. **Turn off "Confirm email"** in the Supabase dashboard (Authentication →
-   Sign In / Providers). There is no API or MCP access to auth configuration
-   from here, so this cannot be done for them.
+   *Reported by the owner on 2026-09-12 as rotated, with the replacement stored
+   only as a GitHub Actions secret. Not independently confirmed from here, and
+   deliberately not inspected — so this stays listed until the owner confirms it
+   directly.* Leaving a done item on the list costs a moment; removing an
+   undone one leaves a possibly-exposed key rotated only in a document.
+2. **Confirm the "Confirm email" setting**, in the Supabase dashboard
+   (Authentication → Sign In / Providers). There is no API or MCP access to auth
+   configuration from here, so this cannot be checked or changed for them.
+
+   **Two observations conflict and neither is being picked over the other:**
+
+   | Date | Source | Observation |
+   |---|---|---|
+   | 2026-09-11 | Read directly from `GET /auth/v1/settings` during the second live pass | `"mailer_autoconfirm": false` — confirmation **ON**, and GoTrue additionally rejected `@example.invalid` and `@example.com` as undeliverable, plus a 429 rate limit |
+   | 2026-09-12 | Owner continuity record (B2), reported | Provider enabled and `mailer_autoconfirm: true` — confirmation **OFF** |
+
+   The setting may simply have been changed between the two. It matters because
+   it decides whether registration yields a usable session immediately, so it
+   should be read from the dashboard once and the answer recorded here rather
+   than inferred.
 
 ## Next concrete action
 
 Identity and access are done. The operational screens are not. Next slice, in
 this order:
 
-1. Members and vehicles as **server** records: owner/admin write commands for
-   `members`, `groups` and `vehicles`, which the schema has read policies for but
-   no write path to. The roster screen then stops being fictional local state.
-2. Link an account to a member record (`members.user_id`), without which a
-   signed-in firefighter cannot be a recipient, respond, or check in.
+1. ~~Owner/admin write commands for `members`, `groups` and `vehicles`.~~
+   **Done — slice 3a, PR #16.**
+2. ~~Link an account to a member record (`members.user_id`).~~
+   **Done — slice 3a, PR #16.**
 3. The commander draft → review → publish flow against `publish_intervention`,
-   including the frozen recipient list and the `QUEUED`-only outbox.
-4. Member response against `submit_response`, then check-in / check-out and the
-   attendance board against the attendance commands.
-5. Only then consider notification transport (**B3**), which is a separate
-   investigation and must not be promised before it is done.
+   including the frozen recipient list and the `QUEUED`-only outbox. The three
+   draft commands exist and are tested; the **screen** is what is missing.
+4. Member response against `submit_response`, plus general availability (C2) and
+   journey progress (C3), then check-in / check-out and the attendance board.
+5. Only then notification transport (**B3**), which must not be promised before
+   it is built and tested on a real device.
 
 Do not start (3) before (1) and (2): an intervention cannot be published to
-recipients who do not exist as server-side members.
+recipients who do not exist as server-side members. Both are now done, so (3) is
+unblocked once PR #16 merges.
+
+**Immediately next:** merge PR #16 when the owner authorises it (normal merge,
+per B8), then apply `202609120005` to the hosted project and smoke-check the
+roster screen against it with disposable data. Then slice 3b.
 
 ## Manual owner checklist
 
