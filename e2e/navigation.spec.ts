@@ -19,11 +19,25 @@ test('keyboard skip link preserves the member route and unsent answer', async ({
   await expect(page.getByTestId('current-answer')).toHaveCount(0);
 });
 
-test('all eight routes stay reachable without page overflow at compact widths', async ({ page }) => {
+test('every route stays reachable without page overflow at compact widths', async ({ page }) => {
   await openApp(page);
+
+  // Enumerated from the rendered navigation rather than hardcoded. A hardcoded
+  // list silently stopped covering a route the moment one was added, which is a
+  // test that passes while proving less than its name claims. The assertion
+  // below still makes adding a route a deliberate act.
+  const routes = await page
+    .locator('[data-testid^="nav-"]')
+    .evaluateAll((links) =>
+      links.map((link) => link.getAttribute('data-testid')!.replace(/^nav-/, '')),
+    );
+  expect(routes.slice().sort()).toEqual(
+    ['clan', 'clanovi', 'dezurni', 'dojava', 'evidencija', 'istorija', 'nalozi', 'prikaz', 'vozila'],
+  );
+
   for (const width of [320, 720, 1024]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'nalozi', 'istorija']) {
+    for (const route of routes) {
       const link = page.getByTestId(`nav-${route}`);
       await expect(link).toBeVisible();
       const box = await link.boundingBox();

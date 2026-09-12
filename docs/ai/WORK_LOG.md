@@ -5,6 +5,203 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-12 - Slice 3a: the write paths the response system never had
+
+**The gap, found by reading the schema instead of the brief.** `202609090002` built a complete
+mobilisation system - publish, receive, respond, record attendance - and no way to create anything.
+`publish_intervention(target_intervention, recipient_member_ids)` takes an intervention that must
+ALREADY exist in `DRAFT`, and nothing in the database could produce one. `members`, `groups`,
+`group_members` and `vehicles` had no write path at all. The whole schema was reachable only by
+privileged SQL.
+
+**Why a hundred passing tests did not notice.** `db-tests/harness.ts` inserted drafts directly as the
+SUPERUSER, outside `asUser`. The helper held a privilege no commander in the application has ever
+held, so the missing function was invisible. `createDraft` now goes through
+`create_intervention_draft`, which makes every intervention scenario in the suite depend on the
+authority check, the validation and the grants being right. The one test that needed the old
+behaviour - the unique index refusing a duplicate idempotency key - was **split rather than deleted**:
+it had conflated "the command is idempotent" with "the constraint is the backstop", and both are now
+asserted separately by their own test.
+
+**The same privilege defect, caught on the first run.** `organisation_audit` was created holding
+`INSERT`, `UPDATE`, `DELETE` and `TRUNCATE` for `authenticated`, because a Supabase project's default
+privileges grant them to every new table and the migration initially only *added* `select` on top -
+the identical mistake `202609110003` exists to correct. *"never grants a client role a privilege with
+no policy behind it"* failed immediately. The stub reproducing the platform's default grants is the
+only reason that was visible locally rather than on the owner's project.
+
+**Two other defects found while building, both mine.** A parameter named `idempotency_key` is
+ambiguous against the column of the same name inside the function body, which is exactly why every
+other parameter in this schema carries a `requested_` prefix. And `max(uuid)` does not exist - the
+one-query existence-and-value trick was wrong, and plpgsql's `FOUND` is the right mechanism, because
+`user_id` is legitimately NULL for a member with no account and the value cannot distinguish "no such
+member" from "member not linked".
+
+**Administrative authority now has a predicate.** `ACCESS_MODEL.md` has said since PR #13 that an
+ADMIN maintains organisational records while a COMMANDER runs call-outs. That distinction existed
+only in prose. `is_dvd_admin()` is now the predicate, and a COMMANDER is refused every roster command
+with `ADMIN_REQUIRED` as firmly as a firefighter is.
+
+**The link that makes the system reachable.** `members.user_id` is what `current_member_id()` reads,
+and nothing could write it - so every approved account resolved to no member and `submit_response`
+would have refused all of them with `MEMBER_RECORD_REQUIRED`. `admin_link_member_account` closes
+that, reports its two one-to-one collisions differently (a member who already has an account needs a
+different correction from an account already given to somebody else), and confers no authority:
+authority is read from `access_grants` and nowhere else, which is its own test.
+
+**Nothing is deleted.** Members, groups and vehicles deactivate with a recorded reason; a discarded
+draft becomes `CANCELLED`. A member who left in 2024 must still resolve on the attendance record of
+an intervention they attended in 2023.
+
+**Verified.** Lint, typecheck, `vite build` and the bundle secret scan pass. Unit **128 passed**
+(was 117). Database **135 passed** (was 101). Browser and accessibility **74 passed** (was 70).
+Checked against deliberately broken code, not only working code: granting a firefighter admin
+authority fails 3 tests, dropping the new table's revoke fails 3, and taking the coordinate capture
+time from the caller instead of the server fails 1.
+
+**One test was quietly under-covering.** `navigation.spec.ts` hardcoded eight route names, so it
+passed while never visiting the ninth. It now enumerates the rendered navigation, with an explicit
+assertion on the expected set so adding a route stays deliberate.
+
+**Environment note, not a code finding.** Four `admin.spec.ts` tests fail on a machine that has a
+real `.env.local`, because they assert the "server not configured" screen that CI deliberately gets.
+Confirmed environmental by running the suite with the file moved aside - all pass - and restoring it
+byte-identically. Worth knowing before somebody treats it as a regression.
+
+**Next concrete action:** slice 3b - general availability (three states, audited like account status)
+and the member response flow on real data, including the progress column decided alongside the
+existing answer vocabulary.
+
+### Correction, same day: the state file contradicted the slice it shipped in
+
+An independent review of PR #16's exact head found `docs/ai/PROJECT_STATE.md` internally stale, and
+it was right on every point. Verified against the file rather than taken on trust, then fixed:
+
+| Stale claim | Reality |
+|---|---|
+| `Last updated: 2026-09-11`, and the same date on the PR section heading | 2026-09-12 |
+| ``main`` = `bd79f7f` (the PR #14 merge) | `dc3aade`, the PR #15 merge |
+| PR table ended at #14 | #15 merged, #16 open as Draft |
+| "No owner/admin write commands for members, groups and vehicles yet" | **This PR adds them** |
+| "no PWA decision made" | C1 decided PWA-only; the PWA itself is still unbuilt |
+| "Only identity and access use the schema" | The society's records now do too |
+| Next-action items 1 and 2 | Both completed by this slice |
+| B3 "Open ... PWA Web Push vs native must be investigated" | Decided (C1/C8) and now active slice-3d work |
+
+**The worst one was "no owner/admin write commands ... yet" sitting inside the diff that adds them.**
+When the Slice 3 section was added, the rest of the file was not swept for claims the slice had just
+invalidated. That is the same failure as the stale `main` SHA corrected in PR #15, and the lesson
+from that one was not generalised: **updating this file means re-reading all of it, not appending to
+it.** A state file that contradicts its own commit is worse than no state file, because the next
+agent trusts it.
+
+**Two things were deliberately NOT marked resolved**, because they concern a private hosted project
+this repository cannot reach and "reported done" is not "verified done":
+
+- **Secret rotation** is reported by the owner as complete. It stays on the action list until the
+  owner confirms it directly. Removing an undone item would leave a possibly-exposed key rotated only
+  in a document; leaving a done one costs a moment.
+- **"Confirm email"** has two conflicting observations now recorded side by side with their dates and
+  provenance: read directly from `GET /auth/v1/settings` on 11 September as `mailer_autoconfirm:
+  false` (confirmation ON), and reported on 12 September as `true` (OFF). It may simply have been
+  changed between them. Neither was picked over the other.
+
+**One claim of mine was downgraded.** That iOS Web Push ignores application-controlled sound and
+`vibrate` was asserted from general knowledge, not read from Apple or W3C documentation and not
+observed on a device. It is now recorded as needing confirmation before anything is promised about
+how a call-out gets noticed - which is exactly the kind of claim that must not be taken on trust,
+since a push that does not wake somebody is the failure this application exists to prevent.
+
+Documentation only: no source file, migration, test or schema object changed.
+
+### Second correction, same day: the first correction was not a full reread
+
+A second independent reread found six more inconsistencies. The first correction had fixed the
+items it was pointed at and had **not** re-read the whole file - which is the exact failure it
+claimed to have learned from, one commit earlier. Recording that plainly, because the pattern is
+now three deep: PR #15 fixed a stale SHA, `e7df6fc` fixed what that missed, and this fixes what
+`e7df6fc` missed.
+
+| Found | Fix |
+|---|---|
+| The PR table called `cb074eb` the current head of #16, citing the superseded CI run - a self-referential stale SHA created *by* the correction commit | The table now names `cb074eb` and `e7df6fc` as checkpoints and sends readers to PR #16 for the live head, with a note saying why a moving reference must never be written here |
+| B3 still asserted iOS ignores sound and `vibrate` as established fact, contradicting the downgraded paragraph directly above it | Every platform claim in B3 is now marked UNVERIFIED pending Apple/W3C evidence and a device test |
+| The slice-2 verification table said 116 unit tests | **117.** Verified by checking out PR #14's head `35383a5` in a throwaway worktree and running the suite: `Tests 117 passed (117)` |
+| "Which screens are real" omitted `evidencija` | Added, and `clanovi` split onto its own row saying plainly that it is the fictional roster and must not be confused with the real one |
+| The repository map stopped at `202609110004` | Added `202609120005`, `src/auth/roster.ts`, `src/ui/views/OrganisationView.tsx` and `db-tests/organisation.test.ts` with their actual roles |
+| The PR #13 and #14 paragraphs said in the present tense that `main` is byte-identical to those heads | Both rewritten as checkpoint statements, with an explicit line that current `main` contains PR #15 and matches neither |
+
+**Four more found by reading the whole file rather than only the listed items:**
+
+- "All four migrations applied to the live project" read as *all* migrations now that a fifth
+  exists. Scoped to that slice's four, in three places, plus a **Not applied** row in the live-project
+  table so a scanner cannot miss it.
+- "email confirmation is expected to be off" contradicted the unresolved conflict recorded two
+  sections below. Now says unresolved, and B2 says so too.
+- "Identity and access are done" understated what slice 3a did and misdescribed what remains.
+- The manual checklist told the owner to confirm "Confirm email" is off - assuming the answer to
+  the very question that is open. It now says to **read** it and write down whichever it is.
+
+**The lesson, stated so it is not learned a fourth time:** this file is read top to bottom by whoever
+resumes, so it must be edited top to bottom. Fixing named items is not the same as making the file
+true.
+
+Documentation only: no source file, migration, test or schema object changed.
+
+### Third correction: the same drift in ACCESS_MODEL.md and DATABASE.md
+
+`PROJECT_STATE.md` was made coherent while the two documents it links to were not. Both were read
+completely and compared against `PROJECT_STATE.md` at `fe37529`, `202609120005`, `db-tests/harness.ts`,
+`db-tests/organisation.test.ts` and the live PR state.
+
+**The single most misleading claim, in both files, was the same one:** that the roster screen *runs
+against the real project*. It does not. `202609120005` is not applied to the hosted project, so every
+command that screen issues would fail there with `function ... does not exist`. Code proven against
+local PostgreSQL and CI is not code proven against the target. Both documents now separate
+**implemented and tested** from **usable on the hosted project** in a table, because a sentence
+carrying both meanings is how this got recorded wrongly in the first place.
+
+`ACCESS_MODEL.md`:
+
+- §8 roster claim split into the two-column table above.
+- §8 email confirmation: the **decision** (B2: off) is now separated from the **current setting**
+  (unverified: `false` observed 11 September, `true` reported 12 September). The claim that
+  registration immediately yields a usable session is gone — it depends on a dashboard setting nobody
+  has read and a sign-up flow nobody has exercised.
+- §4's enumerated list of enforced refusals was missing the whole authority boundary this slice
+  added. A COMMANDER being refused `ADMIN_REQUIRED` on roster commands was described in §5 but absent
+  from the list that claims to be the enforced set; added, along with the firefighter draft refusal
+  and anon's refusal on the new commands.
+- §8 draft bullet now says the migration defining those commands is not on the hosted project either.
+
+`DATABASE.md`:
+
+- §1 clean-database sequence was missing `202609120005`, which the harness does apply — so the
+  document described a four-migration run that has not happened since the migration was added. Added,
+  with a note to keep it in step with `db-tests/harness.ts`.
+- §2 "the last two exist because of a defect only a real project could reveal" became wrong the moment
+  a fifth migration existed. Names `202609110003` and `202609110004` explicitly, and says what
+  `202609120005` is instead.
+- §3 "All four migrations have been applied" replaced by a per-migration table, plus a plain statement
+  that the hosted schema is **behind this branch**.
+- §3 fingerprint claim scoped: that byte-for-byte comparison covers `...0001`–`...0004`, was taken
+  before `202609120005` existed, and is **not** evidence that the hosted project matches this branch.
+- §10 said there are no owner/admin write commands and the roster lives in browser state. Both false.
+  Rewritten as a boundary: built and tested on this branch / not on the hosted project / genuinely not
+  built — and naming the `Clanovi` prototype screen as the one that *is* still fictional browser
+  state, since two screens now show members and only one touches the database.
+
+**Three found beyond the listed defects:** §5 described the intervention lifecycle without mentioning
+that drafts can now be created, edited and discarded by command — the very gap this slice closed;
+the `idempotency_key` note covered only publish, not the draft command that now honours the same key;
+and §1 credited the platform stub with catching one defect when it has now caught two, the second
+being the identical mistake repeated on `organisation_audit`.
+
+Documentation only: no source file, test, migration or schema object changed. `202609120005` remains
+unapplied to the hosted project, and slice 3b has not started.
+
+---
+
 ## 2026-09-11 - Real accounts: the simulated actor stops moving access
 
 **The defect this slice existed to fix.** `AccountAccessSetup` switched to a local `READY` step the

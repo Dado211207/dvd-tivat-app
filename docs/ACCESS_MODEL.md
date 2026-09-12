@@ -56,7 +56,7 @@ caller cannot execute it at all.
 | Role | May |
 |---|---|
 | **OWNER** | Everything below, plus: read every account, assign `ADMIN`/`COMMANDER`/`FIREFIGHTER`/`PENDING`, suspend and restore access, read the role and status audit |
-| **ADMIN** | Read operational data; manage organisational records. **Cannot** assign roles or create an owner |
+| **ADMIN** | Read operational data; manage organisational records — members, groups, vehicles and the account-to-member link (`is_dvd_admin()`). **Cannot** assign roles or create an owner |
 | **COMMANDER** | Create, publish, update, change status of, close and cancel interventions; see responses and attendance; check members in and out; correct attendance with a reason |
 | **FIREFIGHTER** | See interventions addressed to them; respond; check themselves in and out; request a correction of their own record |
 | **PENDING** *(default)* | Nothing operational at all |
@@ -102,8 +102,13 @@ Enforced and tested:
 - a `FIREFIGHTER` promoting themselves → `OWNER_REQUIRED`;
 - a `FIREFIGHTER` publishing, changing status, or correcting attendance → `COMMAND_REQUIRED`;
 - a `FIREFIGHTER` checking somebody else in or out → `COMMAND_REQUIRED`;
+- a `FIREFIGHTER` **or a `COMMANDER`** creating, editing or deactivating a
+  member, group or vehicle, or linking an account to a member → `ADMIN_REQUIRED`.
+  Command authority runs call-outs; it does not edit who is in the society;
+- a `FIREFIGHTER` drafting, editing or discarding an intervention → `COMMAND_REQUIRED`;
 - an unapproved account reading the roster, an intervention, or attendance → zero rows;
-- an anonymous caller reading anything in the operational schema → `permission denied`.
+- an anonymous caller reading anything in the operational schema → `permission denied`,
+  including every command added by `202609120005`.
 
 ## 5. Writes are impossible from a client
 
@@ -139,6 +144,11 @@ no direct `INSERT`/`UPDATE` path a client could use to forge a fact:
 
 | Command | Authority required |
 |---|---|
+| `create_intervention_draft` / `update_intervention_draft` / `discard_intervention_draft` | command |
+| `admin_create_member` / `admin_update_member` / `admin_set_member_active` | admin |
+| `admin_link_member_account` / `admin_unlink_member_account` | admin |
+| `admin_create_group` / `admin_rename_group` / `admin_set_group_active` / `admin_set_group_members` | admin |
+| `admin_create_vehicle` / `admin_update_vehicle` / `admin_set_vehicle_active` | admin |
 | `publish_intervention` | command |
 | `set_intervention_status` | command |
 | `close_intervention` | command |
@@ -157,6 +167,26 @@ all refused with `permission denied`.
 
 Every function is `security definer` with a fixed `search_path` and explicit
 `revoke from public` / `grant execute to authenticated`.
+
+**Administrative authority is not command authority.** A `COMMANDER` publishes
+call-outs and is refused every roster command with `ADMIN_REQUIRED`, as firmly as
+a firefighter is. That distinction was stated in the table above long before it
+had a predicate to stand on; `is_dvd_admin()` is now that predicate, and
+*"refuses a COMMANDER too, because command is not roster authority"* is the test.
+
+**Nothing is deleted.** Members, groups and vehicles are deactivated with a
+recorded reason, never removed — a member who left in 2024 must still resolve on
+the attendance record of an intervention they attended in 2023. A discarded draft
+becomes `CANCELLED` for the same reason. This is also what keeps the promise
+above that no client role holds `DELETE` anywhere.
+
+> **Caught here.** `organisation_audit` was created holding `INSERT`, `UPDATE`,
+> `DELETE` and `TRUNCATE` for `authenticated`, because Supabase's default
+> privileges grant them to every new table and the migration initially only
+> *added* `select` on top — the identical mistake `202609110003` exists to
+> correct. *"never grants a client role a privilege with no policy behind it"*
+> failed on the first run of the new migration. The stub reproducing the
+> platform's default grants is the only reason that was visible locally.
 
 The command functions being callable by `authenticated` is the design, not an
 oversight: they *are* the write surface, and each one begins with its own
@@ -209,16 +239,49 @@ transport, and the outbox cannot leave `QUEUED` without one.
 
 Honest list of what this slice does **not** do:
 
-- **Only identity and access are connected.** Sign-in, registration, profile
-  completion, the role and status load, the owner's account directory and its two
-  commands all run against the real project. **Interventions, responses, vehicle
-  movements and attendance do not** — those screens still run on device-local
-  fictional state with the actor selector, and each one says so on itself.
+- **Identity and access run against the hosted project. The society's records do
+  not yet.** Two different things, and conflating them would be the most
+  misleading sentence in this file:
+
+  | Capability | Implemented and tested | Usable on the hosted project |
+  |---|---|---|
+  | Sign-in, registration, profile completion, role and status load, owner account directory | Yes | **Yes** — migrations `...0001`–`...0004` are applied there |
+  | Roster screen `Evidencija drustva`: members, groups, vehicles, account-to-member link | Yes — against local PostgreSQL 16 and CI's `postgres:16`, from a schema built from zero | **No.** Migration `202609120005` is **not applied** to the hosted project, so every one of these commands would fail there with `function ... does not exist` |
+
+  Applying `202609120005` to the hosted project is a deliberate, separate,
+  owner-authorised step. Until it happens, the roster screen is proven code
+  against an unproven target.
+- **Interventions, responses, vehicle movements and attendance are not connected
+  at all** — those screens still run on device-local fictional state with the
+  actor selector, and each one says so on itself.
+- **Drafting a call-out has a server path but no server screen, and no hosted
+  database.** `create_intervention_draft`, `update_intervention_draft` and
+  `discard_intervention_draft` exist and are tested locally and in CI, but the
+  dispatcher screen still writes to device-local state, and the migration that
+  defines them is not on the hosted project. Publishing from the real database is
+  a later slice, not this one.
+- **A member with no linked account cannot answer a call-out.**
+  `current_member_id()` returns NULL for them, so `submit_response` refuses with
+  `MEMBER_RECORD_REQUIRED`. This is correct behaviour and it is now visible: the
+  roster screen marks every such member rather than leaving it to be discovered
+  during an incident.
 - **Password reset is not implemented**, and is shown as unavailable with the
   reason rather than offered as a form that would send nothing. It needs a
   configured mail provider (blocker B2).
-- **Email confirmation is expected to be off** on the project for now, for the
-  same reason. Registration therefore produces a usable account immediately.
+- **Email confirmation: the decision and the current setting are different
+  things, and only one of them is known.**
+
+  | | |
+  |---|---|
+  | **Decided** (blocker B2) | "Confirm email" is to be **off** for now, so an approved account is usable without a mail round-trip |
+  | **Actually set on the project** | **Unverified.** `GET /auth/v1/settings` read `"mailer_autoconfirm": false` (confirmation **ON**) on 11 September; `true` (**OFF**) was reported on 12 September. It may simply have been changed between the two |
+
+  So **nothing here may claim that registration immediately yields a usable
+  session.** That depends on a dashboard setting nobody has confirmed and on a
+  real sign-up flow that has never been exercised end to end. Both observations
+  are recorded in
+  [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) under Owner action items; the
+  answer belongs there once somebody reads the dashboard.
 - **`btree_gist` is installed in the `public` schema**, which Supabase's linter
   flags (`extension_in_public`, WARN). Its functions take `internal` arguments
   and cannot be called through the REST API, so this is namespace hygiene rather

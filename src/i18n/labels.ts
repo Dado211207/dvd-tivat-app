@@ -42,6 +42,7 @@ export const NAV = {
   vozila: 'Vozila',
   prikaz: 'Prikaz u bazi',
   clanovi: 'Clanovi',
+  evidencija: 'Evidencija drustva',
   nalozi: 'Nalozi i pristup',
   istorija: 'Istorija',
   dojava: 'Prijava gradjana',

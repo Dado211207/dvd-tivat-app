@@ -23,6 +23,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609090002_internal_operations.sql',
   'supabase/migrations/202609110003_client_role_privileges.sql',
   'supabase/migrations/202609110004_function_execute_privileges.sql',
+  'supabase/migrations/202609120005_organisational_writes.sql',
 ];
 
 export const DATABASE_URL =
@@ -181,23 +182,53 @@ export async function expectRefused(
   throw new Error('Expected the operation to be refused, but it succeeded');
 }
 
-/** Creates a DRAFT intervention as a command user, returning its id. */
+/**
+ * Creates a DRAFT intervention THROUGH THE REAL COMMAND, returning its id.
+ *
+ * This used to insert the row directly as the superuser, which is why a hundred
+ * passing tests never noticed that `create_intervention_draft` did not exist:
+ * the helper had a privilege no commander in the application has ever held.
+ * Going through the command means every scenario below now depends on the
+ * authority check, the validation and the grants being right.
+ *
+ * Use `createDraftAsSuperuser` only to test a database constraint directly.
+ */
 export async function createDraft(
   client: Client,
   createdBy: string,
   overrides: Partial<{ title: string; location: string; key: string; kind: string }> = {},
 ): Promise<string> {
+  return asUserCommitted(client, createdBy, async (asCommander) => {
+    const { rows } = await asCommander.query<{ id: string }>(
+      `select public.create_intervention_draft($1, $2, 'Okupljanje u bazi.', $3, $4) as id`,
+      [
+        overrides.kind ?? 'POZAR',
+        overrides.title ?? 'Vjezba: provjera opreme',
+        overrides.location ?? 'Poligon (izmisljena lokacija)',
+        overrides.key ?? `key-${Math.random().toString(36).slice(2)}`,
+      ],
+    );
+    return rows[0]!.id;
+  });
+}
+
+/**
+ * Inserts a draft with superuser privilege, bypassing every command.
+ *
+ * The one legitimate use is asserting that a database-level constraint holds
+ * even when the command layer is skipped entirely - the backstop, not the door.
+ */
+export async function createDraftAsSuperuser(
+  client: Client,
+  createdBy: string,
+  key: string,
+): Promise<string> {
   const { rows } = await client.query<{ id: string }>(
     `insert into public.interventions(
        kind, title, instructions, incident_location, created_by, idempotency_key)
-     values ($1, $2, 'Okupljanje u bazi.', $3, $4, $5) returning id`,
-    [
-      overrides.kind ?? 'POZAR',
-      overrides.title ?? 'Vjezba: provjera opreme',
-      overrides.location ?? 'Poligon (izmisljena lokacija)',
-      createdBy,
-      overrides.key ?? `key-${Math.random().toString(36).slice(2)}`,
-    ],
+     values ('POZAR', 'Vjezba: provjera opreme', 'Okupljanje u bazi.',
+             'Poligon (izmisljena lokacija)', $1, $2) returning id`,
+    [createdBy, key],
   );
   return rows[0]!.id;
 }
