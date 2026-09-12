@@ -57,15 +57,70 @@ attended" and "command stands behind it". Four stale "nine facts" references wer
 ACCESS_MODEL.md, DATABASE.md, the new migration and the new test; two remaining mentions are
 deliberately historical.
 
-**Verified.** Lint, strict typecheck, `vite build` and the bundle secret scan pass. Unit **128
-passed** (unchanged - this slice adds no client code). Database **160 passed**, up from 135.
-Browser and accessibility **74 passed**, run with `.env.local` moved aside as CI does and restored
-byte-identically.
+**A second defect, found by generating the test cases instead of choosing them.** Revalidating the
+authority model produced `db-tests/authority_matrix.test.ts`: eleven commands x ten account states,
+110 declared cells. 96 of the first hundred matched the intended model. Four did not, and they shared
+one cause.
 
-Checked against deliberately broken code, not only working code: removing the `verified` filter from
-`attendance_totals` (restoring the original defect) fails 3 tests; labelling every interval
-`COMMAND_RECORDED` fails 3; putting `verified = true` back into `attendance_correct` fails 2; dropping
-the `revoke ... from public` block fails 4.
+`current_member_id()` (`202609090002:289`) read `members.active` - whether the SOCIETY still counts
+the person - and never `current_dvd_role()` - whether the ACCOUNT still has standing. So **member
+identity survived the loss of authority.** A SUSPENDED, PENDING or incomplete-profile account whose
+linked member sat on an intervention's recipient list could read through seven policies
+(`interventions`, `intervention_updates`, `intervention_recipients`, `intervention_responses`,
+`intervention_acknowledgements`, `attendance_intervals`, `notification_outbox`), **answer a
+call-out** through `submit_response`, close its own interval through `attendance_check_out`, and - new
+in this slice - acknowledge an intervention. The matrix reported a suspended account reading 51
+attendance intervals and 82 interventions.
+
+This is live on the hosted project, not only on this branch. It is not reachable through the
+application - no screen reads any of it from the server - so it is a schema defect rather than an
+exposure. It is fixed now because the member-facing screen is the next slice and it directly
+contradicts what this project documents about suspension.
+
+Fixed at the root: one added condition in `current_member_id()`, and every consumer - seven policies
+and three commands - tightens with it. `acknowledge_intervention`, `attendance_check_in` and
+`attendance_check_out` additionally check `is_dvd_staff()` FIRST, so a withdrawn account is refused
+with `STAFF_REQUIRED` rather than `MEMBER_RECORD_REQUIRED`, which would be untrue - they have a
+member record, they have lost standing to use it.
+
+**`submit_response` was deliberately left alone**, and the first attempt at it is worth recording as
+a warning. I re-created it to add the same staff check and wrote the body from memory rather than
+copying the original: wrong signature, wrong return type, two wrong table names, one wrong column
+name, a dropped no-op-on-unchanged-answer branch, and an error code changed from `ETA_REQUIRED` to
+`INVALID_ETA`. Caught by diffing my version against the real one before running anything. Since the
+root fix already closes the hole there and only the message is imperfect, the whole block was
+removed. A seventy-line merged function is not worth re-creating to improve one error string.
+
+**Nine mutations, each from a byte-identical pristine copy, each restored and re-verified afterwards
+(`sha256sum -c` after every one):** removing the `verified` filter from totals fails 3; forcing every
+interval `COMMAND_RECORDED` fails 3; dropping `revoke ... from public` fails 10 (was 4 - the matrix's
+anonymous cells detect it independently now); reverting the `current_member_id` fix fails 3, each
+from a different angle; removing the staff gate from `acknowledge_intervention` fails 3, on the
+message rather than on access, which is the defence-in-depth story working; from `attendance_check_in`
+fails 6; from `attendance_check_out` fails 3; putting `verified = true` back in `attendance_correct`
+fails 2; and **over-tightening** - making `current_member_id()` always NULL - fails 60, which is the
+check that the fix does not simply deny everything.
+
+**Mutation testing found a gap in my own work.** The staff gate added to `attendance_check_out` could
+be deleted with all 267 tests still passing, because that command was not one of the nine and so had
+no row in the matrix. It has one now, and removing the gate fails 3. A line of authority code with no
+failing test behind it is a claim, not a safeguard.
+
+**One thing deliberately not changed, because it is the owner's call.** `ADMIN` has held full command
+authority since `202609090002`, while the role table implied administrators only manage records - the
+separation of duties runs one way only. Documented and pinned by the matrix rather than altered: in a
+52-member society the administrator is probably also an officer, and refusing them a call-out at
+03:00 to honour a textbook rule is the worse failure. Recorded in PROJECT_STATE.md as a decision to
+take.
+
+**Verified.** Lint, strict typecheck, `vite build` and the bundle secret scan pass. Unit **128
+passed** (unchanged - this slice adds no client code). Database **277 passed**, up from 135 on `main`:
++25 for attendance truth, +110 for the authority matrix, +7 for the identity fix and the states it
+covers. Browser and accessibility **74 passed**, run with `.env.local` moved aside as CI does and
+restored byte-identically.
+
+Checked against deliberately broken code, not only working code - the full mutation battery is
+recorded further down this entry.
 
 **Not applied anywhere.** `202609130006` is local and CI evidence only. The hosted project is two
 migrations behind this branch, one behind `main`, and **still carries this defect** - nothing reads it

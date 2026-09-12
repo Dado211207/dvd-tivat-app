@@ -152,15 +152,18 @@ declare
   new_interval uuid;
   interval_source text;
 begin
+  -- Staff is the floor for every path through this function, and it is checked
+  -- FIRST so the refusal is honest. Since section 9 made `current_member_id()`
+  -- require an effective role, a withdrawn account reaches the member-record
+  -- check with NULL and would otherwise be told it has no member record - when
+  -- what it has lost is standing, not a roster entry.
+  if not public.is_dvd_staff() then raise exception 'STAFF_REQUIRED'; end if;
   if acting_member is null then raise exception 'MEMBER_RECORD_REQUIRED'; end if;
 
   -- Checking somebody else in is a command action.
   if target_member is not null and target_member is distinct from public.current_member_id()
      and not public.is_dvd_command() then
     raise exception 'COMMAND_REQUIRED';
-  end if;
-  if target_member is null and not public.is_dvd_staff() then
-    raise exception 'STAFF_REQUIRED';
   end if;
 
   -- Provenance is decided here, from the authenticated identity, and is never
@@ -473,6 +476,11 @@ declare
   acting_member uuid := public.current_member_id();
   intervention_status text;
 begin
+  -- Staff first, and deliberately before the member-record check. Being a
+  -- recipient is not authority: a withdrawn account whose member row is still
+  -- on an old recipient list must be refused for the honest reason, and
+  -- `MEMBER_RECORD_REQUIRED` would be a lie - they have one.
+  if not public.is_dvd_staff() then raise exception 'STAFF_REQUIRED'; end if;
   if acting_member is null then raise exception 'MEMBER_RECORD_REQUIRED'; end if;
   if not public.is_recipient_of(target_intervention) then
     raise exception 'NOT_A_RECIPIENT';
@@ -582,7 +590,133 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 9. Privileges
+-- 9. A WITHDRAWN ACCOUNT KEPT ITS MEMBER IDENTITY
+--
+-- Found by the authority matrix in `db-tests/authority_matrix.test.ts`, which
+-- calls every command as every account state instead of as the states somebody
+-- thought to try. It reported that a SUSPENDED account could still acknowledge
+-- an intervention and could still read 51 attendance intervals.
+--
+-- The cause is not in this slice's commands. It is `current_member_id()` from
+-- `202609090002`:
+--
+--   select id from public.members where user_id = auth.uid() and active = true
+--
+-- `active` there is the MEMBER ROW's flag - whether the society still counts
+-- this person as a member - not the ACCOUNT's. So the function happily resolves
+-- a member id for an account whose grant was withdrawn (`access_grants.active
+-- = false`), whose approval never came (`PENDING`), or whose profile was never
+-- completed. `current_dvd_role()` returns NULL for all three, and every
+-- `is_dvd_*()` helper correctly refuses them - but `current_member_id()` was
+-- never asked the question, so identity survived the loss of authority.
+--
+-- That single omission reaches further than this slice. On the schema as
+-- merged AND AS APPLIED TO THE HOSTED PROJECT, it lets a withdrawn account:
+--
+--   * read rows through seven policies that route identity through it -
+--     `interventions` (recipient read), `intervention_updates`,
+--     `intervention_recipients`, `notification_outbox`,
+--     `intervention_acknowledgements`, `intervention_responses` and
+--     `attendance_intervals`;
+--   * ANSWER A CALL-OUT, because `submit_response` checks only that
+--     `current_member_id()` is not null - which the root fix below closes
+--     without touching that function;
+--   * close its own attendance interval through `attendance_check_out`, which
+--     checks the same thing.
+--
+-- None of that is reachable through the application today - no screen reads
+-- any of it from the server - so this is a schema defect rather than a live
+-- exposure. It still contradicts what this project documents about suspension
+-- ("every request is refused on the next request"), and a member-facing screen
+-- is the next slice, so it is fixed now rather than after there is a way to
+-- exploit it.
+--
+-- Fixed at the root: identity now requires an effective role. One function,
+-- and every consumer - policies and commands alike - tightens with it. The
+-- three commands below additionally check `is_dvd_staff()` FIRST, so a
+-- withdrawn account is refused with `STAFF_REQUIRED` rather than with
+-- `MEMBER_RECORD_REQUIRED`, which would be untrue: they do have a member
+-- record, they just no longer have standing to use it.
+--
+-- This deliberately changes the behaviour of functions merged in earlier
+-- slices. It is a narrowing, never a widening: every account that could do
+-- something before and cannot now is an account with no effective role.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.current_member_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select member_row.id
+  from public.members member_row
+  where member_row.user_id = auth.uid()
+    and member_row.active = true
+    -- Authority and identity are no longer separable: a withdrawn, unapproved
+    -- or half-registered account is nobody operationally, whatever the roster
+    -- still says about the person.
+    and public.current_dvd_role() is not null
+$$;
+
+comment on function public.current_member_id() is
+  'The acting member, or NULL. Requires an active member row AND an effective '
+  'role, so suspension and non-approval remove member identity rather than '
+  'only role authority.';
+
+-- `attendance_check_out` is re-created unchanged apart from the leading staff
+-- check, so its refusal message is right for a withdrawn account.
+--
+-- `submit_response` is DELIBERATELY LEFT ALONE. The root fix above already
+-- closes its hole - `current_member_id()` returns NULL for a withdrawn
+-- account, so the existing `MEMBER_RECORD_REQUIRED` check refuses it. Only the
+-- message is imperfect: it says no member record when the truth is no
+-- standing. Re-creating a seventy-line merged function to improve one error
+-- string is a poor trade, and the first attempt at it here was written from
+-- memory and got the signature, two table names and a column name wrong -
+-- caught by diffing against the original, which is the only reason it is not
+-- in this file. The message is worth fixing in the slice that builds the
+-- member response screen, by editing the real function in front of you.
+
+create or replace function public.attendance_check_out(
+  target_intervention uuid,
+  target_member uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  acting_member uuid := coalesce(target_member, public.current_member_id());
+  open_interval uuid;
+begin
+  if not public.is_dvd_staff() then raise exception 'STAFF_REQUIRED'; end if;
+  if acting_member is null then raise exception 'MEMBER_RECORD_REQUIRED'; end if;
+  if target_member is not null and target_member is distinct from public.current_member_id()
+     and not public.is_dvd_command() then
+    raise exception 'COMMAND_REQUIRED';
+  end if;
+
+  select id into open_interval
+  from public.attendance_intervals
+  where intervention_id = target_intervention and member_id = acting_member and ended_at is null
+  order by started_at desc limit 1
+  for update;
+
+  if open_interval is null then raise exception 'NOT_CHECKED_IN'; end if;
+
+  update public.attendance_intervals set ended_at = now() where id = open_interval;
+
+  insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id)
+  values (target_intervention, 'ATTENDANCE_CHECK_OUT',
+          jsonb_build_object('member_id', acting_member), auth.uid());
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 10. Privileges
 --
 -- No new table, so Supabase's default-privileges trap does not apply here - but
 -- `revoke ... from public` still does: PostgreSQL grants EXECUTE on every new
@@ -590,7 +724,9 @@ $$;
 -- project, not reasoned about, and it is why `202609110004` exists.
 --
 -- `attendance_totals` is re-granted because dropping the function dropped its
--- grant with it.
+-- grant with it. `create or replace` does NOT reset privileges, so the three
+-- functions re-created in section 9 keep the grants `202609110004` gave them -
+-- asserted rather than assumed by the guard test that reads the grants back.
 -- ---------------------------------------------------------------------------
 
 do $$

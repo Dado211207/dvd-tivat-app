@@ -141,6 +141,30 @@ CSV reading one table.
 still unconfirmed, because "I wrote it down" and "I stand behind it" are
 different claims.
 
+**A second defect, found in the same slice by a test rather than by reading.**
+`current_member_id()` checked only `members.active` — whether the society still
+counts the person — and never whether the *account* still had a role. So a
+`SUSPENDED`, `PENDING` or incomplete-profile account whose linked member was on
+a recipient list kept its **member identity** after losing its authority: it
+could read through seven policies, **answer a call-out** via `submit_response`,
+and close its own attendance interval. Live on the hosted project, unreachable
+through the application because no screen reads any of it from the server.
+Fixed at the root in `202609130006` — identity now requires an effective role —
+and pinned by `db-tests/authority_matrix.test.ts`, which runs **eleven commands
+against ten account states** and declares an expectation for all 110 rather than
+testing the states somebody thought of. Full account in
+[ACCESS_MODEL.md §2](../ACCESS_MODEL.md#identity-is-not-separable-from-authority).
+
+**And one thing left deliberately unchanged, for the owner to decide.** `ADMIN`
+has held full command authority since `202609090002` (`is_dvd_command()` returns
+true for `OWNER`, `ADMIN`, `COMMANDER`), while the documented role table implied
+administrators only manage records. The separation of duties runs one way only:
+a COMMANDER is refused the roster commands, an ADMIN is not refused the command
+ones. The behaviour is now documented and tested rather than altered — in a
+52-member society the administrator is probably also an officer, and refusing
+them a call-out to honour a textbook rule would be the worse failure. **Decide
+whether to keep it.**
+
 ### The conservative model is deliberate, and the UI must absorb its cost
 
 The rule is kept: an unconfirmed interval contributes **nothing** to

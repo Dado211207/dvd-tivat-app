@@ -79,7 +79,7 @@ migration, never by editing an old one.
 | `202609110003_client_role_privileges.sql` | Takes back the table privileges Supabase's project defaults hand to `anon` and `authenticated`, and grants back only what the policies need |
 | `202609110004_function_execute_privileges.sql` | Removes the PUBLIC `EXECUTE` grant that left eight `security definer` helpers callable without signing in |
 | `202609120005_organisational_writes.sql` | The missing write paths: creating, editing and discarding an intervention draft, and CRUD for members, groups and vehicles. Adds `is_dvd_admin()` and the `organisation_audit` trail |
-| `202609130006_attendance_truth.sql` | Stops a self-declared claim counting as participation: adds `source`, a rejection state, `attendance_confirm`/`_reject`/`_unconfirm`, and **replaces** `attendance_totals()` with a version that separates confirmed from unverified time. Also adds the two remaining write paths — `acknowledge_intervention` and vehicle departure/return |
+| `202609130006_attendance_truth.sql` | Stops a self-declared claim counting as participation: adds `source`, a rejection state, `attendance_confirm`/`_reject`/`_unconfirm`, and **replaces** `attendance_totals()` with a version that separates confirmed from unverified time. Adds the two remaining write paths — `acknowledge_intervention` and vehicle departure/return. Also repairs `current_member_id()`, which resolved a member identity for accounts that had lost their role — see [ACCESS_MODEL.md §2](./ACCESS_MODEL.md#identity-is-not-separable-from-authority) |
 
 `202609110003` and `202609110004` exist because of a defect only a real project
 could reveal; both are explained in
