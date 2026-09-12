@@ -35,7 +35,8 @@ Each run applies, from an empty database:
 3. `supabase/migrations/202609090002_internal_operations.sql`;
 4. `supabase/migrations/202609110003_client_role_privileges.sql`;
 5. `supabase/migrations/202609110004_function_execute_privileges.sql`;
-6. `supabase/migrations/202609120005_organisational_writes.sql`.
+6. `supabase/migrations/202609120005_organisational_writes.sql`;
+7. `supabase/migrations/202609130006_attendance_truth.sql`.
 
 The list lives in `db-tests/harness.ts`; keep the two in step, because a
 migration missing from that array is a migration nothing ever runs.
@@ -78,6 +79,7 @@ migration, never by editing an old one.
 | `202609110003_client_role_privileges.sql` | Takes back the table privileges Supabase's project defaults hand to `anon` and `authenticated`, and grants back only what the policies need |
 | `202609110004_function_execute_privileges.sql` | Removes the PUBLIC `EXECUTE` grant that left eight `security definer` helpers callable without signing in |
 | `202609120005_organisational_writes.sql` | The missing write paths: creating, editing and discarding an intervention draft, and CRUD for members, groups and vehicles. Adds `is_dvd_admin()` and the `organisation_audit` trail |
+| `202609130006_attendance_truth.sql` | Stops a self-declared claim counting as participation: adds `source`, a rejection state, `attendance_confirm`/`_reject`/`_unconfirm`, and splits `attendance_totals()` into confirmed and unverified. Also adds the two remaining write paths — `acknowledge_intervention` and vehicle departure/return |
 
 `202609110003` and `202609110004` exist because of a defect only a real project
 could reveal; both are explained in
@@ -93,16 +95,27 @@ schema could publish a call-out but nothing could create one.
 |---|---|
 | `202609090001` · `202609090002` · `202609110003` · `202609110004` | **Applied**, in order |
 | `202609120005_organisational_writes.sql` | **Not applied** |
+| `202609130006_attendance_truth.sql` | **Not applied** |
 
 The first four were applied to the owner's project (`dvd-tivat-app`, region
 `eu-central-1`, PostgreSQL 17), whose `public` schema was empty beforehand.
 
-**The hosted schema is therefore behind this branch.** Every function
-`202609120005` defines — the three intervention-draft commands, the member,
-group and vehicle commands, `admin_link_member_account`, `is_dvd_admin()` — and
-the `organisation_audit` table do not exist there. Calling any of them against
-the hosted project fails. Applying it is a deliberate, owner-authorised step that
-has not been taken.
+**The hosted schema is therefore two migrations behind this branch.** Every
+function `202609120005` defines — the three intervention-draft commands, the
+member, group and vehicle commands, `admin_link_member_account`,
+`is_dvd_admin()` — and the `organisation_audit` table do not exist there.
+Neither does anything from `202609130006`: the attendance confirmation commands,
+the `source` and rejection columns, `acknowledge_intervention`, the vehicle
+movement commands, or the new `attendance_totals()` shape. Calling any of them
+against the hosted project fails. Applying them is a deliberate,
+owner-authorised step that has not been taken.
+
+**The hosted project still has the attendance defect.** Its
+`attendance_totals()` is the original version with no `verified` filter, so on
+that database a self-declared claim would still be summed as participation.
+Nothing reads it there yet — no screen uses attendance against the server — but
+it is the reason to apply `202609130006` rather than leave it pending
+indefinitely.
 
 The result of those first four was verified rather than assumed: a structural
 fingerprint of the hosted schema — tables and their RLS flags, every column with
@@ -115,7 +128,7 @@ exception: the hosted database also carries Supabase's own platform function
 `rls_auto_enable()`, which the local stub does not provide.
 
 **That comparison covers migrations `...0001`–`...0004` only.** It was taken
-before `202609120005` existed and says nothing about the five-migration schema
+before `202609120005` existed and says nothing about the six-migration schema
 this branch builds. It is not evidence that the hosted project matches this
 branch — it currently does not.
 
@@ -128,7 +141,7 @@ authoritative automated evidence. Nothing here claims CI tested the live project
 
 ## 4. What the schema keeps separate
 
-The nine facts in [ACCESS_MODEL.md §7](./ACCESS_MODEL.md#7-facts-that-are-never-inferred-from-each-other)
+The ten facts in [ACCESS_MODEL.md §7](./ACCESS_MODEL.md#7-facts-that-are-never-inferred-from-each-other)
 each have their own table. The two that matter most:
 
 - **Intent** (`intervention_responses`) is not attendance.
@@ -184,9 +197,48 @@ attendance_intervals(
   started_at, ended_at,                      -- trusted server time
   reported_started_at, reported_ended_at,    -- optional, user-reported, never used for duration
   crew, task_role, vehicle_id,               -- optional deployment detail
-  recorded_by, verified, verified_by, verified_at
+  recorded_by,
+  source,                                    -- WHO ASSERTED IT (202609130006)
+  verified, verified_by, verified_at,        -- command stands behind it
+  rejected_at, rejected_by, rejection_reason -- command repudiates it (202609130006)
 )
 ```
+
+### Two independent facts: provenance and confirmation
+
+> **Fixed here, and it was the most consequential defect found in this project
+> so far.** Until `202609130006` a member could check themselves in and that
+> claim counted as participation, because:
+>
+> 1. `attendance_check_in()` with no target member required only
+>    `is_dvd_staff()`, so a `FIREFIGHTER` created their own interval;
+> 2. the row landed `verified = false`, which *looked* like a safeguard;
+> 3. **`attendance_totals()` never filtered on `verified`.** It summed every
+>    closed interval.
+>
+> So "a member **actually attended**" — then one of nine facts this schema
+> exists to keep separate, now split into two — was in practice "a member said
+> they were there". And
+> `verified = true` was set in exactly one place: as a **side effect** of
+> `attendance_correct()`. Confirmation was not a decision anybody made; it was
+> something that happened to a record when a commander fixed its clock. Nothing
+> read the column at all.
+
+The two facts are now separate and neither implies the other:
+
+| Field | Question it answers | Values |
+|---|---|---|
+| `source` | **Who asserted this?** | `SELF_DECLARED`, `COMMAND_RECORDED`, `UNKNOWN` |
+| `verified` / `rejected_at` | **Has command decided about it?** | pending, confirmed, rejected |
+
+`source` is set inside the command from `auth.uid()` and is **not a parameter** —
+a client must not be able to label its own claim as command-recorded. `UNKNOWN`
+exists only for rows written before this migration, where the information is
+genuinely unrecoverable; it counts as unconfirmed.
+
+A commander recording somebody else's arrival is `COMMAND_RECORDED` and **still
+unconfirmed**. That is deliberate: "I wrote it down" and "I stand behind it" are
+different claims by the same person.
 
 Rules, each enforced by the database and tested:
 
@@ -195,12 +247,25 @@ Rules, each enforced by the database and tested:
 | Several intervals per member per intervention | No unique constraint; people leave and come back |
 | No interval ends before it starts | `check (ended_at is null or ended_at > started_at)` |
 | **A member is never in two places at once** | `exclude using gist` on `(member_id, tstzrange(started_at, coalesce(ended_at,'infinity')))` |
-| Duration is never stored | `attendance_totals()` sums closed intervals only |
-| An open interval is visible as open | `attendance_totals()` returns `open_intervals` separately and contributes 0 seconds |
+| Duration is never stored | `attendance_totals()` sums closed intervals from server timestamps |
+| **Only confirmed time is participation** | `attendance_totals()` returns `confirmed_seconds` and `unverified_seconds` as separate columns. Nothing can read a claim as confirmed |
+| **A rejected claim contributes nothing** | Counted as `rejected_intervals`, never summed into either seconds column |
+| An open interval is visible as open | `open_intervals` is separate and contributes 0 seconds |
+| A record cannot be confirmed and rejected at once | `attendance_not_both_states` check constraint, behind two command refusals |
+| Confirming is idempotent | A repeat returns without a second audit row |
+| Rejection needs a reason; confirmation does not | See the note below |
+| Confirmation is reversible | `attendance_unconfirm()` returns the row to **pending**, not to rejected |
+| **Correcting is not confirming** | `attendance_correct()` no longer touches `verified` at all |
 | Correction needs a reason | `attendance_correct()` refuses `REASON_REQUIRED` |
 | Before and after are preserved | `attendance_corrections` holds both as `jsonb`, plus actor and time |
 | A correction cannot create an overlap | Exclusion constraint, surfaced as `CORRECTION_WOULD_OVERLAP` |
 | Closing with open intervals is never silent | `OPEN_ATTENDANCE_INTERVALS:<n>` unless command passes `allow_open_attendance` |
+
+**Why rejection needs a reason and confirmation does not.** Rejecting overrides
+what a member stated about their own presence, and that has to be explainable
+afterwards. Confirmation is the expected outcome, and demanding boilerplate from
+a commander working through thirty records after an incident would produce thirty
+meaningless strings. Both are audited with actor and server time either way.
 
 **The simultaneous-participation rule, decided and documented:** overlap is
 refused **per member across all interventions**, not just within one. A person
@@ -267,6 +332,9 @@ is where "built" stops and "usable" starts.
 
 - **No screen publishes a real call-out.** The draft commands exist; the
   dispatcher screen still writes device-local state.
+- **No screen uses any of `202609130006`.** Confirmation, rejection,
+  acknowledgement and vehicle movements are server commands with tests and no
+  interface. The vehicles and attendance screens are still device-local.
 - The separate `Clanovi` prototype screen is **still fictional browser state**
   and is not the same thing as `Evidencija drustva`. Two screens now show
   members and only one of them touches the database.
@@ -274,4 +342,6 @@ is where "built" stops and "usable" starts.
   the export itself, with its formula-injection escaping, is not written.
 - No `intervention_updates` write command (the table and its read policy exist).
 - No seed file of fictional data for a real project.
-- No general availability, no journey progress, no notification transport.
+- **No general availability and no journey progress.** Both are designed in
+  [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) and neither has a migration yet.
+- No notification transport.

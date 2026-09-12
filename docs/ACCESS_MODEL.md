@@ -106,6 +106,11 @@ Enforced and tested:
   member, group or vehicle, or linking an account to a member → `ADMIN_REQUIRED`.
   Command authority runs call-outs; it does not edit who is in the society;
 - a `FIREFIGHTER` drafting, editing or discarding an intervention → `COMMAND_REQUIRED`;
+- a `FIREFIGHTER` confirming, rejecting or unconfirming attendance — **including
+  their own** → `COMMAND_REQUIRED`. Declaring your presence and vouching for it
+  cannot be the same act by the same person;
+- a member acknowledging an intervention they were not called to → `NOT_A_RECIPIENT`;
+- an unapproved account recording a vehicle movement → `STAFF_REQUIRED`;
 - an unapproved account reading the roster, an intervention, or attendance → zero rows;
 - an anonymous caller reading anything in the operational schema → `permission denied`,
   including every command added by `202609120005`.
@@ -154,7 +159,12 @@ no direct `INSERT`/`UPDATE` path a client could use to forge a fact:
 | `close_intervention` | command |
 | `submit_response` | the authenticated member, and only if they are a recipient |
 | `attendance_check_in` / `_out` | self (staff), or command acting for somebody else |
-| `attendance_correct` | command, with a reason |
+| `attendance_correct` | command, with a reason. **Does not confirm** |
+| `attendance_confirm` | command. Stands behind the record; a note is optional |
+| `attendance_reject` | command, with a reason |
+| `attendance_unconfirm` | command, with a reason. Returns the record to pending |
+| `acknowledge_intervention` | the authenticated recipient. Opening is not responding |
+| `record_vehicle_departure` / `record_vehicle_return` | staff |
 | `owner_set_role` / `owner_set_account_active` | owner, with a reason for status changes |
 
 The one direct write a member has is inserting an
@@ -215,7 +225,9 @@ visible only to command, the `responses_recipient_read` and
 
 ## 7. Facts that are never inferred from each other
 
-Nine separate records, in schema, in the interface and in tests:
+**Ten** separate records, in schema, in the interface and in tests. It was nine
+until `202609130006` split the last attendance fact in two, which is the whole
+subject of [DATABASE.md §6](./DATABASE.md#6-attendance--the-primary-capability):
 
 1. a commander **published** an intervention → `interventions.status`
 2. the server **queued** a notification → `notification_outbox.state = 'QUEUED'`
@@ -223,14 +235,21 @@ Nine separate records, in schema, in the interface and in tests:
 4. a device **acknowledged** receipt → `notification_outbox.state`
 5. a member **opened** it → `intervention_acknowledgements`
 6. a member **stated an intention** → `intervention_responses`
-7. a member **actually attended** → `attendance_intervals`
-8. a vehicle **departed** → `vehicle_movements`
-9. command **changed the status** → `interventions.status`
+7. a member **says they attended** → `attendance_intervals`, `source =
+   'SELF_DECLARED'`, pending
+8. **command stands behind that claim** → the same row, `verified = true`
+9. a vehicle **departed** → `vehicle_movements`
+10. command **changed the status** → `interventions.status`
+
+Facts 7 and 8 are the pair that was previously collapsed into one, and
+collapsing them is what let a self-declared claim be reported as participation.
 
 Tested: publishing creates a `QUEUED` outbox row **and nothing else** — no
 response, no acknowledgement, no attendance, no delivery attempt. Answering
-`DOLAZIM` creates **no** attendance. A vehicle departure creates **no**
-attendance.
+`DOLAZIM` creates **no** attendance. Opening creates **no** response and no
+attendance. A vehicle departure creates **no** attendance. A self-declared
+interval contributes **nothing** to `confirmed_seconds` until command confirms
+it, and a rejected one contributes nothing ever.
 
 Nothing in this system may report `delivered`. There is no notification
 transport, and the outbox cannot leave `QUEUED` without one.

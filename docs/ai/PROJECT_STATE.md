@@ -35,9 +35,12 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- `main`: `dc3aadee8543002a7f4ef5c288b8db1600c59f16` — the merge commit of PR #15.
-- Working branch: `claude/dvd-tivat-app-dev-n8wctb`, restarted from that `main`
-  and currently carrying slice 3a as Draft PR #16.
+- Latest product-code merge checkpoint:
+  `55fdb093e65692ddcb430f1f3383ce329944bb0a` — the normal merge commit of
+  PR #16. **Read the live `main` from GitHub rather than copying a moving head
+  into this static file** (see the note under the PR table).
+- Working branch: `claude/slice-3b-attendance-truth`, cut from that checkpoint
+  and carrying slice 3b-0.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-12
@@ -60,9 +63,10 @@ its four commits. *At that merge*, `main` was `bd79f7f` and its tree was
 byte-identical to PR #14's head `35383a5` (`479b732`), confirmed by `git diff`
 and by comparing tree hashes.
 
-PR #15 was merged the same day, again a normal merge, producing the `main` this
-branch is built on. **Current `main` contains PR #15 and is therefore not
-byte-identical to either head named above.**
+PR #15 was merged the same day, again a normal merge. PR #16 was then merged
+normally on 2026-09-12 with the owner's authorisation, producing the checkpoint
+`55fdb09` this branch is cut from. **That checkpoint contains #13-#16 and is
+therefore not byte-identical to any head named above.**
 
 | PR | State |
 |---|---|
@@ -73,7 +77,9 @@ byte-identical to either head named above.**
 | #13 | **Merged** 2026-09-11 into `3133d00` |
 | #14 | **Merged** 2026-09-11 into `bd79f7f` |
 | #15 | **Merged** 2026-09-11 into `dc3aade` |
-| #16 | **Open, Draft.** Slice 3a. Checkpoints: `cb074eb` the implementation commit, `e7df6fc` the first documentation correction. **The live head is whatever PR #16 currently shows — read it there, not here** |
+| #16 | **Merged normally** 2026-09-12 into `55fdb09`, by the owner. Slice 3a. Implementation checkpoint `cb074eb`; final reviewed head `a5821f4` |
+| #17 | **Open, Draft.** Documentation-only post-merge synchronisation, from `codex/post-merge-slice-3a-docs`. Not authored by this session. CI green |
+| #18 *(expected)* | **Open, Draft.** Slice 3b-0, this branch. Read its live head on GitHub |
 
 > **Why this table names checkpoints and not "the current head".** A branch head
 > moves; a line in a file does not. Writing one here is exactly how `main` came to
@@ -87,8 +93,9 @@ Proposed and owner-approved sequencing, smallest reviewable PR first:
 
 | # | Slice | State |
 |---|---|---|
-| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Built, in Draft PR #16. Not merged, not applied to the live project** |
-| 3b | General availability (C2) and the member-facing response flow on real data | Next |
+| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Merged in PR #16.** `202609120005` not applied to the hosted project |
+| **3b-0** | **Attendance truth** — provenance, confirmation/rejection, and the two write paths that were missing entirely (acknowledgement, vehicle movements) | **Built, in Draft PR. Not merged, not applied to the hosted project** |
+| 3b | General availability (C2), journey progress (C3) and the member-facing response flow on real data | Next |
 | 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | Before push, not after |
 | 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | |
 | 3e | Public feed: aggregate-only, enforced in the database | |
@@ -100,6 +107,27 @@ intervention that must already be a `DRAFT`, and nothing could produce one.
 `members`, `groups` and `vehicles` had no write path either. A hundred passing
 database tests never noticed, because the test helper inserted drafts as the
 **superuser** — a privilege no commander has ever held.
+
+**The defect slice 3b-0 exists to fix, found by inspecting the code rather than
+the documentation.** `attendance_check_in()` let a `FIREFIGHTER` create their own
+interval; the row landed `verified = false`, which looked like a safeguard; and
+**`attendance_totals()` never filtered on `verified`**. So a self-declared claim
+was already being summed as participation. Worse, `verified = true` was set in
+exactly one place — as a *side effect* of `attendance_correct()` — so
+confirmation was not a decision anybody made, and nothing read the column at all.
+
+The owner's recorded rule ("`ON_SCENE` may create an **unverified** interval; it
+must never write verified attendance") was therefore already violated before
+journey progress existed. The design chosen, of the two the owner offered:
+**intervals with an explicit `source` and a three-state confirmation**, not a
+separate claims table — it keeps the cross-intervention overlap exclusion
+constraint, which is the hard part and already correct, and leaves history and
+CSV reading one table.
+
+`source` (who asserted it) and confirmation (whether command decided) are
+**independent**. A commander recording somebody else is `COMMAND_RECORDED` and
+still unconfirmed, because "I wrote it down" and "I stand behind it" are
+different claims.
 
 **Owner decisions recorded for the rest of the slice:**
 
@@ -132,21 +160,23 @@ iPhone, so getting this wrong is not a small matter: a call-out that does not
 wake somebody is the failure mode this whole application exists to avoid — which
 is also why C8's Viber and telephone fallback is not optional.
 
-## Status of the last merged slice
+## Status of the latest merged slice
 
-**Slice 2 - real accounts, authentication and access.** Complete and merged.
-Slice 3a is built but **not merged**; its state is the table above.
+**Slice 3a — organisational write paths and intervention drafts.** Complete and
+merged as PR #16 into checkpoint `55fdb09`. **Hosted activation still pending.**
 
-- PR #13, #14 and #15 merged (normal merges); `main` = `dc3aade`.
-- **That slice's** four migrations (`...0001` to `...0004`) applied to the live
-  project and verified against the locally-tested schema, byte for byte. Slice
-  3a added a fifth, `202609120005`, which is **not** applied there.
-- The client-role privilege defect that only a real project could reveal: found,
-  fixed in two new migrations, and covered by tests that detect it.
-- The simulated actor no longer moves any access. Identity, role and status are
-  loaded from the server before anything protected renders.
-- The owner's account directory is real, and the bootstrap runbook is executed
-  by the test suite rather than merely written.
+- PR #13, #14, #15 and #16 all merged with normal merge commits (B8).
+- Migrations `...0001` to `...0004` are applied to the hosted project and were
+  verified against the locally-tested schema byte for byte. **`202609120005`
+  (slice 3a) and `202609130006` (slice 3b-0) are not applied there**, so the
+  hosted schema is two migrations behind `main`.
+- Slice 3a closed the gap that the schema could publish a call-out while nothing
+  could create one — and that a hundred passing tests missed it, because the test
+  helper created drafts as the superuser.
+- Slice 2, still true: the simulated actor moves no access; identity, role and
+  status are loaded from the server before anything protected renders; the
+  owner's account directory is real; and the bootstrap runbook is executed by
+  the test suite rather than merely written.
 
 | Check | Result |
 |---|---|
@@ -258,7 +288,7 @@ so nobody has to rediscover it:
 | PostgreSQL | 17 (the tests run against 16 locally and in CI) |
 | State before | `public` schema completely empty — no migration had ever run |
 | Applied | `202609090001`, `202609090002`, `202609110003`, `202609110004`, in order |
-| **Not applied** | `202609120005` (slice 3a). The hosted schema is therefore **behind** this branch until it is applied |
+| **Not applied** | `202609120005` (slice 3a) and `202609130006` (slice 3b-0). The hosted schema is **two migrations behind** `main` until they are applied |
 | Verified | Structural fingerprint matches the locally-tested schema byte for byte — see [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
 | Publishable key | Safe in the client bundle by design; it is **not** a secret |
 | Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
@@ -293,9 +323,12 @@ says the hosted project itself was tested by CI.
 - **No screen publishes a real call-out.** `create_intervention_draft`,
   `update_intervention_draft` and `discard_intervention_draft` exist and are
   tested, but the dispatcher screen still writes device-local state. Slice 3b.
-- **Slice 3a's migration is not applied to the hosted project.** `202609120005`
-  is proven against local PostgreSQL 16 and on CI's `postgres:16` service only.
-  Applying it to the owner's project is a post-merge step needing authorisation.
+- **Two migrations are not applied to the hosted project.** `202609120005`
+  (slice 3a) and `202609130006` (slice 3b-0) are proven against local PostgreSQL
+  16 and CI's `postgres:16` service only. Applying them needs owner
+  authorisation. Until then the hosted database still carries the attendance
+  defect `...0006` fixes, and every organisational and attendance command would
+  fail there with `function ... does not exist`.
 - A browser prototype is **no evidence** that a locked Android or iPhone will
   raise an alarm.
 - **PWA only** is decided (C1); the PWA itself is not built. No manifest, no
@@ -305,7 +338,7 @@ says the hosted project itself was tested by CI.
 
 | # | Blocker | State |
 |---|---|---|
-| B1 | Supabase project | **Resolved.** The owner created one and approved its use; the first four migrations are applied and verified there. `202609120005` is not — see the limitations above |
+| B1 | Supabase project | **Resolved.** The owner created one and approved its use; the first four migrations are applied and verified there. `202609120005` and `202609130006` are not — see the limitations above |
 | B2 | Email verification | **Decided:** "Confirm email" is to be turned **off** in the Supabase dashboard for now, so an account is usable immediately. **Whether it actually is off is unresolved** — two conflicting observations are recorded under Owner action items. An SMTP provider is still needed before real registration at scale: Supabase's default sender only reaches project-team addresses and is rate-limited |
 | B3 | Notification transport | **Decided and now active work, not deferred.** PWA Web Push, server-sent from an Edge Function (C1, C8) — slice 3d. Still unbuilt and unproven: nothing may be promised about delivery. **Every platform claim below is UNVERIFIED** and must be checked against Apple/W3C documentation and a real device before it is relied on: that iOS requires the PWA on the home screen, that iOS ignores application-controlled sound and `vibrate`, and that Apple Critical Alerts need an entitlement a PWA cannot hold. See the paragraph under "Slice 3" — these were asserted from general knowledge, not read from an official source |
 | B4 | Emergency number to display | **Resolved: 112.** The non-emergency notice names it rather than inventing one |
@@ -364,9 +397,20 @@ Do not start (3) before (1) and (2): an intervention cannot be published to
 recipients who do not exist as server-side members. Both are now done, so (3) is
 unblocked once PR #16 merges.
 
-**Immediately next:** merge PR #16 when the owner authorises it (normal merge,
-per B8), then apply `202609120005` to the hosted project and smoke-check the
-roster screen against it with disposable data. Then slice 3b.
+**Immediately next, and all four need owner authority:**
+
+1. **Resolve PR #17** (documentation-only, CI green). It overlaps this branch on
+   `docs/ai/PROJECT_STATE.md` and `docs/DATABASE.md`, because both correct the
+   same post-merge staleness. Recommended: merge #17 first, then merge `main`
+   into this branch and resolve — that keeps #17's authorship rather than
+   absorbing it.
+2. **Apply `202609120005` and `202609130006`** to the hosted project. Both are
+   additive. The hosted database currently still has the attendance defect that
+   `...0006` fixes.
+3. Smoke-check `Evidencija drustva` against the hosted project with **disposable
+   data only**, cleaning up with before/after row counts.
+4. Then slice 3b proper: availability, journey progress, and the real commander
+   and firefighter screens.
 
 ## Manual owner checklist
 
@@ -393,6 +437,6 @@ If any of these behaves differently from the expected column, that is a defect �
 record it here rather than working around it.
 
 **B1 is resolved** — the project exists, the first four migrations are on it, and
-identity and access run against it. Slice 3a's `202609120005` is not applied
+identity and access run against it. `202609120005` and `202609130006` are not applied
 there, so this checklist covers identity and access only; the roster screen
 cannot be exercised against the live project until that migration is applied.

@@ -272,21 +272,38 @@ describe('duration', () => {
       client.query('select public.attendance_check_in($1)', [id]),
     );
 
-    const { rows } = await db.query<{
-      closed_intervals: string;
-      open_intervals: string;
-      total_seconds: string;
-    }>(
-      `select closed_intervals, open_intervals, total_seconds
-       from public.attendance_totals() where member_id = $1`,
-      [ff.memberId],
-    );
+    const totals = async () => {
+      const { rows } = await db.query<{
+        confirmed_intervals: string;
+        confirmed_seconds: string;
+        unverified_intervals: string;
+        unverified_seconds: string;
+        open_intervals: string;
+      }>(`select * from public.attendance_totals() where member_id = $1`, [ff.memberId]);
+      return rows[0]!;
+    };
 
-    expect(Number(rows[0]!.closed_intervals)).toBe(2);
+    // Corrected, but NOT confirmed by anybody. Two closed intervals of 2h and
+    // 30m, and one still open.
+    const beforeConfirmation = await totals();
+    expect(Number(beforeConfirmation.unverified_intervals)).toBe(2);
+    expect(Number(beforeConfirmation.unverified_seconds)).toBeCloseTo(2 * 3600 + 30 * 60, 0);
+    // The point of this slice: a corrected self-declared claim is still not
+    // participation. Nothing may read it as confirmed time.
+    expect(Number(beforeConfirmation.confirmed_intervals)).toBe(0);
+    expect(Number(beforeConfirmation.confirmed_seconds)).toBe(0);
     // The open interval is visible as open and contributes nothing.
-    expect(Number(rows[0]!.open_intervals)).toBe(1);
-    // 2 hours + 30 minutes.
-    expect(Number(rows[0]!.total_seconds)).toBeCloseTo(2 * 3600 + 30 * 60, 0);
+    expect(Number(beforeConfirmation.open_intervals)).toBe(1);
+
+    // A commander stands behind one of them. Only then does it count.
+    await asUserCommitted(db, commander, (client) =>
+      client.query('select public.attendance_confirm($1)', [first]),
+    );
+    const afterConfirmation = await totals();
+    expect(Number(afterConfirmation.confirmed_intervals)).toBe(1);
+    expect(Number(afterConfirmation.confirmed_seconds)).toBeCloseTo(2 * 3600, 0);
+    expect(Number(afterConfirmation.unverified_intervals)).toBe(1);
+    expect(Number(afterConfirmation.unverified_seconds)).toBeCloseTo(30 * 60, 0);
   });
 
   it('counts nothing for a member who only responded', async () => {
@@ -347,11 +364,21 @@ describe('corrections', () => {
     );
     expect(rows[0]!.after_value.ended_at).not.toBeNull();
 
-    const verified = await db.query(
-      'select verified, verified_by from public.attendance_intervals where id = $1',
+    // A correction is NOT a confirmation. The previous version of this
+    // assertion expected `verified: true` here, which pinned the defect this
+    // slice removes: `attendance_correct` used to confirm as a side effect, so
+    // fixing a forgotten checkout time silently turned a self-declared claim
+    // into participation. Correcting the record and standing behind it are two
+    // different acts by the same commander, and each is now its own command.
+    const state = await db.query(
+      'select verified, verified_by, rejected_at from public.attendance_intervals where id = $1',
       [intervalId],
     );
-    expect(verified.rows[0]).toMatchObject({ verified: true, verified_by: commander });
+    expect(state.rows[0]).toMatchObject({
+      verified: false,
+      verified_by: null,
+      rejected_at: null,
+    });
   });
 
   it('refuses a firefighter correcting a record', async () => {

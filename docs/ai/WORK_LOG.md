@@ -5,6 +5,80 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-12 - Slice 3b-0: a self-declared claim was already counting as participation
+
+**The defect, found by reading the code rather than the documentation.** DATABASE.md called attendance
+"the primary capability" and the nine-facts contract promised that "a member **actually attended**" was
+its own separate record. It was not. Three facts, each verified in the migration source:
+
+1. `attendance_check_in(intervention)` with no target member required only `is_dvd_staff()`, so a
+   FIREFIGHTER created their own interval (`202609090002:894`).
+2. The row landed `verified = false`, which *looked* like a safeguard (`:487`).
+3. **`attendance_totals()` never filtered on `verified`** (`:536`). It summed every closed interval.
+
+So self-declared presence flowed straight into participation totals. And `verified = true` was set in
+exactly one place - inside `attendance_correct()` (`:994`) - as a **side effect of a commander
+correcting the times**. Confirmation was not a decision anybody made; it was something that happened
+to a record when somebody fixed its clock. Nothing read the column at all.
+
+The owner's recorded rule for slice 3 - "`ON_SCENE` may create an **unverified** interval; it must
+never write verified attendance" - was therefore already violated, before journey progress existed to
+violate it.
+
+**The single test touching `verified` asserted the defect.** It expected `verified: true` after a
+correction. That assertion has been replaced with its opposite, and the commit says so plainly: this
+is not weakening a test to get green, it is removing a test that pinned a bug.
+
+**The design chosen**, of the two the owner offered: **intervals with an explicit `source` and a
+three-state confirmation**, not a separate claims table. The claims table would have had to duplicate
+the cross-intervention overlap exclusion constraint, which is the hard part and already correct, and
+would have left history and CSV unioning two tables. `source` and confirmation are independent: a
+commander recording somebody else is `COMMAND_RECORDED` and **still unconfirmed**, because "I wrote it
+down" and "I stand behind it" are different claims by the same person.
+
+`source` is decided inside the command from `auth.uid()` and is deliberately **not a parameter** - a
+client must not be able to label its own claim as command-recorded. Tested by passing your own member
+id explicitly and getting `SELF_DECLARED` anyway.
+
+**Rejection needs a reason; confirmation does not.** Rejecting overrides what a member said about
+their own presence and has to be explainable. Confirmation is the expected outcome, and demanding
+boilerplate from a commander working through thirty records after an incident would produce thirty
+meaningless strings. Both are audited with actor and server time regardless.
+
+**Two more write gaps, the same shape as slice 3a's.** `intervention_acknowledgements` and
+`vehicle_movements` have both existed since `202609090002` with a table, constraints, RLS and a read
+policy - and **no write path at all**. "Opened" was unrecordable, which is exactly the distinction a
+commander needs (somebody who has not opened the call-out is a different problem from somebody who
+opened it and has not answered). Both now have commands. Acknowledging is idempotent and never moves
+the first-seen timestamp, because "when did they see it" must stay answerable.
+
+**Also corrected while here:** the nine-facts list is now ten, since fact 7 split into "says they
+attended" and "command stands behind it". Four stale "nine facts" references were updated across
+ACCESS_MODEL.md, DATABASE.md, the new migration and the new test; two remaining mentions are
+deliberately historical.
+
+**Verified.** Lint, strict typecheck, `vite build` and the bundle secret scan pass. Unit **128
+passed** (unchanged - this slice adds no client code). Database **160 passed**, up from 135.
+Browser and accessibility **74 passed**, run with `.env.local` moved aside as CI does and restored
+byte-identically.
+
+Checked against deliberately broken code, not only working code: removing the `verified` filter from
+`attendance_totals` (restoring the original defect) fails 3 tests; labelling every interval
+`COMMAND_RECORDED` fails 3; putting `verified = true` back into `attendance_correct` fails 2; dropping
+the `revoke ... from public` block fails 4.
+
+**Not applied anywhere.** `202609130006` is local and CI evidence only. The hosted project is now two
+migrations behind `main` and **still carries this defect** - nothing reads it there yet, because no
+screen uses attendance against the server, but that is the reason to apply it rather than leave it
+pending.
+
+**Next concrete action:** slice 3b proper - availability, journey progress, and the real commander and
+firefighter screens. Note that PR #17 overlaps this branch on `PROJECT_STATE.md` and `DATABASE.md`;
+recommended order is to merge #17 first, then merge `main` in here and resolve, which keeps #17's
+authorship rather than absorbing it.
+
+---
+
 ## 2026-09-12 - Slice 3a: the write paths the response system never had
 
 **The gap, found by reading the schema instead of the brief.** `202609090002` built a complete
