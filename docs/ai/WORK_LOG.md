@@ -148,6 +148,58 @@ true.
 
 Documentation only: no source file, migration, test or schema object changed.
 
+### Third correction: the same drift in ACCESS_MODEL.md and DATABASE.md
+
+`PROJECT_STATE.md` was made coherent while the two documents it links to were not. Both were read
+completely and compared against `PROJECT_STATE.md` at `fe37529`, `202609120005`, `db-tests/harness.ts`,
+`db-tests/organisation.test.ts` and the live PR state.
+
+**The single most misleading claim, in both files, was the same one:** that the roster screen *runs
+against the real project*. It does not. `202609120005` is not applied to the hosted project, so every
+command that screen issues would fail there with `function ... does not exist`. Code proven against
+local PostgreSQL and CI is not code proven against the target. Both documents now separate
+**implemented and tested** from **usable on the hosted project** in a table, because a sentence
+carrying both meanings is how this got recorded wrongly in the first place.
+
+`ACCESS_MODEL.md`:
+
+- §8 roster claim split into the two-column table above.
+- §8 email confirmation: the **decision** (B2: off) is now separated from the **current setting**
+  (unverified: `false` observed 11 September, `true` reported 12 September). The claim that
+  registration immediately yields a usable session is gone — it depends on a dashboard setting nobody
+  has read and a sign-up flow nobody has exercised.
+- §4's enumerated list of enforced refusals was missing the whole authority boundary this slice
+  added. A COMMANDER being refused `ADMIN_REQUIRED` on roster commands was described in §5 but absent
+  from the list that claims to be the enforced set; added, along with the firefighter draft refusal
+  and anon's refusal on the new commands.
+- §8 draft bullet now says the migration defining those commands is not on the hosted project either.
+
+`DATABASE.md`:
+
+- §1 clean-database sequence was missing `202609120005`, which the harness does apply — so the
+  document described a four-migration run that has not happened since the migration was added. Added,
+  with a note to keep it in step with `db-tests/harness.ts`.
+- §2 "the last two exist because of a defect only a real project could reveal" became wrong the moment
+  a fifth migration existed. Names `202609110003` and `202609110004` explicitly, and says what
+  `202609120005` is instead.
+- §3 "All four migrations have been applied" replaced by a per-migration table, plus a plain statement
+  that the hosted schema is **behind this branch**.
+- §3 fingerprint claim scoped: that byte-for-byte comparison covers `...0001`–`...0004`, was taken
+  before `202609120005` existed, and is **not** evidence that the hosted project matches this branch.
+- §10 said there are no owner/admin write commands and the roster lives in browser state. Both false.
+  Rewritten as a boundary: built and tested on this branch / not on the hosted project / genuinely not
+  built — and naming the `Clanovi` prototype screen as the one that *is* still fictional browser
+  state, since two screens now show members and only one touches the database.
+
+**Three found beyond the listed defects:** §5 described the intervention lifecycle without mentioning
+that drafts can now be created, edited and discarded by command — the very gap this slice closed;
+the `idempotency_key` note covered only publish, not the draft command that now honours the same key;
+and §1 credited the platform stub with catching one defect when it has now caught two, the second
+being the identical mistake repeated on `organisation_audit`.
+
+Documentation only: no source file, test, migration or schema object changed. `202609120005` remains
+unapplied to the hosted project, and slice 3b has not started.
+
 ---
 
 ## 2026-09-11 - Real accounts: the simulated actor stops moving access

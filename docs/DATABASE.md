@@ -34,7 +34,11 @@ Each run applies, from an empty database:
 2. `supabase/migrations/202609090001_accounts_reports.sql`;
 3. `supabase/migrations/202609090002_internal_operations.sql`;
 4. `supabase/migrations/202609110003_client_role_privileges.sql`;
-5. `supabase/migrations/202609110004_function_execute_privileges.sql`.
+5. `supabase/migrations/202609110004_function_execute_privileges.sql`;
+6. `supabase/migrations/202609120005_organisational_writes.sql`.
+
+The list lives in `db-tests/harness.ts`; keep the two in step, because a
+migration missing from that array is a migration nothing ever runs.
 
 So "the migrations run on a clean database" is checked on every run: if any
 migration is not runnable from zero, every test fails.
@@ -52,7 +56,9 @@ each new table in `public`. Without that last part the local database would be
 *stricter* than the real platform and the suite would keep proving a
 least-privilege property the hosted project did not have. See
 [ACCESS_MODEL.md §5](./ACCESS_MODEL.md#5-writes-are-impossible-from-a-client) for
-the defect this actually uncovered.
+the **two** defects this has now caught — the original one on the hosted project,
+and the identical mistake repeated on `organisation_audit` in `202609120005`,
+which failed on that migration's very first local run.
 
 It does **not** reproduce GoTrue signup and OTP, the API gateway, storage upload
 handling, or realtime. Those need a real project and are listed as blockers in
@@ -73,25 +79,45 @@ migration, never by editing an old one.
 | `202609110004_function_execute_privileges.sql` | Removes the PUBLIC `EXECUTE` grant that left eight `security definer` helpers callable without signing in |
 | `202609120005_organisational_writes.sql` | The missing write paths: creating, editing and discarding an intervention draft, and CRUD for members, groups and vehicles. Adds `is_dvd_admin()` and the `organisation_audit` trail |
 
-The last two exist because of a defect only a real project could reveal; both are
-explained in
+`202609110003` and `202609110004` exist because of a defect only a real project
+could reveal; both are explained in
 [ACCESS_MODEL.md §5](./ACCESS_MODEL.md#5-writes-are-impossible-from-a-client).
+`202609120005` is not part of that repair — it closes a different gap, that the
+schema could publish a call-out but nothing could create one.
 
 ## 3. The real Supabase project
 
-**Applied.** All four migrations have been applied, in order, to the owner's
-project (`dvd-tivat-app`, region `eu-central-1`, PostgreSQL 17). The `public`
-schema was empty beforehand.
+**Partially applied, and the gap matters.**
 
-The result was verified rather than assumed: a structural fingerprint of the
-hosted schema — tables and their RLS flags, every column with type, nullability
-and default, every constraint definition, every index definition, every policy
-with its `using` and `with check` expressions, every trigger, every table grant,
-and an md5 of every function body — was compared against the same fingerprint
-taken from a local PostgreSQL 16 that had applied the same files. **Every section
-matches byte for byte**, with one expected exception: the hosted database also
-carries Supabase's own platform function `rls_auto_enable()`, which the local
-stub does not provide.
+| Migration | On the hosted project |
+|---|---|
+| `202609090001` · `202609090002` · `202609110003` · `202609110004` | **Applied**, in order |
+| `202609120005_organisational_writes.sql` | **Not applied** |
+
+The first four were applied to the owner's project (`dvd-tivat-app`, region
+`eu-central-1`, PostgreSQL 17), whose `public` schema was empty beforehand.
+
+**The hosted schema is therefore behind this branch.** Every function
+`202609120005` defines — the three intervention-draft commands, the member,
+group and vehicle commands, `admin_link_member_account`, `is_dvd_admin()` — and
+the `organisation_audit` table do not exist there. Calling any of them against
+the hosted project fails. Applying it is a deliberate, owner-authorised step that
+has not been taken.
+
+The result of those first four was verified rather than assumed: a structural
+fingerprint of the hosted schema — tables and their RLS flags, every column with
+type, nullability and default, every constraint definition, every index
+definition, every policy with its `using` and `with check` expressions, every
+trigger, every table grant, and an md5 of every function body — was compared
+against the same fingerprint taken from a local PostgreSQL 16 that had applied
+the same files. **Every section matched byte for byte**, with one expected
+exception: the hosted database also carries Supabase's own platform function
+`rls_auto_enable()`, which the local stub does not provide.
+
+**That comparison covers migrations `...0001`–`...0004` only.** It was taken
+before `202609120005` existed and says nothing about the five-migration schema
+this branch builds. It is not evidence that the hosted project matches this
+branch — it currently does not.
 
 Do **not** apply `supabase/tests/00_supabase_stub.sql` to a real project. It
 would collide with the platform's own `auth` and `storage` schemas.
@@ -118,13 +144,20 @@ DRAFT ──publish──> PUBLISHED ──> ASSEMBLING ──> DEPLOYED ──>
                         └──────────── CLOSED / CANCELLED ─────────┘
 ```
 
-- `DRAFT` is command-only: not yet a call-out.
+- `DRAFT` is command-only: not yet a call-out. It is created by
+  `create_intervention_draft`, edited by `update_intervention_draft` while it is
+  still a draft, and abandoned by `discard_intervention_draft`, which marks it
+  `CANCELLED` rather than deleting it. Before `202609120005` there was no way to
+  create one at all, which made `publish_intervention` unreachable.
 - `CLOSED` and `CANCELLED` are **not reachable** through
   `set_intervention_status`; they are separate commands that require a reason.
 - `version` gives optimistic concurrency, so two commanders cannot silently
   overwrite one another (`VERSION_CONFLICT`).
 - `idempotency_key` is unique per creator, so a retried publish cannot call the
-  society twice.
+  society twice. `create_intervention_draft` honours the same key: a commander
+  whose connection drops mid-tap gets the draft they already made, not a second
+  one. The unique index remains the backstop behind that, and both are tested
+  separately.
 
 ### The location contract
 
@@ -217,10 +250,28 @@ UTC. No duration is ever computed from a formatted string.
 
 ## 10. Not built yet
 
-- Members, groups and vehicles exist as tables with read policies, but there are
-  no owner/admin **write** commands for them yet — the fictional roster still
-  lives in browser state.
+Stated as a boundary rather than a list of absences, because the interesting part
+is where "built" stops and "usable" starts.
+
+**Built, tested, and on this branch only:**
+
+- Admin write commands for `members`, `groups`, `group_members` and `vehicles`,
+  the account-to-member link, the three intervention-draft commands, the
+  `is_dvd_admin()` predicate and the `organisation_audit` trail — all in
+  `202609120005`, covered by `db-tests/organisation.test.ts`.
+- The server-backed `Evidencija drustva` screen that drives them.
+- **None of it exists on the hosted project**, because `202609120005` is not
+  applied there. See §3.
+
+**Genuinely not built:**
+
+- **No screen publishes a real call-out.** The draft commands exist; the
+  dispatcher screen still writes device-local state.
+- The separate `Clanovi` prototype screen is **still fictional browser state**
+  and is not the same thing as `Evidencija drustva`. Two screens now show
+  members and only one of them touches the database.
 - No CSV export. The `attendance_totals()` function is the query it would use;
   the export itself, with its formula-injection escaping, is not written.
 - No `intervention_updates` write command (the table and its read policy exist).
 - No seed file of fictional data for a real project.
+- No general availability, no journey progress, no notification transport.
