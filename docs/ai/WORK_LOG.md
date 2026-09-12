@@ -5,6 +5,75 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-12 - Slice 3a: the write paths the response system never had
+
+**The gap, found by reading the schema instead of the brief.** `202609090002` built a complete
+mobilisation system - publish, receive, respond, record attendance - and no way to create anything.
+`publish_intervention(target_intervention, recipient_member_ids)` takes an intervention that must
+ALREADY exist in `DRAFT`, and nothing in the database could produce one. `members`, `groups`,
+`group_members` and `vehicles` had no write path at all. The whole schema was reachable only by
+privileged SQL.
+
+**Why a hundred passing tests did not notice.** `db-tests/harness.ts` inserted drafts directly as the
+SUPERUSER, outside `asUser`. The helper held a privilege no commander in the application has ever
+held, so the missing function was invisible. `createDraft` now goes through
+`create_intervention_draft`, which makes every intervention scenario in the suite depend on the
+authority check, the validation and the grants being right. The one test that needed the old
+behaviour - the unique index refusing a duplicate idempotency key - was **split rather than deleted**:
+it had conflated "the command is idempotent" with "the constraint is the backstop", and both are now
+asserted separately by their own test.
+
+**The same privilege defect, caught on the first run.** `organisation_audit` was created holding
+`INSERT`, `UPDATE`, `DELETE` and `TRUNCATE` for `authenticated`, because a Supabase project's default
+privileges grant them to every new table and the migration initially only *added* `select` on top -
+the identical mistake `202609110003` exists to correct. *"never grants a client role a privilege with
+no policy behind it"* failed immediately. The stub reproducing the platform's default grants is the
+only reason that was visible locally rather than on the owner's project.
+
+**Two other defects found while building, both mine.** A parameter named `idempotency_key` is
+ambiguous against the column of the same name inside the function body, which is exactly why every
+other parameter in this schema carries a `requested_` prefix. And `max(uuid)` does not exist - the
+one-query existence-and-value trick was wrong, and plpgsql's `FOUND` is the right mechanism, because
+`user_id` is legitimately NULL for a member with no account and the value cannot distinguish "no such
+member" from "member not linked".
+
+**Administrative authority now has a predicate.** `ACCESS_MODEL.md` has said since PR #13 that an
+ADMIN maintains organisational records while a COMMANDER runs call-outs. That distinction existed
+only in prose. `is_dvd_admin()` is now the predicate, and a COMMANDER is refused every roster command
+with `ADMIN_REQUIRED` as firmly as a firefighter is.
+
+**The link that makes the system reachable.** `members.user_id` is what `current_member_id()` reads,
+and nothing could write it - so every approved account resolved to no member and `submit_response`
+would have refused all of them with `MEMBER_RECORD_REQUIRED`. `admin_link_member_account` closes
+that, reports its two one-to-one collisions differently (a member who already has an account needs a
+different correction from an account already given to somebody else), and confers no authority:
+authority is read from `access_grants` and nowhere else, which is its own test.
+
+**Nothing is deleted.** Members, groups and vehicles deactivate with a recorded reason; a discarded
+draft becomes `CANCELLED`. A member who left in 2024 must still resolve on the attendance record of
+an intervention they attended in 2023.
+
+**Verified.** Lint, typecheck, `vite build` and the bundle secret scan pass. Unit **128 passed**
+(was 117). Database **135 passed** (was 101). Browser and accessibility **74 passed** (was 70).
+Checked against deliberately broken code, not only working code: granting a firefighter admin
+authority fails 3 tests, dropping the new table's revoke fails 3, and taking the coordinate capture
+time from the caller instead of the server fails 1.
+
+**One test was quietly under-covering.** `navigation.spec.ts` hardcoded eight route names, so it
+passed while never visiting the ninth. It now enumerates the rendered navigation, with an explicit
+assertion on the expected set so adding a route stays deliberate.
+
+**Environment note, not a code finding.** Four `admin.spec.ts` tests fail on a machine that has a
+real `.env.local`, because they assert the "server not configured" screen that CI deliberately gets.
+Confirmed environmental by running the suite with the file moved aside - all pass - and restoring it
+byte-identically. Worth knowing before somebody treats it as a regression.
+
+**Next concrete action:** slice 3b - general availability (three states, audited like account status)
+and the member response flow on real data, including the progress column decided alongside the
+existing answer vocabulary.
+
+---
+
 ## 2026-09-11 - Real accounts: the simulated actor stops moving access
 
 **The defect this slice existed to fix.** `AccountAccessSetup` switched to a local `READY` step the

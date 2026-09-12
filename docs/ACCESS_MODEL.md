@@ -56,7 +56,7 @@ caller cannot execute it at all.
 | Role | May |
 |---|---|
 | **OWNER** | Everything below, plus: read every account, assign `ADMIN`/`COMMANDER`/`FIREFIGHTER`/`PENDING`, suspend and restore access, read the role and status audit |
-| **ADMIN** | Read operational data; manage organisational records. **Cannot** assign roles or create an owner |
+| **ADMIN** | Read operational data; manage organisational records — members, groups, vehicles and the account-to-member link (`is_dvd_admin()`). **Cannot** assign roles or create an owner |
 | **COMMANDER** | Create, publish, update, change status of, close and cancel interventions; see responses and attendance; check members in and out; correct attendance with a reason |
 | **FIREFIGHTER** | See interventions addressed to them; respond; check themselves in and out; request a correction of their own record |
 | **PENDING** *(default)* | Nothing operational at all |
@@ -139,6 +139,11 @@ no direct `INSERT`/`UPDATE` path a client could use to forge a fact:
 
 | Command | Authority required |
 |---|---|
+| `create_intervention_draft` / `update_intervention_draft` / `discard_intervention_draft` | command |
+| `admin_create_member` / `admin_update_member` / `admin_set_member_active` | admin |
+| `admin_link_member_account` / `admin_unlink_member_account` | admin |
+| `admin_create_group` / `admin_rename_group` / `admin_set_group_active` / `admin_set_group_members` | admin |
+| `admin_create_vehicle` / `admin_update_vehicle` / `admin_set_vehicle_active` | admin |
 | `publish_intervention` | command |
 | `set_intervention_status` | command |
 | `close_intervention` | command |
@@ -157,6 +162,26 @@ all refused with `permission denied`.
 
 Every function is `security definer` with a fixed `search_path` and explicit
 `revoke from public` / `grant execute to authenticated`.
+
+**Administrative authority is not command authority.** A `COMMANDER` publishes
+call-outs and is refused every roster command with `ADMIN_REQUIRED`, as firmly as
+a firefighter is. That distinction was stated in the table above long before it
+had a predicate to stand on; `is_dvd_admin()` is now that predicate, and
+*"refuses a COMMANDER too, because command is not roster authority"* is the test.
+
+**Nothing is deleted.** Members, groups and vehicles are deactivated with a
+recorded reason, never removed — a member who left in 2024 must still resolve on
+the attendance record of an intervention they attended in 2023. A discarded draft
+becomes `CANCELLED` for the same reason. This is also what keeps the promise
+above that no client role holds `DELETE` anywhere.
+
+> **Caught here.** `organisation_audit` was created holding `INSERT`, `UPDATE`,
+> `DELETE` and `TRUNCATE` for `authenticated`, because Supabase's default
+> privileges grant them to every new table and the migration initially only
+> *added* `select` on top — the identical mistake `202609110003` exists to
+> correct. *"never grants a client role a privilege with no policy behind it"*
+> failed on the first run of the new migration. The stub reproducing the
+> platform's default grants is the only reason that was visible locally.
 
 The command functions being callable by `authenticated` is the design, not an
 oversight: they *are* the write surface, and each one begins with its own
@@ -209,11 +234,22 @@ transport, and the outbox cannot leave `QUEUED` without one.
 
 Honest list of what this slice does **not** do:
 
-- **Only identity and access are connected.** Sign-in, registration, profile
-  completion, the role and status load, the owner's account directory and its two
-  commands all run against the real project. **Interventions, responses, vehicle
-  movements and attendance do not** — those screens still run on device-local
-  fictional state with the actor selector, and each one says so on itself.
+- **Identity, access and the society's records are connected.** Sign-in,
+  registration, profile completion, the role and status load, the owner's account
+  directory, and now the roster screen (`Evidencija drustva` — members, groups,
+  vehicles and the account-to-member link) run against the real project.
+  **Interventions, responses, vehicle movements and attendance do not** — those
+  screens still run on device-local fictional state with the actor selector, and
+  each one says so on itself.
+- **Drafting a call-out has a server path but no server screen yet.**
+  `create_intervention_draft` exists and is tested, but the dispatcher screen
+  still writes to device-local state. Publishing from the real database is the
+  next slice, not this one.
+- **A member with no linked account cannot answer a call-out.**
+  `current_member_id()` returns NULL for them, so `submit_response` refuses with
+  `MEMBER_RECORD_REQUIRED`. This is correct behaviour and it is now visible: the
+  roster screen marks every such member rather than leaving it to be discovered
+  during an incident.
 - **Password reset is not implemented**, and is shown as unavailable with the
   reason rather than offered as a form that would send nothing. It needs a
   configured mail provider (blocker B2).

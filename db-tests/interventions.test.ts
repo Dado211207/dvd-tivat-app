@@ -16,6 +16,7 @@ import {
   connect,
   createAccount,
   createDraft,
+  createDraftAsSuperuser,
   createMember,
   expectRefused,
   grantRole,
@@ -181,9 +182,27 @@ describe('publishing', () => {
     expect(outbox.rows[0]!.n).toBe(2);
   });
 
-  it('refuses a duplicate idempotency key from the same creator', async () => {
-    await createDraft(db, commander, { key: 'shared-key' });
-    await expect(createDraft(db, commander, { key: 'shared-key' })).rejects.toThrow(
+  // This assertion used to be one test that conflated two separate facts,
+  // because the helper inserted drafts as the superuser. Splitting it keeps both
+  // rather than losing the constraint check to the command's nicer behaviour.
+  it('returns the same draft when a commander retries the same key', async () => {
+    // Matches `publish_intervention`: a commander whose connection drops
+    // mid-tap must not end up with two drafts of the same incident.
+    const first = await createDraft(db, commander, { key: 'shared-key' });
+    const second = await createDraft(db, commander, { key: 'shared-key' });
+    expect(second).toBe(first);
+
+    const { rows } = await db.query<{ n: number }>(
+      `select count(*)::int as n from public.interventions where idempotency_key = 'shared-key'`,
+    );
+    expect(rows[0]!.n).toBe(1);
+  });
+
+  it('refuses a duplicate idempotency key even when the command is bypassed', async () => {
+    // The unique index is the backstop behind the command's idempotency. If the
+    // command's own check were ever removed, this is what would still hold.
+    await createDraftAsSuperuser(db, commander, 'raw-shared-key');
+    await expect(createDraftAsSuperuser(db, commander, 'raw-shared-key')).rejects.toThrow(
       /interventions_idempotency|duplicate key/i,
     );
   });

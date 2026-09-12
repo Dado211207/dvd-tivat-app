@@ -42,6 +42,40 @@ test('the accounts screen never claims a role it has not been given', async ({ p
   await expect(page.getByLabel('Email')).toHaveCount(0);
 });
 
+/**
+ * The roster screen is the one place real member, group and vehicle records are
+ * entered. It is ADMIN or OWNER authority, and - like the account directory -
+ * the simulation selector must not reach it.
+ */
+test('the society roster cannot be reached through the simulation selector', async ({ page }) => {
+  await openApp(page, 'evidencija');
+
+  // Nothing that would let somebody believe they are editing the real roster.
+  await expect(page.getByRole('button', { name: 'Dodaj clana' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Dodaj vozilo' })).toHaveCount(0);
+  await expect(page.getByRole('table', { name: 'Spisak clanova' })).toHaveCount(0);
+
+  for (const actor of ['Marko Perovic', 'Ana Vukovic', 'Nikola Djukic']) {
+    await switchActor(page, actor);
+    // 'Marko Perovic' is the simulated administrator. Picking him used to be
+    // how the most sensitive screen was opened; it must move nothing.
+    await expect(page.getByRole('button', { name: 'Dodaj clana' })).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Spisak clanova' })).toHaveCount(0);
+  }
+
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+});
+
+test('the roster screen is not labelled as a local simulation', async ({ page }) => {
+  // It reads and writes real server records, so it must not carry the
+  // simulation warning that every device-local screen carries.
+  await openApp(page, 'evidencija');
+  await expect(page.getByText('Ovaj ekran jos radi na lokalnoj simulaciji')).toHaveCount(0);
+});
+
 test('an operational screen says it is still a local simulation', async ({ page }) => {
   await openApp(page, 'dezurni');
   await expect(page.getByText('Ovaj ekran jos radi na lokalnoj simulaciji')).toBeVisible();

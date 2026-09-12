@@ -63,6 +63,50 @@ its four commits. `main`'s tree is byte-identical to PR #14's head `35383a5`
 | #13 | **Merged** 2026-09-11 into `3133d00` |
 | #14 | **Merged** 2026-09-11 into `bd79f7f` |
 
+## Slice 3 — incident dispatch, availability and public visibility
+
+Proposed and owner-approved sequencing, smallest reviewable PR first:
+
+| # | Slice | State |
+|---|---|---|
+| 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **This PR** |
+| 3b | General availability (C2) and the member-facing response flow on real data | Next |
+| 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | Before push, not after |
+| 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | |
+| 3e | Public feed: aggregate-only, enforced in the database | |
+| 3f | Field-use and accessibility pass, live verification, owner test checklist | |
+
+**Why 3a exists at all, and why it is first.** `202609090002` built a complete
+response system with no way to create anything: `publish_intervention` takes an
+intervention that must already be a `DRAFT`, and nothing could produce one.
+`members`, `groups` and `vehicles` had no write path either. A hundred passing
+database tests never noticed, because the test helper inserted drafts as the
+**superuser** — a privilege no commander has ever held.
+
+**Owner decisions recorded for the rest of the slice:**
+
+1. **Response states** — add a progress column alongside the existing
+   `DOLAZIM` / `DOLAZIM_KASNIJE` / `NE_MOGU` answer rather than replacing the
+   vocabulary. "I said I would come" and "I am moving" are different facts.
+   `ON_SCENE` may create an **unverified** `attendance_intervals` row for a
+   commander to confirm; it must never write verified attendance, or self-declared
+   presence becomes the participation record.
+2. **Public location** — the public feed shows a coarse label (settlement or
+   street), never the operational `incident_location` text or the map pin. That
+   field is typed under pressure and will name private houses.
+3. **Satellite basemap** — the tile source sits behind one config value so the
+   provider is a one-line change; ships with Esri World Imagery. Esri's
+   application-use licensing position is **unconfirmed** and is the owner's
+   accepted risk, reversible at near-zero cost given the abstraction.
+
+**Deferred idea, not a requirement (C9):** public notification opt-in, where a
+citizen subscribes to be pushed when a new incident opens.
+
+**Constraint to carry into 3c/3d:** iOS Web Push ignores custom sounds and
+`vibrate` patterns entirely. An incident push can be made visually distinct on
+every platform and audibly distinct only on Android. The owner's primary test
+device is an iPhone, so this should be designed for rather than discovered.
+
 ## Status of this slice
 
 **Slice 2 - real accounts, authentication and access.** Complete.

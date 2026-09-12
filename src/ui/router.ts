@@ -8,7 +8,17 @@
 
 import { useEffect, useState } from 'react';
 
-export const ROUTES = ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'nalozi', 'istorija'] as const;
+export const ROUTES = [
+  'dojava',
+  'dezurni',
+  'clan',
+  'vozila',
+  'prikaz',
+  'clanovi',
+  'evidencija',
+  'nalozi',
+  'istorija',
+] as const;
 export type Route = (typeof ROUTES)[number];
 
 /** The application opens into the duty officer's working screen, not a landing page. */

@@ -1634,3 +1634,118 @@ dialog {
     forced-color-adjust: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Evidencija drustva - the administrator's real roster, groups and vehicles.
+
+   Field use drove the sizes here rather than taste: the controls are entered on
+   a phone, often one-handed, so every interactive target is at least 44px and
+   the reason box and its button stay side by side until there is genuinely no
+   room, at which point they stack rather than shrink.
+   --------------------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.75rem 0 1rem;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.tabs__tab {
+  min-height: 44px;
+  padding: 0.55rem 0.95rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: transparent;
+  color: var(--c-ink-soft);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tabs__tab:hover { color: var(--c-ink); }
+
+.tabs__tab--on {
+  border-color: var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-ink);
+  /* Covers the container's own border so the selected tab reads as joined to
+     the panel below it, not merely tinted. */
+  margin-bottom: -1px;
+  padding-bottom: calc(0.55rem + 1px);
+}
+
+.organisation .stack {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  /* min-width:0 or a long label would push the grid wider than the phone. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.organisation .stack .btn { justify-self: start; }
+
+.organisation .input {
+  min-height: 44px;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 0.5rem;
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font: inherit;
+}
+
+.organisation .input:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+.organisation__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.organisation__reason {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.organisation__reason .input { flex: 1 1 9rem; min-width: 0; }
+.organisation__reason .btn { white-space: nowrap; min-height: 44px; }
+
+.organisation__group {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem 0.9rem;
+  border: 1px solid var(--c-line);
+  border-radius: 0.6rem;
+  background: var(--c-surface-2);
+}
+
+.organisation__group legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+}
+
+.organisation__check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 44px;
+  padding: 0.15rem 0;
+  cursor: pointer;
+}
+
+.organisation__check input {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+}

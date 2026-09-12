@@ -43,6 +43,9 @@ const CitizenReportView = lazy(() =>
 const AccountsView = lazy(() =>
   import('./ui/views/AccountsView').then((module) => ({ default: module.AccountsView })),
 );
+const OrganisationView = lazy(() =>
+  import('./ui/views/OrganisationView').then((module) => ({ default: module.OrganisationView })),
+);
 
 const VIEWS: Record<Route, ComponentType> = {
   dojava: CitizenReportView,
@@ -51,6 +54,7 @@ const VIEWS: Record<Route, ComponentType> = {
   vozila: VehiclesView,
   prikaz: DisplayView,
   clanovi: RosterView,
+  evidencija: OrganisationView,
   nalozi: AccountsView,
   istorija: HistoryView,
 };
@@ -67,7 +71,7 @@ const VIEWS: Record<Route, ComponentType> = {
  */
 const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
-  { label: 'Evidencija', routes: ['clanovi', 'nalozi', 'istorija'] },
+  { label: 'Evidencija', routes: ['evidencija', 'clanovi', 'nalozi', 'istorija'] },
   { label: 'Nije u upotrebi', routes: ['dojava'] },
 ];
 
@@ -81,6 +85,7 @@ const NAV_GROUPS: { label: string; routes: Route[] }[] = [
  */
 const ROUTE_BACKING: Record<Route, 'SERVER' | 'SIMULATED'> = {
   nalozi: 'SERVER',
+  evidencija: 'SERVER',
   dojava: 'SIMULATED',
   dezurni: 'SIMULATED',
   clan: 'SIMULATED',
@@ -97,6 +102,7 @@ const ROUTE_DESCRIPTION: Record<Route, string> = {
   vozila: 'Rucna evidencija izlaska i povratka vozila',
   prikaz: 'Pregled stanja namijenjen ekranu u bazi',
   clanovi: 'Clanovi, uloge, grupe i osposobljenosti',
+  evidencija: 'Stvarni clanovi, grupe i vozila drustva na serveru',
   nalozi: 'Stvarni nalozi na serveru: prijava, uloge i ukidanje pristupa',
   istorija: 'Zavrsene vjezbe i hronologija promjena',
 };
