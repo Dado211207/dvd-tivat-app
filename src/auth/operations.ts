@@ -270,10 +270,10 @@ interface InterventionRow {
   created_at: string;
 }
 interface RecipientRow { member_id: string; member_name_at_publication: string }
-interface AcknowledgementRow { member_id: string; acknowledged_at: string }
+interface AcknowledgementRow { member_id: string; opened_at: string }
 interface ResponseRow {
   member_id: string; answer: string; eta_minutes: number | null;
-  updated_at: string | null; created_at: string;
+  updated_at: string | null; responded_at: string;
 }
 interface JourneyRow { member_id: string; progress: string; updated_at: string }
 interface AttendanceRow {
@@ -370,11 +370,11 @@ export async function fetchRecipientFacts(
       .eq('intervention_id', interventionId),
     backend
       .from('intervention_acknowledgements')
-      .select('member_id, acknowledged_at')
+      .select('member_id, opened_at')
       .eq('intervention_id', interventionId),
     backend
       .from('intervention_responses')
-      .select('member_id, answer, eta_minutes, updated_at, created_at')
+      .select('member_id, answer, eta_minutes, updated_at, responded_at')
       .eq('intervention_id', interventionId),
     backend
       .from('intervention_journey')
@@ -384,14 +384,14 @@ export async function fetchRecipientFacts(
 
   const ackBy = new Map<string, string>();
   for (const row of (acknowledgements.data ?? []) as unknown as AcknowledgementRow[]) {
-    ackBy.set(row.member_id, row.acknowledged_at);
+    ackBy.set(row.member_id, row.opened_at);
   }
   const responseBy = new Map<string, { answer: ResponseAnswer; eta: number | null; at: string }>();
   for (const row of (responses.data ?? []) as unknown as ResponseRow[]) {
     responseBy.set(row.member_id, {
       answer: row.answer as ResponseAnswer,
       eta: row.eta_minutes,
-      at: row.updated_at ?? row.created_at,
+      at: row.updated_at ?? row.responded_at,
     });
   }
   const journeyBy = new Map<string, { step: JourneyStep; at: string }>();
@@ -481,6 +481,58 @@ export async function fetchAvailability(): Promise<readonly AvailabilityRow[]> {
     available: row.available,
     note: row.note,
     changedAt: row.changed_at,
+  }));
+}
+
+/**
+ * Participation per member, computed by the server.
+ *
+ * The client can compute the same figures from intervals it already has -
+ * `participationSeconds()` applies the identical rule - and the history screen
+ * does exactly that for one intervention. This reads the server's own answer
+ * across every intervention, which is the figure a yearly record would be built
+ * from, and which must never be assembled in the browser.
+ *
+ * Note for whoever changes `attendance_totals()` next: this is an application
+ * caller selecting NAMED columns. Changing its result columns is now a breaking
+ * change to the history screen, not only to the test suite.
+ */
+export interface ParticipationTotal {
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly confirmedIntervals: number;
+  readonly confirmedSeconds: number;
+  readonly unverifiedIntervals: number;
+  readonly unverifiedSeconds: number;
+  readonly openIntervals: number;
+  readonly rejectedIntervals: number;
+}
+
+interface TotalsRow {
+  member_id: string; full_name: string;
+  confirmed_intervals: number | string; confirmed_seconds: number | string;
+  unverified_intervals: number | string; unverified_seconds: number | string;
+  open_intervals: number | string; rejected_intervals: number | string;
+}
+
+/** `bigint` and `numeric` can arrive as strings; a total must never be `NaN`. */
+const count = (value: number | string | null | undefined): number => {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export async function fetchParticipationTotals(): Promise<readonly ParticipationTotal[]> {
+  const { data, error } = await accountBackend().rpc('attendance_totals', {});
+  if (error || !data) return [];
+  return (data as unknown as TotalsRow[]).map((row) => ({
+    memberId: row.member_id,
+    memberName: row.full_name,
+    confirmedIntervals: count(row.confirmed_intervals),
+    confirmedSeconds: count(row.confirmed_seconds),
+    unverifiedIntervals: count(row.unverified_intervals),
+    unverifiedSeconds: count(row.unverified_seconds),
+    openIntervals: count(row.open_intervals),
+    rejectedIntervals: count(row.rejected_intervals),
   }));
 }
 

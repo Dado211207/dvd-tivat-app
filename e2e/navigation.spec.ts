@@ -31,9 +31,20 @@ test('every route stays reachable without page overflow at compact widths', asyn
     .evaluateAll((links) =>
       links.map((link) => link.getAttribute('data-testid')!.replace(/^nav-/, '')),
     );
-  expect(routes.slice().sort()).toEqual(
-    ['clan', 'clanovi', 'dezurni', 'dojava', 'evidencija', 'istorija', 'nalozi', 'prikaz', 'vozila'],
-  );
+  expect(routes.slice().sort()).toEqual([
+    'arhiva',
+    'clan',
+    'clanovi',
+    'dezurni',
+    'dojava',
+    'evidencija',
+    'istorija',
+    'mobilizacija',
+    'nalozi',
+    'poziv',
+    'prikaz',
+    'vozila',
+  ]);
 
   for (const width of [320, 720, 1024]) {
     await page.setViewportSize({ width, height: 900 });

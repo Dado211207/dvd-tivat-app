@@ -9,20 +9,33 @@
 import { useEffect, useState } from 'react';
 
 export const ROUTES = [
+  // Real, server-backed operational screens.
+  'poziv',
+  'mobilizacija',
+  'arhiva',
+  'evidencija',
+  'nalozi',
+  // The local prototype. Device-local fictional state, no server, no authority.
   'dojava',
   'dezurni',
   'clan',
   'vozila',
   'prikaz',
   'clanovi',
-  'evidencija',
-  'nalozi',
   'istorija',
 ] as const;
 export type Route = (typeof ROUTES)[number];
 
-/** The application opens into the duty officer's working screen, not a landing page. */
-export const DEFAULT_ROUTE: Route = 'dezurni';
+/**
+ * The application opens into the commander's real console, not a landing page
+ * and not the simulation.
+ *
+ * Somebody who is not signed in lands on a screen that says so and offers the
+ * way in, which is the correct first screen for a real tool. Opening into the
+ * local prototype instead would put a fictional actor selector in front of a
+ * person before anything has established who they are.
+ */
+export const DEFAULT_ROUTE: Route = 'poziv';
 
 function readHash(): Route {
   const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0] ?? '';
