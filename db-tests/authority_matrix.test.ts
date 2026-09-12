@@ -11,7 +11,7 @@
  * or by an account with an incomplete profile, and only one had been called by
  * a member with no linked record.
  *
- * So the cases here are generated from a product: eleven commands x ten
+ * So the cases here are generated from a product: fourteen commands x ten
  * account states, every cell with a declared expectation. Adding a command
  * without adding its row fails `covers every command` below; adding an account
  * state without extending every command's expectations fails at type-check,
@@ -272,6 +272,66 @@ const NO_ROLE = {
 
 const SUBJECTS: Subject[] = [
   {
+    // 202609140007. General availability is about the person, not a call-out,
+    // so it needs staff standing and a linked member and nothing more.
+    fn: 'set_own_availability',
+    requires: 'staff, plus a linked member record',
+    attempt: async (userId) =>
+      outcome(userId, (client) =>
+        client.query('select public.set_own_availability(true, null)'),
+      ),
+    expected: {
+      owner: 'ok',
+      admin: 'ok',
+      commander: 'ok',
+      firefighter: 'ok',
+      otherFirefighter: 'ok',
+      pending: 'STAFF_REQUIRED',
+      suspended: 'STAFF_REQUIRED',
+      incompleteProfile: 'STAFF_REQUIRED',
+      noMember: 'MEMBER_RECORD_REQUIRED',
+      anonymous: 'permission denied',
+    },
+  },
+  {
+    // 202609140007. Progress is per call-out, so being a recipient is required
+    // on top of standing - and every cast member IS a recipient here, which is
+    // what makes the refusals below about authority rather than about targeting.
+    fn: 'set_journey_progress',
+    requires: 'staff, a linked member, and being a recipient of this call-out',
+    attempt: async (userId) => {
+      const intervention = await publishedToEveryone();
+      return outcome(userId, (client) =>
+        client.query('select public.set_journey_progress($1, $2)', [intervention, 'KRECEM']),
+      );
+    },
+    expected: {
+      owner: 'ok',
+      admin: 'ok',
+      commander: 'ok',
+      firefighter: 'ok',
+      otherFirefighter: 'ok',
+      pending: 'STAFF_REQUIRED',
+      suspended: 'STAFF_REQUIRED',
+      incompleteProfile: 'STAFF_REQUIRED',
+      noMember: 'MEMBER_RECORD_REQUIRED',
+      anonymous: 'permission denied',
+    },
+  },
+  {
+    // 202609140007. A convenience over attendance_confirm, so it must carry
+    // exactly the same authority - a batch must never be a way around a rule.
+    fn: 'attendance_confirm_many',
+    requires: 'command, identically to attendance_confirm',
+    attempt: async (userId) => {
+      const intervalId = await pendingInterval();
+      return outcome(userId, (client) =>
+        client.query('select * from public.attendance_confirm_many($1, null)', [[intervalId]]),
+      );
+    },
+    expected: { ...OWNER_ADMIN_COMMAND, ...NO_ROLE },
+  },
+  {
     fn: 'attendance_check_in (for somebody else)',
     requires: 'command, because recording another member is a command act',
     attempt: async (userId) => {
@@ -507,12 +567,17 @@ describe('the authority matrix', () => {
       // Not added by this slice, but its authority was changed by it.
       'attendance_check_out',
       'attendance_confirm',
+      // 202609140007: the batch convenience, which must carry the same rules.
+      'attendance_confirm_many',
       'attendance_correct',
       'attendance_reject',
       'attendance_totals',
       'attendance_unconfirm',
       'record_vehicle_departure',
       'record_vehicle_return',
+      // 202609140007
+      'set_journey_progress',
+      'set_own_availability',
     ]);
   });
 
@@ -525,7 +590,7 @@ describe('the authority matrix', () => {
         ).toBeTruthy();
       }
     }
-    expect(SUBJECTS.length * ACTORS.length).toBe(110);
+    expect(SUBJECTS.length * ACTORS.length).toBe(140);
   });
 
   for (const subject of SUBJECTS) {
