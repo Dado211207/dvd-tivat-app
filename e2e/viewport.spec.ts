@@ -99,7 +99,15 @@ async function clippedText(page: Page): Promise<string[]> {
     const problems: string[] = [];
     const candidates = document.querySelectorAll<HTMLElement>(
       'main h1, main h2, main h3, main dt, main dd, main label, main th, main td,' +
-        ' main .picker__title, main .picker__meta, main button, .nav__link, .workspace-heading__title',
+        ' main .picker__title, main .picker__meta, main button, .nav__link,' +
+        // Added after a regenerated documentation screenshot showed the
+        // chronology's time running under the actor's name: the column was
+        // sized for `HH:mm` and the timestamps gained seconds. `nowrap` text in
+        // a fixed grid track overflows silently, and nothing here was looking
+        // at it. The timing facts and milestones are in the same position.
+        ' main .timeline__time, main .fact-line__label, main .fact-line__value,' +
+        ' main .milestone__label, main .milestone__value, main .milestone__at,' +
+        ' .workspace-heading__title',
     );
     for (const el of candidates) {
       const style = getComputedStyle(el);

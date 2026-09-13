@@ -2025,8 +2025,18 @@ dialog {
 
 .timeline__what { min-width: 0; overflow-wrap: anywhere; }
 
+/*
+ * The time column is sized to `dd.MM.yyyy. HH:mm:ss`.
+ *
+ * It was 7.5rem, which fitted the old `HH:mm` exactly and left the seconds to
+ * run under the actor's name once they were added - the time is `nowrap`, so it
+ * overflowed its grid track silently instead of wrapping. Caught by reading a
+ * regenerated documentation screenshot, not by a test: `clippedText` in
+ * `e2e/viewport.spec.ts` inspects headings, cells and controls, and this is a
+ * span inside a list item.
+ */
 @media (min-width: 40rem) {
-  .timeline__row { grid-template-columns: 7.5rem minmax(0, 1fr); }
+  .timeline__row { grid-template-columns: 11rem minmax(0, 1fr); }
 }
 
 /* A long board should scroll inside itself rather than push the page down
@@ -2188,3 +2198,114 @@ dialog {
 .live-dot--polling { background: var(--c-later); }
 .live-dot--connecting { background: var(--c-unknown); }
 .live-dot--off { background: var(--c-line-strong); }
+
+/* ------------------------------------------------- timings and milestones */
+
+/*
+ * Defect from the hosted review: the commander's overview showed states and no
+ * durations, and what durations existed were squeezed into one ambiguous
+ * column. Every fact here keeps its own label, so a cell that has to stack on a
+ * phone still says WHICH measurement each number is. Labels are never hidden to
+ * save width - the width is found by wrapping instead.
+ */
+
+.fact-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--sp-2);
+  align-items: baseline;
+  /* One fact per line inside its cell. Two facts sharing a line would read as
+     one label with two values. */
+  width: 100%;
+  min-width: 0;
+}
+
+.fact-line + .fact-line { margin-top: 3px; }
+
+/*
+ * `min-width: 0` on both halves, and it is load-bearing.
+ *
+ * A flex item's `min-width` defaults to `auto`, which means "never narrower
+ * than my content" - so without this the label and the value push the cell wider
+ * than the screen and `overflow-wrap` never gets the chance to break anything.
+ * Caught by `e2e/viewport.spec.ts` at 320px, where a timestamp cell measured
+ * 257px of content inside 236px.
+ */
+.fact-line__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.fact-line__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  /* A timestamp with seconds is long; it wraps rather than widening a table
+     past the viewport. */
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Below the card breakpoint the label goes ABOVE the value.
+ *
+ * Side by side, a 320px card leaves a timestamp about eight characters, so it
+ * breaks mid-value and reads as two different numbers. Stacked, each gets a
+ * full line - and at these widths the row is already a card, so the vertical
+ * space is there.
+ */
+@media (max-width: 480px) {
+  .fact-line { flex-direction: column; align-items: flex-start; gap: 0; }
+  .fact-line__label,
+  .fact-line__value { flex: 0 0 auto; width: 100%; }
+  .fact-line + .fact-line { margin-top: var(--sp-2); }
+}
+
+.milestones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.milestone {
+  padding: var(--sp-3);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  min-width: 0;
+}
+
+.milestone__label {
+  font-size: 0.74rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-ink-faint);
+}
+
+.milestone__value {
+  margin-top: var(--sp-1);
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The instant under the duration: the duration is the headline, but a reader
+   checking a record needs the timestamp it was measured to. */
+.milestone__at {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--c-ink-soft);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}

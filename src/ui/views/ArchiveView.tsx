@@ -29,8 +29,7 @@ import {
   fetchParticipationTotals,
   fetchRecipientFacts,
   fetchVehicleMovements,
-  formatDuration,
-  participationSeconds,
+  participationMs,
   stateTimestamp,
   type AttendanceInterval,
   type AuditEvent,
@@ -39,16 +38,27 @@ import {
   type RecipientFacts,
   type VehicleMovement,
 } from '@/auth/operations';
+import { formatDurationMs } from '@/auth/duration';
+import { recipientTimings, summarise } from '@/auth/metrics';
 import { loadRoster } from '@/auth/roster';
 import { OperationalGate } from '../components/OperationalGate';
 import { Chip, EmptyState, Notice, ScrollRegion } from '../components/primitives';
+import {
+  InterventionDurationPanel,
+  MilestonePanel,
+  ResponseTimings,
+  SummaryCounts,
+  VehiclePanel,
+} from '../components/timings';
 import {
   ATTENDANCE_SOURCE_LABEL,
   AUDIT_EVENT_LABEL,
   ATTENDANCE_STATE_LABEL,
   ATTENDANCE_STATE_SYMBOL,
+  endSentence,
   formatTime,
   formatTimeOrNotRecorded,
+  forSentence,
   INTERVENTION_KIND_LABEL,
   INTERVENTION_STATUS_LABEL,
   JOURNEY_LABEL,
@@ -266,6 +276,24 @@ function InterventionRecord({
     [record, detail, names, movements],
   );
 
+  /*
+   * The same two functions the commander's console calls, on the same kind of
+   * rows. That is the whole point of `src/auth/metrics.ts`: an incident looked
+   * at live and the same incident looked at in six months must produce
+   * identical numbers, and two implementations of that promise is one too many.
+   */
+  const summary = useMemo(
+    () => summarise(record, detail.recipients, detail.attendance, movements, detail.audit ?? []),
+    [record, detail, movements],
+  );
+  const timings = useMemo(
+    () =>
+      detail.recipients.map((facts) =>
+        recipientTimings(record, facts, detail.attendance, detail.audit ?? []),
+      ),
+    [record, detail],
+  );
+
   const perMember = useMemo(() => {
     const rows = new Map<string, { name: string; intervals: AttendanceInterval[] }>();
     for (const interval of detail.attendance) {
@@ -279,16 +307,25 @@ function InterventionRecord({
         return {
           memberId,
           name: row.name,
-          confirmedSeconds: confirmed.reduce((sum, i) => sum + participationSeconds(i), 0),
+          confirmedMs: confirmed.reduce((sum, i) => sum + participationMs(i), 0),
           confirmedCount: confirmed.length,
           pending: row.intervals.filter((i) => attendanceState(i) === 'PENDING').length,
           rejected: row.intervals.filter((i) => attendanceState(i) === 'REJECTED'),
         };
       })
-      .sort((a, b) => b.confirmedSeconds - a.confirmedSeconds || a.name.localeCompare(b.name));
+      .sort((a, b) => b.confirmedMs - a.confirmedMs || a.name.localeCompare(b.name));
   }, [detail.attendance]);
 
-  const totalConfirmed = perMember.reduce((sum, row) => sum + row.confirmedSeconds, 0);
+  /*
+   * Read from the summary rather than re-added here.
+   *
+   * The brief that produced this file requires the detail rows and the
+   * cumulative total to use the same calculation contract. Two loops summing
+   * the same intervals would satisfy it by accident today and drift the first
+   * time one of them changed, so there is one loop - `summarise` - and this
+   * line reads its answer.
+   */
+  const totalConfirmed = summary.confirmedMs;
   const stillPending = perMember.reduce((sum, row) => sum + row.pending, 0);
 
   return (
@@ -334,6 +371,13 @@ function InterventionRecord({
         )}
       </section>
 
+      {/* The measured record: how quickly the society responded, how long the
+          intervention ran, and how long it held each state. Identical
+          components and identical arithmetic to the commander's console. */}
+      <MilestonePanel summary={summary} />
+      <InterventionDurationPanel summary={summary} />
+      <SummaryCounts summary={summary} />
+
       <section className="panel">
         <h2 className="panel__title">Hronologija</h2>
         <p className="muted small">
@@ -376,6 +420,16 @@ function InterventionRecord({
       </section>
 
       <section className="panel">
+        <h2 className="panel__title">Vremena odziva po clanu</h2>
+        <p className="muted small">
+          Svako vrijeme je onako kako ga je upisao server. Trajanja su racunata iz punih
+          vremenskih oznaka, a ne iz prikazanih minuta, i ono sto nije zabiljezeno je oznaceno
+          kao takvo - nikada prikazano kao nula.
+        </p>
+        <ResponseTimings timings={timings} testId="archive-timings" />
+      </section>
+
+      <section className="panel">
         <h2 className="panel__title">Ucesce na ovoj intervenciji</h2>
         <p className="muted small">
           Ucesce je <strong>samo potvrdjeno i zatvoreno vrijeme</strong>. Prijava koju komandir nije
@@ -389,7 +443,7 @@ function InterventionRecord({
         ) : (
           <>
             <p className="small" data-testid="archive-total">
-              Ukupno potvrdjeno: <strong>{formatDuration(totalConfirmed)}</strong>
+              Ukupno potvrdjeno: <strong>{formatDurationMs(totalConfirmed)}</strong>
               {stillPending > 0 ? (
                 <>
                   {' '}
@@ -418,7 +472,7 @@ function InterventionRecord({
                       <td data-label="Potvrdjeno">
                         {row.confirmedCount > 0 ? (
                           <Chip tone="yes" symbol={ATTENDANCE_STATE_SYMBOL.CONFIRMED ?? '+'}>
-                            {formatDuration(row.confirmedSeconds)}
+                            {formatDurationMs(row.confirmedMs)}
                           </Chip>
                         ) : (
                           <span className="muted">-</span>
@@ -459,50 +513,13 @@ function InterventionRecord({
         )}
       </section>
 
-      <section className="panel">
-        <h2 className="panel__title">Vozila</h2>
-        <p className="muted small">
-          Izlazak vozila je zapis o vozilu. On nikada ne stvara prisustvo clana - to je posebna
-          cinjenica koju clan prijavljuje sam.
-        </p>
-        {movements.length === 0 ? (
-          <EmptyState title="Nijedno vozilo nije evidentirano na ovoj intervenciji" />
-        ) : (
-          <ScrollRegion
-            label="Vozila na ovoj intervenciji"
-            className="table-wrap table-wrap--cards"
-          >
-            <table className="table table--cards" data-testid="archive-vehicles">
-              <thead>
-                <tr>
-                  <th scope="col">Vozilo</th>
-                  <th scope="col">Izlazak</th>
-                  <th scope="col">Povratak</th>
-                  <th scope="col">Namjena</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map((movement) => (
-                  <tr key={movement.id}>
-                    <th scope="row">
-                      {movement.callsign} - {movement.vehicleName}
-                    </th>
-                    <td data-label="Izlazak" className="small mono">
-                      {formatTime(movement.departedAt)}
-                    </td>
-                    <td data-label="Povratak" className="small mono">
-                      {movement.returnedAt ? formatTime(movement.returnedAt) : 'jos nije vraceno'}
-                    </td>
-                    <td data-label="Namjena" className="small">
-                      {movement.purpose ?? 'Nije upisana'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollRegion>
-        )}
-      </section>
+      {/*
+        Replaced a table that showed departure and return and left the reader to
+        subtract them. It now carries the exact time out of the station and the
+        member who recorded each end of it - both of which the server already
+        held and the archive simply did not print.
+      */}
+      <VehiclePanel summary={summary} />
     </>
   );
 }
@@ -552,7 +569,9 @@ function recordedChronology(
       key: entry.id,
       at: entry.at,
       who: actor,
-      text: `${said ?? `je zabiljezio dogadjaj (${entry.type})`}${describe(entry, names)}.`,
+      // `endSentence` rather than a bare ".": a quoted note may already carry
+      // its own terminator, and "prototipa.." is the defect this replaced.
+      text: endSentence(`${said ?? `je zabiljezio dogadjaj (${entry.type})`}${describe(entry, names)}`),
     });
   }
 
@@ -593,6 +612,18 @@ function describe(entry: AuditEvent, names: ReadonlyMap<string, string>): string
     const value = detail[key];
     return typeof value === 'string' && value !== '' ? value : null;
   };
+  /**
+   * A note somebody TYPED, about to be quoted inside a sentence this function
+   * builds.
+   *
+   * The hosted review found a line reading "Vjezba zavrsena - test operativnog
+   * prototipa..": the commander's closing note already ended in a full stop and
+   * the sentence around it added a second one. `forSentence` trims the trailing
+   * punctuation from the quoted copy only - the stored audit text is never
+   * touched, and the record header above still shows it character for
+   * character.
+   */
+  const note = (key: string): string | null => forSentence(text(key));
   const count = (key: string): number | null => {
     const value = detail[key];
     return typeof value === 'number' ? value : null;
@@ -633,17 +664,17 @@ function describe(entry: AuditEvent, names: ReadonlyMap<string, string>): string
     case 'ATTENDANCE_UNCONFIRMED':
     case 'ATTENDANCE_CORRECTED': {
       const who = member();
-      const reason = text('note');
+      const reason = note('note');
       return `${who === null ? '' : ` za clana ${who}`}${reason === null ? '' : ` - ${reason}`}`;
     }
     case 'ATTENDANCE_REJECTED': {
       const who = member();
-      const reason = text('reason');
+      const reason = note('reason');
       return `${who === null ? '' : ` clana ${who}`}: ${reason ?? 'bez upisanog razloga'}`;
     }
     case 'INTERVENTION_CLOSED':
     case 'INTERVENTION_CANCELLED': {
-      const reason = text('reason');
+      const reason = note('reason');
       const open = count('open_attendance');
       const stillOpen = open !== null && open > 0 ? ` (otvorenih prijava prisustva: ${open})` : '';
       return `${reason === null ? '' : `: ${reason}`}${stillOpen}`;
@@ -753,11 +784,14 @@ function buildChronology(
   }
 
   if (record.closedAt !== null) {
+    const closingNote = forSentence(record.closeReason);
     events.push({
       key: 'closed',
       at: record.closedAt,
       who: 'Komandir',
-      text: `je zatvorio intervenciju${record.closeReason ? `: ${record.closeReason}` : '.'}`,
+      // Same rule as the recorded chronology: the quoted copy loses a trailing
+      // full stop so the built sentence does not end in two.
+      text: endSentence(`je zatvorio intervenciju${closingNote === null ? '' : `: ${closingNote}`}`),
     });
   }
 
@@ -770,7 +804,7 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
   const sorted = useMemo(
     () =>
       [...totals].sort(
-        (a, b) => b.confirmedSeconds - a.confirmedSeconds || a.memberName.localeCompare(b.memberName),
+        (a, b) => b.confirmedMs - a.confirmedMs || a.memberName.localeCompare(b.memberName),
       ),
     [totals],
   );
@@ -808,7 +842,7 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
                     data-label="Potvrdjeno vrijeme"
                     data-testid={`total-confirmed-${row.memberId}`}
                   >
-                    <strong>{formatDuration(row.confirmedSeconds)}</strong>
+                    <strong>{formatDurationMs(row.confirmedMs)}</strong>
                   </td>
                   <td data-label="Potvrdjenih">{row.confirmedIntervals}</td>
                   <td data-label="Ceka potvrdu">
@@ -816,7 +850,7 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
                       <span>
                         {row.unverifiedIntervals}{' '}
                         <span className="muted small">
-                          ({formatDuration(row.unverifiedSeconds)} neuracunato)
+                          ({formatDurationMs(row.unverifiedMs)} neuracunato)
                         </span>
                       </span>
                     ) : (

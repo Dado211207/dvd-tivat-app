@@ -126,9 +126,11 @@ vi.mock('@/auth/operations', async (importOriginal) => {
         memberId: MEMBER_ID,
         memberName: 'Ivo Vatrogasac',
         confirmedIntervals: 1,
-        confirmedSeconds: 5400,
+        // Milliseconds now: the server returns exact numeric seconds and the
+        // adapter converts once, so every screen works in one unit.
+        confirmedMs: 5_400_000,
         unverifiedIntervals: 1,
-        unverifiedSeconds: 1800,
+        unverifiedMs: 1_800_000,
         openIntervals: 0,
         rejectedIntervals: 0,
       },
@@ -444,8 +446,10 @@ describe('the archive renders on real data', () => {
   it('counts nothing for an unconfirmed interval', async () => {
     await show(<ArchiveView />, 'COMMANDER');
     const total = container.querySelector('[data-testid="archive-total"]')?.textContent ?? '';
-    // Ninety minutes were recorded, and none of them are confirmed.
-    expect(total).toContain('0 min');
+    // Ninety minutes were recorded, and none of them are confirmed. It reads
+    // "0 s" rather than "0 min": the formatter can express seconds now, so
+    // nothing has to be rounded up to a minute to look real.
+    expect(total).toContain('0 s');
     expect(total).toMatch(/ceka potvrdu/i);
     expect(total).not.toContain('1 h 30 min');
   });
@@ -653,6 +657,508 @@ describe('the archive renders on real data', () => {
       expect(meta).toContain('11:00');
       expect(meta).not.toContain('19:00');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The timings, on both screens.
+ *
+ * An independent review of the hosted application found the commander's
+ * overview showing five states per member and not one duration, the archive
+ * showing vehicle departure and return with no time away, and a ten-second
+ * attendance interval displayed as "1 min".
+ *
+ * The fixture below is built to make every one of those fail loudly:
+ *
+ * - The recipient list is in the WRONG chronological order. Pero is listed
+ *   second and opened FIRST, so any "first" figure taken as `[0]` of the list
+ *   reports Ivo and fails here.
+ * - Pero answers first, with "Ne mogu". The first ANSWER and the first
+ *   "Dolazim" are therefore different people at different times, which a single
+ *   combined figure cannot express.
+ * - Ivo has two confirmed intervals of 10.591 s and 29.6 s. Rounded
+ *   individually and added they are 41 s; summed exactly and rounded once they
+ *   are 40 s. Only the second is correct.
+ * - The 10.591 s interval is the real one from the hosted archive, to the
+ *   microsecond.
+ */
+describe('every recorded time and duration reaches the screen', () => {
+  const PUBLISHED_AT = '2026-09-13T08:00:00.000Z'; // 10:00:00 in Podgorica
+
+  const TIMED_INTERVENTION = {
+    ...INTERVENTION,
+    status: 'CLOSED' as const,
+    publishedAt: PUBLISHED_AT,
+    closedAt: '2026-09-13T09:00:00.000Z',
+    closeReason: 'Vjezba zavrsena - test operativnog prototipa..',
+  };
+
+  /** Listed Ivo-first; Pero opened and answered first. */
+  const TIMED_RECIPIENTS = [
+    {
+      memberId: MEMBER_ID,
+      memberName: 'Ivo Vatrogasac',
+      acknowledgedAt: '2026-09-13T08:01:30.000Z', // 90 s after publication
+      answer: 'DOLAZIM' as const,
+      etaMinutes: 10,
+      answeredAt: '2026-09-13T08:04:00.000Z', // 4 min after publication
+      journey: 'NA_LICU_MJESTA' as const,
+      journeyAt: '2026-09-13T08:12:00.000Z',
+    },
+    {
+      memberId: OTHER_ID,
+      memberName: 'Pero Vatrogasac',
+      acknowledgedAt: '2026-09-13T08:00:45.000Z', // 45 s - the earliest opening
+      answer: 'NE_MOGU' as const,
+      etaMinutes: null,
+      answeredAt: '2026-09-13T08:01:00.000Z', // 60 s - the earliest answer
+      journey: null,
+      journeyAt: null,
+    },
+  ];
+
+  const TIMED_ATTENDANCE = [
+    {
+      id: 'att-1',
+      memberId: MEMBER_ID,
+      memberName: 'Ivo Vatrogasac',
+      // The exact interval the hosted review found rendered as "1 min".
+      startedAt: '2026-09-13T08:15:11.374456Z',
+      endedAt: '2026-09-13T08:15:21.965675Z',
+      source: 'SELF_DECLARED' as const,
+      verified: true,
+      rejectedAt: null,
+      rejectionReason: null,
+    },
+    {
+      id: 'att-2',
+      memberId: MEMBER_ID,
+      memberName: 'Ivo Vatrogasac',
+      startedAt: '2026-09-13T08:20:00.000Z',
+      endedAt: '2026-09-13T08:20:29.600Z',
+      source: 'SELF_DECLARED' as const,
+      verified: true,
+      rejectedAt: null,
+      rejectionReason: null,
+    },
+  ];
+
+  const TIMED_MOVEMENTS = [
+    {
+      id: 'veh-1',
+      vehicleId: '55555555-5555-4555-8555-555555555555',
+      callsign: 'NV-1',
+      vehicleName: 'Navalno vozilo',
+      interventionId: INTERVENTION_ID,
+      purpose: 'Vjezba',
+      departedAt: '2026-09-13T08:06:00.000Z',
+      returnedAt: '2026-09-13T09:36:00.000Z', // 1 h 30 min away
+    },
+  ];
+
+  const TIMED_AUDIT = [
+    {
+      id: 'b1', at: '2026-09-13T08:03:00.000Z', type: 'INTERVENTION_STATUS_CHANGED',
+      detail: { from: 'PUBLISHED', to: 'ASSEMBLING' },
+      actorName: 'Komandir Smjene', actorIsYou: true,
+    },
+    {
+      id: 'b2', at: '2026-09-13T08:20:00.000Z', type: 'INTERVENTION_STATUS_CHANGED',
+      detail: { from: 'ASSEMBLING', to: 'DEPLOYED' },
+      actorName: 'Zamjenik Komandira', actorIsYou: false,
+    },
+    {
+      id: 'b3', at: '2026-09-13T08:05:00.000Z', type: 'JOURNEY_PROGRESS_SET',
+      detail: { member_id: MEMBER_ID, from: null, to: 'KRECEM' },
+      actorName: 'Ivo Vatrogasac', actorIsYou: false,
+    },
+    {
+      id: 'b4', at: '2026-09-13T08:07:00.000Z', type: 'JOURNEY_PROGRESS_SET',
+      detail: { member_id: MEMBER_ID, from: 'KRECEM', to: 'U_PUTU' },
+      actorName: 'Ivo Vatrogasac', actorIsYou: false,
+    },
+    {
+      id: 'b5', at: '2026-09-13T08:12:00.000Z', type: 'JOURNEY_PROGRESS_SET',
+      detail: { member_id: MEMBER_ID, from: 'U_PUTU', to: 'NA_LICU_MJESTA' },
+      actorName: 'Ivo Vatrogasac', actorIsYou: false,
+    },
+    {
+      id: 'b6', at: '2026-09-13T08:06:00.000Z', type: 'VEHICLE_DEPARTED',
+      detail: { movement_id: 'veh-1' },
+      actorName: 'Komandir Smjene', actorIsYou: true,
+    },
+    {
+      id: 'b7', at: '2026-09-13T09:36:00.000Z', type: 'VEHICLE_RETURNED',
+      detail: { movement_id: 'veh-1' },
+      actorName: 'Zamjenik Komandira', actorIsYou: false,
+    },
+  ];
+
+  async function stub(): Promise<void> {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue([TIMED_INTERVENTION]);
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue(TIMED_RECIPIENTS);
+    vi.mocked(operations.fetchAttendance).mockResolvedValue(TIMED_ATTENDANCE);
+    vi.mocked(operations.fetchVehicleMovements).mockResolvedValue(TIMED_MOVEMENTS);
+    vi.mocked(operations.fetchInterventionAudit).mockResolvedValue(TIMED_AUDIT);
+  }
+
+  /** The commander's console, on the `Pregled` tab. */
+  async function commander(): Promise<void> {
+    await stub();
+    await show(<CommandView />, 'COMMANDER');
+    act(() => {
+      pressByText('Pregled');
+    });
+    await settle();
+  }
+
+  async function archive(): Promise<void> {
+    await stub();
+    await show(<ArchiveView />, 'COMMANDER');
+  }
+
+  function rowFor(memberId: string): string {
+    return container.querySelector(`[data-testid="timing-row-${memberId}"]`)?.textContent ?? '';
+  }
+
+  function textOf(testId: string): string {
+    return container.querySelector(`[data-testid="${testId}"]`)?.textContent ?? '';
+  }
+
+  describe.each([
+    ['the commander console', commander],
+    ['the archive', archive],
+  ])('%s', (_name, render) => {
+    it('gives every response measurement its own label', async () => {
+      await render();
+      const row = rowFor(MEMBER_ID);
+
+      // Opening: the moment, and how long after publication it happened.
+      expect(row).toContain('10:01:30'); // 08:01:30Z in Podgorica
+      expect(row).toContain('1 min 30 s');
+
+      // Answer: the moment, from publication, AND from opening. Three separate
+      // numbers that a single "vrijeme odaziva" would have to collapse to one.
+      expect(row).toContain('10:04:00');
+      expect(row).toContain('4 min'); // publication to answer
+      expect(row).toContain('2 min 30 s'); // opening to answer
+
+      // The member's own estimate, marked as an estimate.
+      expect(row).toMatch(/procjena/i);
+      expect(row).toContain('10 min');
+
+      // Arrival, and publication to arrival.
+      expect(row).toContain('10:12:00');
+      expect(row).toContain('12 min');
+    });
+
+    it('never collapses the measurements into one "vrijeme odaziva"', async () => {
+      await render();
+      // The exact phrase the brief forbids. Four independent durations cannot
+      // be represented by one of them.
+      expect(container.textContent ?? '').not.toMatch(/vrijeme odaziva/i);
+      const labels = [
+        ...container.querySelectorAll(
+          `[data-testid="timing-row-${MEMBER_ID}"] .fact-line__label`,
+        ),
+      ].map((node) => node.textContent);
+      expect(labels.length, 'each fact carries its own label').toBeGreaterThanOrEqual(10);
+    });
+
+    it('shows every movement separately, in order', async () => {
+      await render();
+      const row = rowFor(MEMBER_ID);
+      for (const step of ['Krecem', 'U putu', 'Na licu mjesta']) {
+        expect(row, step).toContain(step);
+      }
+      expect(row.indexOf('Krecem')).toBeLessThan(row.indexOf('U putu'));
+      expect(row.indexOf('U putu')).toBeLessThan(row.indexOf('Na licu mjesta'));
+      expect(row).toContain('10:05:00');
+      expect(row).toContain('10:07:00');
+    });
+
+    it('sums two confirmed intervals exactly, then formats once', async () => {
+      await render();
+      // 10.591 s + 29.600 s = 40.191 s. Rounded individually first it would be
+      // 11 + 30 = 41 s, and the old formatter made the first of them "1 min".
+      expect(rowFor(MEMBER_ID)).toContain('40 s');
+      expect(rowFor(MEMBER_ID)).not.toContain('41 s');
+      expect(rowFor(MEMBER_ID)).not.toContain('1 min 10 s');
+      expect(textOf('total-confirmed')).toBe('40 s');
+      expect(textOf('total-confirmed')).not.toContain('min');
+    });
+
+    it('says what was never recorded instead of showing a zero', async () => {
+      await render();
+      const declined = rowFor(OTHER_ID);
+      // Pero declined: no movement, no arrival, no attendance. Every one of
+      // those is "not recorded", and none of them is "0 s" - which would read
+      // as "arrived instantly and stayed no time".
+      expect(declined).toContain('Nije zabiljezeno');
+      expect(declined).not.toContain('0 s');
+      expect(declined).not.toMatch(/10:1[0-9]/);
+    });
+
+    it('picks every first event by time, never by list position', async () => {
+      await render();
+      // Pero is SECOND in the list and opened FIRST, 45 s after publication.
+      expect(textOf('first-open')).toContain('45 s');
+      expect(textOf('first-open')).toContain('10:00:45');
+      expect(textOf('first-open')).not.toContain('1 min 30 s');
+
+      // He also answered first - but he answered "Ne mogu". The first person
+      // who said they were coming is Ivo, four minutes in.
+      expect(textOf('first-answer')).toContain('1 min');
+      expect(textOf('first-answer')).toContain('10:01:00');
+      expect(textOf('first-coming')).toContain('4 min');
+      expect(textOf('first-coming')).toContain('10:04:00');
+
+      expect(textOf('first-arrive')).toContain('12 min');
+      expect(textOf('first-checkin')).toContain('15 min');
+      expect(textOf('first-vehicle')).toContain('6 min');
+    });
+
+    it('measures the whole intervention and each state it passed through', async () => {
+      await render();
+      expect(textOf('total-duration')).toBe('1 h');
+
+      const rows = [...container.querySelectorAll('[data-testid="state-periods"] tbody tr')].map(
+        (tr) => tr.textContent ?? '',
+      );
+      expect(rows, 'published, assembling, deployed').toHaveLength(3);
+      expect(rows[0]).toMatch(/Objavljeno/);
+      expect(rows[0]).toContain('3 min');
+      expect(rows[1]).toMatch(/Okupljanje/);
+      expect(rows[1]).toContain('17 min');
+      expect(rows[2]).toMatch(/Na terenu/);
+      expect(rows[2]).toContain('40 min');
+
+      // Who moved it. A record that says it was deployed for forty minutes
+      // without saying who decided that is not a complete record.
+      expect(rows[1]).toContain('Komandir Smjene');
+      expect(rows[2]).toContain('Zamjenik Komandira');
+      // The first period was created by publishing, not entered by anybody.
+      expect(rows[0]).toMatch(/Objavom poziva/);
+    });
+
+    it('shows how long each vehicle was away, and who recorded both ends', async () => {
+      await render();
+      const row = container.querySelector('[data-testid="vehicle-periods"] tbody tr')?.textContent ?? '';
+      expect(row).toContain('NV-1');
+      expect(row).toContain('10:06:00'); // departure
+      expect(row).toContain('11:36:00'); // return
+      expect(row, 'the duration the archive never printed').toContain('1 h 30 min');
+      expect(row).toContain('Komandir Smjene'); // recorded the departure
+      expect(row).toContain('Zamjenik Komandira'); // recorded the return
+      expect(row).toContain('Vjezba');
+    });
+
+    it('counts each kind of response separately', async () => {
+      await render();
+      expect(textOf('tally-invited')).toContain('2');
+      expect(textOf('tally-opened')).toContain('2');
+      expect(textOf('tally-responded')).toContain('2');
+      expect(textOf('tally-coming')).toContain('1');
+      expect(textOf('tally-delayed')).toContain('0');
+      expect(textOf('tally-declined')).toContain('1');
+      expect(textOf('tally-arrived')).toContain('1');
+      expect(textOf('tally-present')).toContain('1');
+      expect(textOf('tally-confirmed')).toContain('1');
+    });
+
+    it('prints operational times to the second, in Podgorica time', async () => {
+      await render();
+      // Not a sample: EVERY timestamp in the timing table. A single one without
+      // seconds makes a ten-second difference invisible, which is how the
+      // rounding defect stayed hidden.
+      const stamps = (rowFor(MEMBER_ID).match(/\d{2}\.\d{2}\.\d{4}\. \d{2}:\d{2}(:\d{2})?/g) ?? []);
+      expect(stamps.length).toBeGreaterThan(3);
+      for (const stamp of stamps) {
+        expect(stamp, 'a displayed time must carry seconds').toMatch(/:\d{2}:\d{2}$/);
+      }
+      expect(rowFor(MEMBER_ID)).toContain('13.09.2026.');
+    });
+  });
+
+  it('shows the commander and the archive the same numbers', async () => {
+    // Two screens, one `summarise()`. The point of the shared module is that
+    // an incident looked at live and the same incident looked at months later
+    // cannot disagree.
+    await commander();
+    const live = {
+      total: textOf('total-duration'),
+      confirmed: textOf('total-confirmed'),
+      firstOpen: textOf('first-open'),
+      member: rowFor(MEMBER_ID),
+    };
+
+    act(() => root.unmount());
+    container.remove();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await archive();
+    expect(textOf('total-duration')).toBe(live.total);
+    expect(textOf('total-confirmed')).toBe(live.confirmed);
+    expect(textOf('first-open')).toBe(live.firstOpen);
+    expect(rowFor(MEMBER_ID)).toBe(live.member);
+  });
+
+  /**
+   * The closure note, quoted into a sentence.
+   *
+   * The hosted review found a chronology line reading
+   * "Vjezba zavrsena - test operativnog prototipa..". The commander's note
+   * already ended in a full stop; the sentence the archive builds added a
+   * second one. The fix is in the QUOTATION, never in the stored text -
+   * `operational_audit` is append-only and the note is evidence.
+   */
+  describe('a typed note quoted inside a built sentence', () => {
+    const NOTE = 'Vjezba zavrsena - test operativnog prototipa.';
+
+    async function closedWith(note: string, fromAudit: boolean): Promise<string> {
+      const operations = await import('@/auth/operations');
+      await stub();
+      vi.mocked(operations.fetchInterventions).mockResolvedValue([
+        { ...TIMED_INTERVENTION, closeReason: note },
+      ]);
+      vi.mocked(operations.fetchInterventionAudit).mockResolvedValue(
+        fromAudit
+          ? [
+              ...TIMED_AUDIT,
+              {
+                id: 'b8', at: '2026-09-13T09:00:00.000Z', type: 'INTERVENTION_CLOSED',
+                detail: { reason: note, open_attendance: 0 },
+                actorName: 'Komandir Smjene', actorIsYou: true,
+              },
+            ]
+          : null,
+      );
+      await show(<ArchiveView />, 'COMMANDER');
+      return (
+        [...container.querySelectorAll('[data-testid="archive-timeline"] li')]
+          .map((li) => li.textContent ?? '')
+          .find((line) => line.includes('zatvorio intervenciju')) ?? ''
+      );
+    }
+
+    it('does not end the recorded line in two full stops', async () => {
+      const line = await closedWith(NOTE, true);
+      expect(line, 'the closing line must be on screen').toContain('Vjezba zavrsena');
+      expect(line).not.toContain('..');
+      expect(line).toMatch(/prototipa\.$/);
+    });
+
+    it('does not end the reconstructed line in two full stops either', async () => {
+      // The fallback chronology builds the same sentence from the intervention
+      // row, and had the same defect.
+      const line = await closedWith(NOTE, false);
+      expect(line).toContain('Vjezba zavrsena');
+      expect(line).not.toContain('..');
+      expect(line).toMatch(/prototipa\.$/);
+    });
+
+    it('still shows the stored note exactly as it was typed', async () => {
+      // The whole point: presentation changed, evidence did not. The record
+      // header quotes the note verbatim, trailing full stop and all.
+      await closedWith(NOTE, true);
+      const record = container.querySelector('[data-testid="archive-record"]')?.textContent ?? '';
+      expect(record, 'the stored text is unaltered').toContain(NOTE);
+    });
+
+    it('keeps a question or exclamation mark, which carry meaning', async () => {
+      const line = await closedWith('Da li je oprema vracena?', true);
+      expect(line).toMatch(/vracena\?$/);
+      expect(line).not.toMatch(/vracena\?\./);
+    });
+
+    it('adds the full stop when the note has none', async () => {
+      const line = await closedWith('Vjezba zavrsena bez tacke', true);
+      expect(line).toMatch(/bez tacke\.$/);
+    });
+  });
+
+  /**
+   * Something still happening is not something nobody recorded.
+   *
+   * Caught by reading a regenerated documentation screenshot: an intervention
+   * that was still running showed "Ukupno trajanje: Nije zabiljezeno", and its
+   * current state showed "Jos traje" in the Do column beside "Nije zabiljezeno"
+   * as its duration. Both HAVE a start; what they lack is an end, and calling
+   * that unrecorded suggests somebody failed to write something down.
+   */
+  describe('a duration that has not finished yet', () => {
+    async function openIntervention(): Promise<void> {
+      const operations = await import('@/auth/operations');
+      await stub();
+      vi.mocked(operations.fetchInterventions).mockResolvedValue([
+        // Published, never closed, and moved into one further state.
+        { ...TIMED_INTERVENTION, status: 'DEPLOYED' as const, closedAt: null, closeReason: null },
+      ]);
+      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue([
+        { ...TIMED_MOVEMENTS[0]!, returnedAt: null },
+      ]);
+      await show(<ArchiveView />, 'COMMANDER');
+    }
+
+    it('says the intervention is still running rather than unmeasured', async () => {
+      await openIntervention();
+      expect(textOf('total-duration')).toBe('Jos traje');
+      expect(textOf('total-duration')).not.toContain('Nije zabiljezeno');
+    });
+
+    it('says the same of the state it is currently in', async () => {
+      await openIntervention();
+      const rows = [...container.querySelectorAll('[data-testid="state-periods"] tbody tr')].map(
+        (tr) => tr.textContent ?? '',
+      );
+      const last = rows.at(-1) ?? '';
+      expect(last, 'the open period').toContain('Jos traje');
+      expect(last, 'and not a claim that nothing was written down')
+        .not.toContain('Nije zabiljezeno');
+      // The periods that DID end still show their measured duration.
+      expect(rows[0]).toContain('3 min');
+    });
+
+    it('says a vehicle is still out rather than unmeasured', async () => {
+      await openIntervention();
+      const row = container.querySelector('[data-testid="vehicle-periods"] tbody tr')?.textContent ?? '';
+      expect(row).toContain('Jos nije vraceno'); // the return time
+      expect(row).toContain('Jos je van baze'); // the duration
+      expect(row).not.toContain('Nije zabiljezeno');
+    });
+
+    it('does not print a missing milestone twice', async () => {
+      // "Nije zabiljezeno" once, as the duration. The instant below it is
+      // omitted rather than repeating the same absence as a second fact.
+      await archive();
+      const vehicle = container.querySelector('[data-testid="first-vehicle"]');
+      expect(vehicle?.textContent).toContain('6 min');
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue([]);
+      act(() => root.unmount());
+      container.remove();
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      await show(<ArchiveView />, 'COMMANDER');
+      const occurrences =
+        (textOf('first-vehicle').split('Nije zabiljezeno').length - 1);
+      expect(occurrences, 'one absence, stated once').toBe(1);
+    });
+  });
+
+  it('does not round a ten-second interval up to a minute anywhere on the screen', async () => {
+    // The defect as the reviewer would check it: the whole rendered archive,
+    // searched for the invented minute.
+    await archive();
+    const text = container.textContent ?? '';
+    expect(text).toContain('40 s');
+    expect(text, 'no interval here is a minute long').not.toMatch(/\b1 min\b(?! 30 s)/);
   });
 });
 

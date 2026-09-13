@@ -31,19 +31,17 @@ test('every route stays reachable without page overflow at compact widths', asyn
     .evaluateAll((links) =>
       links.map((link) => link.getAttribute('data-testid')!.replace(/^nav-/, '')),
     );
+  // The deployed sidebar, exactly. Citizen reporting and the simulations that
+  // duplicate a server-backed screen are deliberately NOT offered - their
+  // routes and code remain, and `src/access/navigation.test.ts` pins that
+  // distinction. Adding a route to the sidebar has to change this line.
   expect(routes.slice().sort()).toEqual([
     'arhiva',
-    'clan',
-    'clanovi',
-    'dezurni',
-    'dojava',
     'evidencija',
-    'istorija',
     'mobilizacija',
     'nalozi',
     'poziv',
     'prikaz',
-    'vozila',
   ]);
 
   for (const width of [320, 720, 1024]) {

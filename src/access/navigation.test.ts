@@ -8,12 +8,16 @@
  * compares them, and it fails if anybody changes one without the other.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { OPERATIONAL_ROLES, type OperationalRole } from '@/auth/access';
 import { ROUTES, type Route } from '@/ui/router';
+import { NAV_GROUPS, ROUTES_NOT_OFFERED } from '@/App';
 import { isOfferedTo, landingRouteFor, ROUTE_AUDIENCE } from './navigation';
+
+/** The routes that read and write the real database behind real authentication. */
+const SERVER_BACKED: readonly Route[] = ['poziv', 'mobilizacija', 'arhiva', 'evidencija', 'nalozi'];
 
 describe('what a firefighter is offered', () => {
   it('is not offered the commander console', () => {
@@ -132,5 +136,89 @@ describe('the table stays in step with the gates', () => {
       const reachable = OPERATIONAL_ROLES.some((role) => isOfferedTo(route, role));
       expect(reachable, `${route} is offered to nobody`).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * What the deployed sidebar actually offers.
+ *
+ * `ROUTE_AUDIENCE` above answers "may this role use it". This block answers the
+ * separate question the hosted review asked: "is it in the menu at all" - and
+ * the two are not the same. `dojava` was offered to everybody by the audience
+ * table AND listed in the sidebar under a heading saying it was unused, which
+ * is how a destination this product promises not to have reached a public
+ * deployment.
+ */
+describe('the deployed navigation', () => {
+  it('does not offer citizen reporting anywhere', () => {
+    const offered = NAV_GROUPS.flatMap((group) => group.routes);
+    expect(offered, 'Prijava gradjana must not be a destination').not.toContain('dojava');
+    // Not by relegating it to a heading either. "Nije u upotrebi" was exactly
+    // that, and somebody still tapped it.
+    expect(NAV_GROUPS.map((g) => g.label)).not.toContain('Nije u upotrebi');
+  });
+
+  it('keeps the route resolvable rather than deleting the screen', () => {
+    // The distinction the brief insists on: not offered is not the same as
+    // removed. An old link must still land somewhere that explains itself
+    // instead of on a blank page, and the reviewed work stays in the tree.
+    expect(ROUTES as readonly Route[]).toContain('dojava');
+    expect(existsSync(resolve(process.cwd(), 'src/ui/views/CitizenReportView.tsx'))).toBe(true);
+  });
+
+  it('says on that screen that it is not an emergency channel', () => {
+    // The only reason it is safe to leave the route reachable.
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/ui/views/CitizenReportView.tsx'),
+      'utf8',
+    );
+    expect(source).toMatch(/nije kanal za hitne slucajeve/i);
+  });
+
+  it('never mixes a simulation into the operational group', () => {
+    const operational = NAV_GROUPS.find((group) => group.label === 'Operativa');
+    expect(operational, 'the operational group must exist').toBeDefined();
+    for (const route of operational?.routes ?? []) {
+      expect(
+        SERVER_BACKED,
+        `${route} is offered as operational but is not server-backed`,
+      ).toContain(route);
+    }
+  });
+
+  it('does not offer a simulation that duplicates a server-backed screen', () => {
+    // The console, the call-out, the vehicle log, the roster and the archive
+    // all exist for real now. Offering a second, local copy of each is how a
+    // commander runs a call-out that reaches no server.
+    const offered = NAV_GROUPS.flatMap((group) => group.routes);
+    for (const route of ['dezurni', 'clan', 'vozila', 'clanovi', 'istorija'] as Route[]) {
+      expect(offered, `${route} duplicates a real screen`).not.toContain(route);
+    }
+    // The station display has no server-backed equivalent, so it still earns
+    // its place - this is a judgement about duplication, not a purge.
+    expect(offered).toContain('prikaz');
+  });
+
+  it('accounts for every route exactly once', () => {
+    // A route added without a decision is the failure mode this catches: it
+    // would be neither offered nor listed as deliberately withheld, and the
+    // sums below would not add up.
+    const offered = NAV_GROUPS.flatMap((group) => group.routes);
+    const accounted = [...offered, ...ROUTES_NOT_OFFERED].sort();
+    expect(accounted).toEqual([...ROUTES].sort());
+    expect(new Set(accounted).size, 'no route may be listed twice').toBe(ROUTES.length);
+  });
+
+  it('leaves server authorization untouched by any of this', () => {
+    // The navigation is display only. Every one of these routes still sits
+    // behind its gate and every command behind a `security definer` function,
+    // so withholding a menu entry changes what is OFFERED and nothing about
+    // what is ALLOWED.
+    for (const route of ROUTES_NOT_OFFERED) {
+      expect(ROUTE_AUDIENCE[route], `${route} keeps its audience entry`).toBeDefined();
+    }
+    expect(ROUTE_AUDIENCE.poziv).toEqual(['OWNER', 'ADMIN', 'COMMANDER']);
   });
 });

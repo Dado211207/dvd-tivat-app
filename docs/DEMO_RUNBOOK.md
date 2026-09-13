@@ -239,13 +239,14 @@ private window) for the commander.
 | 10 | Press **Krecem**, then **Na licu mjesta** | The line under the buttons says this does **not** report attendance |
 | 11 | Press **Prijavi dolazak** | It says the record is *prijavio se sam* and **ceka potvrdu komandira** |
 | 12 | On the laptop, **Vozila** tab: record a departure | The screen says a vehicle movement never creates attendance. The attendance board is unchanged |
-| 13 | **Pregled** tab | Four separate columns: opened, answer, movement, attendance. Ivo shows *Ceka potvrdu*, never *Potvrdjeno* |
+| 13 | **Pregled** tab | The board shows opened, answer, movement and attendance as separate columns - Ivo shows *Ceka potvrdu*, never *Potvrdjeno*. Below it, **Vremena odziva po clanu** gives every measurement its own label: how long after publication he opened it, how long until he answered, how long he took to decide after opening, each movement with its time, and the time from publication to arrival |
 | 14 | On the phone, press **Odjavi prisustvo** | The interval closes. It is still waiting for confirmation |
 | 15 | On the laptop, return the vehicle | The movement shows a return time |
 | 16 | **Prisustvo** tab: **Izaberi sve**, then **Potvrdi izabrano** | It confirms **without asking for a note**. `Zvanicno vrijeme ucesca` stops being 0 min |
 | 17 | Press **Odbij** on nothing - just read the dialog wording if you open it | Rejecting *does* demand a reason. Cancel out |
 | 18 | Close the intervention with a short note | The status becomes `Zatvoreno` |
-| 19 | **Arhiva i ucesce** | The chronology lists each fact with its own time; participation shows confirmed time, and unconfirmed separately |
+| 19 | **Arhiva i ucesce** | The chronology lists each fact with its own time; participation shows confirmed time, and unconfirmed separately. The summary above it gives the first opening, first answer, first *Dolazim*, first arrival, first check-in and first vehicle departure, the total duration, the time spent in each state with **who moved it**, and each vehicle's exact time out of the station with both actors |
+| 19b | Look at any short attendance record | A ten-second interval reads **`10 s`** or **`11 s`** - never `1 min`. Every time carries **seconds**, so a duration can be checked against the two timestamps it came from |
 | 20 | Turn on **Airplane Mode** on the phone and reload | The application still opens and says the device is offline and that nothing will be saved |
 | 21 | Turn Airplane Mode off and reload | The offline notice disappears |
 | 22 | On the phone, switch to another app for ten seconds and come back | **The screen is exactly where you left it** - same tab, same intervention, nothing half-typed lost, no flash of a sign-in screen |
@@ -256,6 +257,63 @@ private window) for the commander.
 | 27 | Turn the phone **sideways** | Nothing is cut off at the notch, nothing scrolls sideways, and the archive tables are readable cards rather than columns running off the screen |
 | 28 | On the laptop, sign in as **vatrogasac1@example.invalid** instead | The navigation does **not** offer `Poziv i intervencija` or `Evidencija drustva`, and the account screen shows their own account without the owner's list |
 | 29 | In the commander's recipient picker, look for the withdrawn member | They are **not there**. The list comes from the server, by the same rule publishing enforces |
+
+---
+
+## 8a. The two-device Realtime acceptance (product owner)
+
+**This is the one check nobody else can make, and it is not claimed anywhere in
+this repository.**
+
+What the automated suite in `e2e/realtime-acceptance.spec.ts` does prove: two
+genuinely independent browser contexts - separate storage, separate sessions,
+one COMMANDER and one FIREFIGHTER - both already looking at their screens, with
+a real Realtime WebSocket behind them; every step below arrives on the other
+screen without navigation or a manual refresh; a change made while the socket is
+down still arrives; a payload pushed down a member's own socket for a row they
+may not see never reaches the screen; and one screen opens exactly one channel.
+
+What it cannot prove, and what this section is for:
+
+* the **hosted Supabase project** itself - CI holds no credentials for it and
+  must not, so every automated run above talks to a fake project;
+* two **physical devices** on **different networks**, which is where a mobile
+  radio, a captive portal or a corporate proxy blocking WebSockets shows up.
+
+Twenty minutes. Device A = laptop signed in as the commander. Device B = phone
+signed in as the firefighter, on **mobile data, not the same Wi-Fi**. Open both
+screens BEFORE step 1 and then **do not navigate or refresh either of them**
+until step 15.
+
+| # | On | Do | Expect on the OTHER device, unprompted |
+|---|---|---|---|
+| 1 | A | Publish a call-out to the firefighter | — |
+| 2 | B | (do nothing) | The call-out appears on **Moj poziv** by itself |
+| 3 | B | Press **Otvorio sam poziv** | — |
+| 4 | A | (do nothing) | The **Pregled** timing row fills in the opening time and how long after publication it was |
+| 5 | B | Answer **Dolazim** with an ETA | — |
+| 6 | A | (do nothing) | The answer, the time from publication, and the time from opening all appear |
+| 7 | B | **Krecem**, then **U putu**, then **Na licu mjesta** | All **three** movements appear, in order, each with its own time |
+| 8 | B | **Prijavi dolazak** | The check-in time appears, and *Prva prijava prisustva* fills in |
+| 9 | B | **Odjavi prisustvo**, then A: **Izaberi sve** → **Potvrdi izabrano** | — |
+| 10 | B | (do nothing) | The member's own record turns **Potvrdjeno**, with the exact duration |
+| 11 | A | Record a vehicle departure, then a return | The vehicle's time out of the station appears with both actors |
+| 12 | A | Move the state: Okupljanje → Na terenu → Pod kontrolom | — |
+| 13 | A | Close the intervention with a note | Device B shows the closure without being touched |
+| 14 | B | (do nothing) | The closure is visible on B as well |
+| 15 | A | Only now, open **Arhiva** | The record is there with every duration, and the chronology shows each movement and each state change with who did it |
+
+Then the two cases the automated suite approximates and a device makes real:
+
+| # | Do | Expect |
+|---|---|---|
+| 16 | Put device B in **Airplane Mode** for thirty seconds. While it is offline, change the state on A | B's status line stops saying *Uzivo*. Once B is back online, the change appears **without being refreshed by hand** |
+| 17 | Watch the status line on both for a minute | If it says *Uzivo - promjene stizu same*, the socket is open. If it says *Osvjezavanje na svakih 12 sekundi*, the network is blocking WebSockets - the application still works, and **says which it is doing**. Both are honest; report which one you saw and on which network |
+
+If step 17 says *Osvjezavanje na svakih 12 sekundi* on the society's own
+network, that is worth knowing before the presentation, not during it.
+
+---
 
 ### If you want to show the sign-in error handling
 

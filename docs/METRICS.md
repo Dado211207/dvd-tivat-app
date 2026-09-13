@@ -22,7 +22,13 @@ that could be read as a value.
 ## Where times come from
 
 Every timestamp in this system is written by PostgreSQL, stored as
-`timestamptz` (UTC), and displayed in **Europe/Podgorica**.
+`timestamptz` (UTC), and displayed in **Europe/Podgorica** as
+`dd.MM.yyyy. HH:mm:ss`.
+
+**Seconds are always shown.** Without them a ten-second interval and a
+one-second interval print the same two timestamps, so a reader cannot check a
+duration against the times it was measured from — which is how the rounding
+defect above stayed invisible on a screen that had the evidence on it.
 
 * **No client supplies a time.** Not one command takes a timestamp argument
   from the browser, except `attendance_correct`, which exists precisely so a
@@ -106,6 +112,99 @@ discover it when somebody never answers.
 
 ## Durations
 
+### The contract
+
+Every duration in this application obeys the same four rules. They are stated
+once here because an independent review of the hosted build found an attendance
+interval of **10.591 seconds** displayed as **"1 min"**, and carried that
+invented minute into the participation total.
+
+1. **Milliseconds are the unit.** `elapsedMs(from, to)` subtracts two instants
+   and returns a number of milliseconds. Nothing computes a duration from a
+   formatted string, a minute value, or a local wall clock — see `across DST`
+   below for why that distinction is not theoretical.
+2. **Sum exactly, format once.** Intervals are added as milliseconds and the
+   total is rounded to the nearest second at the moment it is rendered. Three
+   intervals of 29.6 s are **1 min 29 s**, not 1 min 30 s: rounding each one
+   first and adding produces a number that never happened.
+3. **The formatter can say seconds.** `formatDurationMs` renders `0 s`, `10 s`,
+   `59 s`, `1 min`, `1 min 1 s`, `1 h 30 min`, `1 h 1 min 1 s`. There is no
+   floor at one minute. The old formatter had one — `Math.max(minutes, 1)` —
+   added so a real short interval would not read as "0 min", which at the time
+   was indistinguishable from "did not attend". Both problems disappear once
+   seconds can be expressed at all.
+4. **Not measured is null, never zero.** `elapsedMs` returns `null` if either
+   end is missing or unparseable, and the screen prints `Nije zabiljezeno`.
+   A `0 s` on screen therefore always means a real measurement of no time —
+   which is a different statement, and stays distinguishable.
+
+Defined in `src/auth/duration.ts`; the boundaries, including midnight and both
+Podgorica daylight-saving transitions, are pinned in `src/auth/duration.test.ts`.
+
+**Across midnight and across DST.** A duration is the difference between two
+instants, so neither a date boundary nor a clock change affects it. Twenty
+minutes spanning 29 March 01:00 UTC — when Montenegro moves from +1 to +2 — is
+twenty minutes, though the wall clock advanced by eighty. Anything computed from
+the rendered local strings would report an hour and twenty.
+
+**Negative durations are shown as negative.** The database forbids
+`ended_at <= started_at`, so a negative value can only be corrupt data. Printing
+`0 s` would make a broken record look like a brief one.
+
+### Per-member response timings
+
+Each of these is its own field on `RecipientTimings` (`src/auth/metrics.ts`),
+each independently nullable, and each is labelled separately on screen. **There
+is no combined "vrijeme odaziva" anywhere**, for the reason given under
+*Times that are NOT computed*.
+
+| Shown | Definition | Missing when |
+| --- | --- | --- |
+| Otvaranje — Vrijeme | `intervention_acknowledgements.opened_at` | they never opened it |
+| Otvaranje — Od objave | `opened_at − interventions.published_at` | either is absent |
+| Odgovor | `intervention_responses.answer` | they never answered |
+| Odgovor — Vrijeme | `intervention_responses.updated_at`, falling back to `responded_at` | they never answered |
+| Odgovor — Od objave | `answered_at − published_at` | either is absent |
+| Odgovor — Od otvaranja | `answered_at − opened_at` | either is absent; this is how long they took to decide once they had read it |
+| Najavio (procjena) | `intervention_responses.eta_minutes` — the member's own estimate, never a measurement, and labelled as one | they gave none |
+| Kretanje | every `JOURNEY_PROGRESS_SET` audit event for that member, oldest first, each with its own timestamp | none reported |
+| Dolazak — Na licu mjesta | the **first** `NA_LICU_MJESTA` movement; falls back to `intervention_journey.updated_at` when the audit cannot be read | never reported |
+| Dolazak — Od objave | `arrived_at − published_at` | either is absent |
+| Prisustvo — Prijava | the earliest `attendance_intervals.started_at` for that member | no attendance record |
+| Prisustvo — Odjava | the latest `ended_at`; shows *Jos je prijavljen* while one is open | no closed interval |
+| Prisustvo — Potvrdjeno | confirmed participation, below | nothing confirmed AND closed |
+
+A member who reported arriving, left, and reported arriving again **arrived
+once**: arrival is the first such report, not the latest.
+
+### Intervention summary
+
+On `InterventionSummary` (`src/auth/metrics.ts`), shown identically on the
+commander's console and in the archive — one function feeds both, so the two
+cannot print different numbers for one incident.
+
+Every *first* is chosen by **comparing timestamps**, never by taking `[0]` of a
+list. Ties break on a stable key (member id, or row id), because two events
+written in one transaction share `now()` to the microsecond and an ordering that
+happens to be right today is a defect waiting for a different query plan.
+
+| Shown | Definition |
+| --- | --- |
+| Prvo otvaranje poziva | earliest `opened_at`, and `− published_at` |
+| Prvi odgovor | earliest `answered_at` of any answer, and `− published_at` |
+| Prvi odgovor Dolazim | earliest `answered_at` **among `DOLAZIM` answers only** — a different person and a different moment from the first answer, because somebody may have declined first |
+| Prvi dolazak na lice mjesta | earliest arrival, and `− published_at` |
+| Prva prijava prisustva | earliest `attendance_intervals.started_at`, and `− published_at` |
+| Prvi izlazak vozila | earliest `vehicle_movements.departed_at`, and `− published_at` |
+| Ukupno trajanje | `closed_at − published_at`; *Jos traje* while open |
+| Ukupno potvrdjeno ucesce | confirmed participation summed across every member, formatted once |
+| Vrijeme u svakom stanju | one period per state: from the transition that entered it to the transition that left it (or to `closed_at`, or open). The first period starts at `published_at` and names nobody, because publishing created it rather than a transition entering it. Every other period names the actor from its `INTERVENTION_STATUS_CHANGED` audit row. |
+| Van baze (per vehicle) | `returned_at − departed_at`, with the member who recorded each end resolved from the `VEHICLE_DEPARTED` / `VEHICLE_RETURNED` audit rows by `movement_id` |
+
+Nine tallies, each its own fact and none implying another: Pozvano, Otvorilo,
+Odgovorilo, Dolazim, Dolazim kasnije, Ne mogu, Javilo dolazak, Prijavilo
+prisustvo, Potvrdjeno prisustvo.
+
 ### Confirmed participation — the only number that is participation
 
 ```
@@ -131,10 +230,17 @@ Three exclusions, each deliberate:
 left, and came back has two intervals, both shown, and their times added. The
 gap between them is not participation and is not counted.
 
-A confirmed interval shorter than half a second counts as **one second**, not
-zero. `formatDuration` renders both as "0 min", and a board reading "0 min"
-beside a confirmed record says "did not attend". A real interval that short is a
-mis-tap, not an absence.
+**Nothing is rounded up.** A confirmed interval of 10.591 s is measured as
+10591 ms and displayed as `11 s`. The earlier rule here — "shorter than half a
+second counts as one second" — existed only because the formatter could not say
+seconds, and it is what produced the invented minute the review found. It is
+gone.
+
+**A member with nothing confirmed shows `Nije zabiljezeno`, not `0 s`.** That
+covers three different situations — no attendance record at all, an interval
+still open, an interval waiting for the commander — and in none of them is there
+a confirmed duration yet. The pending and rejected counts sit beside it and say
+which.
 
 The same rule is computed twice on purpose: on the client from intervals it
 already has, and on the server by `attendance_totals()`. A disagreement between
@@ -152,8 +258,8 @@ one is shown.
   into a duration would manufacture attendance out of a movement report, which
   is the single thing this schema is built to prevent.
 * **Vehicle time** — `vehicle_movements.departed_at` to `.returned_at`, shown
-  per movement. It is a fact about a vehicle and never creates attendance for
-  anybody riding in it.
+  per movement **with its exact duration and both actors**. It is a fact about a
+  vehicle and never creates attendance for anybody riding in it.
 
 ---
 
@@ -162,8 +268,12 @@ one is shown.
 | Shown | Counts |
 | --- | --- |
 | Trenutno na zadatku | members with an attendance interval that is open (`ended_at is null`, not rejected) |
-| Prijavilo prisustvo | members with any attendance interval on this intervention, confirmed or not |
 | Vozila na terenu | vehicle movements with no `returned_at` |
+
+Only those two are on the console's live panel, and only because they describe
+**this moment** rather than the record — the archive would have nothing to say
+about either six months later. Every cumulative tally is in the summary above,
+in one place, so no two panels can disagree about one number.
 
 These two headline figures were one figure until it contradicted its own table:
 a board reading "Prijavljeno prisustvo: 0" beside a member shown as present is

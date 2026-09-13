@@ -31,13 +31,13 @@ import {
   discardDraft,
   fetchAttendance,
   fetchAvailability,
+  fetchInterventionAudit,
   fetchInterventions,
   fetchEligibleRecipients,
   fetchRecipientFacts,
   fetchVehicleMovements,
-  formatDuration,
   isOpenStatus,
-  participationSeconds,
+  participationMs,
   publishIntervention,
   recordVehicleDeparture,
   recordVehicleReturn,
@@ -47,6 +47,7 @@ import {
   INTERVENTION_KINDS,
   SETTABLE_STATUSES,
   type AttendanceInterval,
+  type AuditEvent,
   type AvailabilityRow,
   type Intervention,
   type InterventionKind,
@@ -55,6 +56,9 @@ import {
   type VehicleMovement,
 } from '@/auth/operations';
 import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
+import { formatDurationMs } from '@/auth/duration';
+import { recipientTimings, summarise } from '@/auth/metrics';
+import { OperationalSummary, ResponseTimings } from '../components/timings';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -108,6 +112,20 @@ interface ConsoleData {
   movements: readonly VehicleMovement[];
   recipients: readonly RecipientFacts[];
   attendance: readonly AttendanceInterval[];
+  /**
+   * The append-only chronology of the selected intervention.
+   *
+   * Needed here, not only in the archive, because it is the only place that
+   * holds EVERY movement a member reported and the actor behind every state
+   * change. The recipient rows carry the latest movement and nothing before it,
+   * so a commander reading the console without this would see that somebody is
+   * on scene and never when they set off.
+   *
+   * Null means the read failed or the project has not been migrated. The
+   * timings degrade - movements empty, arrival falls back to the current
+   * journey row - rather than the screen breaking.
+   */
+  audit: readonly AuditEvent[] | null;
 }
 
 const EMPTY: ConsoleData = {
@@ -119,6 +137,7 @@ const EMPTY: ConsoleData = {
   movements: [],
   recipients: [],
   attendance: [],
+  audit: null,
 };
 
 function CommandConsole({ context }: { context: OperationalContext }) {
@@ -176,18 +195,20 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           interventions.find((i) => isOpenStatus(i.status))?.id ??
           interventions[0]?.id ??
           null;
-        const [recipients, attendance] = focusId
+        const [recipients, attendance, audit] = focusId
           ? await Promise.all([
               fetchRecipientFacts(focusId),
               fetchAttendance(
                 focusId,
                 new Map(members.map((m) => [m.id, m.fullName] as const)),
               ),
+              fetchInterventionAudit(focusId),
             ])
-          : [[], []];
+          : [[], [], null];
         if (!mounted.current || ticket !== generation.current) return;
         setData({
-          interventions, members, eligible, vehicles, availability, movements, recipients, attendance,
+          interventions, members, eligible, vehicles, availability, movements, recipients,
+          attendance, audit,
         });
         setSelectedId(focusId);
       } catch (error) {
@@ -836,41 +857,40 @@ function OverviewTab({
     attendanceBy.set(interval.memberId, list);
   }
 
-  const opened = data.recipients.filter((r) => r.acknowledgedAt !== null).length;
-  const answered = data.recipients.filter((r) => r.answer !== null).length;
-  const coming = data.recipients.filter(
-    (r) => r.answer === 'DOLAZIM' || r.answer === 'DOLAZIM_KASNIJE',
-  ).length;
-  const onScene = data.recipients.filter((r) => r.journey === 'NA_LICU_MJESTA').length;
-  // Still on the task right now: checked in and not yet checked out. NOT the
-  // number of people who have reported attendance - a closed interval counts
-  // towards the record and not towards who is standing on the ground.
+  const audit = data.audit ?? [];
+  const mine = data.movements.filter((m) => m.interventionId === selected.id);
+  const summary = summarise(selected, data.recipients, data.attendance, mine, audit);
+  const timings = data.recipients.map((r) =>
+    recipientTimings(selected, r, data.attendance, audit),
+  );
+
+  // Still on the task RIGHT NOW: checked in and not yet checked out, and
+  // vehicles not yet back. These two are the only counts on this screen that
+  // describe the present moment rather than the record, which is why they are
+  // not in the summary below - the archive would have nothing to say about
+  // them six months later.
   const onTask = data.attendance.filter((a) => a.endedAt === null && a.rejectedAt === null).length;
-  const reported = new Set(
-    data.attendance.filter((a) => a.rejectedAt === null).map((a) => a.memberId),
-  ).size;
-  const vehiclesOut = data.movements.filter(
-    (m) => m.returnedAt === null && m.interventionId === selected.id,
-  ).length;
+  const vehiclesOut = mine.filter((m) => m.returnedAt === null).length;
 
   return (
     <div className="stack">
       <section className="panel">
-        <h2 className="panel__title">Brojke</h2>
+        <h2 className="panel__title">Sada na terenu</h2>
         <p className="muted small">
-          Svaka brojka je svoja cinjenica. Ko je otvorio poziv nije ko je odgovorio, a ko je
-          odgovorio nije ko je prisutan.
+          Stanje u ovom trenutku. Sve kumulativne brojke i vremena su nize, u pregledu odziva.
         </p>
         <div className="totals" data-testid="overview-totals">
-          <Count label="Pozvano" value={data.recipients.length} testId="count-recipients" />
-          <Count label="Otvorilo" value={opened} testId="count-opened" />
-          <Count label="Odgovorilo" value={answered} testId="count-answered" />
-          <Count label="Dolazi" value={coming} testId="count-coming" />
-          <Count label="Na licu mjesta (izjava)" value={onScene} testId="count-onscene" />
           <Count label="Trenutno na zadatku" value={onTask} testId="count-present" />
-          <Count label="Prijavilo prisustvo" value={reported} testId="count-reported" />
           <Count label="Vozila na terenu" value={vehiclesOut} testId="count-vehicles" />
         </div>
+        {data.audit === null ? (
+          /* Said plainly rather than shown as a screen full of "Nije
+             zabiljezeno", which would read as "nobody did anything". */
+          <Notice tone="info">
+            Hronologija nije procitana sa servera, pa pojedina vremena kretanja i imena koja su
+            mijenjala stanje nisu prikazana.
+          </Notice>
+        ) : null}
       </section>
 
       <section className="panel">
@@ -941,8 +961,8 @@ function OverviewTab({
                         <Chip tone="alert" symbol="*">Prijavljen</Chip>
                       ) : confirmed.length > 0 ? (
                         <Chip tone="yes" symbol="+">
-                          Potvrdjeno {formatDuration(
-                            confirmed.reduce((sum, i) => sum + participationSeconds(i), 0),
+                          Potvrdjeno {formatDurationMs(
+                            confirmed.reduce((sum, i) => sum + participationMs(i), 0),
                           )}
                         </Chip>
                       ) : intervals.length > 0 ? (
@@ -958,6 +978,30 @@ function OverviewTab({
           </table>
         </ScrollRegion>
       </section>
+
+      {/*
+        The timings, which the board above deliberately does not carry.
+
+        The chips answer "where is everybody" in one glance, which is what a
+        commander needs while the call-out is running. They cannot answer "how
+        long did this take", and an independent review found exactly that gap:
+        five states per member and not one duration. The two live together
+        rather than one replacing the other, because they answer different
+        questions at different moments.
+
+        Identical component and identical numbers in the archive - see
+        `src/ui/components/timings.tsx`.
+      */}
+      <section className="panel">
+        <h2 className="panel__title">Vremena odziva po clanu</h2>
+        <p className="muted small">
+          Svako vrijeme dolazi sa servera. Trajanja su racunata iz punih vremenskih oznaka, ne iz
+          prikazanih minuta, a ono sto nije zabiljezeno je oznaceno kao takvo.
+        </p>
+        <ResponseTimings timings={timings} />
+      </section>
+
+      <OperationalSummary summary={summary} />
     </div>
   );
 }
@@ -1003,7 +1047,7 @@ function AttendanceTab({
   const confirmed = data.attendance.filter((a) => attendanceState(a) === 'CONFIRMED');
   const rejected = data.attendance.filter((a) => attendanceState(a) === 'REJECTED');
   const open = data.attendance.filter((a) => a.endedAt === null && a.rejectedAt === null);
-  const officialSeconds = confirmed.reduce((sum, i) => sum + participationSeconds(i), 0);
+  const officialSeconds = confirmed.reduce((sum, i) => sum + participationMs(i), 0);
 
   const confirmPicked = async () => {
     setBusy(true);
@@ -1028,7 +1072,7 @@ function AttendanceTab({
       <section className="panel">
         <h2 className="panel__title">Zvanicno vrijeme ucesca</h2>
         <p className="big-number" data-testid="official-total">
-          {formatDuration(officialSeconds)}
+          {formatDurationMs(officialSeconds)}
         </p>
         <p className="muted small">
           Racuna se <strong>samo potvrdjeno i zatvoreno</strong> prisustvo. Zapis koji ceka potvrdu
@@ -1166,7 +1210,7 @@ function AttendanceTab({
                   <Chip tone="yes" symbol={ATTENDANCE_STATE_SYMBOL.CONFIRMED ?? '+'}>
                     {ATTENDANCE_STATE_LABEL.CONFIRMED ?? 'Potvrdjeno'}
                   </Chip>{' '}
-                  {formatDuration(participationSeconds(interval))}
+                  {formatDurationMs(participationMs(interval))}
                 </p>
                 <button
                   type="button"

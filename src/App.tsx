@@ -75,20 +75,64 @@ const VIEWS: Record<Route, ComponentType> = {
 };
 
 /**
+ * What the deployed application OFFERS.
+ *
  * Navigation order follows the owner's decision of 9 September 2026: this is an
- * INTERNAL mobilisation and intervention-record system. Citizen reporting is no
- * longer part of the product promise, so it is not in the operational groups and
- * is never the first thing the application offers. It stays reachable only under
- * an explicitly experimental heading, because deleting it would discard reviewed
- * work that may still be reused - but it must never read as a way to report a
- * fire. Nobody may be encouraged to use this instead of calling the official
- * emergency service.
+ * INTERNAL mobilisation and intervention-record system.
+ *
+ * ---------------------------------------------------------------------------
+ * CITIZEN REPORTING IS NOT HERE, AND NOT BECAUSE IT WAS DELETED
+ * ---------------------------------------------------------------------------
+ *
+ * An independent review of the hosted application found `Prijava gradjana`
+ * still in the sidebar under "Nije u upotrebi". A heading saying a destination
+ * is unused does not stop somebody tapping it during a demonstration, and this
+ * application must never read as a way to report a fire - the official
+ * emergency telephone channel is the only one that is.
+ *
+ * So the destination is gone from the navigation. `CitizenReportView` and its
+ * route are NOT: the code stays, the route still resolves for anybody holding
+ * an old link, and that screen opens on its own "this is not an emergency
+ * channel" refusal. Deleting reviewed work to hide a menu entry would be a
+ * worse answer than not offering it.
+ *
+ * ---------------------------------------------------------------------------
+ * WHICH SIMULATIONS ARE STILL WORTH OFFERING
+ * ---------------------------------------------------------------------------
+ *
+ * `dezurni`, `clan`, `vozila`, `clanovi` and `istorija` each duplicate a screen
+ * that is now server-backed - the console, the firefighter's call-out, the
+ * vehicle log, the roster and the archive. Offering both means a commander can
+ * run a call-out on the simulation by accident and find nothing on the server
+ * afterwards, and during a presentation it makes the real workflow impossible
+ * to follow. They are no longer offered, for the same reason and in the same
+ * way: route and code intact, entry removed.
+ *
+ * `prikaz` stays. It is the station display, and no server-backed screen does
+ * what it does, so it demonstrates something rather than competing with
+ * something.
  */
-const NAV_GROUPS: { label: string; routes: Route[] }[] = [
+export const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Operativa', routes: ['poziv', 'mobilizacija', 'arhiva'] },
   { label: 'Evidencija drustva', routes: ['evidencija', 'nalozi'] },
-  { label: 'Prototip (simulacija)', routes: ['dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija'] },
-  { label: 'Nije u upotrebi', routes: ['dojava'] },
+  { label: 'Prototip (simulacija)', routes: ['prikaz'] },
+];
+
+/**
+ * Routes that exist and resolve, but are deliberately not offered.
+ *
+ * Kept as a named list rather than as an absence, so that the reason above is
+ * attached to something a test can assert against - and so that adding a route
+ * without deciding whether it belongs in the navigation fails that test rather
+ * than quietly appearing in the sidebar.
+ */
+export const ROUTES_NOT_OFFERED: readonly Route[] = [
+  'dojava',
+  'dezurni',
+  'clan',
+  'vozila',
+  'clanovi',
+  'istorija',
 ];
 
 /**
@@ -97,10 +141,13 @@ const NAV_GROUPS: { label: string; routes: Route[] }[] = [
  * The operational slice is now server-backed: a call-out, a firefighter's
  * answer, attendance and the archive all read and write the real database
  * behind real authentication. What remains simulated is the earlier prototype,
- * kept because it still demonstrates screens the server slice has not reached
- * (the station display, the specialities roster) - and the interface has to say
- * so on every one of those screens rather than letting a demonstration imply
- * that a server is involved.
+ * kept because it still demonstrates a screen the server slice has not reached -
+ * the station display - and the interface has to say so on every one of those
+ * screens rather than letting a demonstration imply that a server is involved.
+ *
+ * The rest of the simulation is still classified here even though the
+ * navigation no longer offers it: a route reached by an old link must still
+ * label itself honestly.
  */
 const ROUTE_BACKING: Record<Route, 'SERVER' | 'SIMULATED'> = {
   poziv: 'SERVER',

@@ -133,12 +133,34 @@ after `202609130006`, and `ee2886b99683c44f00216a7e84e7b0dd` across 46 after
 new tables, three new functions, new policies and grants. It alters no existing
 function's signature and drops nothing, so §3.1's warning does not apply to it.
 
+**The measured-record slice of 2026-09-13 added no migration at all.** Every
+fact it puts on screen was already stored: `attendance_totals()` already
+returned exact fractional seconds, `vehicle_movements` already carried
+`departed_by` and `returned_by`, and `operational_audit` already recorded
+`movement_id` on `VEHICLE_DEPARTED` and `VEHICLE_RETURNED`, which is how the
+archive names the member behind each end of a vehicle movement. The defect was
+entirely in what the client did with those rows.
+
 **`attendance_totals()` now has an application caller.** `ArchiveView` selects
 its named columns through `fetchParticipationTotals()`. When `202609130006` was
 written, nothing outside the test suite called that function, which is what made
 its drop-and-recreate safe. That is no longer true: **changing its result columns
 is now a breaking change to the history screen**, and the same drop-and-recreate
 would need the caller updated in the same change.
+
+**`confirmed_seconds` is `numeric`, and the fraction matters.** The function has
+always summed `ended_at - started_at` exactly and returned seconds with their
+fractional part; the client was discarding it, turning a 10.591-second interval
+into a whole number and then - through a formatter that could not express
+seconds at all - into "1 min". Nothing on the server needed changing.
+`fetchParticipationTotals` converts once at the boundary
+(`confirmed_seconds * 1000`) so the rest of the application works in
+milliseconds. See `docs/METRICS.md` for the full duration contract.
+
+Whoever changes this function next: **do not round it**, and do not narrow the
+column to `integer`. A `numeric` that loses its fraction here cannot be
+reconstructed on the client, and the difference between 10 and 11 seconds is
+the difference between a record and a guess.
 
 > One wrinkle worth recording, because it nearly became a silent exception. The
 > first apply stripped the inline comments out of thirteen function bodies to
