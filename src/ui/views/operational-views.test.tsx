@@ -126,9 +126,11 @@ vi.mock('@/auth/operations', async (importOriginal) => {
         memberId: MEMBER_ID,
         memberName: 'Ivo Vatrogasac',
         confirmedIntervals: 1,
-        confirmedSeconds: 5400,
+        // Milliseconds now: the server returns exact numeric seconds and the
+        // adapter converts once, so every screen works in one unit.
+        confirmedMs: 5_400_000,
         unverifiedIntervals: 1,
-        unverifiedSeconds: 1800,
+        unverifiedMs: 1_800_000,
         openIntervals: 0,
         rejectedIntervals: 0,
       },
@@ -444,8 +446,10 @@ describe('the archive renders on real data', () => {
   it('counts nothing for an unconfirmed interval', async () => {
     await show(<ArchiveView />, 'COMMANDER');
     const total = container.querySelector('[data-testid="archive-total"]')?.textContent ?? '';
-    // Ninety minutes were recorded, and none of them are confirmed.
-    expect(total).toContain('0 min');
+    // Ninety minutes were recorded, and none of them are confirmed. It reads
+    // "0 s" rather than "0 min": the formatter can express seconds now, so
+    // nothing has to be rounded up to a minute to look real.
+    expect(total).toContain('0 s');
     expect(total).toMatch(/ceka potvrdu/i);
     expect(total).not.toContain('1 h 30 min');
   });

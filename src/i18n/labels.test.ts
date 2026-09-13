@@ -39,24 +39,36 @@ describe('times are shown in the society’s own timezone', () => {
 
   it('renders a summer instant at UTC+2', () => {
     // 13 September is summer time in Montenegro.
-    expect(formatTime('2026-09-13T16:40:00.000Z')).toBe('13.09.2026. 18:40');
+    expect(formatTime('2026-09-13T16:40:00.000Z')).toBe('13.09.2026. 18:40:00');
   });
 
   it('renders a winter instant at UTC+1', () => {
     // The offset is not a constant, which is exactly why the zone is named
     // rather than an hour being added by hand.
-    expect(formatTime('2026-01-13T16:40:00.000Z')).toBe('13.01.2026. 17:40');
+    expect(formatTime('2026-01-13T16:40:00.000Z')).toBe('13.01.2026. 17:40:00');
   });
 
   it('crosses midnight into the correct day', () => {
     // 23:30 UTC in summer is already the next day in Podgorica. A device-local
     // rendering on a UTC machine would print the previous date here, which on
     // an archive row is a fact about a different night.
-    expect(formatTime('2026-09-13T23:30:00.000Z')).toBe('14.09.2026. 01:30');
+    expect(formatTime('2026-09-13T23:30:00.000Z')).toBe('14.09.2026. 01:30:00');
   });
 
   it('shows the clock alone in the same zone', () => {
-    expect(formatClock('2026-09-13T16:40:00.000Z')).toBe('18:40');
+    expect(formatClock('2026-09-13T16:40:00.000Z')).toBe('18:40:00');
+  });
+
+  it('carries seconds, so events in sequence do not look simultaneous', () => {
+    // From the hosted review: a chronology to the minute showed a member
+    // opening a call-out, answering it and setting off as though all three had
+    // happened at the same instant. On a record of an incident, "we cannot tell
+    // which came first" is a defect.
+    expect(formatTime('2026-09-13T16:40:07.000Z')).toBe('13.09.2026. 18:40:07');
+    expect(formatTime('2026-09-13T16:40:08.000Z')).toBe('13.09.2026. 18:40:08');
+    expect(formatTime('2026-09-13T16:40:07.000Z')).not.toBe(
+      formatTime('2026-09-13T16:40:08.000Z'),
+    );
   });
 
   it('always carries the year', () => {
@@ -68,7 +80,7 @@ describe('times are shown in the society’s own timezone', () => {
 
   it('names the zone when a header asks for it', () => {
     expect(formatTimeWithZone('2026-09-13T16:40:00.000Z')).toBe(
-      '13.09.2026. 18:40 (lokalno vrijeme, Crna Gora)',
+      '13.09.2026. 18:40:00 (lokalno vrijeme, Crna Gora)',
     );
   });
 });
@@ -82,7 +94,7 @@ describe('a time that was never recorded', () => {
   });
 
   it('shows a real time when there is one', () => {
-    expect(formatTimeOrNotRecorded('2026-09-13T16:40:00.000Z')).toBe('13.09.2026. 18:40');
+    expect(formatTimeOrNotRecorded('2026-09-13T16:40:00.000Z')).toBe('13.09.2026. 18:40:00');
   });
 
   it('never puts a broken value on the screen', () => {

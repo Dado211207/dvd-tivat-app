@@ -31,10 +31,9 @@ import {
   fetchAvailability,
   fetchInterventions,
   fetchRecipientFacts,
-  formatDuration,
   isOpenStatus,
   JOURNEY_STEPS,
-  participationSeconds,
+  participationMs,
   setJourneyProgress,
   setOwnAvailability,
   submitResponse,
@@ -45,6 +44,7 @@ import {
   type ResponseAnswer,
 } from '@/auth/operations';
 import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
+import { formatDurationMs } from '@/auth/duration';
 import { loadRoster } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
@@ -593,7 +593,7 @@ function CallOutCard({
                       ? new Date(interval.endedAt).toLocaleString('sr-Latn')
                       : 'jos traje'}
                     {state === 'CONFIRMED' && interval.endedAt
-                      ? ` (${formatDuration(participationSeconds(interval))})`
+                      ? ` (${formatDurationMs(participationMs(interval))})`
                       : ''}
                   </p>
                   {interval.rejectionReason ? (

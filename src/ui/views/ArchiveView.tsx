@@ -29,8 +29,7 @@ import {
   fetchParticipationTotals,
   fetchRecipientFacts,
   fetchVehicleMovements,
-  formatDuration,
-  participationSeconds,
+  participationMs,
   stateTimestamp,
   type AttendanceInterval,
   type AuditEvent,
@@ -39,6 +38,7 @@ import {
   type RecipientFacts,
   type VehicleMovement,
 } from '@/auth/operations';
+import { formatDurationMs } from '@/auth/duration';
 import { loadRoster } from '@/auth/roster';
 import { OperationalGate } from '../components/OperationalGate';
 import { Chip, EmptyState, Notice, ScrollRegion } from '../components/primitives';
@@ -279,16 +279,16 @@ function InterventionRecord({
         return {
           memberId,
           name: row.name,
-          confirmedSeconds: confirmed.reduce((sum, i) => sum + participationSeconds(i), 0),
+          confirmedMs: confirmed.reduce((sum, i) => sum + participationMs(i), 0),
           confirmedCount: confirmed.length,
           pending: row.intervals.filter((i) => attendanceState(i) === 'PENDING').length,
           rejected: row.intervals.filter((i) => attendanceState(i) === 'REJECTED'),
         };
       })
-      .sort((a, b) => b.confirmedSeconds - a.confirmedSeconds || a.name.localeCompare(b.name));
+      .sort((a, b) => b.confirmedMs - a.confirmedMs || a.name.localeCompare(b.name));
   }, [detail.attendance]);
 
-  const totalConfirmed = perMember.reduce((sum, row) => sum + row.confirmedSeconds, 0);
+  const totalConfirmed = perMember.reduce((sum, row) => sum + row.confirmedMs, 0);
   const stillPending = perMember.reduce((sum, row) => sum + row.pending, 0);
 
   return (
@@ -389,7 +389,7 @@ function InterventionRecord({
         ) : (
           <>
             <p className="small" data-testid="archive-total">
-              Ukupno potvrdjeno: <strong>{formatDuration(totalConfirmed)}</strong>
+              Ukupno potvrdjeno: <strong>{formatDurationMs(totalConfirmed)}</strong>
               {stillPending > 0 ? (
                 <>
                   {' '}
@@ -418,7 +418,7 @@ function InterventionRecord({
                       <td data-label="Potvrdjeno">
                         {row.confirmedCount > 0 ? (
                           <Chip tone="yes" symbol={ATTENDANCE_STATE_SYMBOL.CONFIRMED ?? '+'}>
-                            {formatDuration(row.confirmedSeconds)}
+                            {formatDurationMs(row.confirmedMs)}
                           </Chip>
                         ) : (
                           <span className="muted">-</span>
@@ -770,7 +770,7 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
   const sorted = useMemo(
     () =>
       [...totals].sort(
-        (a, b) => b.confirmedSeconds - a.confirmedSeconds || a.memberName.localeCompare(b.memberName),
+        (a, b) => b.confirmedMs - a.confirmedMs || a.memberName.localeCompare(b.memberName),
       ),
     [totals],
   );
@@ -808,7 +808,7 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
                     data-label="Potvrdjeno vrijeme"
                     data-testid={`total-confirmed-${row.memberId}`}
                   >
-                    <strong>{formatDuration(row.confirmedSeconds)}</strong>
+                    <strong>{formatDurationMs(row.confirmedMs)}</strong>
                   </td>
                   <td data-label="Potvrdjenih">{row.confirmedIntervals}</td>
                   <td data-label="Ceka potvrdu">
@@ -816,7 +816,7 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
                       <span>
                         {row.unverifiedIntervals}{' '}
                         <span className="muted small">
-                          ({formatDuration(row.unverifiedSeconds)} neuracunato)
+                          ({formatDurationMs(row.unverifiedMs)} neuracunato)
                         </span>
                       </span>
                     ) : (

@@ -25,6 +25,7 @@
  * suite against real policies, and by the browser suite against a real build.
  */
 
+import { between } from './duration';
 import { accountBackend } from './supabaseClient';
 
 // ---------------------------------------------------------------------------
@@ -217,29 +218,33 @@ export function attendanceState(interval: AttendanceInterval): AttendanceState {
   return interval.verified ? 'CONFIRMED' : 'PENDING';
 }
 
-/** Seconds of participation. Only a confirmed, closed interval counts. */
-export function participationSeconds(interval: AttendanceInterval): number {
+/**
+ * Exact milliseconds of participation. Only a confirmed, closed interval counts.
+ *
+ * This used to return SECONDS, floored at 1 so that a sub-second interval could
+ * not render as "0 min" - which on a board reads as "did not attend". The floor
+ * was a workaround for a formatter that could not say "seconds" at all, and it
+ * is gone: `formatDurationMs` can say "0 s", so nothing has to be inflated to
+ * look real. See `src/auth/duration.ts`.
+ *
+ * Returns 0, not null, for an interval that legitimately counts nothing - an
+ * open one, a rejected one, one awaiting confirmation. Those are answers, not
+ * absences of measurement, and they sum correctly.
+ */
+export function participationMs(interval: AttendanceInterval): number {
   if (attendanceState(interval) !== 'CONFIRMED') return 0;
   if (interval.endedAt === null) return 0;
-  const ms = new Date(interval.endedAt).getTime() - new Date(interval.startedAt).getTime();
-  if (ms <= 0) return 0;
-  // Zero seconds and "no confirmed participation" must never be the same
-  // number, because `formatDuration` renders both as "0 min" and a board
-  // reading "0 min" next to a confirmed record says "did not attend". A
-  // real interval shorter than half a second is a mis-tap, not an absence,
-  // so it counts as the smallest amount of time this can express.
-  return Math.max(1, Math.round(ms / 1000));
+  return Math.max(0, between(interval.startedAt, interval.endedAt) ?? 0);
 }
 
-/** "1 h 23 min", for a person reading a board, not a machine parsing it. */
-export function formatDuration(seconds: number): string {
-  if (seconds <= 0) return '0 min';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.round((seconds % 3600) / 60);
-  if (hours === 0) return `${Math.max(minutes, 1)} min`;
-  if (minutes === 0) return `${hours} h`;
-  return `${hours} h ${minutes} min`;
-}
+/*
+ * `formatDuration` is deliberately NOT re-exported from here.
+ *
+ * It used to live in this file and round every sub-minute duration up to
+ * "1 min". Screens import `formatDurationMs` from `./duration` instead, so a
+ * call site that was not migrated fails to compile rather than quietly keeping
+ * the old contract under a familiar name.
+ */
 
 /**
  * What a member still owes an answer on, for one call-out.
@@ -653,9 +658,17 @@ export interface ParticipationTotal {
   readonly memberId: string;
   readonly memberName: string;
   readonly confirmedIntervals: number;
-  readonly confirmedSeconds: number;
+  /**
+   * Exact confirmed participation in milliseconds.
+   *
+   * `attendance_totals()` returns NUMERIC seconds and has always summed them
+   * exactly on the server - the fractional part was being thrown away here, not
+   * there. Converted once, at the boundary, so the rest of the application has
+   * one unit.
+   */
+  readonly confirmedMs: number;
   readonly unverifiedIntervals: number;
-  readonly unverifiedSeconds: number;
+  readonly unverifiedMs: number;
   readonly openIntervals: number;
   readonly rejectedIntervals: number;
 }
@@ -680,9 +693,9 @@ export async function fetchParticipationTotals(): Promise<readonly Participation
     memberId: row.member_id,
     memberName: row.full_name,
     confirmedIntervals: count(row.confirmed_intervals),
-    confirmedSeconds: count(row.confirmed_seconds),
+    confirmedMs: count(row.confirmed_seconds) * 1000,
     unverifiedIntervals: count(row.unverified_intervals),
-    unverifiedSeconds: count(row.unverified_seconds),
+    unverifiedMs: count(row.unverified_seconds) * 1000,
     openIntervals: count(row.open_intervals),
     rejectedIntervals: count(row.rejected_intervals),
   }));

@@ -35,9 +35,8 @@ import {
   fetchEligibleRecipients,
   fetchRecipientFacts,
   fetchVehicleMovements,
-  formatDuration,
   isOpenStatus,
-  participationSeconds,
+  participationMs,
   publishIntervention,
   recordVehicleDeparture,
   recordVehicleReturn,
@@ -55,6 +54,7 @@ import {
   type VehicleMovement,
 } from '@/auth/operations';
 import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
+import { formatDurationMs } from '@/auth/duration';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -941,8 +941,8 @@ function OverviewTab({
                         <Chip tone="alert" symbol="*">Prijavljen</Chip>
                       ) : confirmed.length > 0 ? (
                         <Chip tone="yes" symbol="+">
-                          Potvrdjeno {formatDuration(
-                            confirmed.reduce((sum, i) => sum + participationSeconds(i), 0),
+                          Potvrdjeno {formatDurationMs(
+                            confirmed.reduce((sum, i) => sum + participationMs(i), 0),
                           )}
                         </Chip>
                       ) : intervals.length > 0 ? (
@@ -1003,7 +1003,7 @@ function AttendanceTab({
   const confirmed = data.attendance.filter((a) => attendanceState(a) === 'CONFIRMED');
   const rejected = data.attendance.filter((a) => attendanceState(a) === 'REJECTED');
   const open = data.attendance.filter((a) => a.endedAt === null && a.rejectedAt === null);
-  const officialSeconds = confirmed.reduce((sum, i) => sum + participationSeconds(i), 0);
+  const officialSeconds = confirmed.reduce((sum, i) => sum + participationMs(i), 0);
 
   const confirmPicked = async () => {
     setBusy(true);
@@ -1028,7 +1028,7 @@ function AttendanceTab({
       <section className="panel">
         <h2 className="panel__title">Zvanicno vrijeme ucesca</h2>
         <p className="big-number" data-testid="official-total">
-          {formatDuration(officialSeconds)}
+          {formatDurationMs(officialSeconds)}
         </p>
         <p className="muted small">
           Racuna se <strong>samo potvrdjeno i zatvoreno</strong> prisustvo. Zapis koji ceka potvrdu
@@ -1166,7 +1166,7 @@ function AttendanceTab({
                   <Chip tone="yes" symbol={ATTENDANCE_STATE_SYMBOL.CONFIRMED ?? '+'}>
                     {ATTENDANCE_STATE_LABEL.CONFIRMED ?? 'Potvrdjeno'}
                   </Chip>{' '}
-                  {formatDuration(participationSeconds(interval))}
+                  {formatDurationMs(participationMs(interval))}
                 </p>
                 <button
                   type="button"

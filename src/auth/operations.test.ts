@@ -10,14 +10,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { formatDurationMs } from './duration';
 import {
   attendanceState,
   explainRefusal,
-  formatDuration,
   INTERVENTION_STATUSES,
   isOpenStatus,
   outstandingFor,
-  participationSeconds,
+  participationMs,
   stateTimestamp,
   type AttendanceInterval,
   type Intervention,
@@ -59,47 +59,52 @@ describe('the three attendance states', () => {
 
 describe('participation is confirmed, closed time and nothing else', () => {
   it('counts a confirmed closed interval', () => {
-    expect(participationSeconds(interval({ verified: true }))).toBe(90 * 60);
+    expect(participationMs(interval({ verified: true }))).toBe(90 * 60_000);
   });
 
   it('counts NOTHING for a pending interval, however long it ran', () => {
     // The defect this whole project fought: a self-declared claim summed as
     // participation. A pending interval is a claim, not a record.
-    expect(participationSeconds(interval())).toBe(0);
+    expect(participationMs(interval())).toBe(0);
   });
 
   it('counts nothing for a rejected interval', () => {
     expect(
-      participationSeconds(interval({ rejectedAt: '2026-09-12T12:00:00.000Z' })),
+      participationMs(interval({ rejectedAt: '2026-09-12T12:00:00.000Z' })),
     ).toBe(0);
   });
 
   it('counts nothing for an interval that is still open', () => {
     // Confirming "this person is here" is allowed before they leave. It is the
     // DURATION that cannot be known yet, so it contributes no time.
-    expect(participationSeconds(interval({ verified: true, endedAt: null }))).toBe(0);
+    expect(participationMs(interval({ verified: true, endedAt: null }))).toBe(0);
   });
 
-  it('never collapses a real interval to the same number as no participation', () => {
-    // Found against the live project: check in, check out immediately, and the
-    // interval is a few hundred milliseconds. Rounded to seconds that is zero,
-    // and zero renders as "0 min" - identical to somebody who never attended,
-    // on a row that says CONFIRMED. Confirmed and absent must never read alike.
+  it('measures a very short interval exactly, without inflating it', () => {
+    // This assertion used to expect 1 SECOND for a 300 ms interval, because the
+    // formatter could not say "seconds" and a 0 rendered as "0 min" - identical
+    // to somebody who never attended. That workaround is what later turned a
+    // ten-second interval into "1 min" on the hosted archive.
+    //
+    // The unit is milliseconds now and the formatter can say "0 s", so the
+    // measurement is simply the measurement.
     expect(
-      participationSeconds(
+      participationMs(
         interval({
           verified: true,
           startedAt: '2026-09-12T10:00:00.000Z',
           endedAt: '2026-09-12T10:00:00.300Z',
         }),
       ),
-    ).toBe(1);
-    expect(participationSeconds(interval({ verified: true, endedAt: null }))).toBe(0);
+    ).toBe(300);
+    // Still zero for an interval that is genuinely not participation, and the
+    // two remain distinguishable on screen: "0 s" against "Nema zapisa".
+    expect(participationMs(interval({ verified: true, endedAt: null }))).toBe(0);
   });
 
   it('never returns a negative duration from an out-of-order pair', () => {
     expect(
-      participationSeconds(
+      participationMs(
         interval({ verified: true, startedAt: '2026-09-12T11:00:00.000Z', endedAt: '2026-09-12T10:00:00.000Z' }),
       ),
     ).toBe(0);
@@ -107,21 +112,34 @@ describe('participation is confirmed, closed time and nothing else', () => {
 });
 
 describe('durations are written for a person', () => {
+  // The full contract, including every boundary, lives in
+  // `src/auth/duration.test.ts`. What is checked here is only that this
+  // module's own output feeds it correctly - a participation figure measured
+  // in milliseconds and formatted once.
   it.each([
-    [0, '0 min'],
-    [30, '1 min'],
-    [60, '1 min'],
-    [90 * 60, '1 h 30 min'],
-    [60 * 60, '1 h'],
-    [125 * 60, '2 h 5 min'],
-  ])('formats %i seconds as %s', (seconds, expected) => {
-    expect(formatDuration(seconds)).toBe(expected);
+    [0, '0 s'],
+    [30_000, '30 s'],
+    [60_000, '1 min'],
+    [90 * 60_000, '1 h 30 min'],
+    [60 * 60_000, '1 h'],
+    [125 * 60_000, '2 h 5 min'],
+  ])('formats %i ms as %s', (ms, expected) => {
+    expect(formatDurationMs(ms)).toBe(expected);
   });
 
-  it('never reports real time as zero', () => {
-    // Somebody who was present for forty seconds was present. Rounding that to
-    // "0 min" on a participation board would read as "did not attend".
-    expect(formatDuration(40)).toBe('1 min');
+  it('reports forty seconds of participation as forty seconds', () => {
+    // This assertion used to demand "1 min" for forty seconds, to stop the old
+    // formatter rendering it as "0 min". Both were wrong; the measurement is
+    // forty seconds and the screen can now say so.
+    const forty = participationMs(
+      interval({
+        verified: true,
+        startedAt: '2026-09-12T10:00:00.000Z',
+        endedAt: '2026-09-12T10:00:40.000Z',
+      }),
+    );
+    expect(forty).toBe(40_000);
+    expect(formatDurationMs(forty)).toBe('40 s');
   });
 });
 

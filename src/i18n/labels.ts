@@ -304,10 +304,16 @@ const DATE_AND_TIME = buildFormatter({
   year: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
+  second: '2-digit',
   hour12: false,
 });
 
-const TIME_ONLY = buildFormatter({ hour: '2-digit', minute: '2-digit', hour12: false });
+const TIME_ONLY = buildFormatter({
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
 
 /** True when times really are being rendered in Podgorica rather than fallback. */
 export function timeZoneIsSupported(): boolean {
@@ -320,6 +326,7 @@ interface ZonedParts {
   readonly year: string;
   readonly hour: string;
   readonly minute: string;
+  readonly second: string;
 }
 
 /**
@@ -336,21 +343,32 @@ function zonedParts(formatter: Intl.DateTimeFormat | null, iso: string): ZonedPa
   const found: Record<string, string> = {};
   for (const part of formatter.formatToParts(date)) found[part.type] = part.value;
 
-  const { day = '', month = '', year = '', hour = '', minute = '' } = found;
-  if (hour === '' || minute === '') return null;
-  return { day, month, year, hour, minute };
+  const { day = '', month = '', year = '', hour = '', minute = '', second = '' } = found;
+  if (hour === '' || minute === '' || second === '') return null;
+  return { day, month, year, hour, minute, second };
 }
 
 /**
- * A full date and time, in Podgorica: "13.09.2026. 18:40".
+ * A full date and time, in Podgorica: "13.09.2026. 18:40:21".
  *
  * The year is present on purpose. An archive is read months and years later,
  * and "13.09." alone cannot tell last year's fire from this one's.
+ *
+ * SECONDS ARE PRESENT for the same reason, and were added after an independent
+ * review of the hosted application: a chronology to the minute showed several
+ * events that had clearly happened in sequence - a member opening a call-out,
+ * answering it, and setting off - as though they had happened at the same
+ * instant. On a record of an incident, "we cannot tell which came first" is a
+ * defect, not a detail.
+ *
+ * Nothing computes a duration from this string. Every duration in the
+ * application is elapsed milliseconds between two server timestamps; see
+ * `src/auth/duration.ts`.
  */
 export function formatTime(iso: string): string {
   const parts = zonedParts(DATE_AND_TIME, iso);
   if (parts === null) return '-';
-  return `${parts.day}.${parts.month}.${parts.year}. ${parts.hour}:${parts.minute}`;
+  return `${parts.day}.${parts.month}.${parts.year}. ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 /** The full date and time with the zone named, for a record header. */
@@ -359,11 +377,11 @@ export function formatTimeWithZone(iso: string): string {
   return shown === '-' ? shown : `${shown} (lokalno vrijeme, Crna Gora)`;
 }
 
-/** Just the clock, in Podgorica: "18:40". For rows already dated by context. */
+/** Just the clock, in Podgorica: "18:40:21". For rows already dated by context. */
 export function formatClock(iso: string): string {
   const parts = zonedParts(TIME_ONLY, iso);
   if (parts === null) return '-';
-  return `${parts.hour}:${parts.minute}`;
+  return `${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 /**
@@ -489,3 +507,25 @@ export const AUDIT_EVENT_LABEL: Record<string, string> = {
 
 /** Somebody whose account has no profile name on the server. Never blank. */
 export const UNNAMED_ACTOR = 'Nepoznat nalog';
+
+/**
+ * A note somebody typed, placed inside a sentence the application builds.
+ *
+ * The hosted review found a chronology line reading
+ * "Vjezba zavrsena - test operativnog prototipa.." - the commander's closing
+ * note already ended in a full stop, and the sentence around it added another.
+ *
+ * This trims trailing sentence punctuation from the QUOTED COPY only. The
+ * stored audit text is never altered: `operational_audit` is append-only, the
+ * note is evidence, and tidying evidence to make a sentence read well is
+ * exactly the thing an audit trail exists to prevent. If somebody asks what was
+ * typed, the answer is still in the database, character for character.
+ *
+ * Only `.`, `,`, `;` and `:` are trimmed. A note ending in "!" or "?" keeps it,
+ * because those carry meaning a full stop does not.
+ */
+export function forSentence(note: string | null | undefined): string | null {
+  if (note === null || note === undefined) return null;
+  const trimmed = note.trim().replace(/[.,;:\s]+$/u, '');
+  return trimmed === '' ? null : trimmed;
+}
