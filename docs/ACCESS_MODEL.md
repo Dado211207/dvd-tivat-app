@@ -388,20 +388,27 @@ Honest list of what this slice does **not** do:
 - **Password reset is not implemented**, and is shown as unavailable with the
   reason rather than offered as a form that would send nothing. It needs a
   configured mail provider (blocker B2).
-- **Email confirmation: the decision and the current setting are different
-  things, and only one of them is known.**
+- **Email confirmation is OFF, and that is now read rather than inferred.**
+  `GET /auth/v1/settings` on the hosted project reported `mailer_autoconfirm:
+  true` on 13 September 2026, which matches the owner's decision under B2: an
+  approved account is usable without a mail round-trip. The two conflicting
+  observations recorded earlier (11 September read `false`, 12 September was
+  reported as `true`) are resolved in favour of the later reading, and the
+  setting was most likely changed between them.
 
-  | | |
-  |---|---|
-  | **Decided** (blocker B2) | "Confirm email" is to be **off** for now, so an approved account is usable without a mail round-trip |
-  | **Actually set on the project** | **Unverified.** `GET /auth/v1/settings` read `"mailer_autoconfirm": false` (confirmation **ON**) on 11 September; `true` (**OFF**) was reported on 12 September. It may simply have been changed between the two |
+  The same read shows `email` as the only enabled provider and
+  `disable_signup: false`. Two consequences worth stating:
 
-  So **nothing here may claim that registration immediately yields a usable
-  session.** That depends on a dashboard setting nobody has confirmed and on a
-  real sign-up flow that has never been exercised end to end. Both observations
-  are recorded in
-  [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) under Owner action items; the
-  answer belongs there once somebody reads the dashboard.
+  - **No redirect allowlist entry is needed.** The application signs in with a
+    password and nothing else: there is no `signInWithOAuth`, no
+    `signInWithOtp`, no `emailRedirectTo`, no `resetPasswordForEmail`, and
+    `detectSessionInUrl` is off. Nothing in the flow ever returns through a
+    URL, so adding the deployment's address to a Site URL or redirect list
+    would change an authentication setting for no behaviour.
+  - **Anyone who finds a public deployment can register.** They arrive with no
+    role and see nothing, which is the access model working - but the accounts
+    accumulate. Turning sign-up off is listed under post-presentation cleanup
+    in [DEMO_RUNBOOK.md](./DEMO_RUNBOOK.md) section 11.
 - **`btree_gist` is installed in the `public` schema**, which Supabase's linter
   flags (`extension_in_public`, WARN). Its functions take `internal` arguments
   and cannot be called through the REST API, so this is namespace hygiene rather
