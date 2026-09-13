@@ -19,6 +19,8 @@
  * `act` are all this needs.
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -335,3 +337,39 @@ async function settle(): Promise<void> {
     });
   }
 }
+
+/**
+ * The one claim that must never appear.
+ *
+ * No push, email, SMS, Viber or telephone transport exists in this application.
+ * Publishing writes rows saying a message is owed; nothing sends them. Every
+ * sentence the commander sees about notification therefore has to deny delivery
+ * in the same breath, and a demonstration must not be able to imply otherwise.
+ *
+ * Pinned as exact text on purpose. Reword it and this fails, which forces
+ * whoever rewrites it to decide again whether the new wording still says
+ * "nobody was notified" - rather than letting it drift into "notifications
+ * sent" one adjective at a time.
+ */
+describe('nothing ever claims a member was notified', () => {
+  const source = readFileSync(resolve(process.cwd(), 'src/ui/views/CommandView.tsx'), 'utf8');
+
+  it('the publish confirmation says nobody will actually be notified', () => {
+    expect(source).toContain('niko nece biti stvarno obavijesten');
+    expect(source).toContain('Kanal za slanje jos ne postoji');
+  });
+
+  it('the message after publishing says the same', () => {
+    expect(source).toContain('STAVLJENA U RED');
+    expect(source).toContain('niko nije stvarno obavijesten');
+  });
+
+  it('no screen carries a bare claim of delivery', () => {
+    for (const file of ['CommandView.tsx', 'MobilisationView.tsx', 'ArchiveView.tsx']) {
+      const text = readFileSync(resolve(process.cwd(), `src/ui/views/${file}`), 'utf8');
+      // "obavijesteni su" / "poslato je" / "isporuceno" - any of these as a
+      // statement of fact would be false today, whatever surrounds them.
+      expect(text, file).not.toMatch(/obavijesteni su|poslato je|isporuceno|dostavljeno/i);
+    }
+  });
+});
