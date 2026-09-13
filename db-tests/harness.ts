@@ -25,6 +25,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609110004_function_execute_privileges.sql',
   'supabase/migrations/202609120005_organisational_writes.sql',
   'supabase/migrations/202609130006_attendance_truth.sql',
+  'supabase/migrations/202609140007_availability_and_journey.sql',
 ];
 
 export const DATABASE_URL =

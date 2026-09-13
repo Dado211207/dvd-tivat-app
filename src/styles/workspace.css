@@ -1749,3 +1749,237 @@ dialog {
   height: 1.15rem;
   flex: none;
 }
+
+/* =====================================================================
+ * Operational screens (server-backed).
+ *
+ * Phone first: every interactive element clears the 44px target, nothing
+ * relies on hover, and no row depends on colour alone - each carries a text
+ * label or symbol beside it.
+ *
+ * These screens are used one-handed, outdoors, at night, by somebody who is
+ * about to drive. That shapes the sizes here more than any visual preference:
+ * the primary actions are deliberately oversized, and the secondary ones are
+ * not made to compete with them.
+ * ===================================================================== */
+
+.panel {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+
+.panel__title {
+  margin: 0 0 var(--sp-2);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.panel__title + .muted { margin-top: 0; }
+
+/* The live call-out. The one card that may claim the eye on the screen. */
+.panel--callout {
+  border-left: 6px solid var(--c-alert);
+  background: var(--c-surface);
+}
+
+.callout__title {
+  margin: 0 0 var(--sp-1);
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.callout__where {
+  margin: 0 0 var(--sp-2);
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--c-ink-soft);
+}
+
+.callout__instructions {
+  margin: 0 0 var(--sp-3);
+  /* Instructions are read while moving. Wider line height, no truncation. */
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.callout__assembly {
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-accent-soft);
+  border-radius: var(--r-sm);
+  font-weight: 650;
+}
+
+/* A secondary action, still a full target. Never used for a primary one. */
+.btn--ghost {
+  background: transparent;
+  border-color: var(--c-line-strong);
+  color: var(--c-ink-soft);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--c-surface-2);
+  color: var(--c-ink);
+}
+
+/* Thumb-sized. Used where a wrong tap costs a real call-out. */
+.btn--big {
+  min-height: 56px;
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 1.05rem;
+}
+
+.big-number {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.row-actions .btn { min-height: 44px; padding: var(--sp-2) var(--sp-3); }
+
+.tabpanel { margin: 0; }
+
+/* ------------------------------------------------------- list selection */
+
+.picker {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.picker__item {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-3);
+  text-align: left;
+  font: inherit;
+  color: var(--c-ink);
+  background: var(--c-surface-2);
+  border: 2px solid var(--c-line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.picker__item:hover { background: var(--c-surface-3); }
+
+/* Selection is a border and a fill, never colour alone: aria-pressed carries
+   it for a screen reader, and the weight change carries it without colour. */
+.picker__item--on {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.picker__title {
+  display: block;
+  font-weight: 700;
+}
+
+.picker__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--c-ink-faint);
+}
+
+.picker__item--on .picker__meta { color: var(--c-ink-soft); }
+
+.pick-list {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pick {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 0.15rem 0;
+  cursor: pointer;
+}
+
+.pick input {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+}
+
+/* ---------------------------------------------------------- fact blocks */
+
+.facts {
+  display: grid;
+  gap: var(--sp-2) var(--sp-4);
+  margin: var(--sp-3) 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+.facts > div { min-width: 0; }
+
+.facts dt {
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-ink-faint);
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  font-weight: 650;
+  /* A long location must wrap rather than widen the page. */
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------ chronology */
+
+.timeline {
+  display: grid;
+  gap: 0;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline__row {
+  display: grid;
+  gap: 0.2rem var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--c-line);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.timeline__row:last-child { border-bottom: none; }
+
+.timeline__time {
+  color: var(--c-ink-faint);
+  white-space: nowrap;
+}
+
+.timeline__what { min-width: 0; overflow-wrap: anywhere; }
+
+@media (min-width: 40rem) {
+  .timeline__row { grid-template-columns: 7.5rem minmax(0, 1fr); }
+}
+
+/* A long board should scroll inside itself rather than push the page down
+   past the actions underneath it. */
+.table-wrap--tall {
+  max-height: 26rem;
+  overflow-y: auto;
+}

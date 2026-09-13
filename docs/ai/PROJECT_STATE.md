@@ -4,7 +4,7 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-12
+Last updated: 2026-09-13
 
 ---
 
@@ -35,16 +35,17 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- Latest product-code merge checkpoint:
-  `45d53640568a75478c875cdc0aa64ca81911c2eb` — the normal merge commit of
-  PR #18, slice 3b-0. Parents `7d00d9bb` (previous `main`) and `dc0134c5`
-  (PR #18's head); its tree is byte-identical to that head.
+- Latest merge checkpoint: `0f1cace73b2b0ef13f16b818ccfcd5273663b5e8` — the
+  normal merge commit of PR #19 (documentation: the ADMIN owner decision).
+  The latest product-code checkpoint before it is
+  `45d53640568a75478c875cdc0aa64ca81911c2eb`, the normal merge of PR #18.
 - Earlier checkpoints, still nameable because they are history: `55fdb093`
   (PR #16, slice 3a) and `7d00d9bb` (PR #17, documentation only).
   **Check GitHub for the moving live `main` rather than trusting any SHA here
   as current** (see the note under the PR table).
-- No active implementation branch. `claude/slice-3b-attendance-truth` is merged
-  and finished; slice 3b proper starts from a fresh branch off live `main`.
+- Active implementation branch: **`claude/slice-3b-real-operations`**, cut from
+  live `main` `0f1cace73b2b0ef13f16b818ccfcd5273663b5e8` (the merge of PR #19).
+  `claude/slice-3b-attendance-truth` is merged and finished.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-12
@@ -247,47 +248,70 @@ iPhone, so getting this wrong is not a small matter: a call-out that does not
 wake somebody is the failure mode this whole application exists to avoid — which
 is also why C8's Viber and telephone fallback is not optional.
 
-## Status of the latest merged slice
+## Status of the latest slice
 
-**Slice 3a - organisational write paths and intervention drafts.** Complete and
-merged as PR #16 into product-code checkpoint `55fdb093`. **Hosted activation is
-still pending.**
+**Slice 3b - the real operational screens.** On branch
+`claude/slice-3b-real-operations`, off live `main` `0f1cace7`. Not merged.
 
-- PR #13, #14, #15, #16 and #17 all merged with normal merge commits (B8);
-  latest product-code checkpoint is `55fdb093`, latest merge of any kind is
-  `7d00d9bb` (documentation only).
-- **All six migrations are applied to the hosted project** and verified against
-  the locally-tested schema byte for byte. `202609120005` and `202609130006`
-  were applied on 2026-09-12, in that order, with the owner's conditional
-  authorisation and after a non-destructive preflight. The hosted schema is
-  **level with `main`**.
-- Slice 3a closed the gap that the schema could publish a call-out while nothing
-  could create one — and that a hundred passing tests missed it, because the test
-  helper created drafts as the superuser.
-- The client-role privilege defect that only a real project could reveal: found,
-  fixed in two earlier migrations, and covered by tests that detect it.
-- Slice 2, still true: the simulated actor moves no access; identity, role and
-  status are loaded from the server before anything protected renders; the
-  owner's account directory is real; and the bootstrap runbook is executed by
-  the test suite rather than merely written.
+What changed, in one line each:
 
-Two sets of totals, because they are not the same number and conflating them is
-how a documented figure stops being true. Read the right column for the question
-you are asking.
+- Migration `202609140007` adds general availability, journey progress and
+  `attendance_confirm_many`. Applied to the hosted project; the hosted schema
+  fingerprint matches the locally-tested one across all seven sections.
+- Three server-backed screens replace the simulation for the work the product
+  exists to do: `poziv` (commander), `mobilizacija` (firefighter), `arhiva`
+  (the record). Each sits behind one `OperationalGate` that answers from the
+  server's snapshot only.
+- The fictional actor selector is **not rendered at all** on a server-backed
+  route. It cannot be tabbed to, announced or scripted there, and no screen
+  there reads the simulation state. The application now opens on `poziv`.
+- An installable shell: manifest, generated icons, a service worker that never
+  caches a server answer, and honest offline and new-version notices.
+- A GitHub Pages workflow that deploys only after CI passes and refuses to
+  publish a bundle containing a secret.
 
-| Check | On `main` before PR #18 (i.e. at `7d00d9bb`) | On `main` now (at `45d53640`) |
-|---|---|---|
-| `npm run lint` | Pass | Pass |
-| `npm run typecheck` | Pass | Pass |
-| `npm run test` (unit) | **128 passed** | **128 passed** — slice 3b-0 added no client code |
-| `npm run test:db` (PostgreSQL 16 + RLS) | **135 passed** | **277 passed** |
-| `npx vite build` | Pass | Pass |
-| `npm run verify:bundle` | Pass - no secret in the built output | Pass |
-| `npm run e2e` (browser + axe) | **74 passed** | **74 passed** |
+Five defects this slice found and fixed, all of which had passed every
+existing check:
 
-Both columns are checkpoint measurements, not live ones. The right-hand column
-was measured on `45d53640` itself; CI on `main` is the live answer, and any
-figure here is only as current as the commit that wrote it.
+1. `intervention_acknowledgements.acknowledged_at` and
+   `intervention_responses.created_at` do not exist - the columns are
+   `opened_at` and `responded_at`. Both were on the two most important screens
+   and would have returned HTTP 400 the first time somebody opened them.
+   `db-tests/client_schema_contract.test.ts` now checks every column and RPC
+   argument the client names against the migrated schema.
+2. A confirmed attendance interval shorter than half a second rounded to zero
+   seconds, and rendered "0 min" - identical to somebody who never came. Found
+   by running the journey against the hosted project.
+3. The first service worker claims the open page moments after the very first
+   visit; reloading on that discarded whatever the person had already typed.
+4. The new fixture server answered every read with an array; PostgREST returns
+   a single OBJECT when the client asks for one, so every `.maybeSingle()` read
+   looked like a missing row.
+5. The browser suite's meaning depended on ambient environment - unconfigured in
+   CI only because CI happens to have no `.env.local`. The webServer now pins it.
+
+Two of those were in the new tests rather than in the product. That is worth
+recording rather than tidying away: a test whose fixture is wrong reports a
+defect that does not exist, and a test whose meaning depends on the machine it
+runs on reports nothing reliable at all.
+
+### Verification on the branch head
+
+| Check | Result |
+|---|---|
+| `npm run lint` | Pass |
+| `npm run typecheck` | Pass |
+| `npm run test` (unit) | **189 passed** |
+| `npm run test:db` (PostgreSQL 16 + RLS) | **330 passed**, 12 skipped |
+| `npm run e2e` (browser + axe, 2 projects) | **116 passed** |
+| `npx vite build` | Pass |
+| `npm run verify:bundle` | Pass - no secret in the built output |
+| Hosted journey (`hosted_operations.test.ts`) | **12 passed** against the live project |
+
+The 12 skipped database tests are `hosted_operations.test.ts`, which needs
+credentials CI deliberately does not have. **A skipped test is not evidence and
+that file must never be offered as CI evidence.** Its 12 passes above were
+measured locally against the hosted project on 2026-09-13.
 
 ## Where things are
 
@@ -302,7 +326,19 @@ src/auth/roster.ts           admin reads and commands for members, groups, vehic
                              and the account-to-member link; pure helpers unit-tested
 src/ui/views/OrganisationView.tsx  the Evidencija drustva screen (ADMIN/OWNER) where
                              the society's real records are entered
+src/auth/operations.ts       the operational data layer: interventions, recipients,
+                             responses, journey, attendance, vehicles, availability
+                             and participation totals. Pure helpers unit-tested
+src/pwa.ts                   service-worker registration and update handling
 src/ui/components/RequireRole.tsx  the role guard used by the owner directory
+src/ui/components/OperationalGate.tsx  the single gate every server-backed
+                             operational screen sits behind
+src/ui/components/ConnectionBar.tsx    offline and new-version notices
+src/ui/views/CommandView.tsx       Poziv i intervencija (OWNER/ADMIN/COMMANDER)
+src/ui/views/MobilisationView.tsx  Moj poziv, the firefighter's screen
+src/ui/views/ArchiveView.tsx       Arhiva i ucesce, the record
+public/sw.js                 service worker. NEVER caches a server answer
+public/manifest.webmanifest  installable shell; icons from scripts/make-icons.mjs
 supabase/migrations/
   202609090001_accounts_reports.sql       accounts, roles, abandoned citizen reports
   202609090002_internal_operations.sql    THE INTERNAL OPERATIONS SCHEMA
@@ -311,19 +347,33 @@ supabase/migrations/
   202609120005_organisational_writes.sql  the WRITE PATHS the schema never had:
                              intervention drafts (command), member/group/vehicle
                              CRUD and account linking (admin), is_dvd_admin(),
-                             organisation_audit. NOT yet applied to the live project
+                             organisation_audit. Applied to the live project
   202609130006_attendance_truth.sql       ATTENDANCE PROVENANCE AND CONFIRMATION:
                              attendance_intervals.source, the reject/unconfirm
                              fields, attendance_confirm/reject/unconfirm,
                              acknowledge_intervention, the vehicle movement
                              commands, and a REPLACED attendance_totals contract.
-                             On this branch only. NOT yet applied to the live project
+                             Applied to the live project
+  202609140007_availability_and_journey.sql  general availability (independent of
+                             any call-out), journey progress that writes NO
+                             attendance, and attendance_confirm_many for batch
+                             confirmation. Applied to the live project
 supabase/tests/    TEST-ONLY Supabase platform stub - never apply to a real project
 db-tests/          integration tests: role matrix, lifecycle, attendance, privileges
   organisation.test.ts       admin-vs-command authority, linking, drafts, audit reads
+  availability_journey.test.ts  availability, journey progress and batch confirmation
+  client_schema_contract.test.ts  every column and RPC argument the client names,
+                             checked against the migrated schema
+  hosted_operations.test.ts  the data layer against the HOSTED project. Needs
+                             credentials, skips without them, NOT CI evidence
+e2e/fixture-server.ts        a fake Supabase project answered inside the browser
+e2e/operational.spec.ts      the operational screens POPULATED: phone layout,
+                             touch targets and axe on the real rendered state
+src/ui/views/operational-views.test.tsx  the same screens rendered in jsdom
 docs/ACCESS_MODEL.md   the role and RLS contract, and what is not enforced yet
 docs/DATABASE.md       schema semantics, the live project, how to run the DB tests
 docs/OWNER_BOOTSTRAP.md the one-time owner procedure - EXECUTED by db-tests/bootstrap.test.ts
+docs/DEMO_RUNBOOK.md   the demonstration: accounts, journey, and what must not be claimed
 scripts/check-bundle-secrets.mjs  reads the built artifact; no secret may ship
 ```
 
@@ -331,15 +381,26 @@ scripts/check-bundle-secrets.mjs  reads the built artifact; no secret may ship
 
 | Screen | Backed by |
 |---|---|
+| `poziv` (Poziv i intervencija) | **The server.** Draft, publish, status, the live overview, the attendance board and vehicle movements. OWNER, ADMIN or COMMANDER |
+| `mobilizacija` (Moj poziv) | **The server.** Availability, acknowledgement, answer, journey progress, check-in and check-out, for the signed-in member only |
+| `arhiva` (Arhiva i ucesce) | **The server.** The chronology of a closed intervention, per-intervention participation, and server-computed totals per member |
 | `nalozi` (Nalozi i pristup) | **The server.** Sign-in, registration, profile, role, status, the owner directory and its two commands |
-| `evidencija` (Evidencija drustva) | **The server**, from slice 3a. The society's real members, groups and vehicles, and the account-to-member link. ADMIN or OWNER only. **Usable against the hosted project since `202609120005` was applied on 2026-09-12** |
+| `evidencija` (Evidencija drustva) | **The server**, from slice 3a. The society's real members, groups and vehicles, and the account-to-member link. ADMIN or OWNER only |
 | `clanovi` (Clanovi) | Device-local **fictional** roster with the actor selector. Easy to confuse with `evidencija` and must not be: this one edits invented demonstration data and touches no server record |
 | `dezurni`, `clan`, `vozila`, `prikaz`, `istorija` | Device-local fictional state and the actor selector. Each carries a banner saying so |
 | `dojava` | Abandoned research, local only |
 
-Two screens now show members, and only one of them is real. `evidencija` is where
-DVD Tivat's actual roster is entered; `clanovi` remains the prototype's invented
-roster and stays that way until a later slice replaces it.
+The navigation is grouped to match: **Operativa** and **Evidencija drustva** are
+the server, **Prototip (simulacija)** is not.
+
+The actor selector is rendered **only** on a simulated route. On a server-backed
+one it is absent from the DOM entirely, so it cannot be tabbed to, announced by a
+screen reader, or found by a script - and no screen there reads the simulation
+state. `e2e/admin.spec.ts` states that as its own rule.
+
+Two screens still show members, and only one of them is real. `evidencija` is
+where DVD Tivat's actual roster is entered; `clanovi` remains the prototype's
+invented roster and stays that way until a later slice replaces it.
 
 ## Non-negotiable rules for anyone continuing this work
 
@@ -386,7 +447,7 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
 ## The live Supabase project
 
-A project exists and **all six migrations are applied to it**, verified by a
+A project exists and **all seven migrations are applied to it**, verified by a
 structural fingerprint that matches a local PostgreSQL 16 built from the same
 files. Recorded here so nobody has to rediscover it:
 
@@ -395,10 +456,10 @@ files. Recorded here so nobody has to rediscover it:
 | Project | `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, **`eu-west-1`** (the docs said `eu-central-1`; the Management API reports `eu-west-1`, so the documented value was wrong) |
 | PostgreSQL | 17 (the tests run against 16 locally and in CI) |
 | State before | `public` schema completely empty — no migration had ever run |
-| Applied | `202609090001`, `202609090002`, `202609110003`, `202609110004`, in order |
-| **Applied** | All six. `202609120005` and `202609130006` were applied on 2026-09-12 with the owner's conditional authorisation, in that order, after a non-destructive preflight |
-| **Verified** | Structural fingerprint matches a local PostgreSQL 16 with the same seven files — **all seven sections identical**, functions `907cb555d29b28616a57807d3503f55a` |
-| Verified | Structural fingerprint matches the locally-tested schema byte for byte — see [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
+| **Applied** | All seven. `202609120005` and `202609130006` on 2026-09-12 with the owner's conditional authorisation, after a non-destructive preflight; `202609140007` on 2026-09-13 |
+| **Verified** | Structural fingerprint matches a local PostgreSQL 16 built from the same files — **all seven sections identical**, functions `ee2886b99683c44f00216a7e84e7b0dd`, 46 functions |
+| Verified | See [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
+| **Contents** | Eight fictional accounts, seven fictional members, two groups, three vehicles. No interventions between demonstrations. Every address is on the reserved `.invalid` domain and cannot receive mail. Passwords are **not** in this repository |
 | Publishable key | Safe in the client bundle by design; it is **not** a secret |
 | Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
 
@@ -429,9 +490,10 @@ says the hosted project itself was tested by CI.
   syntactically valid until expiry.
 - No media upload pipeline, EXIF stripping or byte-signature validation.
 - No CSV export yet.
-- **No screen publishes a real call-out.** `create_intervention_draft`,
-  `update_intervention_draft` and `discard_intervention_draft` exist and are
-  tested, but the dispatcher screen still writes device-local state. Slice 3b.
+- ~~No screen publishes a real call-out.~~ **Resolved 2026-09-13:** `poziv`
+  drafts, publishes, runs and closes a real intervention; `mobilizacija` answers
+  and records attendance; `arhiva` reads the record. Verified against the hosted
+  project. The simulated `dezurni` screen remains, clearly labelled.
 - ~~Two migrations are not applied to the hosted project.~~ **Resolved
   2026-09-12: all six are applied and fingerprint-verified.** Both defects
   slice 3b-0 fixed are now fixed on the live database too, and the whole
@@ -440,14 +502,22 @@ says the hosted project itself was tested by CI.
   schema.
 - A browser prototype is **no evidence** that a locked Android or iPhone will
   raise an alarm.
-- **PWA only** is decided (C1); the PWA itself is not built. No manifest, no
-  service worker, no installability, no native application, no deployment.
+- ~~The PWA itself is not built.~~ **Resolved 2026-09-13:** manifest, icons,
+  installable standalone shell, a service worker that caches only the shell and
+  never a server answer, honest offline and update states, and a GitHub Pages
+  workflow. **Still no native application**, and the deployment needs two
+  repository variables set once — see docs/DEMO_RUNBOOK.md §3.1.
+- **No offline queue.** An action taken with no signal is refused and not
+  stored; the interface says so rather than pretending it was saved.
+- **No notification transport of any kind.** Publishing writes rows saying a
+  message is owed. Nothing sends them, and nothing in the interface may say a
+  member was notified.
 
 ## Blockers needing an owner decision
 
 | # | Blocker | State |
 |---|---|---|
-| B1 | Supabase project | **Resolved.** The owner created one and approved its use; the first four migrations are applied and verified there. `202609120005` (in `main`) and `202609130006` (this branch only) are not — see the limitations above |
+| B1 | Supabase project | **Resolved.** The owner created one and approved its use; **all seven migrations are applied and fingerprint-verified there** |
 | B2 | Email verification | **Decided:** "Confirm email" is to be turned **off** in the Supabase dashboard for now, so an account is usable immediately. **Whether it actually is off is unresolved** — two conflicting observations are recorded under Owner action items. An SMTP provider is still needed before real registration at scale: Supabase's default sender only reaches project-team addresses and is rate-limited |
 | B3 | Notification transport | **Decided and now active work, not deferred.** PWA Web Push, server-sent from an Edge Function (C1, C8) — slice 3d. Still unbuilt and unproven: nothing may be promised about delivery. **Every platform claim below is UNVERIFIED** and must be checked against Apple/W3C documentation and a real device before it is relied on: that iOS requires the PWA on the home screen, that iOS ignores application-controlled sound and `vibrate`, and that Apple Critical Alerts need an entitlement a PWA cannot hold. See the paragraph under "Slice 3" — these were asserted from general knowledge, not read from an official source |
 | B4 | Emergency number to display | **Resolved: 112.** The non-emergency notice names it rather than inventing one |
@@ -487,45 +557,35 @@ these concern a private hosted project that this repository's tests cannot reach
 
 ## Next concrete action
 
-Identity, access and the society's records are done. The **incident** path is
-not. Next, in this order:
+Identity, access, the society's records **and the incident path** are done. The
+commander publishes, the firefighter answers and attends, the commander
+confirms, the archive shows the record - all against the real database, verified
+live.
 
-1. ~~Owner/admin write commands for `members`, `groups` and `vehicles`.~~
-   **Done — slice 3a, PR #16.**
-2. ~~Link an account to a member record (`members.user_id`).~~
-   **Done — slice 3a, PR #16.**
-3. The commander draft → review → publish flow against `publish_intervention`,
-   including the frozen recipient list and the `QUEUED`-only outbox. The three
-   draft commands exist and are tested; the **screen** is what is missing.
-4. Member response against `submit_response`, plus general availability (C2) and
-   journey progress (C3), then check-in / check-out and the attendance board.
-5. Only then notification transport (**B3**), which must not be promised before
-   it is built and tested on a real device.
+What is left, in order:
 
-Do not start (3) before (1) and (2): an intervention cannot be published to
-recipients who do not exist as server-side members. Both are merged. The hosted
-project still needs `202609120005` before those paths exist there, and
-`202609130006` before attendance means anything there.
+1. **Open the slice 3b pull request, review its exact head, and merge only on
+   green CI.** Normal merge commit, never a squash or a rebase of a shared
+   branch (B8).
+2. **Set the two repository variables and run the deployment workflow** - see
+   docs/DEMO_RUNBOOK.md §3.1. This is the one step between the branch and a
+   public demonstration URL, and it needs the owner because this repository
+   keeps placeholder configuration only.
+3. **Rehearse the journey in docs/DEMO_RUNBOOK.md §5** on the devices that will
+   be used, from two browser profiles.
+4. Only then notification transport (**B3**), which must not be promised before
+   it is built and tested on a real device. Nothing today sends anything.
 
-**Immediately next, and every item needs separate owner authority:**
+Not blocking the demonstration, and worth doing after it:
 
-1. ~~Resolve PR #17 (documentation-only).~~ **Done — merged normally on
-   2026-09-12 into `7d00d9bb`, then merged into this branch, so #17 keeps its
-   own authorship rather than being absorbed.**
-2. ~~Merge PR #18 (slice 3b-0).~~ **Done — merged normally on 2026-09-12 into
-   `45d53640`, after the owner's nine-point pre-merge checklist was verified
-   point by point.**
-3. ~~Apply `202609120005` then `202609130006` to the hosted project.~~ **Done —
-   2026-09-12, in that order, after the §3.1 preflight. Fingerprint-verified
-   against a local PostgreSQL built from the same files.**
-4. ~~Smoke-check the hosted project with disposable data only.~~ **Done — the
-   whole journey (draft, publish, acknowledge, respond, check in, vehicle out,
-   check out, vehicle back, confirm, reject, close) plus every role boundary,
-   cleaned up by exact identifier back to zero rows in every table.**
-5. **Slice 3b proper: the real operational interface.** Availability, journey
-   progress, and the commander and firefighter screens on real authenticated
-   server data, including the batch-confirmation requirement recorded below.
-   **This is the remaining work before the presentation.**
+- An offline queue, so an action taken with no signal is stored and sent rather
+  than refused.
+- Replace the simulated `clanovi`, `dezurni`, `clan`, `vozila`, `prikaz` and
+  `istorija` screens, or delete them. They are kept for now because they still
+  demonstrate ideas the server slice has not reached, and because they were the
+  safety net while the real screens were being built.
+- A second Supabase project, so a demonstration and any real use are not the
+  same database.
 
 ## Manual owner checklist
 
@@ -551,8 +611,12 @@ Follow [OWNER_BOOTSTRAP.md](../OWNER_BOOTSTRAP.md) first.
 If any of these behaves differently from the expected column, that is a defect —
 record it here rather than working around it.
 
-**B1 is resolved** — the project exists, **all six migrations are on it**, and
+**B1 is resolved** — the project exists, **all seven migrations are on it**, and
 identity, access, the roster and the whole operational journey have been
-exercised against it with disposable fictional data. The hosted project holds
-**no data at all** between demonstrations: every table was empty before the
-smoke test and empty again after it.
+exercised against it through the application's own data layer.
+
+Since 2026-09-13 the project also holds a **fictional demonstration cast**:
+eight accounts covering every role and state, seven members, two groups and
+three vehicles. There are no interventions between demonstrations. Every
+address is on the reserved `.invalid` domain, which cannot receive mail, and no
+password is in this repository.

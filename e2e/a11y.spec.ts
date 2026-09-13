@@ -11,7 +11,24 @@ import { expect, test } from '@playwright/test';
 import { createCall, goTo, openApp, switchActor } from './helpers';
 
 const RULESETS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
-const VIEWS = ['dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'nalozi', 'istorija'];
+const VIEWS = [
+  // Server-backed. In a build with no project configured they render their
+  // "not connected" state, which is exactly the state a reader with a screen
+  // reader must still be able to understand.
+  'poziv',
+  'mobilizacija',
+  'arhiva',
+  'evidencija',
+  'nalozi',
+  // The local prototype.
+  'dojava',
+  'dezurni',
+  'clan',
+  'vozila',
+  'prikaz',
+  'clanovi',
+  'istorija',
+];
 
 test.describe('accessibility', () => {
   test('empty views pass an axe scan', async ({ page }) => {

@@ -7,12 +7,30 @@
 import { expect, test } from '@playwright/test';
 import { createCall, goTo, openApp, switchActor } from './helpers';
 
-test('opens directly into the duty officer working screen', async ({ page }) => {
+test('the duty officer working screen is ready to use on arrival', async ({ page }) => {
   await openApp(page);
   await expect(page.getByRole('heading', { name: 'Nova vjezba' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Primaoci' })).toBeVisible();
   // The simulation warning is present before anything else is done.
   await expect(page.getByText('SIMULACIJA', { exact: true })).toBeVisible();
+});
+
+/**
+ * With no route in the address, and with a nonsense one, the application must
+ * land on the real commander's console - never on the local simulation.
+ *
+ * Opening into a simulated screen would put a fictional actor selector in front
+ * of somebody before anything had established who they are, which is the exact
+ * confusion this slice exists to remove.
+ */
+test('a bare address lands on the real operational screen, not the simulation', async ({ page }) => {
+  for (const hash of ['', '#/', '#/nepostojeca-ruta']) {
+    await page.goto(`/${hash}`);
+    await page.waitForSelector('main');
+    await expect(page.getByTestId('nav-poziv')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('actor-select')).toHaveCount(0);
+    await expect(page.getByText('SIMULACIJA', { exact: true })).toHaveCount(0);
+  }
 });
 
 test('citizen report is reviewed, saved locally and never becomes a call', async ({ page }) => {

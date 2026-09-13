@@ -19,6 +19,7 @@ import {
   ROLE_LABEL,
   SERVER_BANNER_TEXT,
   SERVER_BANNER_TITLE,
+  SERVER_DATA_NOTE,
   SIM_BANNER_TEXT,
   SIM_BANNER_TITLE,
   T,
@@ -26,6 +27,7 @@ import {
 import { accessObstacle } from '@/auth/access';
 import { useAccess } from '@/auth/AccessProvider';
 import { makeId, useApp } from '@/state/AppStateContext';
+import { ConnectionBar } from './ui/components/ConnectionBar';
 import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
@@ -46,8 +48,20 @@ const AccountsView = lazy(() =>
 const OrganisationView = lazy(() =>
   import('./ui/views/OrganisationView').then((module) => ({ default: module.OrganisationView })),
 );
+const CommandView = lazy(() =>
+  import('./ui/views/CommandView').then((module) => ({ default: module.CommandView })),
+);
+const MobilisationView = lazy(() =>
+  import('./ui/views/MobilisationView').then((module) => ({ default: module.MobilisationView })),
+);
+const ArchiveView = lazy(() =>
+  import('./ui/views/ArchiveView').then((module) => ({ default: module.ArchiveView })),
+);
 
 const VIEWS: Record<Route, ComponentType> = {
+  poziv: CommandView,
+  mobilizacija: MobilisationView,
+  arhiva: ArchiveView,
   dojava: CitizenReportView,
   dezurni: DispatcherView,
   clan: MemberView,
@@ -70,20 +84,27 @@ const VIEWS: Record<Route, ComponentType> = {
  * emergency service.
  */
 const NAV_GROUPS: { label: string; routes: Route[] }[] = [
-  { label: 'Operacije', routes: ['dezurni', 'clan', 'vozila', 'prikaz'] },
-  { label: 'Evidencija', routes: ['evidencija', 'clanovi', 'nalozi', 'istorija'] },
+  { label: 'Operativa', routes: ['poziv', 'mobilizacija', 'arhiva'] },
+  { label: 'Evidencija drustva', routes: ['evidencija', 'nalozi'] },
+  { label: 'Prototip (simulacija)', routes: ['dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija'] },
   { label: 'Nije u upotrebi', routes: ['dojava'] },
 ];
 
 /**
  * Which screens are real, and which are still the local simulation.
  *
- * This slice connected identity and access. Everything else still runs on
- * device-local fictional state with the actor selector - and the interface has
- * to say so on every one of those screens rather than letting a demonstration
- * imply that a server is involved.
+ * The operational slice is now server-backed: a call-out, a firefighter's
+ * answer, attendance and the archive all read and write the real database
+ * behind real authentication. What remains simulated is the earlier prototype,
+ * kept because it still demonstrates screens the server slice has not reached
+ * (the station display, the specialities roster) - and the interface has to say
+ * so on every one of those screens rather than letting a demonstration imply
+ * that a server is involved.
  */
 const ROUTE_BACKING: Record<Route, 'SERVER' | 'SIMULATED'> = {
+  poziv: 'SERVER',
+  mobilizacija: 'SERVER',
+  arhiva: 'SERVER',
   nalozi: 'SERVER',
   evidencija: 'SERVER',
   dojava: 'SIMULATED',
@@ -96,15 +117,18 @@ const ROUTE_BACKING: Record<Route, 'SERVER' | 'SIMULATED'> = {
 };
 
 const ROUTE_DESCRIPTION: Record<Route, string> = {
+  poziv: 'Priprema, objava i vodjenje stvarne intervencije',
+  mobilizacija: 'Vasa dostupnost, vas poziv i vase prisustvo',
+  arhiva: 'Zapis zavrsenih intervencija i potvrdjeno ucesce',
   dojava: 'Napusteni istrazivacki prototip. Nije kanal za prijavu hitnih slucajeva',
-  dezurni: 'Priprema poziva i pracenje odziva ekipe',
-  clan: 'Poziv i odgovor iz ugla izabranog clana',
-  vozila: 'Rucna evidencija izlaska i povratka vozila',
-  prikaz: 'Pregled stanja namijenjen ekranu u bazi',
-  clanovi: 'Clanovi, uloge, grupe i osposobljenosti',
+  dezurni: 'Simulacija: priprema poziva i pracenje odziva ekipe',
+  clan: 'Simulacija: poziv i odgovor iz ugla izabranog clana',
+  vozila: 'Simulacija: rucna evidencija izlaska i povratka vozila',
+  prikaz: 'Simulacija: pregled stanja namijenjen ekranu u bazi',
+  clanovi: 'Simulacija: clanovi, uloge, grupe i osposobljenosti',
   evidencija: 'Stvarni clanovi, grupe i vozila drustva na serveru',
   nalozi: 'Stvarni nalozi na serveru: prijava, uloge i ukidanje pristupa',
-  istorija: 'Zavrsene vjezbe i hronologija promjena',
+  istorija: 'Simulacija: zavrsene vjezbe i hronologija promjena',
 };
 
 /**
@@ -147,6 +171,7 @@ export function App() {
   const mainRef = useRef<HTMLElement>(null);
 
   const current = state.members.find((m) => m.id === state.simulation.actorId);
+  const simulated = ROUTE_BACKING[route] === 'SIMULATED';
 
   function switchActor(memberId: string) {
     const member = state.members.find((m) => m.id === memberId);
@@ -216,24 +241,32 @@ export function App() {
 
         <div className="masthead__tools">
           <SignedInIdentity />
-          <div className="actor-switch">
-            <label htmlFor="actor-select">
-              Simulirani ucesnik
-              <span className="sr-only"> - {T.simulateMemberHint}</span>
-            </label>
-            <select
-              id="actor-select"
-              data-testid="actor-select"
-              value={state.simulation.actorId}
-              onChange={(e) => switchActor(e.target.value)}
-            >
-              {state.members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name} - {ROLE_LABEL[member.roleProposed]}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Strict isolation, not a disabled control: on a server-backed route
+              the actor selector is not rendered at all. It cannot be tabbed to,
+              read by a screen reader, or found by a script, and no screen there
+              reads `state.simulation`. A selector that merely looked inactive
+              beside a real signed-in identity would still invite the reading
+              that choosing a person is how you become them. */}
+          {simulated ? (
+            <div className="actor-switch">
+              <label htmlFor="actor-select">
+                Simulirani ucesnik
+                <span className="sr-only"> - {T.simulateMemberHint}</span>
+              </label>
+              <select
+                id="actor-select"
+                data-testid="actor-select"
+                value={state.simulation.actorId}
+                onChange={(e) => switchActor(e.target.value)}
+              >
+                {state.members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} - {ROLE_LABEL[member.roleProposed]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -241,31 +274,32 @@ export function App() {
           truth about the screen underneath it. Saying "roles are simulated" on
           the one screen where they are not would teach people to ignore this
           strip everywhere else. */}
-      {ROUTE_BACKING[route] === 'SERVER' ? (
-        <div className="sim-bar sim-bar--server">
-          <span className="sim-bar__tag">{SERVER_BANNER_TITLE}</span>
-          <span className="sim-bar__text">{SERVER_BANNER_TEXT}</span>
-        </div>
-      ) : (
+      {simulated ? (
         <div className="sim-bar">
           <span className="sim-bar__tag">{SIM_BANNER_TITLE}</span>
           <span className="sim-bar__text">{SIM_BANNER_TEXT}</span>
+        </div>
+      ) : (
+        <div className="sim-bar sim-bar--server">
+          <span className="sim-bar__tag">{SERVER_BANNER_TITLE}</span>
+          <span className="sim-bar__text">{SERVER_BANNER_TEXT}</span>
         </div>
       )}
 
       <LiveRegion />
 
       <main ref={mainRef} tabIndex={-1} className={route === 'prikaz' ? 'main main--wide' : 'main'} id="main">
+        <ConnectionBar />
         {storageWarning ? <Notice tone="error">{storageWarning}</Notice> : null}
         <VisibleNotice />
         {/* A member form contains an unsent local draft. Remount only this view
             when the simulated person changes so one member can never inherit
             another member's answer, ETA, destination, error or edit state. */}
-        {ROUTE_BACKING[route] === 'SIMULATED' ? (
+        {simulated ? (
           <Notice tone="warn">
             Ovaj ekran jos radi na lokalnoj simulaciji: podaci su izmisljeni, cuvaju se samo u ovom
             pregledacu i biraju se preko izbora simuliranog ucesnika. Server ne ucestvuje i ovdje
-            nema provjere prava. Stvarni nalozi su na ekranu <strong>Nalozi i pristup</strong>.
+            nema provjere prava. Stvarni rad je u grupi <strong>Operativa</strong>.
           </Notice>
         ) : null}
         <Suspense fallback={<p role="status">Ucitavanje prikaza...</p>}>
@@ -275,10 +309,12 @@ export function App() {
 
       <footer className="foot">
         <p>
-          {APP_NAME} - {APP_SUBTITLE}. Simulirani ucesnik: {current?.name ?? '-'} (
-          {ROLE_LABEL[state.simulation.viewRole]}).
+          {APP_NAME} - {APP_SUBTITLE}.
+          {simulated
+            ? ` Simulirani ucesnik: ${current?.name ?? '-'} (${ROLE_LABEL[state.simulation.viewRole]}).`
+            : ' Ovaj ekran radi na serveru; ko ste odredjuje prijava, ne izbor ucesnika.'}
         </p>
-        <p>{LOCAL_DATA_NOTE}</p>
+        <p>{simulated ? LOCAL_DATA_NOTE : SERVER_DATA_NOTE}</p>
       </footer>
     </div>
   );

@@ -3,6 +3,9 @@ import type { Route } from '../router';
 /** Original decorative line icons; the adjacent text supplies every label. */
 export function NavIcon({ route }: { route: Route }) {
   const paths: Record<Route, JSX.Element> = {
+    poziv: <><path d="M12 2a7 7 0 0 0-7 7c0 4 3 6 3 9h8c0-3 3-5 3-9a7 7 0 0 0-7-7Z" /><path d="M9 21h6" /></>,
+    mobilizacija: <><path d="M12 21s-7-4.5-7-10a7 7 0 0 1 14 0c0 5.5-7 10-7 10Z" /><circle cx="12" cy="11" r="2.5" /></>,
+    arhiva: <><rect x="3" y="4" width="18" height="5" rx="1.5" /><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4" /></>,
     dojava: <><path d="M12 3 3 20h18L12 3Z" /><path d="M12 9v4m0 3h.01" /></>,
     dezurni: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M14 15h7m-7 5h7" /></>,
     clan: <><circle cx="12" cy="7" r="4" /><path d="M4 21v-2a8 8 0 0 1 16 0v2" /></>,

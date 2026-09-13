@@ -24,19 +24,30 @@ export const SIM_BANNER_TEXT =
   'Izmisljeni podaci. Nema push, SMS ni telefonskih poziva. Uloge su simulirane; ovo nije prijava na nalog.';
 
 /**
- * The accounts screen runs on the server, so the simulation wording above would
- * be false there - it would say roles are simulated on the one screen where
- * they are not. A banner that is wrong in that direction is worse than no
- * banner, because it teaches people to ignore it everywhere else.
+ * The server-backed screens run against the real database, so the simulation
+ * wording above would be false there - it would say roles are simulated on the
+ * screens where they are not. A banner that is wrong in that direction is worse
+ * than no banner, because it teaches people to ignore it everywhere else.
+ *
+ * It still has to carry the one thing that IS not real: there is no notification
+ * transport. Publishing a call-out writes obligations to send; nothing sends
+ * them. That must be visible on the screens where a call-out is published and
+ * received, not buried in documentation.
  */
-export const SERVER_BANNER_TITLE = 'STVARNI NALOZI';
+export const SERVER_BANNER_TITLE = 'STVARNI PODACI';
 export const SERVER_BANNER_TEXT =
-  'Ovaj ekran radi na serveru. Prijava, uloga i pristup su stvarni i provjeravaju se pri svakom zahtjevu. Izbor simuliranog ucesnika ovdje ne mijenja nista.';
+  'Ovaj ekran radi na serveru. Prijava, uloga i pristup su stvarni i provjeravaju se pri svakom zahtjevu. Obavjestenja se upisuju u red za slanje, ali se ne salju: nema push, SMS, Viber ni telefonskih poziva.';
 
 export const LOCAL_DATA_NOTE =
   'Podaci se cuvaju samo u ovom pregledacu, na ovom uredjaju. Nista se ne sinhronizuje izmedju uredjaja niti se salje na server. Brisanje podataka pregledaca brise i ovo.';
 
+export const SERVER_DATA_NOTE =
+  'Podaci na ovom ekranu se citaju i upisuju na server, uz provjeru prava pri svakom zahtjevu. Za prikaz se koriste iskljucivo izmisljeni clanovi i izmisljeni podaci.';
+
 export const NAV = {
+  poziv: 'Poziv i intervencija',
+  mobilizacija: 'Moj poziv',
+  arhiva: 'Arhiva i ucesce',
   dezurni: 'Dezurni',
   clan: 'Clan',
   vozila: 'Vozila',
@@ -261,3 +272,80 @@ export function formatClock(iso: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
+
+// ---------------------------------------------------------------------------
+// Server-side vocabulary.
+//
+// These label the values the DATABASE stores, not the local prototype's. They
+// are kept apart from the simulation labels above on purpose: the two
+// vocabularies look similar and mean different things, and one screen showing
+// the other's words is exactly how a demonstration starts implying a server is
+// involved when it is not.
+//
+// Local language, no diacritics, as the interface convention requires.
+// ---------------------------------------------------------------------------
+
+export const INTERVENTION_KIND_LABEL: Record<string, string> = {
+  POZAR: 'Pozar',
+  SAOBRACAJNA_NEZGODA: 'Saobracajna nezgoda',
+  TEHNICKA_POMOC: 'Tehnicka pomoc',
+  VJEZBA: 'Vjezba',
+  TEST: 'Test',
+  DRUGO: 'Drugo',
+};
+
+export const INTERVENTION_STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Nacrt',
+  PUBLISHED: 'Objavljeno',
+  ASSEMBLING: 'Okupljanje',
+  DEPLOYED: 'Na terenu',
+  CONTAINED: 'Pod kontrolom',
+  CLOSED: 'Zatvoreno',
+  CANCELLED: 'Otkazano',
+};
+
+export const SERVER_ANSWER_LABEL: Record<string, string> = {
+  DOLAZIM: 'Dolazim',
+  DOLAZIM_KASNIJE: 'Dolazim kasnije',
+  NE_MOGU: 'Ne mogu',
+};
+
+export const SERVER_ANSWER_SYMBOL: Record<string, string> = {
+  DOLAZIM: '+',
+  DOLAZIM_KASNIJE: '~',
+  NE_MOGU: '-',
+};
+
+/** Where a member is for one call-out. Never a statement about attendance. */
+export const JOURNEY_LABEL: Record<string, string> = {
+  KRECEM: 'Krecem',
+  U_PUTU: 'U putu',
+  NA_LICU_MJESTA: 'Na licu mjesta',
+  ODUSTAJEM: 'Odustajem',
+};
+
+export const JOURNEY_SYMBOL: Record<string, string> = {
+  KRECEM: '>',
+  U_PUTU: '>>',
+  NA_LICU_MJESTA: '#',
+  ODUSTAJEM: '-',
+};
+
+/** Who asserted an attendance interval. Separate from whether command confirmed it. */
+export const ATTENDANCE_SOURCE_LABEL: Record<string, string> = {
+  SELF_DECLARED: 'Prijavio se sam',
+  COMMAND_RECORDED: 'Upisala komanda',
+  UNKNOWN: 'Nepoznato porijeklo',
+};
+
+export const ATTENDANCE_STATE_LABEL: Record<string, string> = {
+  PENDING: 'Ceka potvrdu',
+  CONFIRMED: 'Potvrdjeno',
+  REJECTED: 'Odbijeno',
+};
+
+export const ATTENDANCE_STATE_SYMBOL: Record<string, string> = {
+  PENDING: '~',
+  CONFIRMED: '+',
+  REJECTED: '-',
+};

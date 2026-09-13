@@ -104,6 +104,7 @@ order, and what to do if it fails halfway. Read it before applying either file.
 | `202609090001` · `202609090002` · `202609110003` · `202609110004` | **Applied** 2026-09-11, in order |
 | `202609120005_organisational_writes.sql` | **Applied** 2026-09-12 |
 | `202609130006_attendance_truth.sql` | **Applied** 2026-09-12 |
+| `202609140007_availability_and_journey.sql` | **Applied** 2026-09-13 |
 
 The project is `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, region `eu-west-1`,
 PostgreSQL 17. Its `public` schema was empty before the first four.
@@ -120,12 +121,24 @@ easily forgotten: **the `EXECUTE` grant survived the drop-and-recreate**
 (`authenticated` yes, `anon` no), and exactly one `attendance_totals` overload
 exists with the eight-column contract.
 
-**The hosted schema is now level with `main`, and that was verified rather than
+**The hosted schema is level with the branch, and that was verified rather than
 assumed.** A structural fingerprint — functions, columns, constraints, indexes,
 policies, client grants and RLS flags — was taken on the hosted project and on a
-local PostgreSQL 16 that had applied the same seven files from zero. **All seven
-sections matched**, functions at `907cb555d29b28616a57807d3503f55a` across 43
-functions.
+local PostgreSQL 16 that had applied the same files from zero. **All seven
+sections matched**: `907cb555d29b28616a57807d3503f55a` across 43 functions
+after `202609130006`, and `ee2886b99683c44f00216a7e84e7b0dd` across 46 after
+`202609140007`.
+
+`202609140007` is **purely additive** in the strict sense this file uses: four
+new tables, three new functions, new policies and grants. It alters no existing
+function's signature and drops nothing, so §3.1's warning does not apply to it.
+
+**`attendance_totals()` now has an application caller.** `ArchiveView` selects
+its named columns through `fetchParticipationTotals()`. When `202609130006` was
+written, nothing outside the test suite called that function, which is what made
+its drop-and-recreate safe. That is no longer true: **changing its result columns
+is now a breaking change to the history screen**, and the same drop-and-recreate
+would need the caller updated in the same change.
 
 > One wrinkle worth recording, because it nearly became a silent exception. The
 > first apply stripped the inline comments out of thirteen function bodies to

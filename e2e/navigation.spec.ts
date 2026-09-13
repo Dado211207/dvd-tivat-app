@@ -31,9 +31,20 @@ test('every route stays reachable without page overflow at compact widths', asyn
     .evaluateAll((links) =>
       links.map((link) => link.getAttribute('data-testid')!.replace(/^nav-/, '')),
     );
-  expect(routes.slice().sort()).toEqual(
-    ['clan', 'clanovi', 'dezurni', 'dojava', 'evidencija', 'istorija', 'nalozi', 'prikaz', 'vozila'],
-  );
+  expect(routes.slice().sort()).toEqual([
+    'arhiva',
+    'clan',
+    'clanovi',
+    'dezurni',
+    'dojava',
+    'evidencija',
+    'istorija',
+    'mobilizacija',
+    'nalozi',
+    'poziv',
+    'prikaz',
+    'vozila',
+  ]);
 
   for (const width of [320, 720, 1024]) {
     await page.setViewportSize({ width, height: 900 });
@@ -117,4 +128,35 @@ test('member copy distinguishes an unsent answer, a recorded answer and an edit'
   await expect(note).toContainText('Izmjena jos nije zabiljezena');
   await page.getByRole('button', { name: 'Odustani', exact: true }).click();
   await expect(note).toContainText('Odgovor je zabiljezen samo u ovom pregledacu');
+});
+
+/**
+ * The service worker must never reload the page on its own.
+ *
+ * The first worker takes control by claiming the open page moments after the
+ * very first visit. Reloading on that would discard whatever somebody had
+ * already typed, on their first ever use of the application - which is exactly
+ * what happened before `controllerchange` was gated on a deliberate update.
+ */
+test('installing the offline shell never interrupts what somebody is typing', async ({ page }) => {
+  await openApp(page, 'dezurni');
+
+  const controlled = await page.evaluate(async () => {
+    if (!('serviceWorker' in navigator)) return 'unsupported';
+    await navigator.serviceWorker.ready.catch(() => null);
+    for (let i = 0; i < 40 && !navigator.serviceWorker.controller; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return navigator.serviceWorker.controller ? 'controlled' : 'not controlling';
+  });
+  expect(controlled, 'the worker must actually take control for this to prove anything').toBe(
+    'controlled',
+  );
+
+  // Typed AFTER the worker is in control, then given time to misbehave.
+  const title = page.getByLabel(/^Naslov/);
+  await title.fill('Vjezba: nedovrsen unos');
+  await page.waitForTimeout(1500);
+
+  await expect(title).toHaveValue('Vjezba: nedovrsen unos');
 });

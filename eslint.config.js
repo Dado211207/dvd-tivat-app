@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'playwright-report/**', 'test-results/**'] },
+  { ignores: ['dist/**', 'dist-fixture/**', 'node_modules/**', 'playwright-report/**', 'test-results/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -35,6 +35,15 @@ export default tseslint.config(
       // The domain layer must stay deterministic; ctx supplies time and ids.
       'no-restricted-globals': ['error', { name: 'event', message: 'Use the handler parameter.' }],
       eqeqeq: ['error', 'always'],
+    },
+  },
+  {
+    // The service worker runs in its own global scope, not the window's.
+    files: ['public/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { ...globals.serviceworker },
     },
   },
   {

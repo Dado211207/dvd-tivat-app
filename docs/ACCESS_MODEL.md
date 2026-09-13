@@ -364,36 +364,22 @@ transport, and the outbox cannot leave `QUEUED` without one.
 
 Honest list of what this slice does **not** do:
 
-- **Identity and access run against the hosted project. The society's records do
-  not yet.** Two different things, and conflating them would be the most
-  misleading sentence in this file:
-
-  | Capability | Implemented and tested | Usable on the hosted project |
-  |---|---|---|
-  | Sign-in, registration, profile completion, role and status load, owner account directory | Yes | **Yes** — migrations `...0001`–`...0004` are applied there |
-  | Roster screen `Evidencija drustva`: members, groups, vehicles, account-to-member link | Yes — against local PostgreSQL 16 and CI's `postgres:16`, from a schema built from zero | **Yes** — `202609120005` applied 2026-09-12 |
-  | Attendance provenance and confirmation, acknowledgement, vehicle departure and return | Yes, as **server commands** — against local PostgreSQL 16, CI's `postgres:16`, and now the hosted project itself | **Yes** — `202609130006` applied 2026-09-12 and smoke-tested there: provenance, confirmation, rejection, the withdrawn-account lockout and the confirmed-only totals all behaved as specified. **No screen calls them yet** |
-
-  Applying `202609120005` and then `202609130006` to the hosted project, in that
-  order, is a deliberate, separate, owner-authorised step **that has not been
-  taken**. Merging the code was explicitly not authorisation to touch the hosted
-  project; the owner separated the two. Until it happens the roster screen is
-  proven code against an unproven target, and the attendance and identity fixes
-  exist nowhere a real member could benefit from them. `202609130006` is not
-  a purely additive migration — see
-  [DATABASE.md §3.1](./DATABASE.md#31-applying-the-two-pending-migrations--and-why-both-are-additive-is-wrong).
-- **No screen is connected to interventions, responses, vehicle movements or
-  attendance** — those screens still run on device-local fictional state with the
-  actor selector, and each one says so on itself. Since `202609130006` the
-  *commands* behind attendance, acknowledgement and vehicle movement all exist
-  and are tested; what is missing is any interface that calls them, which is why
-  none of this is usable by a member yet.
-- **Drafting a call-out has a server path but no server screen, and no hosted
-  database.** `create_intervention_draft`, `update_intervention_draft` and
-  `discard_intervention_draft` exist and are tested locally and in CI, but the
-  dispatcher screen still writes to device-local state, and the migration that
-  defines them is not on the hosted project. Publishing from the real database is
-  a later slice, not this one.
+- **Nothing is ever sent to anybody.** Publishing a call-out writes rows saying
+  a message is *owed* to each recipient. There is no push, email, SMS, Viber or
+  telephone transport in this application, so a member learns about a call-out
+  only by opening the application. **No screen may say a member was notified**,
+  and the interface says the opposite where it matters — the publish
+  confirmation and the banner on every server-backed screen.
+- ~~No screen is connected to interventions, responses, vehicle movements or
+  attendance.~~ **Resolved 2026-09-13.** `poziv`, `mobilizacija` and `arhiva`
+  read and write the hosted project through the same commands this file
+  specifies. All seven migrations are applied there and fingerprint-verified.
+  What remains on device-local fictional state is the earlier prototype
+  (`dezurni`, `clan`, `vozila`, `prikaz`, `clanovi`, `istorija`), which carries a
+  banner saying so on every one of those screens.
+- **There is no offline queue.** An action taken with no signal is refused and
+  the interface says so. Storing it silently and sending it later - without the
+  person knowing which of the two happened - would be worse than refusing.
 - **A member with no linked account cannot answer a call-out.**
   `current_member_id()` returns NULL for them, so `submit_response` refuses with
   `MEMBER_RECORD_REQUIRED`. This is correct behaviour and it is now visible: the

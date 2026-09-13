@@ -5,6 +5,102 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-13 — Slice 3b: the real operational screens, and the shell around them
+
+Branch `claude/slice-3b-real-operations`, cut from live `main` `0f1cace7`.
+
+**What was built.** Migration `202609140007` (general availability, journey
+progress, `attendance_confirm_many`), the operational data layer
+`src/auth/operations.ts`, one `OperationalGate` every server-backed screen sits
+behind, and three screens: `poziv` (commander), `mobilizacija` (firefighter),
+`arhiva` (the record). Then an installable shell — manifest, generated icons, a
+service worker, offline and update notices — and a GitHub Pages workflow.
+
+**The actor selector is now isolated, not merely ignored.** On a server-backed
+route it is not rendered at all: not tabbable, not announced, not scriptable,
+and no screen there reads the simulation state. The two admin tests that used to
+switch actors *on* a server route now cross over from a simulated one, which
+asserts the stronger property, and a new test states the rule on its own. The
+application opens on `poziv` rather than on the simulation.
+
+**Four defects, each of which had passed every existing check.**
+
+1. `intervention_acknowledgements.acknowledged_at` and
+   `intervention_responses.created_at` do not exist — the columns are
+   `opened_at` and `responded_at`. Both sat on the two most important screens
+   and would have returned HTTP 400 the first time somebody opened them. They
+   compiled, linted and passed 496 tests, because nothing in the suite ever
+   issued the request: the unit tests cover pure functions and the browser tests
+   run against a build with no project configured. `db-tests/client_schema_contract.test.ts`
+   now checks every column and RPC argument the client names against the
+   migrated schema; reintroducing one fails it.
+2. A confirmed attendance interval shorter than half a second rounded to zero
+   seconds and rendered "0 min" — identical to somebody who never attended, on a
+   row marked CONFIRMED. Found only by running the journey against the hosted
+   project. `participationSeconds` now floors a real interval at one second,
+   which is the rule `formatDuration` already applied to 40 seconds.
+3. The first service worker claims the open page moments after the very first
+   visit, and the `controllerchange` handler reloaded on it — discarding
+   whatever the person had already typed, on their first ever use. The browser
+   suite caught this hard: 76 of 78 tests failed. Reloading is now gated on a
+   deliberate "Osvjezi aplikaciju".
+4. My own `DATA_LAYER` list in the new contract test omitted
+   `src/auth/supabaseClient.ts`, so one `.select()` went unchecked. The count
+   assertion at the bottom of that file — written precisely so a parser that
+   quietly stops matching cannot turn the test into an assertion about an empty
+   list — failed and named it.
+
+**The hosted project.** `202609140007` applied; the fingerprint matches a local
+PostgreSQL 16 built from the same files across all seven sections (functions
+`ee2886b99683c44f00216a7e84e7b0dd`, 46 functions). A fictional demonstration
+cast was then created *through the real commands*, not behind them: each account
+completes its own profile, the owner assigns every role, the administrator
+enters the roster. That mattered — an `UPDATE` that set `full_name` directly
+left `profile_complete` false and `current_dvd_role()` correctly returned null,
+which is the schema refusing to let identity be separated from authority.
+
+**What could not be done from here.** The headless browser cannot reach the
+Supabase host through this container's egress relay: the tunnel closes after
+about six seconds with `ERR_CONNECTION_RESET`, for `supabase.co` and for
+unrelated hosts alike. So the journey was driven through the application's own
+data layer from Node instead (`db-tests/hosted_operations.test.ts`, 12 passed
+live), which covers every query, every RPC argument and every returned shape —
+everything except React rendering, which the unit and browser suites cover.
+**No claim here says the interface itself was driven against the hosted
+project.**
+
+**Seeing the screens at all.** After the above, none of the three screens'
+component code had ever executed anywhere - every suite stopped at the gate. Two
+things closed that. `src/ui/views/operational-views.test.tsx` renders them in
+jsdom with a stubbed data layer. `e2e/operational.spec.ts` renders them in a
+real browser against a SECOND build pointed at a project that does not exist,
+with every request answered by `e2e/fixture-server.ts`; nothing real is
+contacted, so it runs in CI. That added phone-width layout, 40px touch targets
+and axe on the populated state - each first proving the screen is actually up,
+because an error notice is perfectly accessible and perfectly narrow.
+
+Writing those found two more faults, both in the new tests rather than the
+product, and both worth recording rather than tidying away. The fixture answered
+every read with an array where PostgREST returns a single object, so a good
+profile read as "Nalog nije potpun". And the primary browser suite was
+unconfigured only because CI happens to have no `.env.local` - a developer has
+one, and the same tests then fail for a reason unrelated to their change. A test
+with a wrong fixture reports a defect that does not exist; a test whose meaning
+depends on the machine reports nothing reliable at all.
+
+One assertion had to be replaced outright. "Confirmed participation totals zero"
+passed even with the confirmed filter deleted, because `participationSeconds`
+enforces the same rule again - the mutation that should have failed it did not.
+Column placement is the view's own decision and does fail. A test believed to be
+load-bearing and isn't is worse than no test.
+
+**Verification on the branch head.** lint pass, typecheck pass, unit 189 passed,
+database 330 passed with 12 skipped, browser 116 passed across two projects,
+build pass, bundle secret scan pass. The 12 skipped are the hosted file, which
+needs credentials CI deliberately does not have — **a skipped test is not
+evidence and that file must never be offered as CI evidence.**
+
+
 ## 2026-09-12 - Both migrations applied to the hosted project, and the journey exercised there
 
 **Applied, in order, with the owner's conditional authorisation.** `202609120005` then

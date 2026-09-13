@@ -15,33 +15,34 @@ facts that no single action is allowed to fake**.
 > 2026. The earlier citizen-report screen is abandoned research, kept only
 > behind an explicitly experimental heading.
 
-> **Most of the application is still a local prototype.** It sends **no push
-> notification, no SMS and no phone call to anyone**, and every member, contact
+> **It sends no notification of any kind.** There is no push, email, SMS, Viber
+> or telephone transport in this application at all. Publishing a call-out writes
+> rows saying a message is *owed* to each recipient; nothing sends them, and
+> nothing in the interface may say a member was notified. Every member, contact
 > label, vehicle and location in this repository is invented.
 >
-> **Two server-backed areas now exist in the code, but only one is active on the
-> hosted project.** *Nalozi i pristup* signs in against the hosted Supabase
-> project, loads the account's role and status from the server before showing
-> anything, and lets the owner grant and withdraw access for real accounts.
-> *Evidencija drustva* manages members, groups, vehicles and account links through
-> tested server commands, but migration `202609120005` has not yet been applied
-> to the hosted project, so that screen is not usable there yet. The remaining
-> operational screens still run on device-local fictional state driven by the
-> actor selector and say so in a banner.
+> **The operational path runs against the real server.** *Poziv i intervencija*
+> drafts, publishes, runs and closes an intervention. *Moj poziv* is where a
+> firefighter states availability, opens the call-out, answers, reports movement
+> and records arrival and departure. *Arhiva i ucesce* is the record afterwards.
+> *Nalozi i pristup* and *Evidencija drustva* cover accounts and the society's
+> roster. All seven migrations are applied to the hosted project and
+> fingerprint-verified against a local PostgreSQL built from the same files.
 >
-> **All six migrations are applied to the hosted project** as of 12 September
-> 2026, and the whole operational journey has been exercised there against
-> disposable fictional data. What the server still lacks is **screens**, not
-> schema: no interface yet calls the attendance, acknowledgement or vehicle
-> commands.
+> **The earlier prototype screens remain, clearly labelled**, under a
+> *Prototip (simulacija)* heading. They run on device-local fictional state
+> driven by an actor selector and say so in a banner on every one of them.
 >
-> The actor selector is a demonstration control, **not a login**. The two are
-> deliberately shaped differently in the interface so a demonstration cannot
-> blur them.
+> The actor selector is a demonstration control, **not a login** — and it is not
+> rendered at all on a server-backed screen, so it cannot be tabbed to,
+> announced or scripted there.
 
-Status: **prototype plus a verified server contract.** Nothing is agreed with
-DVD Tivat yet, nothing is deployed, and nothing here is ready to be relied on in
-an emergency.
+Status: **a working prototype of the whole journey, on real data behind real
+access control.** Nothing is agreed with DVD Tivat yet, no real member exists in
+it, and nothing here is ready to be relied on in an emergency — there is no
+notification transport and no offline queue. See
+[docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) §7 for the honest readiness
+summary.
 
 The member-confirmed operating profile is represented at realistic scale: 52 fictional roster rows,
 one fictional MAN vehicle record, one fictional firefighting SUV record, no shifts, assembly at
@@ -89,6 +90,22 @@ recreates schemas, so point it only at a scratch database.
 
 ## The screens
 
+### The real screens, on the server
+
+| Screen | For | What it does |
+|---|---|---|
+| **Poziv i intervencija** | Owner, administrator, commander | Draft, choose recipients, publish, set status, see who did what, confirm attendance, record vehicle movements, close |
+| **Moj poziv** | Any member with an account | State general availability, open the call-out, answer with an ETA, report movement, record arrival and departure |
+| **Arhiva i ucesce** | Any member with an account | The chronology of a finished intervention and confirmed participation per member |
+| **Evidencija drustva** | Owner and administrator | Members, groups, vehicles and the account-to-member link |
+| **Nalozi i pristup** | **Real accounts** | Sign in and register against the real project; the owner sees every registered account and can assign a role or withdraw access with a mandatory reason, with a permanent audit beneath |
+
+### The earlier prototype, on device-local fictional state
+
+Kept because these still demonstrate ideas the server slice has not reached.
+Every one of them carries a banner saying the data is invented and that no
+access check applies.
+
 | Screen | For | What it does |
 |---|---|---|
 | **Dezurni** | Duty officer | Compose a call, review the exact message and recipients, confirm, watch answers, change status, close or cancel |
@@ -96,26 +113,27 @@ recreates schemas, so point it only at a scratch database.
 | **Vozila** | Anyone at the station | Log vehicle departures and returns as explicit, independent actions |
 | **Prikaz u bazi** | Station wall display | Large read-only overview: incident, location, totals, answers, vehicles |
 | **Clanovi** | Everyone; editable in the admin simulation | The fictional roster, groups and vehicles, with a local-only editor for invented demonstration records |
-| **Evidencija drustva** | Owner and administrator | Server-backed member, group, vehicle and account-link administration. Implemented and tested; unavailable on the hosted project until migration `202609120005` is applied |
-| **Nalozi i pristup** | **Real accounts** | Sign in and register against the real project; the owner sees every registered account and can assign a role or withdraw access with a mandatory reason, with a permanent audit beneath |
 | **Istorija** | Everyone | Past exercises, the timestamped activity log, and a confirmed demo reset |
 | **Prijava gradjana** (under the *Nije u upotrebi* heading) | **Abandoned research, not part of the product** | Out of the operational navigation groups. Retained only so reviewed work can be reused, behind an explicitly experimental heading and a non-emergency notice |
 
-The application opens straight into the duty officer's screen. There is no
-landing page — the point of a prototype is to be driven.
+The application opens on **Poziv i intervencija**, the real commander's console.
+Somebody who is not signed in lands on a screen that says so and offers the way
+in — which is the correct first screen for a real tool, and keeps a fictional
+actor selector from being the first thing anybody sees.
 
 ## What it deliberately does not do
 
 | Absent | Why |
 |---|---|
 | Any real notification | Nobody may be alerted by a demonstration. Delivery is recorded as `NIJE_POKUSANO` and never anything else, enforced by a test |
-| Authentication on the operational screens | *Nalozi i pristup* and *Evidencija drustva* use real authenticated access. The actor selector switches only the remaining fictional prototype screens and protects nothing — which is why each of those screens says so on itself |
-| Shared operational data | Interventions, responses, vehicle movements and history still live in one browser's `localStorage`. Accounts and roles use the hosted server. Shared member/group/vehicle administration is implemented, but remains unavailable on the hosted project until migration `202609120005` is applied |
+| An actor selector on a real screen | It is not rendered there at all, so it cannot be tabbed to, announced by a screen reader or found by a script. It switches only the fictional prototype screens and protects nothing — which is why each of those says so on itself |
+| An offline queue | An action taken with no signal is refused and the interface says so. Storing it and sending it later without saying which of the two happened would be worse than refusing |
 | Real member data | The repository is public. Everything is invented |
 | Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
 | Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
 | Password reset | No mail provider is configured, so a reset form would send nothing while looking as though it had. The screen says that instead of offering one |
-| A fully connected operational server | Identity, access and the society's records use the hosted project, and every operational command exists and is applied there. What is missing is the **interface**: no screen yet reads interventions, responses, attendance or vehicle movements from the server, and notification delivery does not exist at all. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
+| Any notification transport | Publishing writes `QUEUED` rows saying a message is owed. There is no push, email, SMS, Viber or telephone sender, and nothing in the interface may say a member was notified. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
+| A native application | The shell is an installable PWA: manifest, icons, standalone display, and a service worker that caches only the shell and never a server answer. No app store packaging |
 
 **A browser prototype is not evidence that a locked Android or iPhone will raise
 an alarm.** Whether that is achievable at all depends on platform permissions,

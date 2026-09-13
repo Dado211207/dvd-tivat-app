@@ -8,6 +8,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { createCall, goTo, openApp, switchActor } from './helpers';
+import { openOperational } from './fixture-server';
 
 const DIR = 'docs/screenshots';
 
@@ -132,5 +133,37 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await page.getByLabel(/^Opis/).fill('Gust dim se vidi iza izmisljene zgrade.');
     await page.getByLabel(/^Mjesto dogadjaja/).fill('Izmisljeni orijentir kod obale');
     await capture(page, '12-prijava-gradjana-telefon.png');
+  });
+});
+
+/**
+ * The server-backed screens, captured from the fixture build.
+ *
+ * These are the screens the product is actually about, and they cannot be
+ * captured from the ordinary build: with no project configured they all stop at
+ * the gate. The fixture answers for a project that does not exist, so the data
+ * in these images is invented in exactly the same way the rest is.
+ */
+test.describe('screenshots', { tag: '@screenshots' }, () => {
+  test('captures the operational screens', async ({ page }) => {
+    await openOperational(page, 'poziv');
+    await expect(page.getByRole('heading', { name: /Vjezba: provjera opreme/ })).toBeVisible();
+    await capture(page, '08-poziv-intervencija.png');
+
+    await page.getByRole('tab', { name: 'Pregled' }).click();
+    await expect(page.getByTestId('overview-table')).toBeVisible();
+    await capture(page, '09-pregled-odziva.png');
+
+    await page.getByRole('tab', { name: 'Prisustvo' }).click();
+    await expect(page.getByTestId('pick-all-pending')).toBeVisible();
+    await capture(page, '10-prisustvo-potvrda.png');
+
+    await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
+    await expect(page.getByTestId('callout-title')).toBeVisible();
+    await capture(page, '11-moj-poziv.png');
+
+    await openOperational(page, 'arhiva');
+    await expect(page.getByTestId('archive-title')).toBeVisible();
+    await capture(page, '12-arhiva-ucesce.png');
   });
 });
