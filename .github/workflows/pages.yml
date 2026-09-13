@@ -1,0 +1,127 @@
+name: Deploy demonstration build
+
+# Publishes the prototype to GitHub Pages, which is free for a public
+# repository. No paid infrastructure and nothing is purchased.
+#
+# WHAT THIS DEPLOYMENT IS. A demonstration against a Supabase project that
+# holds only fictional members, fictional accounts and clearly labelled
+# exercises. It sends no notification of any kind: there is no push, email,
+# SMS, Viber or telephone transport in the application at all, and publishing a
+# call-out only writes rows that say a message is owed.
+#
+# WHAT GOES INTO THE BUNDLE. The project URL and the PUBLISHABLE key, both of
+# which every Supabase browser application ships and neither of which grants
+# anything on its own - `anon` holds no table privilege and no executable
+# function in this schema. They are read from repository VARIABLES and are
+# deliberately not committed: this repository keeps placeholder configuration
+# only, and the owner can repoint the deployment without a code change.
+#
+# The SECRET key must never appear here, in a variable, in a secret consumed by
+# this workflow, or anywhere else the build can read; `npm run verify:bundle`
+# fails the job if anything of the sort reaches the output.
+#
+# Setting the two variables is a one-time step, described in docs/DEMO_RUNBOOK.md.
+# Without them this workflow fails early and loudly rather than publishing a
+# copy that looks right and refuses every operational screen.
+#
+# Deployment is manual (`workflow_dispatch`) or on a push to main that has
+# already passed CI. It never runs from a pull request, so a fork cannot publish.
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a superseded one is not worth finishing, but an
+# in-flight one is never cancelled half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the demonstration bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A red CI run must not be able to reach the demonstration URL.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Fail early if the project is not configured
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          # Without these the deployed copy would look like the application but
+          # refuse every operational screen, which is worse than not deploying:
+          # somebody would demonstrate it and discover the fault on stage.
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Set the repository variables VITE_SUPABASE_URL and" \
+                 "VITE_SUPABASE_PUBLISHABLE_KEY (Settings -> Secrets and variables" \
+                 "-> Actions -> Variables). See docs/DEMO_RUNBOOK.md."
+            exit 1
+          fi
+          case "$VITE_SUPABASE_PUBLISHABLE_KEY" in
+            sb_secret_*|*service_role*)
+              echo "::error::That is a SECRET key. Only the publishable key may be built in."
+              exit 1 ;;
+          esac
+
+      - name: Point the build at the configured project
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          # Written to a .env file rather than passed as environment variables:
+          # an empty environment variable silently overrides everything else,
+          # which is how a build ends up unconfigured without saying so.
+          {
+            printf 'VITE_SUPABASE_URL=%s\n' "$VITE_SUPABASE_URL"
+            printf 'VITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$VITE_SUPABASE_PUBLISHABLE_KEY"
+          } > .env.production.local
+
+      - uses: actions/configure-pages@v5
+        with:
+          # Turns Pages on the first time, so publishing needs no click in
+          # Settings. Harmless afterwards.
+          enablement: true
+
+      - name: Build
+        run: npm run build
+
+      - name: Refuse to publish a bundle containing a secret
+        run: npm run verify:bundle
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -27,6 +27,7 @@ import {
 import { accessObstacle } from '@/auth/access';
 import { useAccess } from '@/auth/AccessProvider';
 import { makeId, useApp } from '@/state/AppStateContext';
+import { ConnectionBar } from './ui/components/ConnectionBar';
 import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
@@ -288,6 +289,7 @@ export function App() {
       <LiveRegion />
 
       <main ref={mainRef} tabIndex={-1} className={route === 'prikaz' ? 'main main--wide' : 'main'} id="main">
+        <ConnectionBar />
         {storageWarning ? <Notice tone="error">{storageWarning}</Notice> : null}
         <VisibleNotice />
         {/* A member form contains an unsent local draft. Remount only this view

@@ -38,6 +38,15 @@ export default tseslint.config(
     },
   },
   {
+    // The service worker runs in its own global scope, not the window's.
+    files: ['public/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { ...globals.serviceworker },
+    },
+  },
+  {
     // Build and verification scripts run in Node, not a browser.
     files: ['scripts/**/*.mjs'],
     languageOptions: {

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { AccessProvider } from './auth/AccessProvider';
+import { registerServiceWorker } from './pwa';
 import { AppStateProvider } from './state/AppStateContext';
 import './styles/global.css';
 import './styles/workspace.css';
@@ -22,3 +23,7 @@ createRoot(container).render(
     </AccessProvider>
   </StrictMode>,
 );
+
+// After the first render, never before: an offline shell is a convenience and
+// must not delay the screen somebody is waiting on.
+registerServiceWorker();
