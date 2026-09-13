@@ -59,7 +59,22 @@ import {
 export function MobilisationView() {
   return (
     <OperationalGate allow={['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER']} requiresMember>
-      {(context) => <Mobilisation context={context} />}
+      {/* The gate's `requiresMember` already refuses to render without one, so
+          this branch is unreachable - which is exactly why it is a check and
+          not a `!`. This is the screen whose whole argument is that nothing may
+          claim a fact that was not established; asserting one here would be the
+          same mistake in miniature. Narrowed at the boundary, where there are
+          no hooks to call conditionally. */}
+      {(context) =>
+        context.memberId === null ? (
+          <Notice tone="error">
+            <strong>Vas nalog nije povezan sa clanom drustva.</strong> Bez toga vas server ne moze
+            staviti na spisak pozvanih.
+          </Notice>
+        ) : (
+          <Mobilisation context={context} memberId={context.memberId} />
+        )
+      }
     </OperationalGate>
   );
 }
@@ -82,8 +97,7 @@ const EMPTY: MyData = {
   availabilityChangedAt: null,
 };
 
-function Mobilisation({ context }: { context: OperationalContext }) {
-  const memberId = context.memberId!;
+function Mobilisation({ memberId }: { context: OperationalContext; memberId: string }) {
   const [data, setData] = useState<MyData>(EMPTY);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
