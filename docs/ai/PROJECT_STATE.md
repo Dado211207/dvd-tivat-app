@@ -35,17 +35,15 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- Latest merge checkpoint: `0f1cace73b2b0ef13f16b818ccfcd5273663b5e8` — the
-  normal merge commit of PR #19 (documentation: the ADMIN owner decision).
-  The latest product-code checkpoint before it is
-  `45d53640568a75478c875cdc0aa64ca81911c2eb`, the normal merge of PR #18.
+- Latest merge checkpoint: `a60483aede73a0f7e18dc69cbaf9d342b930c241` — the
+  normal merge commit of PR #20, slice 3b. Earlier ones, still nameable because
+  they are history: `0f1cace7` (PR #19, documentation) and `45d53640` (PR #18).
 - Earlier checkpoints, still nameable because they are history: `55fdb093`
   (PR #16, slice 3a) and `7d00d9bb` (PR #17, documentation only).
   **Check GitHub for the moving live `main` rather than trusting any SHA here
   as current** (see the note under the PR table).
-- Active implementation branch: **`claude/slice-3b-real-operations`**, cut from
-  live `main` `0f1cace73b2b0ef13f16b818ccfcd5273663b5e8` (the merge of PR #19).
-  `claude/slice-3b-attendance-truth` is merged and finished.
+- No active implementation branch. `claude/slice-3b-real-operations` is merged
+  (PR #20) and finished, as is `claude/slice-3b-attendance-truth`.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-12
@@ -250,8 +248,11 @@ is also why C8's Viber and telephone fallback is not optional.
 
 ## Status of the latest slice
 
-**Slice 3b - the real operational screens.** On branch
-`claude/slice-3b-real-operations`, off live `main` `0f1cace7`. Not merged.
+**Slice 3b - the real operational screens.** **Merged** as PR #20 on
+2026-09-13 into `main` `a60483aede73a0f7e18dc69cbaf9d342b930c241` - a normal
+merge commit, parents `0f1cace7` (previous `main`) and `7def9425` (the reviewed
+head), its tree byte-identical to that head. CI was green on `7def9425` before
+the merge.
 
 What changed, in one line each:
 
@@ -564,9 +565,8 @@ live.
 
 What is left, in order:
 
-1. **Open the slice 3b pull request, review its exact head, and merge only on
-   green CI.** Normal merge commit, never a squash or a rebase of a shared
-   branch (B8).
+1. ~~Open the slice 3b pull request and merge it on green CI.~~ **Done — PR #20
+   merged normally on 2026-09-13.**
 2. **Set the two repository variables and run the deployment workflow** - see
    docs/DEMO_RUNBOOK.md §3.1. This is the one step between the branch and a
    public demonstration URL, and it needs the owner because this repository
