@@ -2158,3 +2158,33 @@ dialog {
     overflow-y: visible;
   }
 }
+
+/* ---------------------------------------------------------- live indicator */
+
+/*
+ * Says how the screen is staying current: subscribed, or on a timer.
+ *
+ * Deliberately quiet. It is context for somebody deciding how much to trust
+ * what is in front of them, not a status anybody needs to watch - and the dot
+ * never pulses, because an animated marker beside real operational information
+ * reads as an alarm.
+ */
+.live-state {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 var(--sp-3);
+}
+
+.live-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--c-ink-faint);
+  border-radius: 50%;
+}
+
+.live-dot--live { background: var(--c-yes); }
+.live-dot--polling { background: var(--c-later); }
+.live-dot--connecting { background: var(--c-unknown); }
+.live-dot--off { background: var(--c-line-strong); }

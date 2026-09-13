@@ -54,6 +54,7 @@ import {
   type RecipientFacts,
   type VehicleMovement,
 } from '@/auth/operations';
+import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -142,10 +143,20 @@ function CommandConsole({ context }: { context: OperationalContext }) {
     [data.interventions, selectedId],
   );
 
+  /**
+   * Re-read everything.
+   *
+   * `silent` is what a live update uses. An automatic re-read must not flash
+   * "Ucitavanje sa servera..." every few seconds, and - more importantly - must
+   * not look like the screen reset itself, which is the exact complaint this
+   * slice exists to fix. It replaces the data underneath and touches nothing
+   * else: not the tab, not the selection, not a half-typed call-out.
+   */
   const refresh = useCallback(
-    async (keepId?: string | null) => {
+    async (keepId?: string | null, options?: { readonly silent?: boolean }) => {
       const ticket = ++generation.current;
-      setLoading(true);
+      const silent = options?.silent === true;
+      if (!silent) setLoading(true);
       setLoadError(null);
       try {
         const [interventions, members, eligible, vehicles, availability, movements] =
@@ -187,11 +198,25 @@ function CommandConsole({ context }: { context: OperationalContext }) {
             : 'Server trenutno nije dostupan. Prikaz nije osvjezen.',
         );
       } finally {
-        if (mounted.current && ticket === generation.current) setLoading(false);
+        if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
     [],
   );
+
+  /**
+   * Stay current without anybody pressing anything.
+   *
+   * The gate above has already confirmed with the server who this is and that
+   * they may be here, which is why `enabled` can be a constant true - the hook
+   * is never reached otherwise. The notice itself is never read: `refresh` goes
+   * through the same policy-checked queries as every other read on this screen.
+   */
+  const liveStatus = useLiveOperations({
+    enabled: true,
+    interventionId: selectedId,
+    onChange: () => void refresh(selectedId, { silent: true }),
+  });
 
   useEffect(() => {
     void refresh();
@@ -241,6 +266,14 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       ) : null}
       {loading ? <p role="status" className="muted small">Ucitavanje sa servera...</p> : null}
 
+      {/* Says which of the two it is. "Uzivo" and "every twelve seconds" are
+          different promises, and a commander deciding how much to trust what is
+          in front of them needs the difference. */}
+      <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
+        <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
+        {LIVE_STATUS_LABEL[liveStatus]}
+      </p>
+
       <InterventionPicker
         interventions={data.interventions}
         selectedId={selectedId}
@@ -250,27 +283,44 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         }}
       />
 
-      <div
-        role="tabpanel"
-        id={`panel-${tab}`}
-        aria-labelledby={`tab-${tab}`}
-        tabIndex={0}
-        className="tabpanel"
-      >
-        {tab === 'poziv' ? (
-          <CallOutTab
-            data={data}
-            selected={selected}
-            onDone={after}
-            onRefresh={() => void refresh(selectedId)}
-          />
-        ) : null}
-        {tab === 'pregled' ? <OverviewTab data={data} selected={selected} /> : null}
-        {tab === 'prisustvo' ? (
-          <AttendanceTab data={data} selected={selected} onDone={after} context={context} />
-        ) : null}
-        {tab === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
-      </div>
+      {/*
+        Every tab stays MOUNTED and the inactive ones are hidden.
+
+        Found by a browser test: a commander who typed half a call-out, stepped
+        across to `Pregled` to see who was available and came back found the
+        form empty. Rendering only the active tab destroys its `useState`, and
+        the draft with it - the same class of fault as the resume reset, just
+        reached by a different route.
+
+        It also fixes the tab markup. Each button already declared
+        `aria-controls="panel-<id>"`, but only one panel existed at a time and
+        it carried the ACTIVE tab's id, so three of the four pointed at nothing.
+      */}
+      {TABS.map((t) => (
+        <div
+          key={t.id}
+          role="tabpanel"
+          id={`panel-${t.id}`}
+          aria-labelledby={`tab-${t.id}`}
+          tabIndex={0}
+          className="tabpanel"
+          hidden={tab !== t.id}
+        >
+          {t.id === 'poziv' ? (
+            <CallOutTab
+              data={data}
+              selected={selected}
+              onDone={after}
+              onRefresh={() => void refresh(selectedId)}
+            />
+          ) : null}
+          {t.id === 'pregled' ? <OverviewTab data={data} selected={selected} /> : null}
+          {t.id === 'prisustvo' ? (
+            <AttendanceTab data={data} selected={selected} onDone={after} context={context} />
+          ) : null}
+          {t.id === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
+        </div>
+      ))}
     </div>
   );
 }
