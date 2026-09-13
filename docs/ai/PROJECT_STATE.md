@@ -35,15 +35,20 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- Latest merge checkpoint: `a60483aede73a0f7e18dc69cbaf9d342b930c241` — the
-  normal merge commit of PR #20, slice 3b. Earlier ones, still nameable because
-  they are history: `0f1cace7` (PR #19, documentation) and `45d53640` (PR #18).
+- Latest merge checkpoint: `4093a0c63e28953d9d0df86168d1027db8ac5d83` — the
+  normal merge commit of PR #23, presentation stabilisation. Two parents
+  (`c9fb4e84`, the previous `main`, and `f29ed83e`, the reviewed head) and a
+  tree byte-identical to that head. CI was green on `f29ed83e` before the merge.
+  Earlier ones, still nameable because they are history: `c9fb4e84` (PR #22,
+  documentation), `a60483ae` (PR #20, slice 3b), `0f1cace7` (PR #19) and
+  `45d53640` (PR #18).
 - Earlier checkpoints, still nameable because they are history: `55fdb093`
   (PR #16, slice 3a) and `7d00d9bb` (PR #17, documentation only).
   **Check GitHub for the moving live `main` rather than trusting any SHA here
   as current** (see the note under the PR table).
-- No active implementation branch. `claude/slice-3b-real-operations` is merged
-  (PR #20) and finished, as is `claude/slice-3b-attendance-truth`.
+- No active implementation branch. `claude/dvd-tivat-app-dev-n8wctb` is merged
+  (PR #23) and finished, as are `claude/presentation-readiness`,
+  `claude/slice-3b-real-operations` and `claude/slice-3b-attendance-truth`.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-12
@@ -538,6 +543,32 @@ Recorded here so nobody has to rediscover it:
 | Publishable key | Safe in the client bundle by design; it is **not** a secret |
 | Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
 
+### The published copy, confirmed 2026-09-13
+
+`https://dado211207.github.io/dvd-tivat-app/` serves the build from
+`4093a0c` - the merge of PR #23. CI passed on `main` and the
+`Deploy demonstration build` workflow published on its own, as designed.
+
+Checked by fetching the live files, not by trusting the workflow's own report:
+
+| Check | Result |
+|---|---|
+| Index | 200, and its entry bundle hash changed from the previous deployment |
+| `sb_secret_`, `service_role`, `SUPABASE_SECRET`, a JWT header | **0 occurrences** in every served file checked |
+| Project URL in the bundle | present, so the published copy is pointed at the project rather than unconfigured |
+| `Europe/Podgorica`, `Nije zabiljezeno`, the unreachable-server sentence | present in the entry bundle |
+| `safe-area-inset-top`, `table--cards`, `live-dot` | present in the stylesheet |
+| `eligible_recipients`, `intervention_audit` | present in `OperationalGate-*.js` |
+| the twelve-second polling wording | present in `live-*.js` |
+
+**The last two took two wrong turns worth recording**, because both are easy
+traps. The data layer and the live-update hook are in their own code-split
+chunks, not in the entry bundle, so grepping the entry alone made the new work
+look absent. And the "compare against a local build" check that was supposed to
+settle it was run against a **stale local `main`** that still pointed at the
+pre-merge commit, so it confirmed the wrong thing. Neither was a deployment
+fault; both were measurement faults.
+
 **CI does not and must not reach this project.** That would need a secret in CI.
 The local PostgreSQL suite is the authoritative automated evidence; no claim here
 says the hosted project itself was tested by CI.
@@ -639,25 +670,16 @@ live.
 What is left, in order:
 
 1. ~~Open the slice 3b pull request and merge it on green CI.~~ **Done — PR #20
-   merged normally on 2026-09-13.**
-2. **Set the two repository variables** - see docs/DEMO_RUNBOOK.md §3.1. This
-   is the one step between the merged code and a public demonstration URL.
-
-   **It cannot be done from an agent session, and that was established rather
-   than assumed.** `gh` is not installed, and the GitHub REST Actions
-   configuration paths are refused by this environment's egress proxy - not by
-   GitHub, whose own token reports `admin: true` on the repository:
-
-   | Request | Result |
-   |---|---|
-   | `GET /repos/.../actions/runs` | 200 |
-   | `GET /repos/.../actions/variables` | **403, "Access to this GitHub Actions path is not permitted through this proxy"** |
-   | `POST /repos/.../actions/variables` | **403, same proxy message** |
-   | `GET /repos/.../pages` | **403, same proxy message** |
-
-   No workflow dispatch is needed afterwards: `Deploy demonstration build`
-   already runs by itself after CI passes on `main`. Setting the two variables
-   and pushing (or re-running CI) is sufficient.
+   merged normally on 2026-09-13.** So is PR #23, the presentation-stabilisation
+   slice, merged normally the same day with CI green on its exact head.
+2. ~~Set the two repository variables.~~ **Done by the owner on 2026-09-13.**
+   The public URL serves a build pointed at the hosted project, confirmed by
+   fetching it: `https://dado211207.github.io/dvd-tivat-app/` returns 200, its
+   bundle carries the project URL, and it contains no secret key. The earlier
+   note that this could not be done from an agent session stands as a record of
+   why it had to wait for the owner - `gh` is absent and this environment's
+   egress proxy refuses the GitHub Actions configuration paths with 403 while
+   permitting `/actions/runs`.
 3. **Rehearse the journey in docs/DEMO_RUNBOOK.md §5** on the devices that will
    be used, from two browser profiles.
 4. Only then notification transport (**B3**), which must not be promised before
