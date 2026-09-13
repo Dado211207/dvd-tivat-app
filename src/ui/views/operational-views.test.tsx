@@ -1008,6 +1008,80 @@ describe('every recorded time and duration reaches the screen', () => {
     expect(rowFor(MEMBER_ID)).toBe(live.member);
   });
 
+  /**
+   * The closure note, quoted into a sentence.
+   *
+   * The hosted review found a chronology line reading
+   * "Vjezba zavrsena - test operativnog prototipa..". The commander's note
+   * already ended in a full stop; the sentence the archive builds added a
+   * second one. The fix is in the QUOTATION, never in the stored text -
+   * `operational_audit` is append-only and the note is evidence.
+   */
+  describe('a typed note quoted inside a built sentence', () => {
+    const NOTE = 'Vjezba zavrsena - test operativnog prototipa.';
+
+    async function closedWith(note: string, fromAudit: boolean): Promise<string> {
+      const operations = await import('@/auth/operations');
+      await stub();
+      vi.mocked(operations.fetchInterventions).mockResolvedValue([
+        { ...TIMED_INTERVENTION, closeReason: note },
+      ]);
+      vi.mocked(operations.fetchInterventionAudit).mockResolvedValue(
+        fromAudit
+          ? [
+              ...TIMED_AUDIT,
+              {
+                id: 'b8', at: '2026-09-13T09:00:00.000Z', type: 'INTERVENTION_CLOSED',
+                detail: { reason: note, open_attendance: 0 },
+                actorName: 'Komandir Smjene', actorIsYou: true,
+              },
+            ]
+          : null,
+      );
+      await show(<ArchiveView />, 'COMMANDER');
+      return (
+        [...container.querySelectorAll('[data-testid="archive-timeline"] li')]
+          .map((li) => li.textContent ?? '')
+          .find((line) => line.includes('zatvorio intervenciju')) ?? ''
+      );
+    }
+
+    it('does not end the recorded line in two full stops', async () => {
+      const line = await closedWith(NOTE, true);
+      expect(line, 'the closing line must be on screen').toContain('Vjezba zavrsena');
+      expect(line).not.toContain('..');
+      expect(line).toMatch(/prototipa\.$/);
+    });
+
+    it('does not end the reconstructed line in two full stops either', async () => {
+      // The fallback chronology builds the same sentence from the intervention
+      // row, and had the same defect.
+      const line = await closedWith(NOTE, false);
+      expect(line).toContain('Vjezba zavrsena');
+      expect(line).not.toContain('..');
+      expect(line).toMatch(/prototipa\.$/);
+    });
+
+    it('still shows the stored note exactly as it was typed', async () => {
+      // The whole point: presentation changed, evidence did not. The record
+      // header quotes the note verbatim, trailing full stop and all.
+      await closedWith(NOTE, true);
+      const record = container.querySelector('[data-testid="archive-record"]')?.textContent ?? '';
+      expect(record, 'the stored text is unaltered').toContain(NOTE);
+    });
+
+    it('keeps a question or exclamation mark, which carry meaning', async () => {
+      const line = await closedWith('Da li je oprema vracena?', true);
+      expect(line).toMatch(/vracena\?$/);
+      expect(line).not.toMatch(/vracena\?\./);
+    });
+
+    it('adds the full stop when the note has none', async () => {
+      const line = await closedWith('Vjezba zavrsena bez tacke', true);
+      expect(line).toMatch(/bez tacke\.$/);
+    });
+  });
+
   it('does not round a ten-second interval up to a minute anywhere on the screen', async () => {
     // The defect as the reviewer would check it: the whole rendered archive,
     // searched for the invented minute.

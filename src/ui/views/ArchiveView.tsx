@@ -55,8 +55,10 @@ import {
   AUDIT_EVENT_LABEL,
   ATTENDANCE_STATE_LABEL,
   ATTENDANCE_STATE_SYMBOL,
+  endSentence,
   formatTime,
   formatTimeOrNotRecorded,
+  forSentence,
   INTERVENTION_KIND_LABEL,
   INTERVENTION_STATUS_LABEL,
   JOURNEY_LABEL,
@@ -567,7 +569,9 @@ function recordedChronology(
       key: entry.id,
       at: entry.at,
       who: actor,
-      text: `${said ?? `je zabiljezio dogadjaj (${entry.type})`}${describe(entry, names)}.`,
+      // `endSentence` rather than a bare ".": a quoted note may already carry
+      // its own terminator, and "prototipa.." is the defect this replaced.
+      text: endSentence(`${said ?? `je zabiljezio dogadjaj (${entry.type})`}${describe(entry, names)}`),
     });
   }
 
@@ -608,6 +612,18 @@ function describe(entry: AuditEvent, names: ReadonlyMap<string, string>): string
     const value = detail[key];
     return typeof value === 'string' && value !== '' ? value : null;
   };
+  /**
+   * A note somebody TYPED, about to be quoted inside a sentence this function
+   * builds.
+   *
+   * The hosted review found a line reading "Vjezba zavrsena - test operativnog
+   * prototipa..": the commander's closing note already ended in a full stop and
+   * the sentence around it added a second one. `forSentence` trims the trailing
+   * punctuation from the quoted copy only - the stored audit text is never
+   * touched, and the record header above still shows it character for
+   * character.
+   */
+  const note = (key: string): string | null => forSentence(text(key));
   const count = (key: string): number | null => {
     const value = detail[key];
     return typeof value === 'number' ? value : null;
@@ -648,17 +664,17 @@ function describe(entry: AuditEvent, names: ReadonlyMap<string, string>): string
     case 'ATTENDANCE_UNCONFIRMED':
     case 'ATTENDANCE_CORRECTED': {
       const who = member();
-      const reason = text('note');
+      const reason = note('note');
       return `${who === null ? '' : ` za clana ${who}`}${reason === null ? '' : ` - ${reason}`}`;
     }
     case 'ATTENDANCE_REJECTED': {
       const who = member();
-      const reason = text('reason');
+      const reason = note('reason');
       return `${who === null ? '' : ` clana ${who}`}: ${reason ?? 'bez upisanog razloga'}`;
     }
     case 'INTERVENTION_CLOSED':
     case 'INTERVENTION_CANCELLED': {
-      const reason = text('reason');
+      const reason = note('reason');
       const open = count('open_attendance');
       const stillOpen = open !== null && open > 0 ? ` (otvorenih prijava prisustva: ${open})` : '';
       return `${reason === null ? '' : `: ${reason}`}${stillOpen}`;
@@ -768,11 +784,14 @@ function buildChronology(
   }
 
   if (record.closedAt !== null) {
+    const closingNote = forSentence(record.closeReason);
     events.push({
       key: 'closed',
       at: record.closedAt,
       who: 'Komandir',
-      text: `je zatvorio intervenciju${record.closeReason ? `: ${record.closeReason}` : '.'}`,
+      // Same rule as the recorded chronology: the quoted copy loses a trailing
+      // full stop so the built sentence does not end in two.
+      text: endSentence(`je zatvorio intervenciju${closingNote === null ? '' : `: ${closingNote}`}`),
     });
   }
 

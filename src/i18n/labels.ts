@@ -529,3 +529,17 @@ export function forSentence(note: string | null | undefined): string | null {
   const trimmed = note.trim().replace(/[.,;:\s]+$/u, '');
   return trimmed === '' ? null : trimmed;
 }
+
+/**
+ * Close a sentence the application built, without doubling the punctuation.
+ *
+ * The other half of the same defect. `forSentence` handles a note quoted in the
+ * MIDDLE of a sentence; this handles the end of it - where a note may
+ * legitimately be the last thing on the line and may legitimately end in "?" or
+ * "!", which `forSentence` deliberately keeps. Appending a full stop to those
+ * would produce "vracena?." which is no better than "prototipa..".
+ */
+export function endSentence(sentence: string): string {
+  const trimmed = sentence.trimEnd();
+  return /[.!?…]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
+}
