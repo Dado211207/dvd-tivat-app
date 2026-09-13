@@ -88,6 +88,43 @@ export interface Intervention {
   readonly createdAt: string;
 }
 
+/**
+ * The timestamp that belongs to the state a row is showing.
+ *
+ * Found during the device test: the archive list printed
+ * "Pozar - Zatvoreno - 18:40" where 18:40 was the PUBLICATION time. A reader
+ * has every reason to read the time as the time of the state next to it, so
+ * that row said the intervention was closed at the moment it was opened.
+ *
+ * Each state has exactly one timestamp that means it, and the database
+ * guarantees the matching column is present:
+ *
+ *   DRAFT                                     `created_at`
+ *   PUBLISHED/ASSEMBLING/DEPLOYED/CONTAINED   `published_at`  (constraint
+ *                                             `intervention_published_fields`)
+ *   CLOSED/CANCELLED                          `closed_at`     (constraint
+ *                                             `intervention_closed_fields`)
+ *
+ * Returns null rather than falling back to a different column when the
+ * matching one is missing. A fallback is how this defect happened in the first
+ * place: it produces a plausible time that means something else. The caller
+ * says "Nije zabiljezeno" instead, which is true.
+ */
+export function stateTimestamp(record: Intervention): string | null {
+  switch (record.status) {
+    case 'DRAFT':
+      return record.createdAt;
+    case 'PUBLISHED':
+    case 'ASSEMBLING':
+    case 'DEPLOYED':
+    case 'CONTAINED':
+      return record.publishedAt;
+    case 'CLOSED':
+    case 'CANCELLED':
+      return record.closedAt;
+  }
+}
+
 export interface RecipientFacts {
   readonly memberId: string;
   readonly memberName: string;

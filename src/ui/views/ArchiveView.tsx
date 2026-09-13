@@ -30,6 +30,7 @@ import {
   fetchVehicleMovements,
   formatDuration,
   participationSeconds,
+  stateTimestamp,
   type AttendanceInterval,
   type Intervention,
   type ParticipationTotal,
@@ -44,6 +45,7 @@ import {
   ATTENDANCE_STATE_LABEL,
   ATTENDANCE_STATE_SYMBOL,
   formatTime,
+  formatTimeOrNotRecorded,
   INTERVENTION_KIND_LABEL,
   INTERVENTION_STATUS_LABEL,
   JOURNEY_LABEL,
@@ -183,10 +185,16 @@ function Archive() {
                   onClick={() => setSelectedId(item.id)}
                 >
                   <span className="picker__title">{item.title}</span>
-                  <span className="picker__meta">
+                  <span className="picker__meta" data-testid={`archive-meta-${item.id}`}>
                     {INTERVENTION_KIND_LABEL[item.kind] ?? item.kind} -{' '}
                     {INTERVENTION_STATUS_LABEL[item.status] ?? item.status} -{' '}
-                    {formatTime(item.publishedAt ?? item.createdAt)}
+                    {/*
+                      The time that belongs to the state printed beside it. A
+                      row reading "Zatvoreno" once showed the publication time,
+                      which said the intervention was closed the moment it
+                      opened. See `stateTimestamp`.
+                    */}
+                    {formatTimeOrNotRecorded(stateTimestamp(item))}
                   </span>
                 </button>
               </li>

@@ -258,19 +258,123 @@ export const T = {
   close: 'Zatvori',
 } as const;
 
-/** Formats an ISO timestamp for display. Local time of the viewing device. */
-export function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '-';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}. ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+// ---------------------------------------------------------------------------
+// Time
+//
+// Every timestamp in this system is stored `timestamptz` and travels as UTC.
+// It is displayed in EUROPE/PODGORICA, always - never in the timezone of the
+// device doing the reading.
+//
+// That distinction is not pedantry. The record answers "when did this happen",
+// and the answer has to be the same sentence for everybody: a commander
+// reviewing an intervention from abroad, a laptop whose clock region was never
+// set, and the phone that was at the fire. A device-local rendering makes the
+// same stored fact print three different times, and nothing on the screen
+// would say which one to believe.
+//
+// Montenegro observes summer time, so the offset is +1 or +2 depending on the
+// date. The IANA database knows this and we do not, which is exactly why the
+// zone is named rather than an offset being added by hand.
+// ---------------------------------------------------------------------------
+
+export const SOCIETY_TIME_ZONE = 'Europe/Podgorica';
+
+/** What an unrecorded fact says. Never a zero, a dash, or a guessed value. */
+export const NOT_RECORDED = 'Nije zabiljezeno';
+
+/**
+ * Builds a formatter, or null if the runtime has no timezone data.
+ *
+ * A runtime built without full ICU throws on a named zone. Falling back to
+ * device-local time would then be silently wrong, so `zonedParts` reports the
+ * failure to its callers instead of hiding it, and `timeZoneIsSupported()`
+ * lets a test assert the real path is the one in use.
+ */
+function buildFormatter(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat | null {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { ...options, timeZone: SOCIETY_TIME_ZONE });
+  } catch {
+    return null;
+  }
 }
 
-export function formatClock(iso: string): string {
+const DATE_AND_TIME = buildFormatter({
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+const TIME_ONLY = buildFormatter({ hour: '2-digit', minute: '2-digit', hour12: false });
+
+/** True when times really are being rendered in Podgorica rather than fallback. */
+export function timeZoneIsSupported(): boolean {
+  return DATE_AND_TIME !== null && TIME_ONLY !== null;
+}
+
+interface ZonedParts {
+  readonly day: string;
+  readonly month: string;
+  readonly year: string;
+  readonly hour: string;
+  readonly minute: string;
+}
+
+/**
+ * Null for an unusable timestamp or an unusable runtime. Also null if any
+ * expected piece is missing, rather than composing "undefined.09.2026." out of
+ * whatever did arrive - a visibly absent time is recoverable, a malformed one
+ * that looks like data is not.
+ */
+function zonedParts(formatter: Intl.DateTimeFormat | null, iso: string): ZonedParts | null {
+  if (formatter === null) return null;
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '-';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  if (Number.isNaN(date.getTime())) return null;
+
+  const found: Record<string, string> = {};
+  for (const part of formatter.formatToParts(date)) found[part.type] = part.value;
+
+  const { day = '', month = '', year = '', hour = '', minute = '' } = found;
+  if (hour === '' || minute === '') return null;
+  return { day, month, year, hour, minute };
+}
+
+/**
+ * A full date and time, in Podgorica: "13.09.2026. 18:40".
+ *
+ * The year is present on purpose. An archive is read months and years later,
+ * and "13.09." alone cannot tell last year's fire from this one's.
+ */
+export function formatTime(iso: string): string {
+  const parts = zonedParts(DATE_AND_TIME, iso);
+  if (parts === null) return '-';
+  return `${parts.day}.${parts.month}.${parts.year}. ${parts.hour}:${parts.minute}`;
+}
+
+/** The full date and time with the zone named, for a record header. */
+export function formatTimeWithZone(iso: string): string {
+  const shown = formatTime(iso);
+  return shown === '-' ? shown : `${shown} (lokalno vrijeme, Crna Gora)`;
+}
+
+/** Just the clock, in Podgorica: "18:40". For rows already dated by context. */
+export function formatClock(iso: string): string {
+  const parts = zonedParts(TIME_ONLY, iso);
+  if (parts === null) return '-';
+  return `${parts.hour}:${parts.minute}`;
+}
+
+/**
+ * A time, or an honest statement that there isn't one.
+ *
+ * Use this wherever the timestamp may legitimately be absent. Printing a dash
+ * or falling back to a different column would both read as an answer.
+ */
+export function formatTimeOrNotRecorded(iso: string | null | undefined): string {
+  if (iso === null || iso === undefined || iso === '') return NOT_RECORDED;
+  return formatTime(iso);
 }
 
 // ---------------------------------------------------------------------------

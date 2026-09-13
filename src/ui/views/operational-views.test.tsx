@@ -318,6 +318,56 @@ describe('the archive renders on real data', () => {
     const text = await show(<ArchiveView />, 'FIREFIGHTER');
     expect(text).not.toMatch(/nije za vasu ulogu/i);
   });
+
+  /**
+   * The archive list once printed `publishedAt ?? createdAt` on every row, so a
+   * row reading "Zatvoreno" showed the moment the call-out was OPENED. Reported
+   * from the device test, and a false statement about a record that exists to
+   * be trusted months later.
+   *
+   * The three times are deliberately hours apart, and asserted as rendered
+   * text, so a row showing the wrong column cannot pass by coincidence.
+   */
+  describe('each row shows the time of the state it is labelled with', () => {
+    const THREE_TIMES = {
+      createdAt: '2026-09-13T06:00:00.000Z', //  08:00 in Podgorica
+      publishedAt: '2026-09-13T09:00:00.000Z', // 11:00
+      closedAt: '2026-09-13T17:00:00.000Z', //   19:00
+    };
+
+    async function rowText(status: 'PUBLISHED' | 'CLOSED' | 'CANCELLED'): Promise<string> {
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([
+        { ...INTERVENTION, ...THREE_TIMES, status, closeReason: 'Vjezba zavrsena.' },
+      ]);
+      await show(<ArchiveView />, 'COMMANDER');
+      return container.querySelector(`[data-testid="archive-meta-${INTERVENTION_ID}"]`)?.textContent ?? '';
+    }
+
+    it('a closed row shows the closure time, not the publication time', async () => {
+      const meta = await rowText('CLOSED');
+      expect(meta).toContain('Zatvoreno');
+      expect(meta, 'the closure time, 17:00Z in Podgorica').toContain('19:00');
+      expect(meta, 'the publication time must not appear on a closed row').not.toContain('11:00');
+      expect(meta, 'nor the creation time').not.toContain('08:00');
+    });
+
+    it('a cancelled row shows when it was cancelled', async () => {
+      const meta = await rowText('CANCELLED');
+      expect(meta).toContain('Otkazano');
+      expect(meta).toContain('19:00');
+      expect(meta).not.toContain('11:00');
+    });
+
+    it('a published row still shows the publication time', async () => {
+      // The fix must not overcorrect: a row that has not been closed is
+      // correctly described by when it was published.
+      const meta = await rowText('PUBLISHED');
+      expect(meta).toContain('Objavljeno');
+      expect(meta).toContain('11:00');
+      expect(meta).not.toContain('19:00');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
