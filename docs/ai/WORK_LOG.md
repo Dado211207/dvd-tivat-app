@@ -5,6 +5,139 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-13 (late evening) - The measured-record slice
+
+Nine defects from an independent hosted-browser review. Every one of them was
+about a fact the server already held and a screen that did not print it, or
+printed it wrongly - so almost nothing here is new capability. The exception is
+the Realtime acceptance test, which is new evidence rather than new behaviour.
+
+**The one arithmetic defect, and where it came from.**
+
+The hosted archive displayed an attendance interval of
+`16:28:11.374456+00 -> 16:28:21.965675+00` - **10.591219 seconds** - as
+**"1 min"**, and carried that invented minute into the participation total.
+
+The cause was a line added deliberately in an earlier slice:
+
+```ts
+if (hours === 0) return `${Math.max(minutes, 1)} min`;
+```
+
+`formatDuration` could not express seconds at all, so a real short interval
+rendered as "0 min" - indistinguishable on a board from somebody who never
+attended. The `Math.max` was the patch for that, and it made every interval
+under a minute a lie.
+
+Fixed by removing the reason for the patch rather than the patch: `src/auth/duration.ts`
+works in milliseconds, sums before formatting, rounds to the nearest second
+once, and can say `0 s`, `10 s`, `59 s`, `1 min 1 s`, `1 h 30 min`. `null` is
+"not measured" and prints `Nije zabiljezeno`; `0 s` is a measurement of no time.
+The two stay distinguishable, which is what the old code could not do in either
+direction.
+
+Three old tests were encoding the defect and were rewritten with a note saying
+what they used to assert and why it was wrong: `operations.test.ts` demanded
+"1 min" for forty seconds and `toBe(1)` second for a 300 ms interval;
+`operational-views.test.tsx` expected "0 min".
+
+**A defect my own tests found while I was fixing that one.** The first draft of
+`RecipientTimings.confirmedMs` was `number`, so a member with no attendance
+record at all rendered `0 s` confirmed. That is the same conflation in the other
+direction. It is `number | null` now: null when no confirmed interval has both a
+start and an end, which also covers an interval still open and one waiting for
+the commander.
+
+**The metrics themselves.** `src/auth/metrics.ts` is pure and takes rows the
+screens already have. Every "first" goes through `earliestBy`, which compares
+timestamps and breaks ties on a stable key - never `[0]` of a list, because a
+list arrives in whatever order a query returned and an ordering that happens to
+be right today is a defect waiting for a different query plan. Its fixture is
+deliberately in the WRONG order: the member who opened last is first in the
+list, the member who arrived first is last.
+
+`src/ui/components/timings.tsx` renders them, and both screens use it. The
+archive composes the individual panels around the chronology and participation
+ledger it already had; the commander's console takes all four. The archive's
+confirmed total now reads `summarise()`'s answer instead of re-adding the
+intervals itself - two loops for one number is exactly the drift the brief
+warned about.
+
+**Every fact keeps its own label.** Publication-to-opening,
+publication-to-answer, opening-to-answer and publication-to-arrival share a cell
+when the screen is narrow and never a label. A single "vrijeme odaziva" would
+have to pick one and discard three, and a commander reviewing a slow turnout
+needs to know which part was slow. A test asserts the phrase appears nowhere.
+
+**Seconds everywhere.** `formatTime` is now `dd.MM.yyyy. HH:mm:ss`. Without
+seconds a ten-second interval and a one-second interval print the same two
+timestamps, so a reader cannot check a duration against the times it came from -
+which is how the rounding defect stayed invisible on a screen that had the
+evidence on it.
+
+**Citizen reporting, out of the navigation.** The deployed sidebar still offered
+`Prijava gradjana` under a heading reading "Nije u upotrebi". A heading saying a
+destination is unused does not stop anybody tapping it. The entry is gone; the
+route, the view and its own "this is not an emergency channel" refusal all stay,
+so an old link still lands somewhere that explains itself.
+
+Reviewing the rest of that group: `dezurni`, `clan`, `vozila`, `clanovi` and
+`istorija` each duplicate a screen that is now server-backed, so a commander can
+run a call-out on the simulation by accident and find nothing on the server
+afterwards. Not offered either, the same way. `prikaz` stays - the station
+display has no server-backed equivalent, so it demonstrates something rather
+than competing with something. `ROUTES_NOT_OFFERED` makes that a decision rather
+than an omission, and a test requires every route to be either offered or listed
+there.
+
+**Punctuation.** The chronology rendered "Vjezba zavrsena - test operativnog
+prototipa..". `forSentence` trims a trailing stop, comma, semicolon or colon
+from the quoted copy; `endSentence` closes the built sentence only when it does
+not already end. A note ending in "?" or "!" keeps it and gains nothing. The
+stored audit text is untouched, and the record header still quotes it character
+for character - asserted.
+
+**The Realtime acceptance, done properly this time.**
+
+A sequential logout/login test proves nothing: one session at a time never has
+to deliver anything to anybody. `e2e/live-project.ts` holds ONE mutable store in
+the Node test process and serves it to every browser context that installs it,
+so a command from context A really does change the row context B reads. Both
+contexts come from `browser.newContext()` - separate cookie jar, separate
+`localStorage`, separate Supabase session. One test reads the stored session key
+out of each and requires them to name different accounts, because otherwise
+every other assertion in the file would be one person twice.
+
+`page.route` does not intercept a WebSocket, which is why the old fixture always
+fell back to polling - a test that waits twelve seconds and then sees the change
+has tested a timer, not Realtime. `context.routeWebSocket` does, so the hub
+speaks the Phoenix protocol `@supabase/realtime-js` actually sends: `phx_join`
+carrying the client's `postgres_changes` bindings, a `phx_reply` echoing them
+back **unchanged** with server ids (realtime-js compares every field and errors
+the channel on a mismatch - the trap that silently turns this into a polling
+test), heartbeat replies, and `postgres_changes` frames carrying those ids.
+`useLiveOperations` runs unmodified and reports LIVE, which every test asserts
+before asserting anything about delivery.
+
+What is proved: the fifteen steps arrive on the other screen with no navigation
+and no manual refresh; a change made while the socket is cut still arrives; a
+payload pushed down a member's own socket for a row they may not read never
+reaches the screen; one screen opens exactly one channel however often it
+re-renders.
+
+What is NOT proved and is not claimed: the hosted project itself, and two
+physical devices on different networks. Both are written up as a twenty-minute
+owner checklist in `docs/DEMO_RUNBOOK.md` section 8a.
+
+**A layout defect my own change introduced**, found by `e2e/viewport.spec.ts` at
+320px: the new fact lines measured 257px of content in a 236px cell. A flex
+item's `min-width` defaults to `auto` - "never narrower than my content" - so
+`overflow-wrap: anywhere` never got the chance to break anything. `min-width: 0`
+on both halves, and below 480px the label stacks above the value so a timestamp
+gets a full line instead of breaking mid-value.
+
+---
+
 ## 2026-09-13 (evening) - The presentation-stabilisation slice
 
 Ten reported problems from the physical device test, each root-caused before it

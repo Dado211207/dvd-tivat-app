@@ -139,7 +139,10 @@ test.describe('the archive', () => {
   test('counts nothing for an interval nobody confirmed', async ({ page }) => {
     await openOperational(page, 'arhiva');
     const total = page.getByTestId('archive-total');
-    await expect(total).toContainText('0 min');
+    // "0 s", not "0 min". This assertion used to demand the latter, because the
+    // formatter could not express seconds at all - which is the same limitation
+    // that later printed a ten-second interval as "1 min".
+    await expect(total).toContainText('0 s');
     await expect(total).not.toContainText('1 h 30 min');
   });
 

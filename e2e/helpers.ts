@@ -15,8 +15,33 @@ export async function openApp(page: Page, route = 'dezurni') {
   await page.waitForSelector('main');
 }
 
+/**
+ * Moves to a route the way the application itself does.
+ *
+ * Clicks the sidebar entry when there is one. There is deliberately no longer
+ * an entry for every route: citizen reporting and the simulations that
+ * duplicate a server-backed screen were taken out of the deployed navigation,
+ * while their routes, their code and their tests all stay - see `NAV_GROUPS`
+ * in `src/App.tsx`.
+ *
+ * For those, the hash is set directly. That is a `hashchange`, not a page load,
+ * so the router responds exactly as it does to a link and no in-memory state is
+ * lost - which a `page.goto` would have quietly destroyed, turning several of
+ * these tests into tests of a freshly-booted application.
+ */
 export async function goTo(page: Page, route: string) {
-  await page.getByTestId(`nav-${route}`).click();
+  const link = page.getByTestId(`nav-${route}`);
+  if ((await link.count()) > 0) {
+    await link.click();
+  } else {
+    await page.evaluate((target) => {
+      window.location.hash = `#/${target}`;
+    }, route);
+  }
+  await page.waitForFunction(
+    (target) => window.location.hash === `#/${target}`,
+    route,
+  );
 }
 
 export async function switchActor(page: Page, name: string) {

@@ -1082,6 +1082,76 @@ describe('every recorded time and duration reaches the screen', () => {
     });
   });
 
+  /**
+   * Something still happening is not something nobody recorded.
+   *
+   * Caught by reading a regenerated documentation screenshot: an intervention
+   * that was still running showed "Ukupno trajanje: Nije zabiljezeno", and its
+   * current state showed "Jos traje" in the Do column beside "Nije zabiljezeno"
+   * as its duration. Both HAVE a start; what they lack is an end, and calling
+   * that unrecorded suggests somebody failed to write something down.
+   */
+  describe('a duration that has not finished yet', () => {
+    async function openIntervention(): Promise<void> {
+      const operations = await import('@/auth/operations');
+      await stub();
+      vi.mocked(operations.fetchInterventions).mockResolvedValue([
+        // Published, never closed, and moved into one further state.
+        { ...TIMED_INTERVENTION, status: 'DEPLOYED' as const, closedAt: null, closeReason: null },
+      ]);
+      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue([
+        { ...TIMED_MOVEMENTS[0]!, returnedAt: null },
+      ]);
+      await show(<ArchiveView />, 'COMMANDER');
+    }
+
+    it('says the intervention is still running rather than unmeasured', async () => {
+      await openIntervention();
+      expect(textOf('total-duration')).toBe('Jos traje');
+      expect(textOf('total-duration')).not.toContain('Nije zabiljezeno');
+    });
+
+    it('says the same of the state it is currently in', async () => {
+      await openIntervention();
+      const rows = [...container.querySelectorAll('[data-testid="state-periods"] tbody tr')].map(
+        (tr) => tr.textContent ?? '',
+      );
+      const last = rows.at(-1) ?? '';
+      expect(last, 'the open period').toContain('Jos traje');
+      expect(last, 'and not a claim that nothing was written down')
+        .not.toContain('Nije zabiljezeno');
+      // The periods that DID end still show their measured duration.
+      expect(rows[0]).toContain('3 min');
+    });
+
+    it('says a vehicle is still out rather than unmeasured', async () => {
+      await openIntervention();
+      const row = container.querySelector('[data-testid="vehicle-periods"] tbody tr')?.textContent ?? '';
+      expect(row).toContain('Jos nije vraceno'); // the return time
+      expect(row).toContain('Jos je van baze'); // the duration
+      expect(row).not.toContain('Nije zabiljezeno');
+    });
+
+    it('does not print a missing milestone twice', async () => {
+      // "Nije zabiljezeno" once, as the duration. The instant below it is
+      // omitted rather than repeating the same absence as a second fact.
+      await archive();
+      const vehicle = container.querySelector('[data-testid="first-vehicle"]');
+      expect(vehicle?.textContent).toContain('6 min');
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue([]);
+      act(() => root.unmount());
+      container.remove();
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      await show(<ArchiveView />, 'COMMANDER');
+      const occurrences =
+        (textOf('first-vehicle').split('Nije zabiljezeno').length - 1);
+      expect(occurrences, 'one absence, stated once').toBe(1);
+    });
+  });
+
   it('does not round a ten-second interval up to a minute anywhere on the screen', async () => {
     // The defect as the reviewer would check it: the whole rendered archive,
     // searched for the invented minute.

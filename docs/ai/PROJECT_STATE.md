@@ -253,6 +253,66 @@ is also why C8's Viber and telephone fallback is not optional.
 
 ## Status of the latest slice
 
+**The measured record.** Nine defects from an independent hosted-browser review,
+fixed on branch `claude/dvd-tivat-app-dev-n8wctb`. Full detail is in
+`docs/ai/WORK_LOG.md`; the headlines:
+
+- **A ten-second attendance interval displayed as "1 min"**, and the invented
+  minute reached the participation total. `src/auth/duration.ts` measures in
+  milliseconds, sums before formatting and rounds once, and can express
+  seconds - which removes the reason the old `Math.max(minutes, 1)` floor
+  existed. `null` is "not measured"; `0 s` is a measurement of no time.
+- **The commander's overview showed five states per member and not one
+  duration.** `src/auth/metrics.ts` computes every response timing and every
+  summary figure; `src/ui/components/timings.tsx` renders them, on BOTH the
+  console and the archive, from one `summarise()` - so one incident cannot show
+  two different numbers.
+- **Every "first" is chosen chronologically**, through `earliestBy`, with a
+  stable tie-break. Never `[0]` of a list.
+- **Nothing is collapsed into a "vrijeme odaziva".** Publication-to-opening,
+  publication-to-answer, opening-to-answer and publication-to-arrival each keep
+  their own label. A test asserts the phrase appears nowhere.
+- **Vehicle and state durations are printed**, with the actor behind each end.
+  The archive used to show two timestamps and leave the reader to subtract them.
+- **Times carry seconds** (`dd.MM.yyyy. HH:mm:ss`), so a duration can be checked
+  against the timestamps it came from.
+- **Citizen reporting is out of the deployed navigation**, together with the
+  five simulations that duplicate a server-backed screen. Routes and code stay;
+  `ROUTES_NOT_OFFERED` makes the exclusion a decision a test can check.
+- **Closure notes no longer produce "prototipa.."**; the stored audit text is
+  untouched and still quoted verbatim in the record header.
+- **Realtime is proved across two isolated browser contexts** with a real
+  WebSocket - see the section below for exactly what that does and does not
+  cover.
+
+**No migration in this slice.** Everything needed was already on the hosted
+project: `attendance_totals()` already returns exact `numeric` seconds summed
+server-side, `vehicle_movements` already carries `departed_by`/`returned_by`,
+and `operational_audit` already records `movement_id` on both vehicle events.
+The defect was entirely in what the client did with those rows.
+
+### The Realtime evidence, and its limits
+
+`e2e/realtime-acceptance.spec.ts` drives two `browser.newContext()` contexts -
+separate storage, separate sessions, one COMMANDER and one FIREFIGHTER - against
+one shared mutable store with a real Realtime WebSocket
+(`e2e/live-project.ts`, via `context.routeWebSocket`). Both screens are open
+before any mutation and neither is navigated or refreshed.
+
+It proves: the fifteen steps of a call-out arrive on the other screen by
+themselves; a change made while the socket is cut still arrives; a payload
+pushed down a member's own socket for a row they may not read never reaches the
+screen; one screen opens exactly one channel.
+
+It does **not** prove, and nothing here claims: the hosted Supabase project
+itself (CI holds no credentials for it and must not), or two physical devices on
+different networks. Both are an owner checklist in `docs/DEMO_RUNBOOK.md`
+section 8a.
+
+---
+
+## Previous slice: presentation stabilisation
+
 **Presentation stabilisation.** Ten reported problems from the physical device
 test of 13 September, fixed on branch `claude/dvd-tivat-app-dev-n8wctb`
 (PR #23). Full detail is in `docs/ai/WORK_LOG.md`; the headlines:

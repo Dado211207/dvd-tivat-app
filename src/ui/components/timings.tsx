@@ -163,9 +163,26 @@ function Milestone({
     <div className="milestone" data-testid={testId}>
       <div className="milestone__label">{label}</div>
       <div className="milestone__value">{formatDurationOrNotMeasured(ms)}</div>
-      <div className="milestone__at">{formatTimeOrNotRecorded(at)}</div>
+      {/* The instant under the duration, and only when there is one. An event
+          that never happened would otherwise print "Nije zabiljezeno" twice,
+          which reads as two separate missing facts rather than one. */}
+      {at === null ? null : <div className="milestone__at">{formatTimeOrNotRecorded(at)}</div>}
     </div>
   );
+}
+
+/**
+ * A duration that has not finished yet, said as such.
+ *
+ * "Jos traje" and "Nije zabiljezeno" are different statements and the screen
+ * must not use one for the other: an intervention still running, a member still
+ * checked in and a vehicle still out all HAVE a start - what they do not have
+ * is an end, and calling that unrecorded would suggest somebody failed to write
+ * something down.
+ */
+function ongoingOr(ms: number | null, stillRunning: boolean, running = 'Jos traje'): string {
+  if (stillRunning) return running;
+  return formatDurationOrNotMeasured(ms);
 }
 
 /**
@@ -271,7 +288,9 @@ export function InterventionDurationPanel({ summary }: { summary: InterventionSu
           </div>
           <div>
             <dt>Ukupno trajanje</dt>
-            <dd data-testid="total-duration">{formatDurationOrNotMeasured(summary.totalMs)}</dd>
+            <dd data-testid="total-duration">
+              {ongoingOr(summary.totalMs, summary.closedAt === null && summary.publishedAt !== null)}
+            </dd>
           </div>
           <div>
             <dt>Ukupno potvrdjeno ucesce</dt>
@@ -303,7 +322,9 @@ export function InterventionDurationPanel({ summary }: { summary: InterventionSu
                     <td data-label="Do" className="small mono">
                       {period.to === null ? 'Jos traje' : formatTimeOrNotRecorded(period.to)}
                     </td>
-                    <td data-label="Trajanje">{formatDurationOrNotMeasured(period.durationMs)}</td>
+                    <td data-label="Trajanje">
+                      {ongoingOr(period.durationMs, period.to === null)}
+                    </td>
                     <td data-label="Promijenio">
                       {/* The first period was created by publishing, not
                           entered by a transition, so it names nobody. */}
@@ -392,7 +413,9 @@ export function VehiclePanel({ summary }: { summary: InterventionSummary }) {
                         ? 'Jos nije vraceno'
                         : formatTimeOrNotRecorded(vehicle.returnedAt)}
                     </td>
-                    <td data-label="Van baze">{formatDurationOrNotMeasured(vehicle.awayMs)}</td>
+                    <td data-label="Van baze">
+                      {ongoingOr(vehicle.awayMs, vehicle.returnedAt === null, 'Jos je van baze')}
+                    </td>
                     <td data-label="Evidentirao izlazak" className="small">
                       {vehicle.departedBy ?? 'Nije zabiljezeno'}
                     </td>

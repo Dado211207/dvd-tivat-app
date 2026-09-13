@@ -50,6 +50,34 @@ test.describe('the navigation offers only what the role can use', () => {
     }
   });
 
+  /**
+   * What the hosted review actually looked at: the deployed sidebar.
+   *
+   * It found "Prijava gradjana" there, under a heading reading "Nije u
+   * upotrebi". A heading saying a destination is unused does not stop anybody
+   * tapping it, and this application must never read as a way to report a fire.
+   */
+  test('citizen reporting is not a destination for anybody', async ({ page }) => {
+    for (const role of ['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER'] as const) {
+      await openOperational(page, 'poziv', role);
+      await expect(page.getByTestId('nav-dojava'), role).toHaveCount(0);
+      const rail = page.getByRole('complementary');
+      await expect(rail, role).not.toContainText('Prijava gradjana');
+      await expect(rail, role).not.toContainText('Nije u upotrebi');
+    }
+  });
+
+  test('no simulation that duplicates a real screen is offered', async ({ page }) => {
+    // A commander who runs a call-out on the local simulation by accident finds
+    // nothing on the server afterwards. The station display stays, because no
+    // server-backed screen does what it does.
+    await openOperational(page, 'poziv', 'COMMANDER');
+    for (const route of ['dezurni', 'clan', 'vozila', 'clanovi', 'istorija']) {
+      await expect(page.getByTestId(`nav-${route}`), route).toHaveCount(0);
+    }
+    await expect(page.getByTestId('nav-prikaz')).toBeVisible();
+  });
+
   test('the active destination is marked', async ({ page }) => {
     await openOperational(page, 'arhiva', 'COMMANDER');
     await expect(page.getByTestId('archive-title')).toBeVisible();
