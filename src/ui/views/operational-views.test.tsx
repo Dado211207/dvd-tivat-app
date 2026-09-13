@@ -373,3 +373,47 @@ describe('nothing ever claims a member was notified', () => {
     }
   });
 });
+
+/**
+ * The resting state, which is how these screens look almost all of the time.
+ *
+ * Every other test here has a call-out in it. A firefighter opens this
+ * application far more often with nothing running, and an empty screen that
+ * says nothing - or worse, one that looks broken - is what they would actually
+ * see most days.
+ */
+describe('with nothing happening', () => {
+  // Set for the whole test and put back afterwards, rather than queued with
+  // `mockResolvedValueOnce`: a screen may read the same thing more than once,
+  // and a leftover queued answer then leaks into the next test.
+  afterEach(async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue([INTERVENTION]);
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue(RECIPIENTS);
+    vi.mocked(operations.fetchAttendance).mockResolvedValue([PENDING_INTERVAL]);
+  });
+
+  it('the firefighter screen still offers availability and says why it is quiet', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue([]);
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue([]);
+    vi.mocked(operations.fetchAttendance).mockResolvedValue([]);
+
+    const text = await show(<MobilisationView />, 'FIREFIGHTER');
+
+    // Not an error, not a blank panel: it says there is no call-out.
+    expect(text).not.toMatch(/nije dostupan|Server je odbio|Ucitavanje/);
+    expect(text).toMatch(/nema|nijedan|nista/i);
+    // Availability is a statement about your own life, so it is always usable.
+    expect(container.querySelector('[data-testid="available-yes"]')).not.toBeNull();
+  });
+
+  it('the archive says it is empty rather than showing an empty table', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue([]);
+
+    const text = await show(<ArchiveView />, 'COMMANDER');
+    expect(text).not.toMatch(/Arhiva nije ucitana/);
+    expect(text).toMatch(/Arhiva je prazna/i);
+  });
+});
