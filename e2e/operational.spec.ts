@@ -123,7 +123,17 @@ test.describe('the archive', () => {
     const events = page.getByTestId('archive-timeline').locator('li');
     await expect(events.filter({ hasText: 'je otvorio poziv' })).toHaveCount(1);
     await expect(events.filter({ hasText: 'je odgovorio' })).toHaveCount(2);
-    await expect(events.filter({ hasText: 'javio kretanje' })).toHaveCount(1);
+
+    // THREE, not one. This assertion used to expect a single movement, because
+    // the chronology was reconstructed from `intervention_journey`, which holds
+    // one row per member and therefore only ever knew the latest step. The
+    // archive now reads the recorded chronology, where all three have been
+    // sitting since the day they were written.
+    await expect(events.filter({ hasText: 'javio kretanje' })).toHaveCount(3);
+
+    // And the state transition, which no current-state row can express at all.
+    await expect(events.filter({ hasText: 'promijenio stanje' })).toHaveCount(1);
+    await expect(page.getByTestId('chronology-degraded')).toHaveCount(0);
   });
 
   test('counts nothing for an interval nobody confirmed', async ({ page }) => {

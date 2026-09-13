@@ -113,6 +113,10 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     ]),
     fetchRecipientFacts: vi.fn(async () => RECIPIENTS),
     fetchAttendance: vi.fn(async () => [PENDING_INTERVAL]),
+    // Null is "the chronology could not be read", which is what an older
+    // project without the reading function answers. The screen must then fall
+    // back to what it can reconstruct AND say that it has - asserted below.
+    fetchInterventionAudit: vi.fn(async () => null),
     fetchVehicleMovements: vi.fn(async () => []),
     fetchAvailability: vi.fn(async () => [
       { memberId: MEMBER_ID, available: true, note: 'U gradu sam.', changedAt: '2026-09-13T07:00:00.000Z' },
@@ -179,7 +183,7 @@ async function show(node: React.ReactElement, role: OperationalRole): Promise<st
       </AccessProvider>,
     );
   });
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     await act(async () => {
       await Promise.resolve();
     });
@@ -385,6 +389,133 @@ describe('the archive renders on real data', () => {
     const row = container.querySelector('[data-testid="archive-totals"] tbody tr')?.textContent ?? '';
     expect(row).toContain('1 h 30 min'); // confirmed
     expect(row).toMatch(/30 min.*neuracunato/); // unconfirmed, named as not counted
+  });
+
+  /**
+   * The chronology, read from what the server recorded rather than
+   * reconstructed from current state.
+   *
+   * The device test found the record showing only each member's LATEST
+   * movement and no state transition at all. The obvious reading is that the
+   * earlier movements were being overwritten. They were not: `operational_audit`
+   * has held every one of them since the schema was written - the archive simply
+   * never read the table.
+   */
+  describe('the recorded chronology', () => {
+    const AUDIT = [
+      {
+        id: 'a1',
+        at: '2026-09-13T08:00:00.000Z',
+        type: 'INTERVENTION_PUBLISHED',
+        detail: { recipient_count: 2 },
+        actorName: 'Komandir Smjene',
+        actorIsYou: true,
+      },
+      {
+        id: 'a2',
+        at: '2026-09-13T08:04:00.000Z',
+        type: 'JOURNEY_PROGRESS_SET',
+        detail: { member_id: MEMBER_ID, from: null, to: 'KRECEM' },
+        actorName: 'Ivo Vatrogasac',
+        actorIsYou: false,
+      },
+      {
+        id: 'a3',
+        at: '2026-09-13T08:07:00.000Z',
+        type: 'JOURNEY_PROGRESS_SET',
+        detail: { member_id: MEMBER_ID, from: 'KRECEM', to: 'U_PUTU' },
+        actorName: 'Ivo Vatrogasac',
+        actorIsYou: false,
+      },
+      {
+        id: 'a4',
+        at: '2026-09-13T08:10:00.000Z',
+        type: 'JOURNEY_PROGRESS_SET',
+        detail: { member_id: MEMBER_ID, from: 'U_PUTU', to: 'NA_LICU_MJESTA' },
+        actorName: 'Ivo Vatrogasac',
+        actorIsYou: false,
+      },
+      {
+        id: 'a5',
+        at: '2026-09-13T08:12:00.000Z',
+        type: 'INTERVENTION_STATUS_CHANGED',
+        detail: { from: 'PUBLISHED', to: 'DEPLOYED' },
+        actorName: 'Komandir Smjene',
+        actorIsYou: true,
+      },
+    ];
+
+    async function showWithAudit(): Promise<string[]> {
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchInterventionAudit).mockResolvedValueOnce(AUDIT);
+      await show(<ArchiveView />, 'COMMANDER');
+      return [...container.querySelectorAll('[data-testid="archive-timeline"] li')].map(
+        (li) => li.textContent ?? '',
+      );
+    }
+
+    it('shows every movement, not only the last one', async () => {
+      const lines = await showWithAudit();
+      const journey = lines.filter((line) => /javio kretanje/.test(line));
+      expect(journey, 'three steps were recorded and three must appear').toHaveLength(3);
+      expect(journey[0]).toMatch(/Krecem/);
+      expect(journey[1]).toMatch(/U putu/);
+      expect(journey[2]).toMatch(/Na licu mjesta/);
+    });
+
+    it('shows the state transition the current-state rows cannot express', async () => {
+      const lines = await showWithAudit();
+      const change = lines.find((line) => /promijenio stanje/.test(line));
+      expect(change, 'Okupljanje, Na terenu and Pod kontrolom must leave a line').toBeDefined();
+      // Both ends of the transition, in words, not enum names.
+      expect(change).toMatch(/Objavljeno/);
+      expect(change).toMatch(/Na terenu/);
+      expect(change).not.toMatch(/DEPLOYED|PUBLISHED/);
+    });
+
+    it('names who did each thing', async () => {
+      const lines = await showWithAudit();
+      expect(lines.find((l) => /promijenio stanje/.test(l))).toMatch(/Komandir Smjene/);
+      expect(lines.find((l) => /javio kretanje/.test(l))).toMatch(/Ivo Vatrogasac/);
+    });
+
+    it('keeps movement and attendance as different sentences', async () => {
+      // The rule the whole schema is built around: reporting a position is not
+      // reporting participation, and the archive must not blur them.
+      const lines = await showWithAudit();
+      for (const line of lines.filter((l) => /javio kretanje/.test(l))) {
+        expect(line).not.toMatch(/prisus/i);
+      }
+    });
+
+    it('never says anybody was notified', async () => {
+      const lines = await showWithAudit();
+      const published = lines.find((l) => /objavio poziv/.test(l));
+      expect(published).toMatch(/bez stvarnog slanja/);
+      expect(published).not.toMatch(/obavijest/i);
+    });
+
+    it('orders the record oldest first', async () => {
+      const lines = await showWithAudit();
+      const times = lines.map((l) => l.slice(0, 16));
+      expect([...times], 'a record whose lines shuffle is not a record').toEqual(
+        [...times].sort(),
+      );
+    });
+
+    it('says so when it is showing the shortened fallback instead', async () => {
+      // The default mock answers null - "could not read". A shortened history
+      // presented as the whole one is worse than no history.
+      await show(<ArchiveView />, 'COMMANDER');
+      const notice = container.querySelector('[data-testid="chronology-degraded"]');
+      expect(notice, 'a fallback must announce itself').not.toBeNull();
+      expect(notice?.textContent).toMatch(/skracena hronologija/i);
+    });
+
+    it('does not say that when the real chronology was read', async () => {
+      await showWithAudit();
+      expect(container.querySelector('[data-testid="chronology-degraded"]')).toBeNull();
+    });
   });
 
   it('is readable by a firefighter, not only by command', async () => {

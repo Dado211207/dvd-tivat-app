@@ -125,6 +125,26 @@ export function stateTimestamp(record: Intervention): string | null {
   }
 }
 
+/**
+ * One recorded event in an intervention's chronology.
+ *
+ * Read from `operational_audit`, which the commands have been writing since the
+ * schema was created. The archive used to assemble its chronology from
+ * CURRENT-STATE rows instead, which is why only a member's latest movement
+ * appeared and no state transition did at all - not because anything was being
+ * overwritten, but because nothing read the table that had it.
+ */
+export interface AuditEvent {
+  readonly id: string;
+  readonly at: string;
+  readonly type: string;
+  /** Whatever the writing command recorded. Shapes differ by event type. */
+  readonly detail: Record<string, unknown>;
+  /** Null when the acting account has no profile name on the server. */
+  readonly actorName: string | null;
+  readonly actorIsYou: boolean;
+}
+
 /** One member the server confirms may be called out, with the role it counted. */
 export type OperationalRoleName = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
 
@@ -323,6 +343,10 @@ interface InterventionRow {
   created_at: string;
 }
 interface RecipientRow { member_id: string; member_name_at_publication: string }
+interface AuditRow {
+  event_id: string; occurred_at: string; event_type: string;
+  detail: unknown; actor_name: string | null; actor_is_you: boolean;
+}
 interface EligibleRecipientRow {
   member_id: string; full_name: string; role: string; specialties: string[] | null;
 }
@@ -408,6 +432,35 @@ export async function fetchEligibleRecipients(): Promise<readonly EligibleRecipi
       fullName: row.full_name,
       role: row.role as OperationalRoleName,
       specialties: row.specialties ?? [],
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The recorded chronology of one intervention.
+ *
+ * Returns an empty list when the server refuses or is unreachable, and the
+ * screen says which of the two it is rather than presenting "no events" - an
+ * empty chronology and an unread one look identical and mean opposite things.
+ * Null is "could not read".
+ */
+export async function fetchInterventionAudit(
+  interventionId: string,
+): Promise<readonly AuditEvent[] | null> {
+  try {
+    const { data, error } = await accountBackend().rpc('intervention_audit', {
+      target_intervention: interventionId,
+    });
+    if (error || !data) return null;
+    return (data as unknown as AuditRow[]).map((row) => ({
+      id: row.event_id,
+      at: row.occurred_at,
+      type: row.event_type,
+      detail: (row.detail ?? {}) as Record<string, unknown>,
+      actorName: row.actor_name ?? null,
+      actorIsYou: row.actor_is_you === true,
     }));
   } catch {
     return null;

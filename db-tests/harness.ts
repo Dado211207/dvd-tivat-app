@@ -32,6 +32,7 @@ const MIGRATIONS = [
   // one, which is exactly the failure mode a bare `alter publication` would
   // have had.
   'supabase/migrations/202609150009_realtime_publication.sql',
+  'supabase/migrations/202609150010_intervention_audit_read.sql',
 ];
 
 export const DATABASE_URL =

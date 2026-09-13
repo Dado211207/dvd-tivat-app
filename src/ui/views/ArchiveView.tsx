@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   attendanceState,
   fetchAttendance,
+  fetchInterventionAudit,
   fetchInterventions,
   fetchParticipationTotals,
   fetchRecipientFacts,
@@ -32,6 +33,7 @@ import {
   participationSeconds,
   stateTimestamp,
   type AttendanceInterval,
+  type AuditEvent,
   type Intervention,
   type ParticipationTotal,
   type RecipientFacts,
@@ -42,6 +44,7 @@ import { OperationalGate } from '../components/OperationalGate';
 import { Chip, EmptyState, Notice, ScrollRegion } from '../components/primitives';
 import {
   ATTENDANCE_SOURCE_LABEL,
+  AUDIT_EVENT_LABEL,
   ATTENDANCE_STATE_LABEL,
   ATTENDANCE_STATE_SYMBOL,
   formatTime,
@@ -50,6 +53,7 @@ import {
   INTERVENTION_STATUS_LABEL,
   JOURNEY_LABEL,
   SERVER_ANSWER_LABEL,
+  UNNAMED_ACTOR,
 } from '@/i18n/labels';
 
 export function ArchiveView() {
@@ -63,9 +67,17 @@ export function ArchiveView() {
 interface Detail {
   readonly recipients: readonly RecipientFacts[];
   readonly attendance: readonly AttendanceInterval[];
+  /**
+   * The recorded chronology, or null when it could not be read.
+   *
+   * Null is not "nothing happened". The screen falls back to the chronology it
+   * can reconstruct from current-state rows and says so, rather than quietly
+   * showing a shorter history as though it were the whole one.
+   */
+  readonly audit: readonly AuditEvent[] | null;
 }
 
-const NO_DETAIL: Detail = { recipients: [], attendance: [] };
+const NO_DETAIL: Detail = { recipients: [], attendance: [], audit: null };
 
 function Archive() {
   const [interventions, setInterventions] = useState<readonly Intervention[]>([]);
@@ -124,17 +136,31 @@ function Archive() {
   // Detail follows the selection. Kept as a second read rather than loading
   // every intervention's recipients up front: an archive grows without bound.
   useEffect(() => {
-    if (selectedId === null) {
-      setDetail(NO_DETAIL);
-      return;
-    }
+    // Clear first: merging into the previous record's detail would show one
+    // intervention's chronology under another's heading for a moment.
+    setDetail(NO_DETAIL);
+    if (selectedId === null) return;
     let live = true;
     void (async () => {
       const [recipients, attendance] = await Promise.all([
         fetchRecipientFacts(selectedId),
         fetchAttendance(selectedId, names),
       ]);
-      if (live && mounted.current) setDetail({ recipients, attendance });
+      if (live && mounted.current) setDetail((current) => ({ ...current, recipients, attendance }));
+    })();
+
+    /*
+     * The chronology is read SEPARATELY, not alongside the two above.
+     *
+     * A `Promise.all` is only as fast as its slowest member, so one read that
+     * hangs - an unreachable project, a socket a proxy will not close - would
+     * hold back the recipients and the attendance too, and the record would sit
+     * empty as though nothing had happened. This way the facts arrive when they
+     * arrive and the chronology fills in after, or says it could not be read.
+     */
+    void (async () => {
+      const audit = await fetchInterventionAudit(selectedId);
+      if (live && mounted.current) setDetail((current) => ({ ...current, audit }));
     })();
     return () => {
       live = false;
@@ -207,6 +233,7 @@ function Archive() {
         <InterventionRecord
           record={record}
           detail={detail}
+          names={names}
           movements={movements.filter((m) => m.interventionId === record.id)}
         />
       )}
@@ -221,16 +248,22 @@ function Archive() {
 function InterventionRecord({
   record,
   detail,
+  names,
   movements,
 }: {
   record: Intervention;
   detail: Detail;
+  names: ReadonlyMap<string, string>;
   movements: readonly VehicleMovement[];
 }) {
   const closed = record.closedAt !== null;
+  const recorded = detail.audit !== null;
   const events = useMemo(
-    () => buildChronology(record, detail, movements),
-    [record, detail, movements],
+    () =>
+      detail.audit !== null
+        ? recordedChronology(detail.audit, detail.recipients, names)
+        : buildChronology(record, detail, movements),
+    [record, detail, names, movements],
   );
 
   const perMember = useMemo(() => {
@@ -304,10 +337,26 @@ function InterventionRecord({
       <section className="panel">
         <h2 className="panel__title">Hronologija</h2>
         <p className="muted small">
-          Svaki red je jedna cinjenica sa svojim vremenom. Nista nije spojeno u zajednicki
-          &quot;status&quot;, jer otvaranje poziva, odgovor, kretanje i prisustvo su cetiri razlicite
-          stvari.
+          Svaki red je jedna cinjenica sa svojim vremenom, onako kako ju je zabiljezio server.
+          Nista nije spojeno u zajednicki &quot;status&quot;, jer otvaranje poziva, odgovor,
+          kretanje i prisustvo su cetiri razlicite stvari.
         </p>
+        {recorded ? null : (
+          /*
+           * The audit could not be read - most likely the reading function is
+           * not yet on this project. What is shown instead is reconstructed
+           * from current-state rows, which can only ever carry each member's
+           * LATEST movement and no state transition at all. Saying so is the
+           * difference between a short record and a record that looks complete
+           * and is not.
+           */
+          <Notice tone="warn" testId="chronology-degraded">
+            <strong>Prikazana je skracena hronologija.</strong> Zabiljezeni redoslijed dogadjaja
+            nije procitan sa servera, pa se ovdje vidi samo posljednje stanje svakog clana - ne i
+            promjene stanja intervencije niti ranije javljeno kretanje. Zapis na serveru je
+            potpun; nedostaje samo ovaj prikaz.
+          </Notice>
+        )}
         {events.length === 0 ? (
           <EmptyState title="Nema zabiljezenih dogadjaja">
             Poziv je objavljen, ali jos niko nije otvorio, odgovorio niti se prijavio.
@@ -474,6 +523,142 @@ interface ChronologyEvent {
   readonly text: string;
 }
 
+/**
+ * The chronology as the SERVER recorded it.
+ *
+ * Every line here is an `operational_audit` row: a real event, with the time
+ * the database stamped on it and the account that caused it. That is what the
+ * fallback below cannot give - it reconstructs from current-state rows, so it
+ * can only ever show a member's LATEST movement and no state transition at all.
+ *
+ * Opening a call-out and answering it are added from the recipient facts,
+ * because those two are not audited: they live in their own tables, each with
+ * its own timestamp, and are already single facts that cannot be superseded.
+ */
+function recordedChronology(
+  audit: readonly AuditEvent[],
+  recipients: readonly RecipientFacts[],
+  names: ReadonlyMap<string, string>,
+): readonly ChronologyEvent[] {
+  const events: ChronologyEvent[] = [];
+
+  for (const entry of audit) {
+    const actor = entry.actorName ?? UNNAMED_ACTOR;
+    const said = AUDIT_EVENT_LABEL[entry.type];
+    // An unrecognised event type is still shown, with its time and its actor.
+    // Hiding it would silently shorten a record somebody may be relying on, and
+    // a raw name once is better than a missing line forever.
+    events.push({
+      key: entry.id,
+      at: entry.at,
+      who: actor,
+      text: `${said ?? `je zabiljezio dogadjaj (${entry.type})`}${describe(entry, names)}.`,
+    });
+  }
+
+  for (const person of recipients) {
+    if (person.acknowledgedAt !== null) {
+      events.push({
+        key: `ack-${person.memberId}`,
+        at: person.acknowledgedAt,
+        who: person.memberName,
+        text: 'je otvorio poziv.',
+      });
+    }
+    if (person.answer !== null && person.answeredAt !== null) {
+      const answer = SERVER_ANSWER_LABEL[person.answer] ?? person.answer;
+      const eta = person.etaMinutes !== null ? ` (za ${person.etaMinutes} min)` : '';
+      events.push({
+        key: `answer-${person.memberId}`,
+        at: person.answeredAt,
+        who: person.memberName,
+        text: `je odgovorio: ${answer}${eta}.`,
+      });
+    }
+  }
+
+  return events.sort(byTime);
+}
+
+/**
+ * The part of a line that comes from the event's own detail.
+ *
+ * Each shape is the one the writing command records, read by name rather than
+ * by position, and anything absent is simply left out - never rendered as
+ * "undefined" and never guessed at.
+ */
+function describe(entry: AuditEvent, names: ReadonlyMap<string, string>): string {
+  const detail = entry.detail;
+  const text = (key: string): string | null => {
+    const value = detail[key];
+    return typeof value === 'string' && value !== '' ? value : null;
+  };
+  const count = (key: string): number | null => {
+    const value = detail[key];
+    return typeof value === 'number' ? value : null;
+  };
+  const member = (): string | null => {
+    const id = detail['member_id'];
+    if (typeof id !== 'string') return null;
+    return names.get(id) ?? null;
+  };
+
+  switch (entry.type) {
+    case 'INTERVENTION_PUBLISHED': {
+      const recipients = count('recipient_count') ?? count('recipients');
+      // Never "obavijestio". Publishing writes obligations; nothing sends them.
+      return recipients === null
+        ? ''
+        : ` i upisao ${recipients} obaveza za slanje (bez stvarnog slanja)`;
+    }
+    case 'INTERVENTION_STATUS_CHANGED': {
+      const from = text('from');
+      const to = text('to');
+      if (to === null) return '';
+      const shownTo = INTERVENTION_STATUS_LABEL[to] ?? to;
+      const shownFrom = from === null ? null : INTERVENTION_STATUS_LABEL[from] ?? from;
+      return shownFrom === null ? `: ${shownTo}` : `: ${shownFrom} -> ${shownTo}`;
+    }
+    case 'JOURNEY_PROGRESS_SET': {
+      const to = text('to');
+      const who = member();
+      const step = to === null ? '' : `: ${JOURNEY_LABEL[to] ?? to}`;
+      // "Na licu mjesta" is a statement about position. It is not attendance,
+      // and this sentence must not let a reader think it was recorded as one.
+      return who === null ? step : ` za clana ${who}${step}`;
+    }
+    case 'ATTENDANCE_CHECK_IN':
+    case 'ATTENDANCE_CHECK_OUT':
+    case 'ATTENDANCE_CONFIRMED':
+    case 'ATTENDANCE_UNCONFIRMED':
+    case 'ATTENDANCE_CORRECTED': {
+      const who = member();
+      const reason = text('note');
+      return `${who === null ? '' : ` za clana ${who}`}${reason === null ? '' : ` - ${reason}`}`;
+    }
+    case 'ATTENDANCE_REJECTED': {
+      const who = member();
+      const reason = text('reason');
+      return `${who === null ? '' : ` clana ${who}`}: ${reason ?? 'bez upisanog razloga'}`;
+    }
+    case 'INTERVENTION_CLOSED':
+    case 'INTERVENTION_CANCELLED': {
+      const reason = text('reason');
+      const open = count('open_attendance');
+      const stillOpen = open !== null && open > 0 ? ` (otvorenih prijava prisustva: ${open})` : '';
+      return `${reason === null ? '' : `: ${reason}`}${stillOpen}`;
+    }
+    default:
+      return '';
+  }
+}
+
+/** Oldest first, with a stable tie-break so the record never shuffles. */
+function byTime(a: ChronologyEvent, b: ChronologyEvent): number {
+  const diff = new Date(a.at).getTime() - new Date(b.at).getTime();
+  return diff !== 0 ? diff : a.key.localeCompare(b.key);
+}
+
 function buildChronology(
   record: Intervention,
   detail: Detail,
@@ -576,12 +761,7 @@ function buildChronology(
     });
   }
 
-  return events.sort((a, b) => {
-    const diff = new Date(a.at).getTime() - new Date(b.at).getTime();
-    // Ties are possible when two rows share a transaction time. Fall back to a
-    // stable key so the order does not shuffle between renders.
-    return diff !== 0 ? diff : a.key.localeCompare(b.key);
-  });
+  return events.sort(byTime);
 }
 
 // ---------------------------------------------------------------------------

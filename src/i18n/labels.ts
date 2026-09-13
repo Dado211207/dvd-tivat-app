@@ -453,3 +453,39 @@ export const ATTENDANCE_STATE_SYMBOL: Record<string, string> = {
   CONFIRMED: '+',
   REJECTED: '-',
 };
+
+// ---------------------------------------------------------------------------
+// The recorded chronology
+//
+// One sentence per event type in `operational_audit`. Written as sentences a
+// member would say rather than as field names, because the archive is read by
+// people who were at the incident, not by anybody debugging it.
+//
+// The distinctions the rest of the system keeps apart are kept apart here too.
+// Reporting movement is never described as attendance; publishing is never
+// described as notifying, because nothing is sent; a confirmation is always
+// named as the commander's act, not as the member's.
+// ---------------------------------------------------------------------------
+
+export const AUDIT_EVENT_LABEL: Record<string, string> = {
+  INTERVENTION_DRAFTED: 'je pripremio nacrt poziva',
+  INTERVENTION_DRAFT_UPDATED: 'je izmijenio nacrt prije objave',
+  INTERVENTION_DRAFT_DISCARDED: 'je odbacio nacrt',
+  // Never "obavijestio". Publishing writes obligations; no channel sends them.
+  INTERVENTION_PUBLISHED: 'je objavio poziv',
+  INTERVENTION_STATUS_CHANGED: 'je promijenio stanje intervencije',
+  INTERVENTION_CLOSED: 'je zatvorio intervenciju',
+  INTERVENTION_CANCELLED: 'je otkazao intervenciju',
+  JOURNEY_PROGRESS_SET: 'je javio kretanje',
+  ATTENDANCE_CHECK_IN: 'je zabiljezio dolazak',
+  ATTENDANCE_CHECK_OUT: 'je zabiljezio odlazak',
+  ATTENDANCE_CONFIRMED: 'je potvrdio prijavu prisustva',
+  ATTENDANCE_UNCONFIRMED: 'je povukao potvrdu prisustva',
+  ATTENDANCE_REJECTED: 'je odbio prijavu prisustva',
+  ATTENDANCE_CORRECTED: 'je ispravio zapis o prisustvu',
+  VEHICLE_DEPARTED: 'je evidentirao izlazak vozila',
+  VEHICLE_RETURNED: 'je evidentirao povratak vozila',
+};
+
+/** Somebody whose account has no profile name on the server. Never blank. */
+export const UNNAMED_ACTOR = 'Nepoznat nalog';
