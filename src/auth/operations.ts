@@ -155,7 +155,13 @@ export function participationSeconds(interval: AttendanceInterval): number {
   if (attendanceState(interval) !== 'CONFIRMED') return 0;
   if (interval.endedAt === null) return 0;
   const ms = new Date(interval.endedAt).getTime() - new Date(interval.startedAt).getTime();
-  return ms > 0 ? Math.round(ms / 1000) : 0;
+  if (ms <= 0) return 0;
+  // Zero seconds and "no confirmed participation" must never be the same
+  // number, because `formatDuration` renders both as "0 min" and a board
+  // reading "0 min" next to a confirmed record says "did not attend". A
+  // real interval shorter than half a second is a mis-tap, not an absence,
+  // so it counts as the smallest amount of time this can express.
+  return Math.max(1, Math.round(ms / 1000));
 }
 
 /** "1 h 23 min", for a person reading a board, not a machine parsing it. */

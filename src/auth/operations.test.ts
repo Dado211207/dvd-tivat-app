@@ -77,6 +77,23 @@ describe('participation is confirmed, closed time and nothing else', () => {
     expect(participationSeconds(interval({ verified: true, endedAt: null }))).toBe(0);
   });
 
+  it('never collapses a real interval to the same number as no participation', () => {
+    // Found against the live project: check in, check out immediately, and the
+    // interval is a few hundred milliseconds. Rounded to seconds that is zero,
+    // and zero renders as "0 min" - identical to somebody who never attended,
+    // on a row that says CONFIRMED. Confirmed and absent must never read alike.
+    expect(
+      participationSeconds(
+        interval({
+          verified: true,
+          startedAt: '2026-09-12T10:00:00.000Z',
+          endedAt: '2026-09-12T10:00:00.300Z',
+        }),
+      ),
+    ).toBe(1);
+    expect(participationSeconds(interval({ verified: true, endedAt: null }))).toBe(0);
+  });
+
   it('never returns a negative duration from an out-of-order pair', () => {
     expect(
       participationSeconds(
