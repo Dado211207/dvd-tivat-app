@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { formatDurationMs } from './duration';
+import { formatDurationMs, formatDurationOrNotMeasured } from './duration';
 import { earliestBy, recipientTimings, summarise } from './metrics';
 import type {
   AttendanceInterval,
@@ -221,7 +221,7 @@ describe('one member’s timings', () => {
     expect(ana.confirmedMs).toBe(59_200);
     // Rounded individually these are 30 s + 30 s = "1 min". Summed exactly and
     // formatted once they are 59 s, which is what actually happened.
-    expect(formatDurationMs(ana.confirmedMs)).toBe('59 s');
+    expect(formatDurationMs(ana.confirmedMs!)).toBe('59 s');
   });
 
   it('reports the declared ETA as the member’s estimate, beside the measurement', () => {
@@ -235,17 +235,44 @@ describe('one member’s timings', () => {
     expect(ceda.stillCheckedIn).toBe(true);
     expect(ceda.firstCheckInAt).toBe('2026-09-13T10:15:00.000Z');
     expect(ceda.lastCheckOutAt).toBeNull();
-    expect(ceda.confirmedMs, 'a running interval has no duration yet').toBe(0);
+    // Null, not zero. A running interval has no duration YET, which is a
+    // different statement from "was here for no time" - and the screen says so
+    // in words rather than printing "0 s" beside somebody who is standing on
+    // the incident ground right now.
+    expect(ceda.confirmedMs, 'a running interval has no duration yet').toBeNull();
+    expect(formatDurationOrNotMeasured(ceda.confirmedMs)).toBe('Nije zabiljezeno');
     expect(ceda.confirmedIntervals).toBe(0);
   });
 
   it('keeps a rejected claim in the record and out of the total', () => {
     const bojan = forMember('bojan');
     expect(bojan.rejectedIntervals).toBe(1);
-    expect(bojan.confirmedMs).toBe(0);
+    // A whole hour of rejected claim must not reach the figure - and the
+    // absence of a confirmed one is stated, not rendered as a measured zero.
+    expect(bojan.confirmedMs).toBeNull();
     expect(bojan.confirmedIntervals).toBe(0);
-    // A whole hour of rejected claim must not reach the figure.
-    expect(formatDurationMs(bojan.confirmedMs)).toBe('0 s');
+    expect(formatDurationOrNotMeasured(bojan.confirmedMs)).toBe('Nije zabiljezeno');
+  });
+
+  it('measures a confirmed interval that really did last no time as zero', () => {
+    // The other side of the same rule. This member HAS a confirmed, closed
+    // record; it is simply very short. "0 s" is the measurement, and it must
+    // remain distinguishable from "nothing was recorded".
+    const zero = recipientTimings(
+      INTERVENTION,
+      RECIPIENTS.find((r) => r.memberId === 'ana')!,
+      [
+        {
+          id: 'z1', memberId: 'ana', memberName: 'Ana Prva',
+          startedAt: '2026-09-13T10:30:00.000Z',
+          endedAt: '2026-09-13T10:30:00.000Z',
+          source: 'SELF_DECLARED', verified: true, rejectedAt: null, rejectionReason: null,
+        },
+      ],
+      AUDIT,
+    );
+    expect(zero.confirmedMs).toBe(0);
+    expect(formatDurationOrNotMeasured(zero.confirmedMs)).toBe('0 s');
   });
 
   it('gives a member who never opened it nulls, not zeros', () => {

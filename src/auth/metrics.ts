@@ -137,8 +137,18 @@ export interface RecipientTimings {
   /** First attendance start and last attendance end, across all their intervals. */
   readonly firstCheckInAt: string | null;
   readonly lastCheckOutAt: string | null;
-  /** Exact confirmed, closed participation. Summed over intervals before formatting. */
-  readonly confirmedMs: number;
+  /**
+   * Exact confirmed, closed participation, summed over intervals before
+   * formatting.
+   *
+   * **Null, not zero, when there is nothing to measure.** A member who never
+   * reported attendance and a member whose confirmed interval happened to last
+   * no time are different facts, and a `0` would render both as "0 s". So would
+   * a member whose interval is still open, or is waiting for the commander to
+   * confirm it - in each of those cases there is no confirmed duration YET,
+   * which the screen says in words beside the pending count.
+   */
+  readonly confirmedMs: number | null;
   readonly confirmedIntervals: number;
   readonly pendingIntervals: number;
   readonly rejectedIntervals: number;
@@ -189,6 +199,11 @@ export function recipientTimings(
 
   const mine = attendance.filter((interval) => interval.memberId === facts.memberId);
   const confirmed = mine.filter((interval) => attendanceState(interval) === 'CONFIRMED');
+  // Only the intervals that can actually be measured - confirmed AND closed.
+  // An open interval is confirmed presence whose duration is not known yet.
+  const measured = confirmed
+    .map((interval) => between(interval.startedAt, interval.endedAt))
+    .filter((ms): ms is number => ms !== null);
   const firstIn = earliestBy(mine, (i) => i.startedAt, (i) => i.id);
   const lastOut = mine.reduce<AttendanceInterval | null>((latest, interval) => {
     if (interval.endedAt === null) return latest;
@@ -218,8 +233,9 @@ export function recipientTimings(
 
     firstCheckInAt: firstIn?.startedAt ?? null,
     lastCheckOutAt: lastOut?.endedAt ?? null,
-    // Summed exactly, formatted once, by whoever displays it.
-    confirmedMs: sumMs(confirmed.map((i) => between(i.startedAt, i.endedAt))),
+    // Summed exactly, formatted once, by whoever displays it. Null rather than
+    // zero when there was nothing to measure - see the field's own note.
+    confirmedMs: measured.length === 0 ? null : sumMs(measured),
     confirmedIntervals: confirmed.length,
     pendingIntervals: mine.filter((i) => attendanceState(i) === 'PENDING').length,
     rejectedIntervals: mine.filter((i) => attendanceState(i) === 'REJECTED').length,

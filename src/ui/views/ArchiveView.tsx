@@ -39,9 +39,17 @@ import {
   type VehicleMovement,
 } from '@/auth/operations';
 import { formatDurationMs } from '@/auth/duration';
+import { recipientTimings, summarise } from '@/auth/metrics';
 import { loadRoster } from '@/auth/roster';
 import { OperationalGate } from '../components/OperationalGate';
 import { Chip, EmptyState, Notice, ScrollRegion } from '../components/primitives';
+import {
+  InterventionDurationPanel,
+  MilestonePanel,
+  ResponseTimings,
+  SummaryCounts,
+  VehiclePanel,
+} from '../components/timings';
 import {
   ATTENDANCE_SOURCE_LABEL,
   AUDIT_EVENT_LABEL,
@@ -266,6 +274,24 @@ function InterventionRecord({
     [record, detail, names, movements],
   );
 
+  /*
+   * The same two functions the commander's console calls, on the same kind of
+   * rows. That is the whole point of `src/auth/metrics.ts`: an incident looked
+   * at live and the same incident looked at in six months must produce
+   * identical numbers, and two implementations of that promise is one too many.
+   */
+  const summary = useMemo(
+    () => summarise(record, detail.recipients, detail.attendance, movements, detail.audit ?? []),
+    [record, detail, movements],
+  );
+  const timings = useMemo(
+    () =>
+      detail.recipients.map((facts) =>
+        recipientTimings(record, facts, detail.attendance, detail.audit ?? []),
+      ),
+    [record, detail],
+  );
+
   const perMember = useMemo(() => {
     const rows = new Map<string, { name: string; intervals: AttendanceInterval[] }>();
     for (const interval of detail.attendance) {
@@ -288,7 +314,16 @@ function InterventionRecord({
       .sort((a, b) => b.confirmedMs - a.confirmedMs || a.name.localeCompare(b.name));
   }, [detail.attendance]);
 
-  const totalConfirmed = perMember.reduce((sum, row) => sum + row.confirmedMs, 0);
+  /*
+   * Read from the summary rather than re-added here.
+   *
+   * The brief that produced this file requires the detail rows and the
+   * cumulative total to use the same calculation contract. Two loops summing
+   * the same intervals would satisfy it by accident today and drift the first
+   * time one of them changed, so there is one loop - `summarise` - and this
+   * line reads its answer.
+   */
+  const totalConfirmed = summary.confirmedMs;
   const stillPending = perMember.reduce((sum, row) => sum + row.pending, 0);
 
   return (
@@ -334,6 +369,13 @@ function InterventionRecord({
         )}
       </section>
 
+      {/* The measured record: how quickly the society responded, how long the
+          intervention ran, and how long it held each state. Identical
+          components and identical arithmetic to the commander's console. */}
+      <MilestonePanel summary={summary} />
+      <InterventionDurationPanel summary={summary} />
+      <SummaryCounts summary={summary} />
+
       <section className="panel">
         <h2 className="panel__title">Hronologija</h2>
         <p className="muted small">
@@ -373,6 +415,16 @@ function InterventionRecord({
             ))}
           </ol>
         )}
+      </section>
+
+      <section className="panel">
+        <h2 className="panel__title">Vremena odziva po clanu</h2>
+        <p className="muted small">
+          Svako vrijeme je onako kako ga je upisao server. Trajanja su racunata iz punih
+          vremenskih oznaka, a ne iz prikazanih minuta, i ono sto nije zabiljezeno je oznaceno
+          kao takvo - nikada prikazano kao nula.
+        </p>
+        <ResponseTimings timings={timings} testId="archive-timings" />
       </section>
 
       <section className="panel">
@@ -459,50 +511,13 @@ function InterventionRecord({
         )}
       </section>
 
-      <section className="panel">
-        <h2 className="panel__title">Vozila</h2>
-        <p className="muted small">
-          Izlazak vozila je zapis o vozilu. On nikada ne stvara prisustvo clana - to je posebna
-          cinjenica koju clan prijavljuje sam.
-        </p>
-        {movements.length === 0 ? (
-          <EmptyState title="Nijedno vozilo nije evidentirano na ovoj intervenciji" />
-        ) : (
-          <ScrollRegion
-            label="Vozila na ovoj intervenciji"
-            className="table-wrap table-wrap--cards"
-          >
-            <table className="table table--cards" data-testid="archive-vehicles">
-              <thead>
-                <tr>
-                  <th scope="col">Vozilo</th>
-                  <th scope="col">Izlazak</th>
-                  <th scope="col">Povratak</th>
-                  <th scope="col">Namjena</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map((movement) => (
-                  <tr key={movement.id}>
-                    <th scope="row">
-                      {movement.callsign} - {movement.vehicleName}
-                    </th>
-                    <td data-label="Izlazak" className="small mono">
-                      {formatTime(movement.departedAt)}
-                    </td>
-                    <td data-label="Povratak" className="small mono">
-                      {movement.returnedAt ? formatTime(movement.returnedAt) : 'jos nije vraceno'}
-                    </td>
-                    <td data-label="Namjena" className="small">
-                      {movement.purpose ?? 'Nije upisana'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollRegion>
-        )}
-      </section>
+      {/*
+        Replaced a table that showed departure and return and left the reader to
+        subtract them. It now carries the exact time out of the station and the
+        member who recorded each end of it - both of which the server already
+        held and the archive simply did not print.
+      */}
+      <VehiclePanel summary={summary} />
     </>
   );
 }

@@ -2188,3 +2188,85 @@ dialog {
 .live-dot--polling { background: var(--c-later); }
 .live-dot--connecting { background: var(--c-unknown); }
 .live-dot--off { background: var(--c-line-strong); }
+
+/* ------------------------------------------------- timings and milestones */
+
+/*
+ * Defect from the hosted review: the commander's overview showed states and no
+ * durations, and what durations existed were squeezed into one ambiguous
+ * column. Every fact here keeps its own label, so a cell that has to stack on a
+ * phone still says WHICH measurement each number is. Labels are never hidden to
+ * save width - the width is found by wrapping instead.
+ */
+
+.fact-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--sp-2);
+  align-items: baseline;
+  /* One fact per line inside its cell. Two facts sharing a line would read as
+     one label with two values. */
+  width: 100%;
+}
+
+.fact-line + .fact-line { margin-top: 3px; }
+
+.fact-line__label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-ink-faint);
+}
+
+.fact-line__value {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  /* A timestamp with seconds is long; it wraps rather than widening a table
+     past the viewport. */
+  overflow-wrap: anywhere;
+}
+
+.milestones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.milestone {
+  padding: var(--sp-3);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  min-width: 0;
+}
+
+.milestone__label {
+  font-size: 0.74rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-ink-faint);
+}
+
+.milestone__value {
+  margin-top: var(--sp-1);
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The instant under the duration: the duration is the headline, but a reader
+   checking a record needs the timestamp it was measured to. */
+.milestone__at {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--c-ink-soft);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
