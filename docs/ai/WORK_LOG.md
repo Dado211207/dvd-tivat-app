@@ -5,6 +5,159 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-13 (evening) - The presentation-stabilisation slice
+
+Ten reported problems from the physical device test, each root-caused before it
+was touched, each fixed at the layer it actually lives in, and each pinned by a
+test that fails without the fix. Mutation-checked where the check was cheap;
+recorded here where it was not.
+
+**1. "The screen reloads when I Alt-Tab back." It does not reload.**
+
+The document is never re-fetched. What happens is a silent REMOUNT, which looks
+identical from the outside. supabase-js re-checks the session when a tab becomes
+visible and emits an auth event even when nothing changed; `AccessProvider`
+rebuilt a snapshot object equal in content and different in identity;
+`OperationalGate` had that object in its effect dependencies and reset to
+LOADING; and while LOADING it returned a spinner INSTEAD OF `children`, so every
+`useState` below it - the active tab, the selected intervention, half-typed text
+- was destroyed.
+
+Fixed at the source with `sameAccess()`: the provider keeps the previous object
+when the content is unchanged. The gate additionally no longer replaces an open
+screen with a spinner and keys its effect on primitives. Those two are redundant
+defences and are described as such rather than counted as three covers.
+
+A browser test then found the same class of fault by another route: rendering
+only the active tab destroyed a half-typed call-out when the commander stepped
+across to `Pregled`. Every tab is mounted now and inactive ones hidden, which
+also repaired the tab markup - each button declared `aria-controls` and three of
+the four pointed at nothing.
+
+**2. A withdrawn member was still callable. Confirmed on the real project.**
+
+Not a rendering mistake: `publish_intervention` filtered on `members.active`
+alone. The hosted preflight measured it - one member on the roster, linked to an
+account, who could not have received a call-out. Being callable now means the
+same thing as being able to act, by reusing `current_dvd_role()`'s own
+conditions, so the two cannot drift. OWNER, ADMIN, COMMANDER and FIREFIGHTER are
+all eligible, deliberately: in a volunteer society command turns out too.
+
+The whole call-out is refused rather than silently dropping one person. Three
+existing database fixtures had to change, which is evidence rather than
+breakage - each was publishing to somebody who could never have opened it.
+
+**3. A row labelled "Zatvoreno" showed the publication time.**
+
+Each state now uses the one column that means it, verified against the table
+definition and guaranteed present by the existing constraints. Where the
+matching column is missing the row says `Nije zabiljezeno` rather than falling
+back - a fallback is how the defect happened.
+
+**4. Times were rendered in the device's timezone.** Now Europe/Podgorica, with
+the zone named rather than an offset added by hand, and the year included. A
+record has to read the same for the phone that was at the fire and the laptop
+reviewing it afterwards.
+
+**5. Nothing was being overwritten in the history.**
+
+The archive built its chronology from CURRENT-STATE rows, so it could only ever
+show each member's latest movement and no state transition at all.
+`operational_audit` has held every one of them since the schema was written -
+34 rows on the hosted project before anything was changed. The table had no
+reader, and only a `is_dvd_command()` policy, so a firefighter could not have
+read their own participation history. Added a reader and a member read policy;
+both additive.
+
+**6. Layout, measured rather than eyeballed.** `e2e/viewport.spec.ts` measures
+horizontal overflow, clipped text, unreachable table columns and touch-target
+height at eight widths from 320 to 1920.
+
+- Desktop fields were 183px wide because the sizing rule read
+  `input[type='text']`, and an attribute selector matches the ATTRIBUTE, not the
+  IDL default - so `<input />` with no type never matched it, nor did
+  `type="email"`. Those are exactly the three fields the report named.
+- The society name sat under the iPhone status bar: the page is served
+  `viewport-fit=cover` with a translucent status bar, so safe-area insets are
+  now applied throughout.
+- Navigation labels looked clipped because the active marker is a 3px bar inset
+  on the LEFT, which lands on the icon once the rail becomes a horizontal row.
+- Archive columns were unreachable on a phone: measured at 758px inside 260px.
+  Each row is a card below 640px now.
+
+On the ARIA question for the card pattern: the standard advice is to re-declare
+the table roles. That was done first and then MEASURED, by reading the real
+accessibility tree out of the engine over CDP - identical with and without them.
+Current Chromium derives table semantics from markup, so the roles were noise
+and the linter calling them redundant was right. The caveat is recorded in the
+stylesheet: measured in Chromium, and if a device ever shows WebKit behaving the
+old way the fix is the COMPLETE set, measured there - not a partial set on a
+guess.
+
+**7. Live updates.** Realtime where it can be established, foreground polling
+where it cannot, and the screen says which. It never calls a twelve-second timer
+"uzivo". A change notice carries no authority by construction: the handler takes
+no arguments, so there is no payload to render even if somebody wanted to - the
+only possible response is to re-read through the policy-checked queries. The
+manual refresh button stays. The publication migration is additive and does
+nothing at all on a database without the publication, which is how the local
+suite proves it is safe rather than assuming it.
+
+**8. Signing in through Brave said "check your email and password".** The
+request had never left the browser. A refusal is an answer and stays generic - a
+different message per refusal would turn the form into a membership oracle - but
+a failure to REACH the server is not an answer at all, so saying so leaks
+nothing. The second consecutive failure adds a content blocker as ONE possible
+cause, never asserted, and never tells anybody to turn their protection off.
+
+**9. "The title appeared twice" - NOT REPRODUCED as a field-mapping defect.**
+
+Tested with deliberately different values for title, location and assembly
+point, on all three screens. Every value renders in its own field. The
+duplication is real and is the ordinary list-and-detail shape: the archive lists
+the interventions and then shows the selected one's record underneath, so its
+title legitimately appears in both. Pinned at exactly two occurrences, so a
+third would fail. No defect is claimed.
+
+**10. A firefighter was offered the commander's console and refused by it**, and
+their own account page carried the empty shell of the owner's directory. The
+navigation now offers only what the role can use and a firefighter lands on
+their own call-out screen. An unknown role is never treated as no access. None
+of this is a control, and a test says so: typing the commander's URL is still
+refused by the gate, and every command by the server.
+
+**Hosted changes, after preflight**
+
+Four additive migrations applied to `yskhdzrdbywrpfowckpn` after confirming the
+existing `publish_intervention` signature matched exactly, that the three new
+functions did not exist, and that no already-published recipient row would
+change meaning (`historic_ineligible_recipients = 0`). Postflight: three
+functions present, two policies on `operational_audit`, eight tables published
+to `supabase_realtime` - so the live path is genuinely available, not only the
+fallback - one member correctly excluded from the callable list, and `anon`
+holding execute on none of them.
+
+The hosted security advisor then reported `rls_auto_enable()` executable by
+`anon`. It is an event trigger function, so it cannot be invoked as an ordinary
+function at all and the grant could not have done anything; it is tidied anyway,
+guarded so the local suite (which has no such function) still passes. The 49
+`authenticated` findings are the architecture working as designed - every
+command is `security definer`, granted to `authenticated`, and checks authority
+in its first statement.
+
+**Verification**
+
+TypeScript, ESLint, 302 unit tests, 359 database tests against real policies,
+and the browser suite at eight viewports. Hosted preflight and postflight
+queries run against the real project, counts only, no names.
+
+**Next concrete action**
+
+Merge after CI is green on the exact reviewed head, redeploy Pages, and drive
+the public URL against the hosted project with fictional accounts.
+
+---
+
 ## 2026-09-13 (later) - Presentation readiness: everything except the deployment itself
 
 **The deployment is blocked on one owner action, and the block is an

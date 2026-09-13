@@ -248,6 +248,21 @@ private window) for the commander.
 | 19 | **Arhiva i ucesce** | The chronology lists each fact with its own time; participation shows confirmed time, and unconfirmed separately |
 | 20 | Turn on **Airplane Mode** on the phone and reload | The application still opens and says the device is offline and that nothing will be saved |
 | 21 | Turn Airplane Mode off and reload | The offline notice disappears |
+| 22 | On the phone, switch to another app for ten seconds and come back | **The screen is exactly where you left it** - same tab, same intervention, nothing half-typed lost, no flash of a sign-in screen |
+| 23 | Look under the tabs on either device | A line says either *Uzivo - promjene stizu same* or *Osvjezavanje na svakih 12 sekundi*. Both are honest; the second is the fallback when the live connection cannot be made |
+| 24 | Leave the commander on **Pregled** and, on the phone, change something | The commander's screen updates **on its own** within a few seconds. No loading line appears and nothing resets |
+| 25 | In **Arhiva**, open the closed intervention | The chronology shows **every** movement - Krecem, U putu and Na licu mjesta as three lines - plus each state change, each with a time and **who did it** |
+| 26 | Look at the archive list row for the closed intervention | It reads `Zatvoreno` beside the **closure** time, not the publication time |
+| 27 | Turn the phone **sideways** | Nothing is cut off at the notch, nothing scrolls sideways, and the archive tables are readable cards rather than columns running off the screen |
+| 28 | On the laptop, sign in as **vatrogasac1@example.invalid** instead | The navigation does **not** offer `Poziv i intervencija` or `Evidencija drustva`, and the account screen shows their own account without the owner's list |
+| 29 | In the commander's recipient picker, look for the withdrawn member | They are **not there**. The list comes from the server, by the same rule publishing enforces |
+
+### If you want to show the sign-in error handling
+
+Turn on a content blocker, or Brave Shields, and try to sign in. The message
+says the request **never reached the server** - not "check your password". Try
+twice and it adds a blocker as one possible cause. This was a real finding from
+the 13 September device test.
 
 ### If a demonstration action is performed twice
 

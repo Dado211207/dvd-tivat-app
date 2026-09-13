@@ -191,6 +191,88 @@ async function show(node: React.ReactElement, role: OperationalRole): Promise<st
   return container.textContent ?? '';
 }
 
+/**
+ * A reported OBSERVATION, not yet a confirmed defect: "the title appeared
+ * twice, and the fields may be mapped wrongly".
+ *
+ * The brief is explicit that a field-mapping defect may not be CLAIMED unless
+ * it reproduces with deliberately different values for the title, the location
+ * and the assembly point. So that is exactly what this does: three values that
+ * cannot be confused with one another, checked one screen at a time.
+ *
+ * The finding is recorded in `docs/ai/WORK_LOG.md`. In short: the mapping is
+ * correct on every screen, and the duplication is real but is the ordinary
+ * list-and-detail shape - the archive shows a list of interventions and then
+ * the selected one's record underneath, so the selected title legitimately
+ * appears in both. These tests pin the mapping so that if the reporter did see
+ * something else, this is no longer where it could have come from.
+ */
+describe('title, location and assembly point are not confused with each other', () => {
+  const DISTINCT = {
+    ...INTERVENTION,
+    title: 'NASLOV-JEDAN',
+    incidentLocation: 'LOKACIJA-DVA',
+    assemblyPoint: 'OKUPLJANJE-TRI',
+    instructions: 'UPUTSTVO-CETIRI',
+  };
+
+  async function withDistinctValues(view: React.ReactElement, role: OperationalRole) {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([DISTINCT]);
+    return show(view, role);
+  }
+
+  it('the commander console puts each value where it belongs', async () => {
+    await withDistinctValues(<CommandView />, 'COMMANDER');
+
+    const location = container.querySelector('[data-testid="selected-location"]');
+    expect(location?.textContent, 'the location field must hold the location').toBe('LOKACIJA-DVA');
+    expect(location?.textContent).not.toContain('NASLOV');
+    expect(location?.textContent).not.toContain('OKUPLJANJE');
+
+    // Each distinct value must appear somewhere, and none may stand in for
+    // another. Counted across the whole screen rather than per element, so a
+    // value rendered into the wrong field shows up as a count of two.
+    const text = container.textContent ?? '';
+    for (const value of ['NASLOV-JEDAN', 'LOKACIJA-DVA', 'OKUPLJANJE-TRI', 'UPUTSTVO-CETIRI']) {
+      expect(text, `${value} must be on the screen`).toContain(value);
+    }
+  });
+
+  it('the archive puts each value where it belongs', async () => {
+    await withDistinctValues(<ArchiveView />, 'COMMANDER');
+
+    expect(container.querySelector('[data-testid="archive-title"]')?.textContent).toBe(
+      'NASLOV-JEDAN',
+    );
+    const meta = container.querySelector(`[data-testid="archive-meta-${INTERVENTION_ID}"]`);
+    expect(meta?.textContent, 'the list row shows kind, state and time - not the location')
+      .not.toContain('LOKACIJA-DVA');
+  });
+
+  it('the archive shows the title exactly twice, and that is the list and the record', async () => {
+    // The reported duplication, measured. It is the ordinary list-and-detail
+    // shape: the picker lists every intervention, and the record for the
+    // selected one sits underneath. Pinned so a THIRD copy - which would be a
+    // real defect - fails here.
+    await withDistinctValues(<ArchiveView />, 'COMMANDER');
+    const occurrences = (container.textContent ?? '').split('NASLOV-JEDAN').length - 1;
+    expect(occurrences).toBe(2);
+
+    const inPicker = container.querySelector('[data-testid="archive-list"]')?.textContent ?? '';
+    const inRecord = container.querySelector('[data-testid="archive-record"]')?.textContent ?? '';
+    expect(inPicker).toContain('NASLOV-JEDAN');
+    expect(inRecord).toContain('NASLOV-JEDAN');
+  });
+
+  it('the firefighter screen shows the title once', async () => {
+    await withDistinctValues(<MobilisationView />, 'FIREFIGHTER');
+    const occurrences = (container.textContent ?? '').split('NASLOV-JEDAN').length - 1;
+    expect(occurrences, 'one call-out, one heading').toBe(1);
+    expect(container.textContent).toContain('LOKACIJA-DVA');
+  });
+});
+
 describe('the commander console renders on real data', () => {
   it('shows the call-out and does not fail to render', async () => {
     const text = await show(<CommandView />, 'COMMANDER');
