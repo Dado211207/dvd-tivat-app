@@ -750,7 +750,13 @@ function OverviewTab({
     (r) => r.answer === 'DOLAZIM' || r.answer === 'DOLAZIM_KASNIJE',
   ).length;
   const onScene = data.recipients.filter((r) => r.journey === 'NA_LICU_MJESTA').length;
-  const present = data.attendance.filter((a) => a.endedAt === null && a.rejectedAt === null).length;
+  // Still on the task right now: checked in and not yet checked out. NOT the
+  // number of people who have reported attendance - a closed interval counts
+  // towards the record and not towards who is standing on the ground.
+  const onTask = data.attendance.filter((a) => a.endedAt === null && a.rejectedAt === null).length;
+  const reported = new Set(
+    data.attendance.filter((a) => a.rejectedAt === null).map((a) => a.memberId),
+  ).size;
   const vehiclesOut = data.movements.filter(
     (m) => m.returnedAt === null && m.interventionId === selected.id,
   ).length;
@@ -769,7 +775,8 @@ function OverviewTab({
           <Count label="Odgovorilo" value={answered} testId="count-answered" />
           <Count label="Dolazi" value={coming} testId="count-coming" />
           <Count label="Na licu mjesta (izjava)" value={onScene} testId="count-onscene" />
-          <Count label="Prijavljeno prisustvo" value={present} testId="count-present" />
+          <Count label="Trenutno na zadatku" value={onTask} testId="count-present" />
+          <Count label="Prijavilo prisustvo" value={reported} testId="count-reported" />
           <Count label="Vozila na terenu" value={vehiclesOut} testId="count-vehicles" />
         </div>
       </section>

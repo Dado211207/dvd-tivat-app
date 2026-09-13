@@ -101,7 +101,9 @@ const TABLES: Record<string, unknown[]> = {
   ],
   groups: [{ id: '77777777-7777-4777-8777-777777777777', name: 'Prva smjena', active: true }],
   group_members: [{ group_id: '77777777-7777-4777-8777-777777777777', member_id: MEMBER_ID }],
-  profiles: [{ user_id: USER_ID, email: 'komandir@example.invalid', full_name: 'Komandir Smjene', profile_complete: true }],
+  // The signed-in account is linked to Ivo, so the identity pill must say
+  // Ivo - not a second name that contradicts the roster on the same screen.
+  profiles: [{ user_id: USER_ID, email: 'ivo@example.invalid', full_name: 'Ivo Vatrogasac', profile_complete: true }],
 };
 
 const RPC: Record<string, unknown> = {
@@ -154,7 +156,7 @@ export async function installFixtureProject(page: Page, role: FixtureRole = 'COM
     }
 
     if (path.startsWith('/auth/v1/user')) {
-      return json(route, { id: USER_ID, email: 'komandir@example.invalid', aud: 'authenticated' });
+      return json(route, { id: USER_ID, email: 'ivo@example.invalid', aud: 'authenticated' });
     }
     if (path.startsWith('/auth/v1/')) {
       return json(route, {
@@ -162,7 +164,7 @@ export async function installFixtureProject(page: Page, role: FixtureRole = 'COM
         token_type: 'bearer',
         expires_in: 3600,
         refresh_token: 'fixture',
-        user: { id: USER_ID, email: 'komandir@example.invalid' },
+        user: { id: USER_ID, email: 'ivo@example.invalid' },
       });
     }
 
@@ -208,7 +210,7 @@ export async function installFixtureProject(page: Page, role: FixtureRole = 'COM
         expires_at: Math.floor(Date.now() / 1000) + 3600,
         expires_in: 3600,
         refresh_token: 'fixture',
-        user: { id: userId, email: 'komandir@example.invalid', aud: 'authenticated', app_metadata: {}, user_metadata: {} },
+        user: { id: userId, email: 'ivo@example.invalid', aud: 'authenticated', app_metadata: {}, user_metadata: {} },
       };
       window.localStorage.setItem(`sb-${ref}-auth-token`, JSON.stringify(session));
     },
