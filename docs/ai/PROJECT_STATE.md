@@ -742,17 +742,28 @@ What is left, in order:
    permitting `/actions/runs`.
 3. **Rehearse the journey in docs/DEMO_RUNBOOK.md §5** on the devices that will
    be used, from two browser profiles.
-4. Only then notification transport (**B3**), which must not be promised before
+4. **Run the two-device Realtime acceptance in `docs/DEMO_RUNBOOK.md` §8a.**
+   This is the one check nobody but the owner can make, and it is the only
+   remaining item the automated suite deliberately does not claim: the hosted
+   project itself (CI holds no credentials for it), and two physical devices on
+   different networks, where a mobile radio or a corporate proxy blocking
+   WebSockets would show up. Record which of *Uzivo* or *Osvjezavanje na svakih
+   12 sekundi* the status line showed, and on which network.
+5. Only then notification transport (**B3**), which must not be promised before
    it is built and tested on a real device. Nothing today sends anything.
 
 Not blocking the demonstration, and worth doing after it:
 
 - An offline queue, so an action taken with no signal is stored and sent rather
   than refused.
-- Replace the simulated `clanovi`, `dezurni`, `clan`, `vozila`, `prikaz` and
-  `istorija` screens, or delete them. They are kept for now because they still
-  demonstrate ideas the server slice has not reached, and because they were the
-  safety net while the real screens were being built.
+- Decide what finally happens to the simulated `clanovi`, `dezurni`, `clan`,
+  `vozila` and `istorija` screens. They are no longer OFFERED - each duplicates
+  a screen that is now server-backed, and a commander running a call-out on one
+  by accident would find nothing on the server afterwards - but the routes and
+  the code are still there, listed in `ROUTES_NOT_OFFERED` in `src/App.tsx`.
+  Deleting them is an owner decision, not a tidy-up: they were the safety net
+  while the real screens were being built. `prikaz` is still offered, because
+  the station display has no server-backed equivalent yet.
 - A second Supabase project, so a demonstration and any real use are not the
   same database.
 
