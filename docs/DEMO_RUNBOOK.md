@@ -215,7 +215,62 @@ Not done, and needed before anybody relies on it:
 
 ---
 
-## 8. Optional: check the whole journey automatically first
+## 8. Real-device acceptance checklist
+
+Run this once on the actual phone, from the public URL, before the
+presentation. Five to ten minutes. It is the only check that covers the things
+no automated suite in this repository can reach: a real iPhone, a real network,
+and a real Home Screen install.
+
+Two identities are needed. Use the phone for the firefighter and a laptop (or a
+private window) for the commander.
+
+| # | Do this | Expect |
+|---|---|---|
+| 1 | Open the public URL in **Safari on iPhone** | The application loads. No browser warning. The screen says you are not signed in and offers the way in |
+| 2 | Share -> **Add to Home Screen**, then open from the Home Screen | It opens without Safari's address bar. The icon is the teal bell |
+| 3 | On the laptop, sign in as **komandir@example.invalid** | The identity pill top right shows the name and `COMMANDER` |
+| 4 | **Poziv i intervencija**: fill title, location, instruction. Save the draft | The draft appears below the form. Nobody has been called |
+| 5 | Choose Ivo, Pero and Jovo. Press **Objavi** | The confirmation says obligations are **queued and nobody will actually be notified**. Read it aloud |
+| 6 | On the phone, sign in as **vatrogasac1@example.invalid** | **Moj poziv** shows the call-out you just published |
+| 7 | Press **Dostupan sam** | The panel records availability with a time |
+| 8 | Press **1. Otvorio sam poziv** | The button is replaced by *when* you opened it. Opening is a fact, not a toggle |
+| 9 | Answer **Dolazim**, add an ETA band, send | The answer is recorded and can still be changed |
+| 10 | Press **Krecem**, then **Na licu mjesta** | The line under the buttons says this does **not** report attendance |
+| 11 | Press **Prijavi dolazak** | It says the record is *prijavio se sam* and **ceka potvrdu komandira** |
+| 12 | On the laptop, **Vozila** tab: record a departure | The screen says a vehicle movement never creates attendance. The attendance board is unchanged |
+| 13 | **Pregled** tab | Four separate columns: opened, answer, movement, attendance. Ivo shows *Ceka potvrdu*, never *Potvrdjeno* |
+| 14 | On the phone, press **Odjavi prisustvo** | The interval closes. It is still waiting for confirmation |
+| 15 | On the laptop, return the vehicle | The movement shows a return time |
+| 16 | **Prisustvo** tab: **Izaberi sve**, then **Potvrdi izabrano** | It confirms **without asking for a note**. `Zvanicno vrijeme ucesca` stops being 0 min |
+| 17 | Press **Odbij** on nothing - just read the dialog wording if you open it | Rejecting *does* demand a reason. Cancel out |
+| 18 | Close the intervention with a short note | The status becomes `Zatvoreno` |
+| 19 | **Arhiva i ucesce** | The chronology lists each fact with its own time; participation shows confirmed time, and unconfirmed separately |
+| 20 | Turn on **Airplane Mode** on the phone and reload | The application still opens and says the device is offline and that nothing will be saved |
+| 21 | Turn Airplane Mode off and reload | The offline notice disappears |
+
+### If a demonstration action is performed twice
+
+Nothing here is destructive, and every screen re-reads the server, so the
+recovery is almost always **press `Osvjezi sa servera` and carry on**.
+
+| Mistake | What actually happened | Recovery |
+|---|---|---|
+| Published twice | The second press is refused - a published call-out cannot be published again | None needed |
+| Two drafts created | Only one is selected; the other is a draft nobody was called to | Select it and **Odbaci nacrt** with a reason, or ignore it |
+| Checked in twice | The second is refused: an open interval already exists | None needed |
+| Checked out twice | The second is refused | None needed |
+| Confirmed twice | The second reports `INTERVAL_CONFIRMED` per interval and confirms the rest | None needed |
+| Confirmed the wrong interval | It is confirmed | **Povuci potvrdu** with a reason. The reason is mandatory and stays in the record |
+| Rejected by mistake | It is rejected, with your reason | **Potvrdi** it again. Both the rejection and the confirmation stay in the record - that is the point |
+| Vehicle sent out twice | Refused: `VEHICLE_ALREADY_OUT` | None needed |
+| Closed the intervention early | It is closed | Create a new one. A closed intervention is deliberately not reopenable |
+| Signed in as the wrong person | Everything you did is attributed to them | **Odjavi se**, sign in correctly, and redo the step |
+
+If a screen shows a sentence about rights being refused, that is the access
+model working - it is worth showing rather than hiding.
+
+## 9. Optional: check the whole journey automatically first
 
 `db-tests/hosted_operations.test.ts` drives the application's own data layer
 through the whole journey against the hosted project. It is useful the morning
@@ -238,7 +293,7 @@ project, and must never be described as having tested it.
 
 ---
 
-## 9. If something goes wrong during the demonstration
+## 10. If something goes wrong during the demonstration
 
 **A screen says the server is not available.** It is telling the truth; it will
 not show stale data instead. Check the venue's network. The application works
@@ -256,3 +311,25 @@ was among the chosen recipients. A call-out is addressed, not broadcast.
 
 **A new version notice appears mid-demonstration.** Ignore it. It applies only
 when pressed, and never changes the application underneath you.
+
+---
+
+## 11. Immediately after the presentation
+
+Not optional, and not "when there is time".
+
+1. **Change or delete the demonstration accounts.** The addresses are published
+   in section 4 of this file and the repository is public; only the password
+   keeps them closed. Supabase dashboard -> Authentication -> Users.
+2. **Decide about open registration.** The project currently has sign-up
+   enabled and email confirmation off, so anyone who finds the URL can create an
+   account. They arrive with no role and see nothing - the access model holds -
+   but the accounts accumulate. Turn sign-up off in the dashboard if the URL
+   stays up.
+3. **Delete the demonstration interventions** if the archive should start empty
+   for real use, or keep them clearly labelled as exercises.
+4. **Decide whether the public URL stays up at all.** It is a prototype against
+   a single project with no backup policy.
+5. **Before any real member data is ever entered**, settle the privacy questions
+   in section 7 and give the project a second environment, so a demonstration
+   and real use are not the same database.

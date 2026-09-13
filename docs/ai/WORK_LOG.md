@@ -5,6 +5,65 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-13 (later) - Presentation readiness: everything except the deployment itself
+
+**The deployment is blocked on one owner action, and the block is an
+environment limitation rather than a missing decision.** The two repository
+variables cannot be set from here: `gh` is not installed, and this session's
+egress proxy refuses the GitHub Actions configuration paths (403 with "Access
+to this GitHub Actions path is not permitted through this proxy") while
+permitting `/actions/runs` reads. GitHub itself reports `admin: true` for the
+token, so this is the proxy's policy, not a repository permission. Reported
+rather than routed around, per the proxy's own guidance.
+
+**So the artifact that would be published was verified instead, at the real
+base path.** `dist/` was built from the merged `main` with the real client
+configuration and served through a small server that behaves like GitHub Pages
+for a project site: everything under `/dvd-tivat-app/`, a hard 404 outside it,
+no SPA rewrite. Thirty-two browser checks passed, among them:
+
+- every asset reference is relative, so the base path resolves;
+- the service worker registers with scope `/dvd-tivat-app/` and takes control;
+- the first visit does **not** reload, and typed input survives;
+- a deep hash route and a refresh on it never reach a Pages 404;
+- offline opens from the cached shell and says so; coming back online clears it;
+- **authenticated operational data flowed through the page and nothing
+  cross-origin entered any cache** - fifteen shell entries, zero from the API.
+
+That last one was made as strong as it can be made here: the real project host
+was answered locally so responses genuinely passed through the worker, rather
+than asserting the rule from the source.
+
+**Configuration.** The built bundle contains the intended project URL and the
+publishable key, exactly one Supabase host, no `sb_secret_`, and no
+`service_role`. Values were validated and compared without being printed.
+
+**Auth settings, read from the project.** `mailer_autoconfirm: true`
+(confirmation off, matching B2 - this closes the two conflicting observations
+recorded earlier), `email` the only provider, `disable_signup: false`. No
+redirect or Site URL entry is needed because the flow is password-only with
+`detectSessionInUrl` off, so no authentication setting was changed.
+
+**Hosted data audit**, read through the application's own authenticated path as
+the OWNER: 8 accounts all on `.invalid`, 7 invented members, 3 vehicles, **0
+interventions**, 0 attendance rows, 0 vehicle movements, no telephone-shaped
+string, no routable address, and no outbox row claiming delivery.
+
+**Presentation review** at 390px across all six main screens: no undefined or
+`[object Object]`, no stack trace or database error code, no developer
+placeholder, no horizontal scrolling, the correct banner on each screen, the
+actor selector only on simulated ones, nothing claiming a notification was
+delivered, working Back and Forward, and no console noise. No blockers found,
+so no presentation fix was needed and none was invented.
+
+**Three of my own checks were wrong before they were right**, all the same
+mistake - asserting on a proxy for the property instead of the property. A hash
+route change fires `framenavigated`, so an intentional click looked like a
+reload; `.app` and `.station-rail` are legitimately transparent because the
+ground is painted on `body` and the rail uses a gradient through the
+`background` shorthand. Each was corrected to measure the thing itself.
+
+
 ## 2026-09-13 — Slice 3b: the real operational screens, and the shell around them
 
 Branch `claude/slice-3b-real-operations`, cut from live `main` `0f1cace7`, and

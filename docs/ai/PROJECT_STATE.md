@@ -540,21 +540,20 @@ these concern a private hosted project that this repository's tests cannot reach
    deliberately not inspected — so this stays listed until the owner confirms it
    directly.* Leaving a done item on the list costs a moment; removing an
    undone one leaves a possibly-exposed key rotated only in a document.
-2. **Confirm the "Confirm email" setting**, in the Supabase dashboard
-   (Authentication → Sign In / Providers). There is no API or MCP access to auth
-   configuration from here, so this cannot be checked or changed for them.
+2. ~~Confirm the "Confirm email" setting.~~ **Answered 13 September 2026.**
+   `GET /auth/v1/settings` on the hosted project reports `mailer_autoconfirm:
+   true` - confirmation **OFF**, matching the B2 decision. The 11 September
+   reading of `false` and the 12 September report of `true` are resolved in
+   favour of the later one; the setting was most likely changed between them.
+   The same read shows `email` as the only provider and `disable_signup: false`.
 
-   **Two observations conflict and neither is being picked over the other:**
-
-   | Date | Source | Observation |
-   |---|---|---|
-   | 2026-09-11 | Read directly from `GET /auth/v1/settings` during the second live pass | `"mailer_autoconfirm": false` — confirmation **ON**, and GoTrue additionally rejected `@example.invalid` and `@example.com` as undeliverable, plus a 429 rate limit |
-   | 2026-09-12 | Owner continuity record (B2), reported | Provider enabled and `mailer_autoconfirm: true` — confirmation **OFF** |
-
-   The setting may simply have been changed between the two. It matters because
-   it decides whether registration yields a usable session immediately, so it
-   should be read from the dashboard once and the answer recorded here rather
-   than inferred.
+   Two things follow. **No redirect or Site URL allowlist entry is needed** for
+   the deployment: the flow is password-only, with no OAuth, no magic link, no
+   password reset and `detectSessionInUrl` off, so nothing ever returns through
+   a URL. And **open registration is on**, so anyone who finds a public
+   deployment can create an account - they get no role and see nothing, but the
+   accounts accumulate, which is why turning sign-up off is on the
+   post-presentation cleanup list.
 
 ## Next concrete action
 
@@ -567,10 +566,24 @@ What is left, in order:
 
 1. ~~Open the slice 3b pull request and merge it on green CI.~~ **Done — PR #20
    merged normally on 2026-09-13.**
-2. **Set the two repository variables and run the deployment workflow** - see
-   docs/DEMO_RUNBOOK.md §3.1. This is the one step between the branch and a
-   public demonstration URL, and it needs the owner because this repository
-   keeps placeholder configuration only.
+2. **Set the two repository variables** - see docs/DEMO_RUNBOOK.md §3.1. This
+   is the one step between the merged code and a public demonstration URL.
+
+   **It cannot be done from an agent session, and that was established rather
+   than assumed.** `gh` is not installed, and the GitHub REST Actions
+   configuration paths are refused by this environment's egress proxy - not by
+   GitHub, whose own token reports `admin: true` on the repository:
+
+   | Request | Result |
+   |---|---|
+   | `GET /repos/.../actions/runs` | 200 |
+   | `GET /repos/.../actions/variables` | **403, "Access to this GitHub Actions path is not permitted through this proxy"** |
+   | `POST /repos/.../actions/variables` | **403, same proxy message** |
+   | `GET /repos/.../pages` | **403, same proxy message** |
+
+   No workflow dispatch is needed afterwards: `Deploy demonstration build`
+   already runs by itself after CI passes on `main`. Setting the two variables
+   and pushing (or re-running CI) is sufficient.
 3. **Rehearse the journey in docs/DEMO_RUNBOOK.md §5** on the devices that will
    be used, from two browser profiles.
 4. Only then notification transport (**B3**), which must not be promised before
