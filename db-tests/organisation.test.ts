@@ -234,29 +234,28 @@ describe('linking an account to a member', () => {
   }
 
   it('is what makes a member able to answer a call-out at all', async () => {
-    // Before linking, every approved account in the system resolves to no
-    // member, and submit_response refuses it. This is the join that was
-    // unreachable until this slice: nothing could write members.user_id.
+    // This used to publish to the unlinked member and check that
+    // `submit_response` refused them. That state is now unreachable, which is a
+    // stronger guarantee and the one the test asserts instead: an unlinked
+    // member cannot even be ADDRESSED. They could never have opened the
+    // call-out, so counting them among the people called was always wrong.
     const userId = await freshAccount('veza@example.invalid', 'Clan Za Vezu');
     const memberId = await createMember(db, 'Clan Za Vezu');
 
     const intervention = await createDraft(db, commander, { key: `veza-${Date.now()}` });
-    await asUserCommitted(db, commander, (client) =>
+    const refusedPublish = await expectRefused(db, commander, (client) =>
       client.query('select public.publish_intervention($1, $2)', [intervention, [memberId]]),
     );
-
-    const refused = await expectRefused(db, userId, (client) =>
-      client.query('select public.submit_response($1, $2, $3, $4)', [
-        intervention,
-        'DOLAZIM',
-        null,
-        false,
-      ]),
-    );
-    expect(refused).toContain('MEMBER_RECORD_REQUIRED');
+    expect(refusedPublish).toContain('RECIPIENT_NOT_ELIGIBLE');
 
     await asUserCommitted(db, admin, (client) =>
       client.query('select public.admin_link_member_account($1, $2)', [memberId, userId]),
+    );
+
+    // Linked, and now callable. The same draft, so this is the identical
+    // request that was refused a moment ago - only the link has changed.
+    await asUserCommitted(db, commander, (client) =>
+      client.query('select public.publish_intervention($1, $2)', [intervention, [memberId]]),
     );
 
     await asUserCommitted(db, userId, (client) =>
@@ -647,7 +646,12 @@ describe('editing and discarding a draft', () => {
     // After publication an operationally important edit becomes an
     // intervention_updates row, so that what recipients already acted on is
     // never silently rewritten.
-    const memberId = await createMember(db, 'Primalac Izmjene');
+    // A member who can actually be called: publishing now refuses anybody who
+    // could not open the call-out, so the fixture has to be a real recipient.
+    const recipient = await createAccount(db, `izmjena-${Date.now()}@example.invalid`);
+    await completeProfile(db, recipient.userId, 'Primalac Izmjene');
+    await grantRole(db, recipient.userId, 'FIREFIGHTER');
+    const memberId = await createMember(db, 'Primalac Izmjene', recipient.userId);
     const id = await createDraft(db, commander, { key: `objavljen-${Date.now()}` });
     await asUserCommitted(db, commander, (client) =>
       client.query('select public.publish_intervention($1, $2)', [id, [memberId]]),

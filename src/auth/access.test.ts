@@ -4,8 +4,10 @@ import {
   asOperationalRole,
   hasOperationalAccess,
   loadAccess,
+  sameAccess,
   type Access,
   type AccessGateway,
+  type SignedInAccess,
 } from './access';
 
 const FIXED_NOW = () => new Date('2026-09-11T08:00:00.000Z');
@@ -181,5 +183,67 @@ describe('narrowing what the wire returns', () => {
     expect(asOperationalRole(null)).toBeNull();
     expect(asOperationalRole(undefined)).toBeNull();
     expect(asOperationalRole('')).toBeNull();
+  });
+});
+
+/**
+ * `sameAccess` decides whether a re-read is worth telling anybody about.
+ *
+ * It is the reason returning to the tab no longer resets the screen: the
+ * provider keeps the previous snapshot object when the answer has not changed,
+ * so nothing downstream sees "the account changed". Getting it wrong in either
+ * direction is bad - too loose and a real suspension goes unnoticed, too strict
+ * and the churn comes back.
+ */
+describe('two snapshots say the same thing', () => {
+  const signedIn = (over: Partial<SignedInAccess> = {}): SignedInAccess => ({
+    kind: 'SIGNED_IN',
+    userId: 'user-1',
+    email: 'komandir@example.invalid',
+    fullName: 'Komandir Smjene',
+    profileComplete: true,
+    accountStatus: 'ACTIVE',
+    role: 'COMMANDER',
+    loadedAt: '2026-09-13T10:00:00.000Z',
+    ...over,
+  });
+
+  it('ignores when it was read', () => {
+    // The whole point. `loadedAt` differs on every single read and says nothing
+    // about the answer; comparing it would make the function always return
+    // false and restore the bug it exists to prevent.
+    expect(sameAccess(signedIn(), signedIn({ loadedAt: '2026-09-13T11:22:33.000Z' }))).toBe(true);
+  });
+
+  it('is true for two separately built but identical snapshots', () => {
+    expect(sameAccess(signedIn(), signedIn())).toBe(true);
+  });
+
+  it.each([
+    ['a different account', { userId: 'user-2' }],
+    ['a different role', { role: 'FIREFIGHTER' as const }],
+    ['a withdrawn account', { accountStatus: 'WITHDRAWN' as const }],
+    ['a role taken away', { role: null }],
+    ['a completed profile', { profileComplete: false }],
+    ['a changed name', { fullName: 'Neko Drugi' }],
+    ['a changed address', { email: 'drugi@example.invalid' }],
+  ])('is false for %s', (_label, over) => {
+    expect(sameAccess(signedIn(), signedIn(over as Partial<SignedInAccess>))).toBe(false);
+  });
+
+  it('separates the states that carry nothing else', () => {
+    expect(sameAccess({ kind: 'LOADING' }, { kind: 'LOADING' })).toBe(true);
+    expect(sameAccess({ kind: 'SIGNED_OUT' }, { kind: 'SIGNED_OUT' })).toBe(true);
+    expect(sameAccess({ kind: 'LOADING' }, { kind: 'SIGNED_OUT' })).toBe(false);
+    expect(sameAccess({ kind: 'SIGNED_OUT' }, signedIn())).toBe(false);
+  });
+
+  it('distinguishes why the server could not be asked', () => {
+    expect(
+      sameAccess({ kind: 'UNAVAILABLE', reason: 'NETWORK' }, { kind: 'UNAVAILABLE', reason: 'NETWORK' }),
+    ).toBe(true);
+    expect(
+      sameAccess({ kind: 'UNAVAILABLE', reason: 'NETWORK' }, { kind: 'UNAVAILABLE', reason: 'NO_PROFILE' }),
+    ).toBe(false);
   });
 });

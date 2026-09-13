@@ -542,31 +542,85 @@ Everything is `timestamptz` and written with the server's `now()`. Display
 converts to Europe/Podgorica in the client; the stored value stays canonical
 UTC. No duration is ever computed from a formatted string.
 
-## 10. Not built yet
+## 10. Who may be called, and the chronology
+
+Added 2026-09-13 by migrations `202609150008` and `202609150010`. Both additive.
+
+### `is_eligible_recipient(member)`
+
+True only for a member with an active roster record, a linked account, a
+completed profile, an active grant, and a role of `OWNER`, `ADMIN`, `COMMANDER`
+or `FIREFIGHTER`.
+
+Those are exactly the conditions `current_dvd_role()` applies, and reusing them
+is the point: **"can be called" and "can respond" cannot drift apart**. Before
+this, `publish_intervention` filtered on `members.active` alone, so a roster row
+still marked active passed even when the account behind it had been withdrawn.
+The hosted preflight found one such member on the real project.
+
+`publish_intervention` refuses the **whole** call-out if any requested recipient
+is ineligible, rather than silently dropping them. A commander who selected five
+people and got four must be told, not left to find out when somebody never
+answers — and a modified client posting an ineligible id straight at the RPC
+gets an error rather than a partial publication.
+
+`eligible_recipients()` is the same rule as a list, for the picker. The screen
+cannot offer somebody the server will refuse; the server refusing regardless is
+what makes a modified client harmless.
+
+**Command roles are eligible, deliberately.** In a volunteer society the
+commander and the administrator turn out to incidents like everybody else.
+
+### `intervention_audit(intervention)`
+
+`operational_audit` has recorded every state transition and every journey step
+since the schema was written. It had no reader, and one policy —
+`is_dvd_command()` — so a member could not have read their own participation
+history even if a screen had asked.
+
+This function returns the recorded events with each actor resolved to a display
+name (no e-mail address, no account id), to command or to a member who was
+actually called to that intervention. Ordering is `occurred_at` then `id`,
+because several events share a transaction time to the microsecond and an
+archive whose lines shuffle between readings is not a record.
+
+`202609150008` also adds `operational_audit_recipient_read`, **alongside** the
+command policy rather than replacing it. PostgreSQL ORs permissive policies, so
+command keeps reading everything and a recipient gains exactly their own
+interventions. It is a SELECT policy only: no client holds INSERT, UPDATE or
+DELETE on that table through any policy in any role, and the actor on every row
+is `auth.uid()` recorded by the command that did the work.
+
+## 11. Realtime
+
+`202609150009` adds eight operational tables to the `supabase_realtime`
+publication. The block is guarded and is a **no-op** where the publication is
+absent — which is the plain PostgreSQL the tests run against — or where the role
+may not alter it.
+
+The client treats a change notice as one thing only: "something you care about
+may have moved". It never reads the payload; the response is always to re-read
+through the ordinary policy-checked queries. So a notice can never show anybody
+a row they could not already read, and where no notice arrives the client polls
+in the foreground instead. `REPLICA IDENTITY` is deliberately left at the
+default: the old row would only matter to a client that read payloads.
+
+## 12. Not built yet
 
 Stated as a boundary rather than a list of absences, because the interesting part
 is where "built" stops and "usable" starts.
 
-**Built and tested on merged `main`, but not yet activated on the hosted project:**
-
-- Admin write commands for `members`, `groups`, `group_members` and `vehicles`,
-  the account-to-member link, the three intervention-draft commands, the
-  `is_dvd_admin()` predicate and the `organisation_audit` trail — all in
-  `202609120005`, covered by `db-tests/organisation.test.ts`.
-- The server-backed `Evidencija drustva` screen that drives them.
-- **None of it exists on the hosted project**, because `202609120005` is not
-  applied there. See §3.
+This section was stale and is corrected here rather than quietly rewritten:
+it claimed `202609120005` was not applied to the hosted project and that no
+screen published a real call-out. Both were true when written and neither has
+been true since 12 September. All eleven migrations are applied, and the
+commander, firefighter and archive screens all run against the real database.
 
 **Genuinely not built:**
 
-- **No screen publishes a real call-out.** The draft commands exist; the
-  dispatcher screen still writes device-local state.
-- **No screen uses any of `202609130006`.** Confirmation, rejection,
-  acknowledgement and vehicle movements are server commands with tests and no
-  interface. The vehicles and attendance screens are still device-local.
 - The separate `Clanovi` prototype screen is **still fictional browser state**
-  and is not the same thing as `Evidencija drustva`. Two screens now show
-  members and only one of them touches the database.
+  and is not the same thing as `Evidencija drustva`. Two screens show members
+  and only one of them touches the database.
 - No CSV export. The `attendance_totals()` function is the query it would use;
   the export itself, with its formula-injection escaping, is not written.
 - No `intervention_updates` write command (the table and its read policy exist).

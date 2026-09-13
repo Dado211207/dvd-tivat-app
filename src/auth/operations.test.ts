@@ -14,10 +14,13 @@ import {
   attendanceState,
   explainRefusal,
   formatDuration,
+  INTERVENTION_STATUSES,
   isOpenStatus,
   outstandingFor,
   participationSeconds,
+  stateTimestamp,
   type AttendanceInterval,
+  type Intervention,
   type RecipientFacts,
 } from './operations';
 
@@ -213,5 +216,81 @@ describe('server refusals become sentences a firefighter can act on', () => {
   it('handles null and undefined without throwing', () => {
     expect(explainRefusal(null)).toBeTruthy();
     expect(explainRefusal(undefined)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Which timestamp belongs to which state.
+ *
+ * The archive list once printed `published_at ?? created_at` for every row,
+ * whatever the row said it was. A closed intervention therefore showed the
+ * moment it was OPENED beside the word "Zatvoreno", which is a false statement
+ * about a record people are meant to rely on months later.
+ *
+ * The three times below are deliberately hours apart so no assertion can pass
+ * by accident on a shared value.
+ */
+const CREATED = '2026-09-13T06:00:00.000Z';
+const PUBLISHED = '2026-09-13T09:00:00.000Z';
+const CLOSED = '2026-09-13T17:00:00.000Z';
+
+const record = (over: Partial<Intervention> = {}): Intervention => ({
+  id: 'x1',
+  kind: 'POZAR',
+  otherKindNote: null,
+  title: 'Pozar niskog rastinja (izmisljeno)',
+  instructions: 'Uputstvo.',
+  incidentLocation: 'Izmisljena lokacija',
+  assemblyPoint: null,
+  latitude: null,
+  longitude: null,
+  status: 'CLOSED',
+  version: 3,
+  publishedAt: PUBLISHED,
+  closedAt: CLOSED,
+  closeReason: 'Vjezba zavrsena.',
+  createdAt: CREATED,
+  ...over,
+});
+
+describe('the timestamp that belongs to the displayed state', () => {
+  it.each([
+    ['DRAFT', CREATED],
+    ['PUBLISHED', PUBLISHED],
+    ['ASSEMBLING', PUBLISHED],
+    ['DEPLOYED', PUBLISHED],
+    ['CONTAINED', PUBLISHED],
+    ['CLOSED', CLOSED],
+    ['CANCELLED', CLOSED],
+  ] as const)('%s uses %s', (status, expected) => {
+    expect(stateTimestamp(record({ status }))).toBe(expected);
+  });
+
+  it('never answers the publication time for a closed intervention', () => {
+    // The exact defect, stated as its own assertion so a future refactor that
+    // reintroduces a `?? publishedAt` fallback fails here and not only in the
+    // table above.
+    const closed = record({ status: 'CLOSED' });
+    expect(stateTimestamp(closed)).not.toBe(closed.publishedAt);
+    expect(stateTimestamp(closed)).not.toBe(closed.createdAt);
+  });
+
+  it('covers every status the database allows', () => {
+    // A status added to the schema without a timestamp decision would silently
+    // return undefined here. This makes that a failing test rather than a blank
+    // space on a board.
+    for (const status of INTERVENTION_STATUSES) {
+      expect(stateTimestamp(record({ status })), status).toBeTypeOf('string');
+    }
+  });
+
+  it('reports a missing timestamp as missing rather than substituting another', () => {
+    // The database constraints make this impossible, but a client can also be
+    // handed a row by a fixture or a partially-migrated project. Inventing a
+    // time would be worse than admitting there is none.
+    expect(stateTimestamp(record({ status: 'CLOSED', closedAt: null }))).toBeNull();
+    expect(stateTimestamp(record({ status: 'PUBLISHED', publishedAt: null }))).toBeNull();
   });
 });

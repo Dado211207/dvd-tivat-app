@@ -26,6 +26,14 @@ const MIGRATIONS = [
   'supabase/migrations/202609120005_organisational_writes.sql',
   'supabase/migrations/202609130006_attendance_truth.sql',
   'supabase/migrations/202609140007_availability_and_journey.sql',
+  'supabase/migrations/202609150008_recipient_eligibility_and_history.sql',
+  // A no-op on plain PostgreSQL - there is no `supabase_realtime` publication
+  // here. Listed anyway so the suite proves it is SAFE on a database without
+  // one, which is exactly the failure mode a bare `alter publication` would
+  // have had.
+  'supabase/migrations/202609150009_realtime_publication.sql',
+  'supabase/migrations/202609150010_intervention_audit_read.sql',
+  'supabase/migrations/202609150011_revoke_event_trigger_execute.sql',
 ];
 
 export const DATABASE_URL =

@@ -32,6 +32,7 @@ import {
   fetchAttendance,
   fetchAvailability,
   fetchInterventions,
+  fetchEligibleRecipients,
   fetchRecipientFacts,
   fetchVehicleMovements,
   formatDuration,
@@ -49,9 +50,11 @@ import {
   type AvailabilityRow,
   type Intervention,
   type InterventionKind,
+  type EligibleRecipient,
   type RecipientFacts,
   type VehicleMovement,
 } from '@/auth/operations';
+import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -88,6 +91,18 @@ export function CommandView() {
 interface ConsoleData {
   interventions: readonly Intervention[];
   members: readonly RosterMember[];
+  /**
+   * Who may be CALLED, answered by the server.
+   *
+   * Kept separate from `members`, which is the roster. The two are different
+   * questions and were conflated until a withdrawn member appeared in the
+   * picker: they were on the roster, their record was active, and their
+   * account had been withdrawn, so they could not have opened the call-out.
+   *
+   * Null means the list could not be read. That is not the same as nobody
+   * qualifying, and the screen says which.
+   */
+  eligible: readonly EligibleRecipient[] | null;
   vehicles: readonly RosterVehicle[];
   availability: readonly AvailabilityRow[];
   movements: readonly VehicleMovement[];
@@ -98,6 +113,7 @@ interface ConsoleData {
 const EMPTY: ConsoleData = {
   interventions: [],
   members: [],
+  eligible: null,
   vehicles: [],
   availability: [],
   movements: [],
@@ -127,19 +143,31 @@ function CommandConsole({ context }: { context: OperationalContext }) {
     [data.interventions, selectedId],
   );
 
+  /**
+   * Re-read everything.
+   *
+   * `silent` is what a live update uses. An automatic re-read must not flash
+   * "Ucitavanje sa servera..." every few seconds, and - more importantly - must
+   * not look like the screen reset itself, which is the exact complaint this
+   * slice exists to fix. It replaces the data underneath and touches nothing
+   * else: not the tab, not the selection, not a half-typed call-out.
+   */
   const refresh = useCallback(
-    async (keepId?: string | null) => {
+    async (keepId?: string | null, options?: { readonly silent?: boolean }) => {
       const ticket = ++generation.current;
-      setLoading(true);
+      const silent = options?.silent === true;
+      if (!silent) setLoading(true);
       setLoadError(null);
       try {
-        const [interventions, members, vehicles, availability, movements] = await Promise.all([
-          fetchInterventions(),
-          loadRoster(),
-          loadVehicles(),
-          fetchAvailability(),
-          fetchVehicleMovements(),
-        ]);
+        const [interventions, members, eligible, vehicles, availability, movements] =
+          await Promise.all([
+            fetchInterventions(),
+            loadRoster(),
+            fetchEligibleRecipients(),
+            loadVehicles(),
+            fetchAvailability(),
+            fetchVehicleMovements(),
+          ]);
         // The newest call-out that is still open is what a commander wants on
         // opening the screen; falling back to the newest of any kind means the
         // screen is never blank when history exists.
@@ -158,7 +186,9 @@ function CommandConsole({ context }: { context: OperationalContext }) {
             ])
           : [[], []];
         if (!mounted.current || ticket !== generation.current) return;
-        setData({ interventions, members, vehicles, availability, movements, recipients, attendance });
+        setData({
+          interventions, members, eligible, vehicles, availability, movements, recipients, attendance,
+        });
         setSelectedId(focusId);
       } catch (error) {
         if (!mounted.current || ticket !== generation.current) return;
@@ -168,11 +198,25 @@ function CommandConsole({ context }: { context: OperationalContext }) {
             : 'Server trenutno nije dostupan. Prikaz nije osvjezen.',
         );
       } finally {
-        if (mounted.current && ticket === generation.current) setLoading(false);
+        if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
     [],
   );
+
+  /**
+   * Stay current without anybody pressing anything.
+   *
+   * The gate above has already confirmed with the server who this is and that
+   * they may be here, which is why `enabled` can be a constant true - the hook
+   * is never reached otherwise. The notice itself is never read: `refresh` goes
+   * through the same policy-checked queries as every other read on this screen.
+   */
+  const liveStatus = useLiveOperations({
+    enabled: true,
+    interventionId: selectedId,
+    onChange: () => void refresh(selectedId, { silent: true }),
+  });
 
   useEffect(() => {
     void refresh();
@@ -222,6 +266,14 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       ) : null}
       {loading ? <p role="status" className="muted small">Ucitavanje sa servera...</p> : null}
 
+      {/* Says which of the two it is. "Uzivo" and "every twelve seconds" are
+          different promises, and a commander deciding how much to trust what is
+          in front of them needs the difference. */}
+      <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
+        <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
+        {LIVE_STATUS_LABEL[liveStatus]}
+      </p>
+
       <InterventionPicker
         interventions={data.interventions}
         selectedId={selectedId}
@@ -231,27 +283,44 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         }}
       />
 
-      <div
-        role="tabpanel"
-        id={`panel-${tab}`}
-        aria-labelledby={`tab-${tab}`}
-        tabIndex={0}
-        className="tabpanel"
-      >
-        {tab === 'poziv' ? (
-          <CallOutTab
-            data={data}
-            selected={selected}
-            onDone={after}
-            onRefresh={() => void refresh(selectedId)}
-          />
-        ) : null}
-        {tab === 'pregled' ? <OverviewTab data={data} selected={selected} /> : null}
-        {tab === 'prisustvo' ? (
-          <AttendanceTab data={data} selected={selected} onDone={after} context={context} />
-        ) : null}
-        {tab === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
-      </div>
+      {/*
+        Every tab stays MOUNTED and the inactive ones are hidden.
+
+        Found by a browser test: a commander who typed half a call-out, stepped
+        across to `Pregled` to see who was available and came back found the
+        form empty. Rendering only the active tab destroys its `useState`, and
+        the draft with it - the same class of fault as the resume reset, just
+        reached by a different route.
+
+        It also fixes the tab markup. Each button already declared
+        `aria-controls="panel-<id>"`, but only one panel existed at a time and
+        it carried the ACTIVE tab's id, so three of the four pointed at nothing.
+      */}
+      {TABS.map((t) => (
+        <div
+          key={t.id}
+          role="tabpanel"
+          id={`panel-${t.id}`}
+          aria-labelledby={`tab-${t.id}`}
+          tabIndex={0}
+          className="tabpanel"
+          hidden={tab !== t.id}
+        >
+          {t.id === 'poziv' ? (
+            <CallOutTab
+              data={data}
+              selected={selected}
+              onDone={after}
+              onRefresh={() => void refresh(selectedId)}
+            />
+          ) : null}
+          {t.id === 'pregled' ? <OverviewTab data={data} selected={selected} /> : null}
+          {t.id === 'prisustvo' ? (
+            <AttendanceTab data={data} selected={selected} onDone={after} context={context} />
+          ) : null}
+          {t.id === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
+        </div>
+      ))}
     </div>
   );
 }
@@ -324,10 +393,13 @@ function CallOutTab({
     () => new Map(data.availability.map((a) => [a.memberId, a] as const)),
     [data.availability],
   );
-  const eligible = useMemo(
-    () => data.members.filter((m) => m.active && m.userId !== null),
-    [data.members],
-  );
+  // Not filtered here. The screen used to apply its own rule - an active
+  // roster row with a linked account - which passed a member whose ACCOUNT had
+  // been withdrawn. The server answers this question now, by the same rule
+  // `publish_intervention` enforces, so the list and the command cannot
+  // disagree. See `fetchEligibleRecipients`.
+  const eligible = data.eligible ?? [];
+  const eligibleUnavailable = data.eligible === null;
 
   const create = async () => {
     setError(null);
@@ -525,27 +597,47 @@ function CallOutTab({
             <>
               <h3>Kome se salje</h3>
               <p className="muted small">
-                Prikazani su samo clanovi sa povezanim nalogom - ostali ne bi mogli ni da vide poziv.
-                Oznaka dostupnosti je opsta, ne odgovor na ovaj poziv.
+                Spisak daje server: prikazani su samo clanovi koji zaista mogu da prime i otvore
+                poziv - aktivan clan, aktivan nalog i popunjen profil. Clan kome je nalog ukinut se
+                ne prikazuje i ne moze biti pozvan. Oznaka dostupnosti je opsta izjava clana, a ne
+                odgovor na ovaj poziv.
               </p>
+              {/*
+                An empty picker with no explanation reads as a screen that has
+                not finished loading. It has two entirely different causes and a
+                commander must not have to guess which one they are looking at.
+              */}
+              {eligibleUnavailable ? (
+                <Notice tone="error" testId="eligible-recipients-unavailable">
+                  <strong>Spisak clanova nije procitan sa servera.</strong> Ovo nije podatak da
+                  nema clanova - znaci da odgovor nije stigao. Osvjezite prikaz prije nego sto
+                  objavite poziv.
+                </Notice>
+              ) : eligible.length === 0 ? (
+                <Notice tone="warn" testId="no-eligible-recipients">
+                  <strong>Nijedan clan trenutno ne moze da primi poziv.</strong> Poziv se moze
+                  poslati samo clanu sa aktivnim nalogom i popunjenim profilom. Clan kome je nalog
+                  ukinut se ovdje ne prikazuje.
+                </Notice>
+              ) : null}
               <ScrollRegion label="Spisak clanova za poziv" className="table-wrap table-wrap--tall">
                 <ul className="pick-list" data-testid="recipient-picker">
                   {eligible.map((m) => {
-                    const availability = availableBy.get(m.id);
+                    const availability = availableBy.get(m.memberId);
                     return (
-                      <li key={m.id}>
+                      <li key={m.memberId}>
                         <label className="pick">
                           <input
                             type="checkbox"
-                            checked={selectedMembers.has(m.id)}
+                            checked={selectedMembers.has(m.memberId)}
                             onChange={(event) => {
                               const next = new Set(selectedMembers);
-                              if (event.target.checked) next.add(m.id);
-                              else next.delete(m.id);
+                              if (event.target.checked) next.add(m.memberId);
+                              else next.delete(m.memberId);
                               setSelectedMembers(next);
                             }}
                           />
-                          <span>{m.fullName}</span>
+                          <span className="pick__name">{m.fullName}</span>
                           {availability ? (
                             <Chip
                               tone={availability.available ? 'yes' : 'no'}
@@ -783,8 +875,12 @@ function OverviewTab({
 
       <section className="panel">
         <h2 className="panel__title">Ko je gdje</h2>
-        <ScrollRegion label="Pregled odziva po clanu">
-          <table className="table" data-testid="overview-table">
+        <ScrollRegion label="Pregled odziva po clanu" className="table-wrap table-wrap--cards">
+          {/* Five facts per member is exactly the table a telephone cannot show
+              side by side. Below 640px each row becomes a card - see
+              `.table--cards` - rather than collapsing any of them into one
+              status, which is the thing this screen exists not to do. */}
+          <table className="table table--cards" data-testid="overview-table">
             <thead>
               <tr>
                 <th scope="col">Clan</th>
@@ -802,14 +898,14 @@ function OverviewTab({
                 return (
                   <tr key={r.memberId}>
                     <th scope="row">{r.memberName}</th>
-                    <td>
+                    <td data-label="Otvorio">
                       {r.acknowledgedAt ? (
                         <Chip tone="yes" symbol="+">Otvorio</Chip>
                       ) : (
                         <Chip tone="unknown" symbol="?">Nije otvorio</Chip>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Odgovor">
                       {r.answer ? (
                         <Chip
                           tone={
@@ -828,7 +924,7 @@ function OverviewTab({
                         <Chip tone="unknown" symbol="?">Bez odgovora</Chip>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Kretanje">
                       {r.journey ? (
                         <Chip
                           tone={r.journey === 'ODUSTAJEM' ? 'no' : 'accent'}
@@ -840,7 +936,7 @@ function OverviewTab({
                         <Chip tone="unknown" symbol="?">Nije javio</Chip>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Prisustvo">
                       {open ? (
                         <Chip tone="alert" symbol="*">Prijavljen</Chip>
                       ) : confirmed.length > 0 ? (

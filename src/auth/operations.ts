@@ -88,6 +88,73 @@ export interface Intervention {
   readonly createdAt: string;
 }
 
+/**
+ * The timestamp that belongs to the state a row is showing.
+ *
+ * Found during the device test: the archive list printed
+ * "Pozar - Zatvoreno - 18:40" where 18:40 was the PUBLICATION time. A reader
+ * has every reason to read the time as the time of the state next to it, so
+ * that row said the intervention was closed at the moment it was opened.
+ *
+ * Each state has exactly one timestamp that means it, and the database
+ * guarantees the matching column is present:
+ *
+ *   DRAFT                                     `created_at`
+ *   PUBLISHED/ASSEMBLING/DEPLOYED/CONTAINED   `published_at`  (constraint
+ *                                             `intervention_published_fields`)
+ *   CLOSED/CANCELLED                          `closed_at`     (constraint
+ *                                             `intervention_closed_fields`)
+ *
+ * Returns null rather than falling back to a different column when the
+ * matching one is missing. A fallback is how this defect happened in the first
+ * place: it produces a plausible time that means something else. The caller
+ * says "Nije zabiljezeno" instead, which is true.
+ */
+export function stateTimestamp(record: Intervention): string | null {
+  switch (record.status) {
+    case 'DRAFT':
+      return record.createdAt;
+    case 'PUBLISHED':
+    case 'ASSEMBLING':
+    case 'DEPLOYED':
+    case 'CONTAINED':
+      return record.publishedAt;
+    case 'CLOSED':
+    case 'CANCELLED':
+      return record.closedAt;
+  }
+}
+
+/**
+ * One recorded event in an intervention's chronology.
+ *
+ * Read from `operational_audit`, which the commands have been writing since the
+ * schema was created. The archive used to assemble its chronology from
+ * CURRENT-STATE rows instead, which is why only a member's latest movement
+ * appeared and no state transition did at all - not because anything was being
+ * overwritten, but because nothing read the table that had it.
+ */
+export interface AuditEvent {
+  readonly id: string;
+  readonly at: string;
+  readonly type: string;
+  /** Whatever the writing command recorded. Shapes differ by event type. */
+  readonly detail: Record<string, unknown>;
+  /** Null when the acting account has no profile name on the server. */
+  readonly actorName: string | null;
+  readonly actorIsYou: boolean;
+}
+
+/** One member the server confirms may be called out, with the role it counted. */
+export type OperationalRoleName = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
+
+export interface EligibleRecipient {
+  readonly memberId: string;
+  readonly fullName: string;
+  readonly role: OperationalRoleName;
+  readonly specialties: readonly string[];
+}
+
 export interface RecipientFacts {
   readonly memberId: string;
   readonly memberName: string;
@@ -276,6 +343,13 @@ interface InterventionRow {
   created_at: string;
 }
 interface RecipientRow { member_id: string; member_name_at_publication: string }
+interface AuditRow {
+  event_id: string; occurred_at: string; event_type: string;
+  detail: unknown; actor_name: string | null; actor_is_you: boolean;
+}
+interface EligibleRecipientRow {
+  member_id: string; full_name: string; role: string; specialties: string[] | null;
+}
 interface AcknowledgementRow { member_id: string; opened_at: string }
 interface ResponseRow {
   member_id: string; answer: string; eta_minutes: number | null;
@@ -318,6 +392,78 @@ async function commandReturning<T>(
     return { ok: true, value: data as T };
   } catch (error) {
     return { ok: false, message: explainRefusal(String(error)) };
+  }
+}
+
+/**
+ * The members a call-out may actually be sent to.
+ *
+ * Read from the server rather than filtered here. The screen used to apply its
+ * own rule - active member row with a linked account - and that rule was wrong
+ * in a way nobody noticed until a withdrawn member appeared in the picker
+ * during the device test: their roster row was still active and still linked,
+ * but the account behind it had been withdrawn, so they could not have opened
+ * the call-out or answered it.
+ *
+ * `eligible_recipients()` applies the identical conditions `publish_intervention`
+ * enforces, so the list cannot offer somebody the server will refuse. The
+ * server refusing regardless is what makes a modified client harmless; this
+ * read only stops a commander being shown a name that would fail.
+ *
+ * Returns NULL when the list could not be read, and an empty array when the
+ * server read fine and nobody qualifies. Those are different sentences on the
+ * screen and a commander needs to know which one they are looking at: an empty
+ * picker that silently means "the server did not answer" is how somebody stands
+ * in front of a console at 03:00 believing the roster is empty.
+ *
+ * It never falls back to a client-side rule. Doing so would reintroduce the
+ * defect at exactly the worst moment, and quietly.
+ *
+ * A failure here does not take the rest of the console down with it: the other
+ * reads answer questions this one cannot, and a commander can still see a
+ * running intervention while the picker says it is unavailable.
+ */
+export async function fetchEligibleRecipients(): Promise<readonly EligibleRecipient[] | null> {
+  try {
+    const { data, error } = await accountBackend().rpc('eligible_recipients');
+    if (error || !data) return null;
+    return (data as unknown as EligibleRecipientRow[]).map((row) => ({
+      memberId: row.member_id,
+      fullName: row.full_name,
+      role: row.role as OperationalRoleName,
+      specialties: row.specialties ?? [],
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The recorded chronology of one intervention.
+ *
+ * Returns an empty list when the server refuses or is unreachable, and the
+ * screen says which of the two it is rather than presenting "no events" - an
+ * empty chronology and an unread one look identical and mean opposite things.
+ * Null is "could not read".
+ */
+export async function fetchInterventionAudit(
+  interventionId: string,
+): Promise<readonly AuditEvent[] | null> {
+  try {
+    const { data, error } = await accountBackend().rpc('intervention_audit', {
+      target_intervention: interventionId,
+    });
+    if (error || !data) return null;
+    return (data as unknown as AuditRow[]).map((row) => ({
+      id: row.event_id,
+      at: row.occurred_at,
+      type: row.event_type,
+      detail: (row.detail ?? {}) as Record<string, unknown>,
+      actorName: row.actor_name ?? null,
+      actorIsYou: row.actor_is_you === true,
+    }));
+  } catch {
+    return null;
   }
 }
 

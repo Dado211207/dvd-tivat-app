@@ -10,7 +10,7 @@
  */
 
 import type { RoleId } from '@/domain/types';
-import { lazy, Suspense, useRef, type ComponentType } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ComponentType } from 'react';
 import {
   APP_NAME,
   APP_SUBTITLE,
@@ -25,13 +25,14 @@ import {
   T,
 } from '@/i18n/labels';
 import { accessObstacle } from '@/auth/access';
+import { isOfferedTo, landingRouteFor } from '@/access/navigation';
 import { useAccess } from '@/auth/AccessProvider';
 import { makeId, useApp } from '@/state/AppStateContext';
 import { ConnectionBar } from './ui/components/ConnectionBar';
 import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
-import { hrefFor, useRoute, type Route } from './ui/router';
+import { DEFAULT_ROUTE, hrefFor, useRoute, type Route } from './ui/router';
 import { DispatcherView } from './ui/views/DispatcherView';
 import { DisplayView } from './ui/views/DisplayView';
 import { HistoryView } from './ui/views/HistoryView';
@@ -167,11 +168,44 @@ function SignedInIdentity() {
 export function App() {
   const route = useRoute();
   const { state, run, storageWarning } = useApp();
+  const { access } = useAccess();
   const View = VIEWS[route];
   const mainRef = useRef<HTMLElement>(null);
 
   const current = state.members.find((m) => m.id === state.simulation.actorId);
   const simulated = ROUTE_BACKING[route] === 'SIMULATED';
+
+  /**
+   * The role the server has confirmed, or null while it has not said.
+   *
+   * Null is never treated as "no access": it covers signed out, still loading
+   * and server unreachable, and a navigation that shrinks while a session is
+   * being checked is worse than one that explains itself at the gate.
+   */
+  const role = access.kind === 'SIGNED_IN' ? access.role : null;
+
+  /**
+   * Open into a screen the person can actually use.
+   *
+   * A firefighter used to land on the commander's console and be refused by it,
+   * which was the first thing they saw. This only acts when NO route was asked
+   * for - an empty hash - so a shared link, the back button and a reload all
+   * keep their route.
+   */
+  const landed = useRef(false);
+  useEffect(() => {
+    if (landed.current || role === null) return;
+    landed.current = true;
+    const asked = window.location.hash.replace(/^#\/?/, '').split('?')[0] ?? '';
+    if (asked !== '') return;
+    const landing = landingRouteFor(role);
+    if (landing !== DEFAULT_ROUTE) window.location.replace(hrefFor(landing));
+  }, [role]);
+
+  const navGroups = NAV_GROUPS.map((group) => ({
+    label: group.label,
+    routes: group.routes.filter((r) => isOfferedTo(r, role)),
+  })).filter((group) => group.routes.length > 0);
 
   function switchActor(memberId: string) {
     const member = state.members.find((m) => m.id === memberId);
@@ -208,7 +242,7 @@ export function App() {
           </div>
         </div>
         <nav className="nav" aria-label="Glavna navigacija">
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div className="nav__group" key={group.label}>
               <p className="nav__label">{group.label}</p>
               <div className="nav__items">

@@ -117,13 +117,16 @@ export function Total({
 export function Notice({
   tone,
   children,
+  testId,
 }: {
   tone: 'info' | 'error' | 'warn';
   children: ReactNode;
+  /** So a test can assert THIS notice appeared, not merely some notice. */
+  testId?: string;
 }) {
   const symbol = tone === 'error' ? '!' : tone === 'warn' ? '*' : 'i';
   return (
-    <div className={`notice notice--${tone}`}>
+    <div className={`notice notice--${tone}`} data-testid={testId}>
       <span className="notice__sym" aria-hidden="true">
         {symbol}
       </span>
