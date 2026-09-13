@@ -110,6 +110,19 @@ const RPC: Record<string, unknown> = {
   current_dvd_role: 'COMMANDER',
   current_account_status: 'ACTIVE',
   current_member_id: MEMBER_ID,
+  /*
+   * Who may be called out. Answered by the server in the real thing, so it is
+   * answered by the fixture here rather than derived from `members` - a fixture
+   * that recomputed the rule would stop testing the screen and start testing a
+   * copy of the rule.
+   *
+   * Pero is in `members` above and deliberately NOT here: he stands in for the
+   * member whose roster row is active but whose account has been withdrawn,
+   * which is the case the device test found in the real picker.
+   */
+  eligible_recipients: [
+    { member_id: MEMBER_ID, full_name: 'Ivo Vatrogasac', role: 'FIREFIGHTER', specialties: [] },
+  ],
   attendance_totals: [
     {
       member_id: MEMBER_ID,

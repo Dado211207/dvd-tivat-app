@@ -825,8 +825,12 @@ function OverviewTab({
 
       <section className="panel">
         <h2 className="panel__title">Ko je gdje</h2>
-        <ScrollRegion label="Pregled odziva po clanu">
-          <table className="table" data-testid="overview-table">
+        <ScrollRegion label="Pregled odziva po clanu" className="table-wrap table-wrap--cards">
+          {/* Five facts per member is exactly the table a telephone cannot show
+              side by side. Below 640px each row becomes a card - see
+              `.table--cards` - rather than collapsing any of them into one
+              status, which is the thing this screen exists not to do. */}
+          <table className="table table--cards" data-testid="overview-table">
             <thead>
               <tr>
                 <th scope="col">Clan</th>
@@ -844,14 +848,14 @@ function OverviewTab({
                 return (
                   <tr key={r.memberId}>
                     <th scope="row">{r.memberName}</th>
-                    <td>
+                    <td data-label="Otvorio">
                       {r.acknowledgedAt ? (
                         <Chip tone="yes" symbol="+">Otvorio</Chip>
                       ) : (
                         <Chip tone="unknown" symbol="?">Nije otvorio</Chip>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Odgovor">
                       {r.answer ? (
                         <Chip
                           tone={
@@ -870,7 +874,7 @@ function OverviewTab({
                         <Chip tone="unknown" symbol="?">Bez odgovora</Chip>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Kretanje">
                       {r.journey ? (
                         <Chip
                           tone={r.journey === 'ODUSTAJEM' ? 'no' : 'accent'}
@@ -882,7 +886,7 @@ function OverviewTab({
                         <Chip tone="unknown" symbol="?">Nije javio</Chip>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Prisustvo">
                       {open ? (
                         <Chip tone="alert" symbol="*">Prijavljen</Chip>
                       ) : confirmed.length > 0 ? (

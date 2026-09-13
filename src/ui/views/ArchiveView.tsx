@@ -349,8 +349,11 @@ function InterventionRecord({
                 </>
               ) : null}
             </p>
-            <ScrollRegion label="Ucesce po clanu na ovoj intervenciji">
-              <table className="table" data-testid="archive-participation">
+            <ScrollRegion
+              label="Ucesce po clanu na ovoj intervenciji"
+              className="table-wrap table-wrap--cards"
+            >
+              <table className="table table--cards" data-testid="archive-participation">
                 <thead>
                   <tr>
                     <th scope="col">Clan</th>
@@ -363,7 +366,7 @@ function InterventionRecord({
                   {perMember.map((row) => (
                     <tr key={row.memberId}>
                       <th scope="row">{row.name}</th>
-                      <td>
+                      <td data-label="Potvrdjeno">
                         {row.confirmedCount > 0 ? (
                           <Chip tone="yes" symbol={ATTENDANCE_STATE_SYMBOL.CONFIRMED ?? '+'}>
                             {formatDuration(row.confirmedSeconds)}
@@ -372,7 +375,7 @@ function InterventionRecord({
                           <span className="muted">-</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Ceka potvrdu">
                         {row.pending > 0 ? (
                           <Chip tone="later" symbol={ATTENDANCE_STATE_SYMBOL.PENDING ?? '~'}>
                             {row.pending} {row.pending === 1 ? 'prijava' : 'prijave'}
@@ -381,7 +384,7 @@ function InterventionRecord({
                           <span className="muted">-</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Odbijeno">
                         {row.rejected.length > 0 ? (
                           <span>
                             <Chip tone="no" symbol={ATTENDANCE_STATE_SYMBOL.REJECTED ?? '-'}>
@@ -416,8 +419,11 @@ function InterventionRecord({
         {movements.length === 0 ? (
           <EmptyState title="Nijedno vozilo nije evidentirano na ovoj intervenciji" />
         ) : (
-          <ScrollRegion label="Vozila na ovoj intervenciji">
-            <table className="table" data-testid="archive-vehicles">
+          <ScrollRegion
+            label="Vozila na ovoj intervenciji"
+            className="table-wrap table-wrap--cards"
+          >
+            <table className="table table--cards" data-testid="archive-vehicles">
               <thead>
                 <tr>
                   <th scope="col">Vozilo</th>
@@ -432,11 +438,15 @@ function InterventionRecord({
                     <th scope="row">
                       {movement.callsign} - {movement.vehicleName}
                     </th>
-                    <td className="small mono">{formatTime(movement.departedAt)}</td>
-                    <td className="small mono">
+                    <td data-label="Izlazak" className="small mono">
+                      {formatTime(movement.departedAt)}
+                    </td>
+                    <td data-label="Povratak" className="small mono">
                       {movement.returnedAt ? formatTime(movement.returnedAt) : 'jos nije vraceno'}
                     </td>
-                    <td className="small">{movement.purpose ?? '-'}</td>
+                    <td data-label="Namjena" className="small">
+                      {movement.purpose ?? 'Nije upisana'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -597,8 +607,8 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
           Tabela se popunjava kada se prijavi i potvrdi prvo prisustvo.
         </EmptyState>
       ) : (
-        <ScrollRegion label="Ukupno ucesce po clanu">
-          <table className="table" data-testid="archive-totals">
+        <ScrollRegion label="Ukupno ucesce po clanu" className="table-wrap table-wrap--cards">
+          <table className="table table--cards" data-testid="archive-totals">
             <thead>
               <tr>
                 <th scope="col">Clan</th>
@@ -613,11 +623,15 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
               {sorted.map((row) => (
                 <tr key={row.memberId}>
                   <th scope="row">{row.memberName}</th>
-                  <td data-testid={`total-confirmed-${row.memberId}`}>
+                  <td
+                   
+                    data-label="Potvrdjeno vrijeme"
+                    data-testid={`total-confirmed-${row.memberId}`}
+                  >
                     <strong>{formatDuration(row.confirmedSeconds)}</strong>
                   </td>
-                  <td>{row.confirmedIntervals}</td>
-                  <td>
+                  <td data-label="Potvrdjenih">{row.confirmedIntervals}</td>
+                  <td data-label="Ceka potvrdu">
                     {row.unverifiedIntervals > 0 ? (
                       <span>
                         {row.unverifiedIntervals}{' '}
@@ -629,8 +643,10 @@ function AllTimeTotals({ totals }: { totals: readonly ParticipationTotal[] }) {
                       <span className="muted">-</span>
                     )}
                   </td>
-                  <td>{row.openIntervals > 0 ? row.openIntervals : <span className="muted">-</span>}</td>
-                  <td>
+                  <td data-label="U toku">
+                    {row.openIntervals > 0 ? row.openIntervals : <span className="muted">-</span>}
+                  </td>
+                  <td data-label="Odbijeno">
                     {row.rejectedIntervals > 0 ? (
                       row.rejectedIntervals
                     ) : (
