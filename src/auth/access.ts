@@ -51,6 +51,37 @@ export type Access =
   | { readonly kind: 'UNAVAILABLE'; readonly reason: 'NETWORK' | 'NO_PROFILE' }
   | SignedInAccess;
 
+/**
+ * Whether two snapshots say the same thing.
+ *
+ * `loadAccess` builds a new object every time it runs, and it runs often - a
+ * token refresh, a tab regaining focus, any `onAuthStateChange` event. Handing
+ * consumers a new object that means exactly what the old one meant is not free:
+ * anything keyed on the snapshot's identity re-runs, and a screen that drops to
+ * a loading state while it re-reads will throw away whatever the person was
+ * doing. So the provider keeps the previous object when nothing changed, and
+ * this is the comparison it uses.
+ *
+ * `loadedAt` is deliberately NOT compared. It is the one field guaranteed to
+ * differ on every read, and it says when we asked - never what the answer was.
+ */
+export function sameAccess(a: Access, b: Access): boolean {
+  if (a === b) return true;
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'UNAVAILABLE' && b.kind === 'UNAVAILABLE') return a.reason === b.reason;
+  if (a.kind === 'SIGNED_IN' && b.kind === 'SIGNED_IN') {
+    return (
+      a.userId === b.userId &&
+      a.email === b.email &&
+      a.fullName === b.fullName &&
+      a.profileComplete === b.profileComplete &&
+      a.accountStatus === b.accountStatus &&
+      a.role === b.role
+    );
+  }
+  return true; // NOT_CONFIGURED, LOADING and SIGNED_OUT carry nothing else.
+}
+
 export interface AccessGateway {
   /** The authenticated user, or null when there is no session. */
   currentUser(): Promise<{ id: string; email: string } | null>;
