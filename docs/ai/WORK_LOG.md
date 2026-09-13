@@ -7,7 +7,9 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ## 2026-09-13 — Slice 3b: the real operational screens, and the shell around them
 
-Branch `claude/slice-3b-real-operations`, cut from live `main` `0f1cace7`.
+Branch `claude/slice-3b-real-operations`, cut from live `main` `0f1cace7`, and
+**merged as PR #20** into `a60483ae` with a normal merge commit after CI was
+green on the reviewed head `7def9425`.
 
 **What was built.** Migration `202609140007` (general availability, journey
 progress, `attendance_confirm_many`), the operational data layer
