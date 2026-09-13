@@ -14,6 +14,9 @@ import { useState, type FormEvent } from 'react';
 import { useAccess } from '@/auth/AccessProvider';
 import { accessObstacle } from '@/auth/access';
 import {
+  GENERIC_CREDENTIAL_ERROR,
+  NETWORK_BLOCKED_HINT,
+  NETWORK_UNREACHABLE_ERROR,
   PASSWORD_RESET_AVAILABLE,
   completeOwnProfile,
   registerWithEmail,
@@ -33,6 +36,15 @@ export function AccountAccessSetup() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  /**
+   * How many times in a row the server could not be reached.
+   *
+   * Counted here rather than in the data layer because the right sentence
+   * depends on it: once is a passing network, twice on a device that is
+   * otherwise online is usually something blocking the request. Reset by a
+   * success or by any answer the server actually gave.
+   */
+  const [unreachableRuns, setUnreachableRuns] = useState(0);
 
   const obstacle = accessObstacle(access);
 
@@ -41,6 +53,29 @@ export function AccountAccessSetup() {
     setError('');
     setMessage('');
     setPassword('');
+    setUnreachableRuns(0);
+  }
+
+  /**
+   * One sentence for a failed attempt, chosen without ever reading the error.
+   *
+   * A refusal is an answer and stays generic: a different message for "no such
+   * address" and "wrong password" would turn this form into a way to test who
+   * belongs to the society. A failure to REACH the server is not an answer at
+   * all, so saying so leaks nothing - the request never got there to be judged.
+   *
+   * Nothing built from the error itself reaches the screen. These are fixed
+   * strings, which is what guarantees no raw Supabase message, request URL, key
+   * or token can ever be displayed.
+   */
+  function explain(outcome: { readonly unreachable?: boolean }): string {
+    if (outcome.unreachable !== true) {
+      setUnreachableRuns(0);
+      return GENERIC_CREDENTIAL_ERROR;
+    }
+    const runs = unreachableRuns + 1;
+    setUnreachableRuns(runs);
+    return runs >= 2 ? NETWORK_BLOCKED_HINT : NETWORK_UNREACHABLE_ERROR;
   }
 
   async function submitCredentials(event: FormEvent) {
@@ -61,9 +96,10 @@ export function AccountAccessSetup() {
         const outcome = await signInWithEmail(email, password);
         setPassword('');
         if (!outcome.ok) {
-          setError(outcome.message ?? '');
+          setError(explain(outcome));
           return;
         }
+        setUnreachableRuns(0);
         // The provider reloads from the server; nothing here decides access.
         await reload();
         return;
@@ -72,9 +108,10 @@ export function AccountAccessSetup() {
       const outcome = await registerWithEmail(email, password);
       setPassword('');
       if (!outcome.ok) {
-        setError(outcome.message ?? '');
+        setError(explain(outcome));
         return;
       }
+      setUnreachableRuns(0);
       if (outcome.sessionStarted) {
         await reload();
         return;

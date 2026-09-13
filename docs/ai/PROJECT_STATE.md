@@ -248,7 +248,78 @@ is also why C8's Viber and telephone fallback is not optional.
 
 ## Status of the latest slice
 
-**Slice 3b - the real operational screens.** **Merged** as PR #20 on
+**Presentation stabilisation.** Ten reported problems from the physical device
+test of 13 September, fixed on branch `claude/dvd-tivat-app-dev-n8wctb`
+(PR #23). Full detail is in `docs/ai/WORK_LOG.md`; the headlines:
+
+- **The resume "reload" was a silent REMOUNT**, not a document reload. Fixed at
+  the source with `sameAccess()` in `src/auth/access.ts`, so the provider hands
+  out the same object when the content has not changed.
+- **A withdrawn member was still callable.** Confirmed on the hosted project by
+  preflight: one member linked to an account who could not have received a
+  call-out. `is_eligible_recipient()` now decides, by the same conditions
+  `current_dvd_role()` applies.
+- **An archive row labelled "Zatvoreno" showed the publication time.** Each
+  state uses the column that means it, or says `Nije zabiljezeno`.
+- **Times are Europe/Podgorica**, not the reading device's zone, and carry the
+  year.
+- **The chronology was never being overwritten.** `operational_audit` had
+  recorded everything since the schema was written - 34 rows on the hosted
+  project - and simply had no reader. `intervention_audit()` is that reader.
+- **Live updates** through Realtime with foreground polling as the fallback,
+  and the screen says which is in use. The manual refresh button stays.
+- **Layout is now measured**, not eyeballed: `e2e/viewport.spec.ts` checks
+  overflow, clipped text, unreachable columns and touch targets at eight widths.
+- **Sign-in tells "could not reach the server" apart from "refused"**, which
+  leaks nothing because the request never arrived to be judged.
+- **Navigation offers each role only what it can use**, and hiding a
+  destination is not what keeps anybody out - a test asserts the gate and the
+  server still refuse.
+- **The reported duplicate title was NOT reproduced** as a field-mapping
+  defect. Tested with deliberately different values on all three screens; the
+  duplication is the ordinary list-and-detail shape and is pinned at exactly
+  two occurrences.
+
+**Metric definitions now live in `docs/METRICS.md`** - what every number on a
+screen means, which two events each duration sits between, and what no number
+here ever means.
+
+### Migrations in this slice
+
+All four are **additive**. None drops, alters a column, or removes an intended
+privilege.
+
+| Migration | What it does |
+|---|---|
+| `202609150008` | `is_eligible_recipient`, `eligible_recipients`, a replaced `publish_intervention` body (identical signature), a member read policy on `operational_audit` |
+| `202609150009` | Publishes eight operational tables to `supabase_realtime`; a no-op where the publication is absent or the role may not alter it |
+| `202609150010` | `intervention_audit()` - the chronology reader, with each actor resolved to a display name |
+| `202609150011` | Revokes an unintended EXECUTE grant on the `rls_auto_enable()` event trigger function; guarded, since it does not exist outside the hosted platform |
+
+**Applied to the hosted project on 2026-09-13 after preflight.** Postflight
+confirmed three functions present, two policies on `operational_audit`, eight
+tables published, `anon` holding execute on none of the new functions, and one
+member correctly excluded from the callable list.
+
+### Verification on the branch head
+
+| Check | Result |
+|---|---|
+| `npm run lint` | Pass |
+| `npm run typecheck` | Pass |
+| `npm run test` (unit) | **302 passed** |
+| `npm run test:db` (PostgreSQL 16 + RLS) | **359 passed**, 12 skipped |
+| `npm run e2e` (browser + axe, 2 projects) | see the PR; run on the final head |
+
+The 12 skipped database tests are `hosted_operations.test.ts`, which needs
+credentials CI deliberately does not have. **A skipped test is not evidence and
+that file must never be offered as CI evidence.**
+
+---
+
+## Previous slice: 3b - the real operational screens
+
+**Merged** as PR #20 on
 2026-09-13 into `main` `a60483aede73a0f7e18dc69cbaf9d342b930c241` - a normal
 merge commit, parents `0f1cace7` (previous `main`) and `7def9425` (the reviewed
 head), its tree byte-identical to that head. CI was green on `7def9425` before
@@ -448,16 +519,19 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
 ## The live Supabase project
 
-A project exists and **all seven migrations are applied to it**, verified by a
-structural fingerprint that matches a local PostgreSQL 16 built from the same
-files. Recorded here so nobody has to rediscover it:
+A project exists and **all eleven migrations are applied to it**. The first
+seven were verified by a structural fingerprint matching a local PostgreSQL 16
+built from the same files; the four added on 2026-09-13 were applied after a
+preflight that confirmed each was additive, and verified by a postflight query.
+Recorded here so nobody has to rediscover it:
 
 | Fact | Value |
 |---|---|
 | Project | `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, **`eu-west-1`** (the docs said `eu-central-1`; the Management API reports `eu-west-1`, so the documented value was wrong) |
 | PostgreSQL | 17 (the tests run against 16 locally and in CI) |
 | State before | `public` schema completely empty — no migration had ever run |
-| **Applied** | All seven. `202609120005` and `202609130006` on 2026-09-12 with the owner's conditional authorisation, after a non-destructive preflight; `202609140007` on 2026-09-13 |
+| **Applied** | All eleven. `202609120005` and `202609130006` on 2026-09-12 with the owner's conditional authorisation, after a non-destructive preflight; `202609140007` on 2026-09-13; `202609150008`, `202609150009`, `202609150010` and `202609150011` on 2026-09-13, all additive, after the preflight recorded in `WORK_LOG.md` |
+| **Realtime** | Eight operational tables are in the `supabase_realtime` publication, so live updates use the subscription path rather than only the polling fallback |
 | **Verified** | Structural fingerprint matches a local PostgreSQL 16 built from the same files — **all seven sections identical**, functions `ee2886b99683c44f00216a7e84e7b0dd`, 46 functions |
 | Verified | See [DATABASE.md §3](../DATABASE.md#3-the-real-supabase-project) |
 | **Contents** | Eight fictional accounts, seven fictional members, two groups, three vehicles. No interventions between demonstrations. Every address is on the reserved `.invalid` domain and cannot receive mail. Passwords are **not** in this repository |

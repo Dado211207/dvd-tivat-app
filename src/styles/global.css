@@ -404,7 +404,23 @@ img {
   color: var(--c-ink-faint);
 }
 
-.field input[type='text'],
+/*
+ * Every text-like control, not only `type="text"`.
+ *
+ * This selector used to read `input[type='text']`, which is why the device
+ * test found the e-mail, title and location fields rendering at the browser's
+ * default ~20-character width on a desktop. An attribute selector matches the
+ * ATTRIBUTE, not the IDL default: `<input />` with no `type` at all - which is
+ * how the title, location and assembly-point fields are written - never
+ * matched it, and neither did `type="email"` or `type="password"` on the
+ * sign-in form. The three fields named in the report are exactly those.
+ *
+ * Written as an exclusion so a control added later is styled by default and a
+ * forgotten `type` cannot silently drop out of the design again. Checkboxes
+ * and radios are excluded because a full-width 44px checkbox is not a control,
+ * it is a wall.
+ */
+.field input:not([type='checkbox']):not([type='radio']),
 .field textarea,
 .field select {
   width: 100%;
@@ -422,7 +438,7 @@ img {
   resize: vertical;
 }
 
-.field--invalid input[type='text'],
+.field--invalid input:not([type='checkbox']):not([type='radio']),
 .field--invalid textarea,
 .field--invalid select {
   border-color: var(--c-alert);

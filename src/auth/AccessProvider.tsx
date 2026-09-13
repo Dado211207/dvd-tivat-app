@@ -24,7 +24,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { loadAccess, type Access, type AccessGateway } from './access';
+import { loadAccess, sameAccess, type Access, type AccessGateway } from './access';
 import {
   accountBackend,
   isAccountBackendConfigured,
@@ -66,7 +66,11 @@ export function AccessProvider({ children, gateway, configured }: AccessProvider
     if (!isConfigured) return;
     const ticket = ++generation.current;
     const next = await loadAccess(activeGateway);
-    if (mounted.current && ticket === generation.current) setAccess(next);
+    if (!mounted.current || ticket !== generation.current) return;
+    // Keep the previous object when the answer is unchanged. Every consumer
+    // downstream is keyed on this value, and a token refresh or a tab regaining
+    // focus must not look like "the account changed" to any of them.
+    setAccess((current) => (sameAccess(current, next) ? current : next));
   }, [activeGateway, isConfigured]);
 
   useEffect(() => {

@@ -34,7 +34,8 @@ body {
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
-  padding: 28px 18px 20px;
+  padding: calc(28px + var(--safe-top)) 18px calc(20px + var(--safe-bottom))
+    calc(18px + var(--safe-left));
   overflow-y: auto;
   color: #e8f3f5;
   background:
@@ -232,7 +233,7 @@ body {
   gap: 24px;
   align-items: center;
   justify-content: space-between;
-  padding: 22px 34px 19px;
+  padding: calc(22px + var(--safe-top)) calc(34px + var(--safe-right)) 19px 34px;
   color: var(--c-ink);
   background: var(--c-surface);
   border-bottom: 1px solid var(--c-line);
@@ -402,8 +403,15 @@ body {
   width: 100%;
   max-width: 1480px;
   min-width: 0;
-  padding: 30px 34px 40px;
+  padding: 30px calc(34px + var(--safe-right)) 40px 34px;
   margin: 0 auto;
+  /*
+   * When the on-screen keyboard opens, the browser scrolls the focused field
+   * into view - to the very edge of the visible area, where the primary action
+   * underneath it is exactly what gets hidden. This reserves room so the field
+   * and the button below it both stay visible.
+   */
+  scroll-padding-bottom: 8rem;
 }
 
 .main--wide {
@@ -412,7 +420,7 @@ body {
 
 .foot {
   grid-area: footer;
-  padding: 18px 34px 22px;
+  padding: 18px calc(34px + var(--safe-right)) calc(22px + var(--safe-bottom)) 34px;
   font-size: 0.75rem;
   color: var(--c-ink-faint);
   text-align: left;
@@ -705,7 +713,7 @@ body {
   color: var(--c-ink);
 }
 
-.field input[type='text'],
+.field input:not([type='checkbox']):not([type='radio']),
 .field textarea,
 .field select {
   background: var(--c-surface-2);
@@ -1387,7 +1395,7 @@ dialog {
   .sim-bar,
   .main,
   .foot {
-    padding-right: 24px;
+    padding-right: calc(24px + var(--safe-right));
     padding-left: 24px;
   }
 
@@ -1406,7 +1414,14 @@ dialog {
     position: static;
     width: 100%;
     height: auto;
-    padding: 14px 14px 10px;
+    /*
+     * The society's name sat under the iPhone status bar in the installed
+     * application. The page is served `viewport-fit=cover` with a translucent
+     * status bar, so the web view genuinely starts above the clock - the fix is
+     * to pad, not to move the mark.
+     */
+    padding: calc(14px + var(--safe-top)) calc(14px + var(--safe-right)) 10px
+      calc(14px + var(--safe-left));
     overflow: visible;
   }
 
@@ -1429,8 +1444,20 @@ dialog {
     display: flex;
     flex-direction: row;
     gap: 7px;
+    /*
+     * The row scrolls edge to edge: it is pulled out to the rail's own padding
+     * and puts that padding back inside itself. Without this the first and last
+     * entries end up half under the rail's edge when the row is scrolled, which
+     * is what the device test saw as "the beginnings of the labels are cut".
+     * `scroll-padding` makes the same true of an entry scrolled into view by
+     * the browser rather than by a finger.
+     */
+    margin-inline: calc(-14px - var(--safe-left)) calc(-14px - var(--safe-right));
+    padding-inline: calc(14px + var(--safe-left)) calc(14px + var(--safe-right));
+    scroll-padding-inline: calc(14px + var(--safe-left)) calc(14px + var(--safe-right));
     padding-bottom: 3px;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
   }
 
@@ -1451,8 +1478,19 @@ dialog {
   .nav__link {
     flex: 0 0 auto;
     min-height: 44px;
-    padding: 5px 11px 5px 6px;
+    /* Symmetric. The old 6px left against 11px right put the icon hard against
+       the edge, and the active marker below then sat on top of it. */
+    padding: 5px 11px;
     white-space: nowrap;
+  }
+
+  /*
+   * The active marker is a 3px bar INSET ON THE LEFT, which reads correctly
+   * down the vertical rail and lands squarely on top of the icon once the rail
+   * becomes a horizontal row. Underline it instead.
+   */
+  .nav__link[aria-current='page'] {
+    box-shadow: inset 0 -3px #59d3dc;
   }
 
   .nav__icon {
@@ -1464,7 +1502,8 @@ dialog {
   .masthead {
     position: static;
     align-items: flex-start;
-    padding: 18px 18px 16px;
+    /* The rail above already carries the status-bar inset in this layout. */
+    padding: 18px calc(18px + var(--safe-right)) 16px calc(18px + var(--safe-left));
   }
 
   .workspace-heading__title {
@@ -1487,15 +1526,16 @@ dialog {
 
   .sim-bar {
     flex-wrap: wrap;
-    padding: 9px 18px;
+    padding: 9px calc(18px + var(--safe-right)) 9px calc(18px + var(--safe-left));
   }
 
   .main {
-    padding: 20px 16px 34px;
+    padding: 20px calc(16px + var(--safe-right)) 34px calc(16px + var(--safe-left));
   }
 
   .foot {
-    padding: 18px;
+    padding: 18px calc(18px + var(--safe-right)) calc(18px + var(--safe-bottom))
+      calc(18px + var(--safe-left));
   }
 }
 
@@ -1610,13 +1650,13 @@ dialog {
 
 @media (max-width: 359px) {
   .nav__link {
-    padding-right: 8px;
+    padding-inline: 8px;
     font-size: 0.82rem;
   }
 
   .main {
-    padding-right: 12px;
-    padding-left: 12px;
+    padding-right: calc(12px + var(--safe-right));
+    padding-left: calc(12px + var(--safe-left));
   }
 }
 
@@ -1920,6 +1960,18 @@ dialog {
   flex: none;
 }
 
+/*
+ * A long Montenegrin name wraps onto a second line instead of pushing the
+ * availability chip off a 320px screen. `min-width: 0` is what actually allows
+ * it: a flex item will not shrink below its content width without it, however
+ * many wrapping rules are set on the text.
+ */
+.pick__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* ---------------------------------------------------------- fact blocks */
 
 .facts {
@@ -1983,3 +2035,156 @@ dialog {
   max-height: 26rem;
   overflow-y: auto;
 }
+
+/* ---------------------------------------------------------------------------
+   A table on a telephone
+   ---------------------------------------------------------------------------
+
+   The device test reported that the archive's later columns could not be seen
+   on an iPhone. Measured, the all-time participation table is 758px wide inside
+   a 260px screen. Its container does scroll - so the columns are technically
+   reachable - but a person holding the phone sees two of six and nothing on the
+   screen suggests there are four more.
+
+   Below 640px each row becomes a small card: the member's name as its heading
+   and every other column as a labelled line under it. Nothing is dropped and
+   nothing is summarised, which matters here more than usual - the whole point
+   of this screen is that confirmed, unconfirmed and rejected have their own
+   columns and are never added together.
+
+   ON THE ARIA QUESTION, which is the interesting part.
+
+   The standard advice for this pattern is to re-declare `role="table"`,
+   `role="row"`, `role="cell"` and so on, because changing `display` on table
+   elements used to drop them out of the accessibility tree. That advice was
+   followed here first and then MEASURED, by reading the real tree out of the
+   engine over CDP at 320px with the cards active:
+
+     with explicit roles  table 2, row 4, cell 8, rowheader 2, columnheader 10
+     with none of them    table 2, row 4, cell 8, rowheader 2, columnheader 10
+
+   Identical. Current Chromium derives table semantics from the markup, not
+   from the layout object, so the roles were pure noise - and the linter that
+   called them redundant was right. They are gone.
+
+   The honest caveat: this was measured in Chromium, which is what is available
+   here. WebKit could still behave the old way, and if a real device ever shows
+   that, the fix is to add the COMPLETE set of roles, measured on that device -
+   not a partial set added on a guess, which would describe a table with no
+   rows in it and be worse than plain markup.
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .table-wrap--cards {
+    overflow-x: visible;
+    border: 0;
+  }
+
+  .table--cards,
+  .table--cards tbody {
+    display: block;
+    width: 100%;
+  }
+
+  /* The headings move into each cell as `data-label`. They stay in the document
+     for anything reading the table as a table. */
+  .table--cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .table--cards tbody tr {
+    display: block;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-line);
+    border-radius: var(--r-sm);
+  }
+
+  .table--cards tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .table--cards tbody tr:hover {
+    background: var(--c-surface-2);
+  }
+
+  .table--cards th[scope='row'] {
+    display: block;
+    padding: 0 0 8px;
+    font-size: 0.98rem;
+    font-weight: 700;
+    text-align: left;
+    border: 0;
+  }
+
+  .table--cards td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 40%) minmax(0, 1fr);
+    gap: 10px;
+    align-items: baseline;
+    padding: 5px 0;
+    border: 0;
+  }
+
+  .table--cards td::before {
+    content: attr(data-label);
+    font-size: 0.7rem;
+    font-weight: 750;
+    color: var(--c-ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* A cell can hold a chip and a sentence; both wrap rather than widening the
+     card past the screen. */
+  .table--cards td > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* The tall boards cap their own height on a large screen so the actions below
+     stay reachable. As cards they are already one column, and an inner scroll
+     region inside a page that scrolls is worse than a long page. */
+  .table-wrap--tall.table-wrap--cards {
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+/* ---------------------------------------------------------- live indicator */
+
+/*
+ * Says how the screen is staying current: subscribed, or on a timer.
+ *
+ * Deliberately quiet. It is context for somebody deciding how much to trust
+ * what is in front of them, not a status anybody needs to watch - and the dot
+ * never pulses, because an animated marker beside real operational information
+ * reads as an alarm.
+ */
+.live-state {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 var(--sp-3);
+}
+
+.live-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--c-ink-faint);
+  border-radius: 50%;
+}
+
+.live-dot--live { background: var(--c-yes); }
+.live-dot--polling { background: var(--c-later); }
+.live-dot--connecting { background: var(--c-unknown); }
+.live-dot--off { background: var(--c-line-strong); }

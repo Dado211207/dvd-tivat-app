@@ -105,8 +105,18 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     ...real,
     fetchOwnMemberId: vi.fn(async () => MEMBER_ID),
     fetchInterventions: vi.fn(async () => [INTERVENTION]),
+    // Who may be CALLED is the server's answer, not a filter over the roster.
+    // Pero is on the roster below but is NOT here: he stands in for the
+    // withdrawn member whose account can no longer sign in.
+    fetchEligibleRecipients: vi.fn(async () => [
+      { memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac', role: 'FIREFIGHTER' as const, specialties: [] },
+    ]),
     fetchRecipientFacts: vi.fn(async () => RECIPIENTS),
     fetchAttendance: vi.fn(async () => [PENDING_INTERVAL]),
+    // Null is "the chronology could not be read", which is what an older
+    // project without the reading function answers. The screen must then fall
+    // back to what it can reconstruct AND say that it has - asserted below.
+    fetchInterventionAudit: vi.fn(async () => null),
     fetchVehicleMovements: vi.fn(async () => []),
     fetchAvailability: vi.fn(async () => [
       { memberId: MEMBER_ID, available: true, note: 'U gradu sam.', changedAt: '2026-09-13T07:00:00.000Z' },
@@ -173,13 +183,95 @@ async function show(node: React.ReactElement, role: OperationalRole): Promise<st
       </AccessProvider>,
     );
   });
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     await act(async () => {
       await Promise.resolve();
     });
   }
   return container.textContent ?? '';
 }
+
+/**
+ * A reported OBSERVATION, not yet a confirmed defect: "the title appeared
+ * twice, and the fields may be mapped wrongly".
+ *
+ * The brief is explicit that a field-mapping defect may not be CLAIMED unless
+ * it reproduces with deliberately different values for the title, the location
+ * and the assembly point. So that is exactly what this does: three values that
+ * cannot be confused with one another, checked one screen at a time.
+ *
+ * The finding is recorded in `docs/ai/WORK_LOG.md`. In short: the mapping is
+ * correct on every screen, and the duplication is real but is the ordinary
+ * list-and-detail shape - the archive shows a list of interventions and then
+ * the selected one's record underneath, so the selected title legitimately
+ * appears in both. These tests pin the mapping so that if the reporter did see
+ * something else, this is no longer where it could have come from.
+ */
+describe('title, location and assembly point are not confused with each other', () => {
+  const DISTINCT = {
+    ...INTERVENTION,
+    title: 'NASLOV-JEDAN',
+    incidentLocation: 'LOKACIJA-DVA',
+    assemblyPoint: 'OKUPLJANJE-TRI',
+    instructions: 'UPUTSTVO-CETIRI',
+  };
+
+  async function withDistinctValues(view: React.ReactElement, role: OperationalRole) {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([DISTINCT]);
+    return show(view, role);
+  }
+
+  it('the commander console puts each value where it belongs', async () => {
+    await withDistinctValues(<CommandView />, 'COMMANDER');
+
+    const location = container.querySelector('[data-testid="selected-location"]');
+    expect(location?.textContent, 'the location field must hold the location').toBe('LOKACIJA-DVA');
+    expect(location?.textContent).not.toContain('NASLOV');
+    expect(location?.textContent).not.toContain('OKUPLJANJE');
+
+    // Each distinct value must appear somewhere, and none may stand in for
+    // another. Counted across the whole screen rather than per element, so a
+    // value rendered into the wrong field shows up as a count of two.
+    const text = container.textContent ?? '';
+    for (const value of ['NASLOV-JEDAN', 'LOKACIJA-DVA', 'OKUPLJANJE-TRI', 'UPUTSTVO-CETIRI']) {
+      expect(text, `${value} must be on the screen`).toContain(value);
+    }
+  });
+
+  it('the archive puts each value where it belongs', async () => {
+    await withDistinctValues(<ArchiveView />, 'COMMANDER');
+
+    expect(container.querySelector('[data-testid="archive-title"]')?.textContent).toBe(
+      'NASLOV-JEDAN',
+    );
+    const meta = container.querySelector(`[data-testid="archive-meta-${INTERVENTION_ID}"]`);
+    expect(meta?.textContent, 'the list row shows kind, state and time - not the location')
+      .not.toContain('LOKACIJA-DVA');
+  });
+
+  it('the archive shows the title exactly twice, and that is the list and the record', async () => {
+    // The reported duplication, measured. It is the ordinary list-and-detail
+    // shape: the picker lists every intervention, and the record for the
+    // selected one sits underneath. Pinned so a THIRD copy - which would be a
+    // real defect - fails here.
+    await withDistinctValues(<ArchiveView />, 'COMMANDER');
+    const occurrences = (container.textContent ?? '').split('NASLOV-JEDAN').length - 1;
+    expect(occurrences).toBe(2);
+
+    const inPicker = container.querySelector('[data-testid="archive-list"]')?.textContent ?? '';
+    const inRecord = container.querySelector('[data-testid="archive-record"]')?.textContent ?? '';
+    expect(inPicker).toContain('NASLOV-JEDAN');
+    expect(inRecord).toContain('NASLOV-JEDAN');
+  });
+
+  it('the firefighter screen shows the title once', async () => {
+    await withDistinctValues(<MobilisationView />, 'FIREFIGHTER');
+    const occurrences = (container.textContent ?? '').split('NASLOV-JEDAN').length - 1;
+    expect(occurrences, 'one call-out, one heading').toBe(1);
+    expect(container.textContent).toContain('LOKACIJA-DVA');
+  });
+});
 
 describe('the commander console renders on real data', () => {
   it('shows the call-out and does not fail to render', async () => {
@@ -227,6 +319,73 @@ describe('the commander console renders on real data', () => {
     const text = await show(<CommandView />, 'FIREFIGHTER');
     expect(text).toMatch(/nije za vasu ulogu/i);
     expect(text).not.toContain('Vjezba: provjera opreme');
+  });
+
+  /**
+   * The recipient picker, which offered a withdrawn member on the real device.
+   *
+   * The screen used to compute the list itself, from an active roster row with
+   * a linked account. Both were still true of somebody whose ACCOUNT had been
+   * withdrawn, so they were offered a call-out they could not have opened.
+   *
+   * The list now comes from the server, by the same rule `publish_intervention`
+   * enforces. These tests hold the SCREEN to that: the roster below contains
+   * Pero, the server's eligible list does not, and the picker must follow the
+   * server rather than the roster.
+   */
+  describe('the recipient picker offers only who the server says may be called', () => {
+    const DRAFT = { ...INTERVENTION, status: 'DRAFT' as const, publishedAt: null, version: 1 };
+
+    async function showDraft(
+      eligible: readonly { memberId: string; fullName: string }[] | null,
+    ): Promise<string> {
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([DRAFT]);
+      vi.mocked(operations.fetchEligibleRecipients).mockResolvedValueOnce(
+        eligible === null
+          ? null
+          : eligible.map((m) => ({ ...m, role: 'FIREFIGHTER' as const, specialties: [] })),
+      );
+      return show(<CommandView />, 'COMMANDER');
+    }
+
+    it('lists the server’s answer and not the roster', async () => {
+      await showDraft([{ memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac' }]);
+      const picker = container.querySelector('[data-testid="recipient-picker"]');
+      expect(picker?.textContent).toContain('Ivo Vatrogasac');
+      // Pero IS in the roster mock and is NOT in the server's list. A screen
+      // filtering the roster itself would show him here - which is exactly how
+      // a withdrawn member reached the real picker.
+      expect(
+        picker?.textContent,
+        'a member the server does not offer must not appear',
+      ).not.toContain('Pero Vatrogasac');
+    });
+
+    it('says the list could not be read, rather than showing an empty one', async () => {
+      // "The server did not answer" and "nobody qualifies" look identical as an
+      // empty list and mean opposite things. A commander must not have to guess.
+      await showDraft(null);
+      const notice = container.querySelector('[data-testid="eligible-recipients-unavailable"]');
+      expect(notice, 'a failed read must be stated').not.toBeNull();
+      expect(notice?.textContent).toMatch(/nije procitan/i);
+      expect(container.querySelector('[data-testid="no-eligible-recipients"]')).toBeNull();
+    });
+
+    it('says nobody qualifies when the server answers with nobody', async () => {
+      await showDraft([]);
+      const notice = container.querySelector('[data-testid="no-eligible-recipients"]');
+      expect(notice, 'an empty answer must be explained').not.toBeNull();
+      expect(notice?.textContent).toMatch(/aktivnim nalogom/i);
+      expect(container.querySelector('[data-testid="eligible-recipients-unavailable"]')).toBeNull();
+    });
+
+    it('cannot publish when there is nobody to publish to', async () => {
+      await showDraft([]);
+      const publish = container.querySelector<HTMLButtonElement>('[data-testid="publish"]');
+      expect(publish, 'the button still exists so the screen is not mysterious').not.toBeNull();
+      expect(publish?.disabled).toBe(true);
+    });
   });
 });
 
@@ -314,9 +473,186 @@ describe('the archive renders on real data', () => {
     expect(row).toMatch(/30 min.*neuracunato/); // unconfirmed, named as not counted
   });
 
+  /**
+   * The chronology, read from what the server recorded rather than
+   * reconstructed from current state.
+   *
+   * The device test found the record showing only each member's LATEST
+   * movement and no state transition at all. The obvious reading is that the
+   * earlier movements were being overwritten. They were not: `operational_audit`
+   * has held every one of them since the schema was written - the archive simply
+   * never read the table.
+   */
+  describe('the recorded chronology', () => {
+    const AUDIT = [
+      {
+        id: 'a1',
+        at: '2026-09-13T08:00:00.000Z',
+        type: 'INTERVENTION_PUBLISHED',
+        detail: { recipient_count: 2 },
+        actorName: 'Komandir Smjene',
+        actorIsYou: true,
+      },
+      {
+        id: 'a2',
+        at: '2026-09-13T08:04:00.000Z',
+        type: 'JOURNEY_PROGRESS_SET',
+        detail: { member_id: MEMBER_ID, from: null, to: 'KRECEM' },
+        actorName: 'Ivo Vatrogasac',
+        actorIsYou: false,
+      },
+      {
+        id: 'a3',
+        at: '2026-09-13T08:07:00.000Z',
+        type: 'JOURNEY_PROGRESS_SET',
+        detail: { member_id: MEMBER_ID, from: 'KRECEM', to: 'U_PUTU' },
+        actorName: 'Ivo Vatrogasac',
+        actorIsYou: false,
+      },
+      {
+        id: 'a4',
+        at: '2026-09-13T08:10:00.000Z',
+        type: 'JOURNEY_PROGRESS_SET',
+        detail: { member_id: MEMBER_ID, from: 'U_PUTU', to: 'NA_LICU_MJESTA' },
+        actorName: 'Ivo Vatrogasac',
+        actorIsYou: false,
+      },
+      {
+        id: 'a5',
+        at: '2026-09-13T08:12:00.000Z',
+        type: 'INTERVENTION_STATUS_CHANGED',
+        detail: { from: 'PUBLISHED', to: 'DEPLOYED' },
+        actorName: 'Komandir Smjene',
+        actorIsYou: true,
+      },
+    ];
+
+    async function showWithAudit(): Promise<string[]> {
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchInterventionAudit).mockResolvedValueOnce(AUDIT);
+      await show(<ArchiveView />, 'COMMANDER');
+      return [...container.querySelectorAll('[data-testid="archive-timeline"] li')].map(
+        (li) => li.textContent ?? '',
+      );
+    }
+
+    it('shows every movement, not only the last one', async () => {
+      const lines = await showWithAudit();
+      const journey = lines.filter((line) => /javio kretanje/.test(line));
+      expect(journey, 'three steps were recorded and three must appear').toHaveLength(3);
+      expect(journey[0]).toMatch(/Krecem/);
+      expect(journey[1]).toMatch(/U putu/);
+      expect(journey[2]).toMatch(/Na licu mjesta/);
+    });
+
+    it('shows the state transition the current-state rows cannot express', async () => {
+      const lines = await showWithAudit();
+      const change = lines.find((line) => /promijenio stanje/.test(line));
+      expect(change, 'Okupljanje, Na terenu and Pod kontrolom must leave a line').toBeDefined();
+      // Both ends of the transition, in words, not enum names.
+      expect(change).toMatch(/Objavljeno/);
+      expect(change).toMatch(/Na terenu/);
+      expect(change).not.toMatch(/DEPLOYED|PUBLISHED/);
+    });
+
+    it('names who did each thing', async () => {
+      const lines = await showWithAudit();
+      expect(lines.find((l) => /promijenio stanje/.test(l))).toMatch(/Komandir Smjene/);
+      expect(lines.find((l) => /javio kretanje/.test(l))).toMatch(/Ivo Vatrogasac/);
+    });
+
+    it('keeps movement and attendance as different sentences', async () => {
+      // The rule the whole schema is built around: reporting a position is not
+      // reporting participation, and the archive must not blur them.
+      const lines = await showWithAudit();
+      for (const line of lines.filter((l) => /javio kretanje/.test(l))) {
+        expect(line).not.toMatch(/prisus/i);
+      }
+    });
+
+    it('never says anybody was notified', async () => {
+      const lines = await showWithAudit();
+      const published = lines.find((l) => /objavio poziv/.test(l));
+      expect(published).toMatch(/bez stvarnog slanja/);
+      expect(published).not.toMatch(/obavijest/i);
+    });
+
+    it('orders the record oldest first', async () => {
+      const lines = await showWithAudit();
+      const times = lines.map((l) => l.slice(0, 16));
+      expect([...times], 'a record whose lines shuffle is not a record').toEqual(
+        [...times].sort(),
+      );
+    });
+
+    it('says so when it is showing the shortened fallback instead', async () => {
+      // The default mock answers null - "could not read". A shortened history
+      // presented as the whole one is worse than no history.
+      await show(<ArchiveView />, 'COMMANDER');
+      const notice = container.querySelector('[data-testid="chronology-degraded"]');
+      expect(notice, 'a fallback must announce itself').not.toBeNull();
+      expect(notice?.textContent).toMatch(/skracena hronologija/i);
+    });
+
+    it('does not say that when the real chronology was read', async () => {
+      await showWithAudit();
+      expect(container.querySelector('[data-testid="chronology-degraded"]')).toBeNull();
+    });
+  });
+
   it('is readable by a firefighter, not only by command', async () => {
     const text = await show(<ArchiveView />, 'FIREFIGHTER');
     expect(text).not.toMatch(/nije za vasu ulogu/i);
+  });
+
+  /**
+   * The archive list once printed `publishedAt ?? createdAt` on every row, so a
+   * row reading "Zatvoreno" showed the moment the call-out was OPENED. Reported
+   * from the device test, and a false statement about a record that exists to
+   * be trusted months later.
+   *
+   * The three times are deliberately hours apart, and asserted as rendered
+   * text, so a row showing the wrong column cannot pass by coincidence.
+   */
+  describe('each row shows the time of the state it is labelled with', () => {
+    const THREE_TIMES = {
+      createdAt: '2026-09-13T06:00:00.000Z', //  08:00 in Podgorica
+      publishedAt: '2026-09-13T09:00:00.000Z', // 11:00
+      closedAt: '2026-09-13T17:00:00.000Z', //   19:00
+    };
+
+    async function rowText(status: 'PUBLISHED' | 'CLOSED' | 'CANCELLED'): Promise<string> {
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([
+        { ...INTERVENTION, ...THREE_TIMES, status, closeReason: 'Vjezba zavrsena.' },
+      ]);
+      await show(<ArchiveView />, 'COMMANDER');
+      return container.querySelector(`[data-testid="archive-meta-${INTERVENTION_ID}"]`)?.textContent ?? '';
+    }
+
+    it('a closed row shows the closure time, not the publication time', async () => {
+      const meta = await rowText('CLOSED');
+      expect(meta).toContain('Zatvoreno');
+      expect(meta, 'the closure time, 17:00Z in Podgorica').toContain('19:00');
+      expect(meta, 'the publication time must not appear on a closed row').not.toContain('11:00');
+      expect(meta, 'nor the creation time').not.toContain('08:00');
+    });
+
+    it('a cancelled row shows when it was cancelled', async () => {
+      const meta = await rowText('CANCELLED');
+      expect(meta).toContain('Otkazano');
+      expect(meta).toContain('19:00');
+      expect(meta).not.toContain('11:00');
+    });
+
+    it('a published row still shows the publication time', async () => {
+      // The fix must not overcorrect: a row that has not been closed is
+      // correctly described by when it was published.
+      const meta = await rowText('PUBLISHED');
+      expect(meta).toContain('Objavljeno');
+      expect(meta).toContain('11:00');
+      expect(meta).not.toContain('19:00');
+    });
   });
 });
 

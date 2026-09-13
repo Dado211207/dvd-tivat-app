@@ -205,8 +205,8 @@ describe('the client names things the database has', () => {
    */
   it('actually found the call sites it claims to check', () => {
     expect(selects.length).toBeGreaterThanOrEqual(18);
-    expect(rpcs.length).toBeGreaterThanOrEqual(38);
+    expect(rpcs.length).toBeGreaterThanOrEqual(39);
     expect(new Set(selects.map((s) => s.table)).size).toBeGreaterThanOrEqual(10);
-    expect(new Set(rpcs.map((r) => r.name)).size).toBeGreaterThanOrEqual(30);
+    expect(new Set(rpcs.map((r) => r.name)).size).toBeGreaterThanOrEqual(31);
   });
 });

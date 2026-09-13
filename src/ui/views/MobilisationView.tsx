@@ -44,6 +44,7 @@ import {
   type RecipientFacts,
   type ResponseAnswer,
 } from '@/auth/operations';
+import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
 import { loadRoster } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
@@ -114,10 +115,18 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
     };
   }, []);
 
+  /**
+   * Re-read everything.
+   *
+   * `silent` is what a live update uses: the screen must not flash a loading
+   * line every few seconds, and must not look as though it reset itself while
+   * somebody was halfway through answering.
+   */
   const refresh = useCallback(
-    async (keepId?: string | null) => {
+    async (keepId?: string | null, options?: { readonly silent?: boolean }) => {
       const ticket = ++generation.current;
-      setLoading(true);
+      const silent = options?.silent === true;
+      if (!silent) setLoading(true);
       try {
         const [interventions, availability, members] = await Promise.all([
           fetchInterventions(),
@@ -151,7 +160,7 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         if (!mounted.current || ticket !== generation.current) return;
         setOffline(true);
       } finally {
-        if (mounted.current && ticket === generation.current) setLoading(false);
+        if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
     [memberId],
@@ -160,6 +169,21 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /**
+   * A call-out that arrives while this screen is open should appear on it.
+   *
+   * Which is the whole point from a member's side: the telephone is in a pocket,
+   * the commander publishes, and the screen has to show it without the member
+   * thinking to pull down. The notice is never read - `refresh` re-reads through
+   * the same policy-checked queries, so a member still sees only the call-outs
+   * they were actually sent.
+   */
+  const liveStatus = useLiveOperations({
+    enabled: true,
+    interventionId: activeId,
+    onChange: () => void refresh(activeId, { silent: true }),
+  });
 
   const active = useMemo(
     () => data.interventions.find((i) => i.id === activeId) ?? null,
@@ -207,6 +231,11 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         </div>
       ) : null}
       {loading ? <p role="status" className="muted small">Ucitavanje...</p> : null}
+
+      <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
+        <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
+        {LIVE_STATUS_LABEL[liveStatus]}
+      </p>
 
       <AvailabilityPanel data={data} busy={busy} onAct={act} />
 

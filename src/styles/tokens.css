@@ -86,6 +86,24 @@
 
   --focus: 3px solid var(--c-accent);
   --focus-offset: 2px;
+
+  /*
+   * The parts of the screen the device keeps for itself.
+   *
+   * The page is served with `viewport-fit=cover` and, installed on iOS, with a
+   * translucent status bar - so the web view extends underneath the clock, the
+   * notch and the home indicator. Without these the society's name sat under
+   * the status bar, which is what the device test reported.
+   *
+   * Held as tokens rather than written inline because they appear in a dozen
+   * `calc()` expressions and because `env()` inside a shorthand is easy to get
+   * silently wrong. The `0px` fallback is what every non-notched browser uses,
+   * and the unit matters: `calc()` rejects a bare `0` here.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 @media (prefers-color-scheme: dark) {

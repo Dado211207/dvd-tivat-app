@@ -134,12 +134,29 @@ afterAll(async () => {
   await db?.end();
 });
 
-/** A published intervention addressed to every linked member in the cast. */
+/**
+ * A published intervention addressed to every member who may actually be called.
+ *
+ * It used to address the whole cast. Since `is_eligible_recipient` exists,
+ * `publish_intervention` refuses the entire call-out if any one of them cannot
+ * receive it, and most of this cast deliberately cannot: `pending` holds no
+ * role, `suspended`'s grant is inactive, `incompleteProfile` has no finished
+ * profile, `noMember` has no member record, and `subjectMember` has no account
+ * at all. Sending to them was never meaningful - they could not have opened it.
+ *
+ * THIS DOES NOT WEAKEN THE MATRIX. The refusals it checks happen before the
+ * recipient test: `set_journey_progress` raises STAFF_REQUIRED and then
+ * MEMBER_RECORD_REQUIRED, so an ineligible actor is refused on those grounds
+ * whether or not they were addressed. And `subjectMember` still gets attendance
+ * recorded against them below - a commander logging somebody who turned up
+ * without a telephone is a real path, and it never required recipiency.
+ */
+const ELIGIBLE_ACTORS = ['owner', 'admin', 'commander', 'firefighter', 'otherFirefighter'] as const;
+
 async function publishedToEveryone(): Promise<string> {
-  const recipients = [
-    ...ACTORS.map((a) => cast[a].memberId).filter((id): id is string => id !== null),
-    subjectMember,
-  ];
+  const recipients = ELIGIBLE_ACTORS.map((a) => cast[a].memberId).filter(
+    (id): id is string => id !== null,
+  );
   const id = await createDraft(db, cast.commander.userId!, {
     key: `matrix-${(seq += 1)}-${Date.now()}`,
   });

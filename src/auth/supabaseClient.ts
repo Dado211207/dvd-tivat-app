@@ -58,6 +58,72 @@ export const GENERIC_CREDENTIAL_ERROR =
   'Prijava nije uspjela. Provjerite email i lozinku, pa pokusajte ponovo.';
 
 /**
+ * "The server never answered" is a different thing, and safe to say.
+ *
+ * Reported from the device test: signing in through Brave failed with the
+ * message above, so the person spent their time checking a password that was
+ * perfectly correct. The request had never left the browser - the shield
+ * blocked it.
+ *
+ * Telling somebody the server was unreachable leaks NOTHING about whether an
+ * address has an account, because the request never reached the server to be
+ * judged. That is the whole distinction: a refusal is an answer and stays
+ * generic; a failure to reach anybody is not an answer at all.
+ *
+ * A rate-limit refusal stays generic too. It IS an answer from the server, and
+ * a distinct message for it would tell somebody probing addresses which ones
+ * are worth probing harder.
+ */
+export const NETWORK_UNREACHABLE_ERROR =
+  'Server nije dostupan. Zahtjev nije stigao do servera, pa prijava nije ni pokusana. Provjerite internet vezu i pokusajte ponovo.';
+
+/**
+ * The same thing said again, after it has happened more than once.
+ *
+ * The first failure is usually a passing network. A repeated one on a device
+ * that is otherwise online is very often a content blocker, a privacy shield or
+ * a work network - which is what the report describes. Naming that as ONE
+ * POSSIBLE cause saves the evening; asserting it as the cause would be a guess,
+ * and telling anybody to turn their protection off would be worse than useless
+ * advice.
+ */
+export const NETWORK_BLOCKED_HINT =
+  'Server i dalje nije dostupan. Ako ste inace na internetu, zahtjev mozda blokira dodatak za blokiranje sadrzaja, zastita privatnosti u pregledacu (na primjer Brave Shields) ili mreza na kojoj ste. Mozete pokusati sa drugog pregledaca ili druge mreze, ili pitati vlasnika sistema.';
+
+/**
+ * Whether a failure means "could not reach the server" rather than "refused".
+ *
+ * Kept to the shapes a fetch actually produces when nothing answered: the
+ * browser's own `TypeError: Failed to fetch` (which is also what a blocked
+ * request looks like - deliberately indistinguishable, by design), an aborted
+ * or timed-out request, and supabase-js's own wrapper for the same.
+ *
+ * Anything else - including every message the SERVER sent - is treated as a
+ * refusal and gets the generic sentence. Guessing wrongly in that direction
+ * would turn the sign-in form into the membership oracle this whole design
+ * avoids, so the test is deliberately narrow.
+ */
+export function isUnreachable(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : typeof error === 'string'
+        ? error
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : '';
+
+  return (
+    /failed to fetch/i.test(message) ||
+    /networkerror|network error/i.test(message) ||
+    /load failed/i.test(message) ||
+    /fetch failed/i.test(message) ||
+    /aborterror|signal is aborted|timed? ?out/i.test(message) ||
+    /err_(blocked|connection|internet|network|name_not_resolved)/i.test(message)
+  );
+}
+
+/**
  * Password reset is not offered, and the reason is stated rather than hidden.
  *
  * Supabase's default mail sender only delivers to addresses on the project team
@@ -69,8 +135,16 @@ export const PASSWORD_RESET_AVAILABLE = false;
 
 export interface AuthOutcome {
   readonly ok: boolean;
-  /** Present only when `ok` is false. Always the generic message. */
+  /** Present only when `ok` is false. Always one of the fixed messages above. */
   readonly message?: string;
+  /**
+   * True when the request never reached the server.
+   *
+   * Separate from `message` on purpose: the CALLER decides what to say, because
+   * the right sentence depends on how many times this has now happened, and
+   * that is something only the screen is counting.
+   */
+  readonly unreachable?: boolean;
 }
 
 export interface RegistrationOutcome extends AuthOutcome {
@@ -91,10 +165,24 @@ export async function signInWithEmail(email: string, password: string): Promise<
       email: email.trim().toLowerCase(),
       password,
     });
-    return error ? { ok: false, message: GENERIC_CREDENTIAL_ERROR } : { ok: true };
-  } catch {
-    return { ok: false, message: GENERIC_CREDENTIAL_ERROR };
+    if (error === null) return { ok: true };
+    // The server answered and said no. Which "no" it was stays private.
+    return unreachable(error) ? { ok: false, unreachable: true } : { ok: false };
+  } catch (thrown) {
+    return unreachable(thrown) ? { ok: false, unreachable: true } : { ok: false };
   }
+}
+
+/**
+ * One place that decides which sentence a failed sign-in gets.
+ *
+ * Never builds the message from the error. A raw Supabase message, a request
+ * URL, a key or a JWT must never reach the screen, and the surest way to
+ * guarantee that is for no code path to be able to put one there: the caller
+ * chooses between two fixed strings.
+ */
+function unreachable(error: unknown): boolean {
+  return isUnreachable(error);
 }
 
 /**
@@ -114,10 +202,12 @@ export async function registerWithEmail(
       email: email.trim().toLowerCase(),
       password,
     });
-    if (error) return { ok: false, sessionStarted: false, message: GENERIC_CREDENTIAL_ERROR };
+    if (error) {
+      return { ok: false, sessionStarted: false, unreachable: unreachable(error) };
+    }
     return { ok: true, sessionStarted: data.session !== null };
-  } catch {
-    return { ok: false, sessionStarted: false, message: GENERIC_CREDENTIAL_ERROR };
+  } catch (thrown) {
+    return { ok: false, sessionStarted: false, unreachable: unreachable(thrown) };
   }
 }
 

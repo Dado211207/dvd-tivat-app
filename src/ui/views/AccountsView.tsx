@@ -15,7 +15,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ASSIGNABLE_ROLES, type AccountRole, type AccountStatus } from '@/access/policy';
 import { useAccess } from '@/auth/AccessProvider';
-import { accessObstacle } from '@/auth/access';
 import {
   loadDirectory,
   loadRoleAudit,
@@ -62,25 +61,19 @@ export function AccountsView() {
     <>
       <h1 className="sr-only">Nalozi i pristup</h1>
       <AccountAccessSetup />
-      <RequireRole
-        allow={['OWNER']}
-        refused={
-          <section className="card account-directory" aria-labelledby="account-directory-h">
-            <div className="card__head">
-              <div>
-                <p className="card__kicker">Samo vlasnik sistema</p>
-                <h2 id="account-directory-h">Spisak naloga</h2>
-              </div>
-            </div>
-            <Notice tone="info">
-              {accessObstacle(access) === 'SIGN_IN_REQUIRED'
-                ? 'Spisak naloga se ne prikazuje dok se ne prijavite.'
-                : 'Ovaj spisak vidi samo vlasnik sistema. Server ne salje ove redove nikome ' +
-                  'drugom, pa ovdje nema sta da se sakrije - jednostavno ne stizu.'}
-            </Notice>
-          </section>
-        }
-      >
+      {/*
+        Nothing at all for anybody but the owner.
+        A firefighter opening this screen used to find a section headed "Spisak
+        naloga" with an explanation that they could not see it. It was honest,
+        and it was still the empty shell of somebody else's management screen
+        sitting on their own account page, and it invited the reading that
+        something had failed to load.
+        Their own account information, which is what they came here for, is
+        above in `AccountAccessSetup` and is untouched. The server is what
+        actually withholds the rows - the directory policies return nothing to a
+        non-owner - so this is tidiness, not a control.
+      */}
+      <RequireRole allow={['OWNER']} refused={null}>
         {access.kind === 'SIGNED_IN' ? <OwnerDirectory ownUserId={access.userId} /> : null}
       </RequireRole>
       <RegistrationExplainer />

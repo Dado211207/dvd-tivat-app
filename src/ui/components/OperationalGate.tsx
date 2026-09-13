@@ -64,24 +64,40 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
 
   const loadMember = useCallback(async () => {
     const ticket = ++generation.current;
-    setMember({ kind: 'LOADING' });
+    // Only the FIRST read may show a spinner. Once this gate has an answer it
+    // keeps rendering `children` while it re-reads, because replacing them with
+    // a spinner unmounts the whole screen underneath - and every `useState` in
+    // it: the active tab, the selected intervention, half-typed text. That is
+    // what made the application look like it reloaded on returning to the tab.
+    setMember((current) => (current.kind === 'READY' ? current : { kind: 'LOADING' }));
     try {
       const memberId = await fetchOwnMemberId();
       if (mounted.current && ticket === generation.current) setMember({ kind: 'READY', memberId });
     } catch {
-      if (mounted.current && ticket === generation.current) setMember({ kind: 'FAILED' });
+      if (mounted.current && ticket === generation.current) {
+        // A failed BACKGROUND re-read keeps the last known answer. The screens
+        // below report their own server errors; tearing the gate down over a
+        // refresh that failed would lose the person's place for nothing.
+        setMember((current) => (current.kind === 'READY' ? current : { kind: 'FAILED' }));
+      }
     }
   }, []);
 
+  // Keyed on WHAT THE SNAPSHOT SAYS, never on the object it says it in.
+  // `loadAccess` builds a new object on every read - a token refresh, a tab
+  // regaining focus - and depending on that object meant re-reading, and
+  // remounting, every time the person came back to the application.
   const signedInUserId = access.kind === 'SIGNED_IN' ? access.userId : null;
+  const signedInRole = access.kind === 'SIGNED_IN' ? access.role : null;
+  const signedInStatus = access.kind === 'SIGNED_IN' ? access.accountStatus : null;
+  const operational = hasOperationalAccess(access);
   useEffect(() => {
-    if (!hasOperationalAccess(access)) {
+    if (!operational) {
       setMember({ kind: 'READY', memberId: null });
       return;
     }
     void loadMember();
-    // Re-read when the account changes, not on every render of the snapshot.
-  }, [signedInUserId, access, loadMember]);
+  }, [operational, signedInUserId, signedInRole, signedInStatus, loadMember]);
 
   const retry = () => {
     void reload();

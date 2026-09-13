@@ -110,6 +110,67 @@ const RPC: Record<string, unknown> = {
   current_dvd_role: 'COMMANDER',
   current_account_status: 'ACTIVE',
   current_member_id: MEMBER_ID,
+  /*
+   * Who may be called out. Answered by the server in the real thing, so it is
+   * answered by the fixture here rather than derived from `members` - a fixture
+   * that recomputed the rule would stop testing the screen and start testing a
+   * copy of the rule.
+   *
+   * Pero is in `members` above and deliberately NOT here: he stands in for the
+   * member whose roster row is active but whose account has been withdrawn,
+   * which is the case the device test found in the real picker.
+   */
+  eligible_recipients: [
+    { member_id: MEMBER_ID, full_name: 'Ivo Vatrogasac', role: 'FIREFIGHTER', specialties: [] },
+  ],
+  /*
+   * The recorded chronology. Three separate movements for one member, which is
+   * the point: the current-state row can only hold the last of them, so a
+   * screen showing all three proves it is reading the audit and not the
+   * snapshot.
+   */
+  intervention_audit: [
+    {
+      event_id: 'aa000001-0000-4000-8000-000000000001',
+      occurred_at: '2026-09-13T08:00:00.000Z',
+      event_type: 'INTERVENTION_PUBLISHED',
+      detail: { recipient_count: 2 },
+      actor_name: 'Komandir Smjene',
+      actor_is_you: true,
+    },
+    {
+      event_id: 'aa000001-0000-4000-8000-000000000002',
+      occurred_at: '2026-09-13T08:04:00.000Z',
+      event_type: 'JOURNEY_PROGRESS_SET',
+      detail: { member_id: MEMBER_ID, from: null, to: 'KRECEM' },
+      actor_name: 'Ivo Vatrogasac',
+      actor_is_you: false,
+    },
+    {
+      event_id: 'aa000001-0000-4000-8000-000000000003',
+      occurred_at: '2026-09-13T08:07:00.000Z',
+      event_type: 'JOURNEY_PROGRESS_SET',
+      detail: { member_id: MEMBER_ID, from: 'KRECEM', to: 'U_PUTU' },
+      actor_name: 'Ivo Vatrogasac',
+      actor_is_you: false,
+    },
+    {
+      event_id: 'aa000001-0000-4000-8000-000000000004',
+      occurred_at: '2026-09-13T08:10:00.000Z',
+      event_type: 'JOURNEY_PROGRESS_SET',
+      detail: { member_id: MEMBER_ID, from: 'U_PUTU', to: 'NA_LICU_MJESTA' },
+      actor_name: 'Ivo Vatrogasac',
+      actor_is_you: false,
+    },
+    {
+      event_id: 'aa000001-0000-4000-8000-000000000005',
+      occurred_at: '2026-09-13T08:12:00.000Z',
+      event_type: 'INTERVENTION_STATUS_CHANGED',
+      detail: { from: 'PUBLISHED', to: 'DEPLOYED' },
+      actor_name: 'Komandir Smjene',
+      actor_is_you: true,
+    },
+  ],
   attendance_totals: [
     {
       member_id: MEMBER_ID,
