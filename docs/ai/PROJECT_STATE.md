@@ -270,7 +270,7 @@ What changed, in one line each:
 - A GitHub Pages workflow that deploys only after CI passes and refuses to
   publish a bundle containing a secret.
 
-Three defects this slice found and fixed, all of which had passed every
+Five defects this slice found and fixed, all of which had passed every
 existing check:
 
 1. `intervention_acknowledgements.acknowledged_at` and
@@ -284,6 +284,16 @@ existing check:
    by running the journey against the hosted project.
 3. The first service worker claims the open page moments after the very first
    visit; reloading on that discarded whatever the person had already typed.
+4. The new fixture server answered every read with an array; PostgREST returns
+   a single OBJECT when the client asks for one, so every `.maybeSingle()` read
+   looked like a missing row.
+5. The browser suite's meaning depended on ambient environment - unconfigured in
+   CI only because CI happens to have no `.env.local`. The webServer now pins it.
+
+Two of those were in the new tests rather than in the product. That is worth
+recording rather than tidying away: a test whose fixture is wrong reports a
+defect that does not exist, and a test whose meaning depends on the machine it
+runs on reports nothing reliable at all.
 
 ### Verification on the branch head
 
@@ -291,9 +301,9 @@ existing check:
 |---|---|
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm run test` (unit) | **176 passed** |
+| `npm run test` (unit) | **189 passed** |
 | `npm run test:db` (PostgreSQL 16 + RLS) | **330 passed**, 12 skipped |
-| `npm run e2e` (browser + axe, 2 projects) | **78 passed** |
+| `npm run e2e` (browser + axe, 2 projects) | **116 passed** |
 | `npx vite build` | Pass |
 | `npm run verify:bundle` | Pass - no secret in the built output |
 | Hosted journey (`hosted_operations.test.ts`) | **12 passed** against the live project |
@@ -356,6 +366,10 @@ db-tests/          integration tests: role matrix, lifecycle, attendance, privil
                              checked against the migrated schema
   hosted_operations.test.ts  the data layer against the HOSTED project. Needs
                              credentials, skips without them, NOT CI evidence
+e2e/fixture-server.ts        a fake Supabase project answered inside the browser
+e2e/operational.spec.ts      the operational screens POPULATED: phone layout,
+                             touch targets and axe on the real rendered state
+src/ui/views/operational-views.test.tsx  the same screens rendered in jsdom
 docs/ACCESS_MODEL.md   the role and RLS contract, and what is not enforced yet
 docs/DATABASE.md       schema semantics, the live project, how to run the DB tests
 docs/OWNER_BOOTSTRAP.md the one-time owner procedure - EXECUTED by db-tests/bootstrap.test.ts

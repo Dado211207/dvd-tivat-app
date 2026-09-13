@@ -69,8 +69,33 @@ everything except React rendering, which the unit and browser suites cover.
 **No claim here says the interface itself was driven against the hosted
 project.**
 
-**Verification on the branch head.** lint pass, typecheck pass, unit 176 passed,
-database 330 passed with 12 skipped, browser 78 passed across two projects,
+**Seeing the screens at all.** After the above, none of the three screens'
+component code had ever executed anywhere - every suite stopped at the gate. Two
+things closed that. `src/ui/views/operational-views.test.tsx` renders them in
+jsdom with a stubbed data layer. `e2e/operational.spec.ts` renders them in a
+real browser against a SECOND build pointed at a project that does not exist,
+with every request answered by `e2e/fixture-server.ts`; nothing real is
+contacted, so it runs in CI. That added phone-width layout, 40px touch targets
+and axe on the populated state - each first proving the screen is actually up,
+because an error notice is perfectly accessible and perfectly narrow.
+
+Writing those found two more faults, both in the new tests rather than the
+product, and both worth recording rather than tidying away. The fixture answered
+every read with an array where PostgREST returns a single object, so a good
+profile read as "Nalog nije potpun". And the primary browser suite was
+unconfigured only because CI happens to have no `.env.local` - a developer has
+one, and the same tests then fail for a reason unrelated to their change. A test
+with a wrong fixture reports a defect that does not exist; a test whose meaning
+depends on the machine reports nothing reliable at all.
+
+One assertion had to be replaced outright. "Confirmed participation totals zero"
+passed even with the confirmed filter deleted, because `participationSeconds`
+enforces the same rule again - the mutation that should have failed it did not.
+Column placement is the view's own decision and does fail. A test believed to be
+load-bearing and isn't is worse than no test.
+
+**Verification on the branch head.** lint pass, typecheck pass, unit 189 passed,
+database 330 passed with 12 skipped, browser 116 passed across two projects,
 build pass, bundle secret scan pass. The 12 skipped are the hosted file, which
 needs credentials CI deliberately does not have — **a skipped test is not
 evidence and that file must never be offered as CI evidence.**
