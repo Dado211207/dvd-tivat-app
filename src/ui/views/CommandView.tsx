@@ -32,6 +32,7 @@ import {
   fetchAttendance,
   fetchAvailability,
   fetchInterventions,
+  fetchEligibleRecipients,
   fetchRecipientFacts,
   fetchVehicleMovements,
   formatDuration,
@@ -49,6 +50,7 @@ import {
   type AvailabilityRow,
   type Intervention,
   type InterventionKind,
+  type EligibleRecipient,
   type RecipientFacts,
   type VehicleMovement,
 } from '@/auth/operations';
@@ -88,6 +90,18 @@ export function CommandView() {
 interface ConsoleData {
   interventions: readonly Intervention[];
   members: readonly RosterMember[];
+  /**
+   * Who may be CALLED, answered by the server.
+   *
+   * Kept separate from `members`, which is the roster. The two are different
+   * questions and were conflated until a withdrawn member appeared in the
+   * picker: they were on the roster, their record was active, and their
+   * account had been withdrawn, so they could not have opened the call-out.
+   *
+   * Null means the list could not be read. That is not the same as nobody
+   * qualifying, and the screen says which.
+   */
+  eligible: readonly EligibleRecipient[] | null;
   vehicles: readonly RosterVehicle[];
   availability: readonly AvailabilityRow[];
   movements: readonly VehicleMovement[];
@@ -98,6 +112,7 @@ interface ConsoleData {
 const EMPTY: ConsoleData = {
   interventions: [],
   members: [],
+  eligible: null,
   vehicles: [],
   availability: [],
   movements: [],
@@ -133,13 +148,15 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       setLoading(true);
       setLoadError(null);
       try {
-        const [interventions, members, vehicles, availability, movements] = await Promise.all([
-          fetchInterventions(),
-          loadRoster(),
-          loadVehicles(),
-          fetchAvailability(),
-          fetchVehicleMovements(),
-        ]);
+        const [interventions, members, eligible, vehicles, availability, movements] =
+          await Promise.all([
+            fetchInterventions(),
+            loadRoster(),
+            fetchEligibleRecipients(),
+            loadVehicles(),
+            fetchAvailability(),
+            fetchVehicleMovements(),
+          ]);
         // The newest call-out that is still open is what a commander wants on
         // opening the screen; falling back to the newest of any kind means the
         // screen is never blank when history exists.
@@ -158,7 +175,9 @@ function CommandConsole({ context }: { context: OperationalContext }) {
             ])
           : [[], []];
         if (!mounted.current || ticket !== generation.current) return;
-        setData({ interventions, members, vehicles, availability, movements, recipients, attendance });
+        setData({
+          interventions, members, eligible, vehicles, availability, movements, recipients, attendance,
+        });
         setSelectedId(focusId);
       } catch (error) {
         if (!mounted.current || ticket !== generation.current) return;
@@ -324,10 +343,13 @@ function CallOutTab({
     () => new Map(data.availability.map((a) => [a.memberId, a] as const)),
     [data.availability],
   );
-  const eligible = useMemo(
-    () => data.members.filter((m) => m.active && m.userId !== null),
-    [data.members],
-  );
+  // Not filtered here. The screen used to apply its own rule - an active
+  // roster row with a linked account - which passed a member whose ACCOUNT had
+  // been withdrawn. The server answers this question now, by the same rule
+  // `publish_intervention` enforces, so the list and the command cannot
+  // disagree. See `fetchEligibleRecipients`.
+  const eligible = data.eligible ?? [];
+  const eligibleUnavailable = data.eligible === null;
 
   const create = async () => {
     setError(null);
@@ -525,27 +547,47 @@ function CallOutTab({
             <>
               <h3>Kome se salje</h3>
               <p className="muted small">
-                Prikazani su samo clanovi sa povezanim nalogom - ostali ne bi mogli ni da vide poziv.
-                Oznaka dostupnosti je opsta, ne odgovor na ovaj poziv.
+                Spisak daje server: prikazani su samo clanovi koji zaista mogu da prime i otvore
+                poziv - aktivan clan, aktivan nalog i popunjen profil. Clan kome je nalog ukinut se
+                ne prikazuje i ne moze biti pozvan. Oznaka dostupnosti je opsta izjava clana, a ne
+                odgovor na ovaj poziv.
               </p>
+              {/*
+                An empty picker with no explanation reads as a screen that has
+                not finished loading. It has two entirely different causes and a
+                commander must not have to guess which one they are looking at.
+              */}
+              {eligibleUnavailable ? (
+                <Notice tone="error" testId="eligible-recipients-unavailable">
+                  <strong>Spisak clanova nije procitan sa servera.</strong> Ovo nije podatak da
+                  nema clanova - znaci da odgovor nije stigao. Osvjezite prikaz prije nego sto
+                  objavite poziv.
+                </Notice>
+              ) : eligible.length === 0 ? (
+                <Notice tone="warn" testId="no-eligible-recipients">
+                  <strong>Nijedan clan trenutno ne moze da primi poziv.</strong> Poziv se moze
+                  poslati samo clanu sa aktivnim nalogom i popunjenim profilom. Clan kome je nalog
+                  ukinut se ovdje ne prikazuje.
+                </Notice>
+              ) : null}
               <ScrollRegion label="Spisak clanova za poziv" className="table-wrap table-wrap--tall">
                 <ul className="pick-list" data-testid="recipient-picker">
                   {eligible.map((m) => {
-                    const availability = availableBy.get(m.id);
+                    const availability = availableBy.get(m.memberId);
                     return (
-                      <li key={m.id}>
+                      <li key={m.memberId}>
                         <label className="pick">
                           <input
                             type="checkbox"
-                            checked={selectedMembers.has(m.id)}
+                            checked={selectedMembers.has(m.memberId)}
                             onChange={(event) => {
                               const next = new Set(selectedMembers);
-                              if (event.target.checked) next.add(m.id);
-                              else next.delete(m.id);
+                              if (event.target.checked) next.add(m.memberId);
+                              else next.delete(m.memberId);
                               setSelectedMembers(next);
                             }}
                           />
-                          <span>{m.fullName}</span>
+                          <span className="pick__name">{m.fullName}</span>
                           {availability ? (
                             <Chip
                               tone={availability.available ? 'yes' : 'no'}

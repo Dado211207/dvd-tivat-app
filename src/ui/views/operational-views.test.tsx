@@ -105,6 +105,12 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     ...real,
     fetchOwnMemberId: vi.fn(async () => MEMBER_ID),
     fetchInterventions: vi.fn(async () => [INTERVENTION]),
+    // Who may be CALLED is the server's answer, not a filter over the roster.
+    // Pero is on the roster below but is NOT here: he stands in for the
+    // withdrawn member whose account can no longer sign in.
+    fetchEligibleRecipients: vi.fn(async () => [
+      { memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac', role: 'FIREFIGHTER' as const, specialties: [] },
+    ]),
     fetchRecipientFacts: vi.fn(async () => RECIPIENTS),
     fetchAttendance: vi.fn(async () => [PENDING_INTERVAL]),
     fetchVehicleMovements: vi.fn(async () => []),
@@ -227,6 +233,73 @@ describe('the commander console renders on real data', () => {
     const text = await show(<CommandView />, 'FIREFIGHTER');
     expect(text).toMatch(/nije za vasu ulogu/i);
     expect(text).not.toContain('Vjezba: provjera opreme');
+  });
+
+  /**
+   * The recipient picker, which offered a withdrawn member on the real device.
+   *
+   * The screen used to compute the list itself, from an active roster row with
+   * a linked account. Both were still true of somebody whose ACCOUNT had been
+   * withdrawn, so they were offered a call-out they could not have opened.
+   *
+   * The list now comes from the server, by the same rule `publish_intervention`
+   * enforces. These tests hold the SCREEN to that: the roster below contains
+   * Pero, the server's eligible list does not, and the picker must follow the
+   * server rather than the roster.
+   */
+  describe('the recipient picker offers only who the server says may be called', () => {
+    const DRAFT = { ...INTERVENTION, status: 'DRAFT' as const, publishedAt: null, version: 1 };
+
+    async function showDraft(
+      eligible: readonly { memberId: string; fullName: string }[] | null,
+    ): Promise<string> {
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([DRAFT]);
+      vi.mocked(operations.fetchEligibleRecipients).mockResolvedValueOnce(
+        eligible === null
+          ? null
+          : eligible.map((m) => ({ ...m, role: 'FIREFIGHTER' as const, specialties: [] })),
+      );
+      return show(<CommandView />, 'COMMANDER');
+    }
+
+    it('lists the server’s answer and not the roster', async () => {
+      await showDraft([{ memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac' }]);
+      const picker = container.querySelector('[data-testid="recipient-picker"]');
+      expect(picker?.textContent).toContain('Ivo Vatrogasac');
+      // Pero IS in the roster mock and is NOT in the server's list. A screen
+      // filtering the roster itself would show him here - which is exactly how
+      // a withdrawn member reached the real picker.
+      expect(
+        picker?.textContent,
+        'a member the server does not offer must not appear',
+      ).not.toContain('Pero Vatrogasac');
+    });
+
+    it('says the list could not be read, rather than showing an empty one', async () => {
+      // "The server did not answer" and "nobody qualifies" look identical as an
+      // empty list and mean opposite things. A commander must not have to guess.
+      await showDraft(null);
+      const notice = container.querySelector('[data-testid="eligible-recipients-unavailable"]');
+      expect(notice, 'a failed read must be stated').not.toBeNull();
+      expect(notice?.textContent).toMatch(/nije procitan/i);
+      expect(container.querySelector('[data-testid="no-eligible-recipients"]')).toBeNull();
+    });
+
+    it('says nobody qualifies when the server answers with nobody', async () => {
+      await showDraft([]);
+      const notice = container.querySelector('[data-testid="no-eligible-recipients"]');
+      expect(notice, 'an empty answer must be explained').not.toBeNull();
+      expect(notice?.textContent).toMatch(/aktivnim nalogom/i);
+      expect(container.querySelector('[data-testid="eligible-recipients-unavailable"]')).toBeNull();
+    });
+
+    it('cannot publish when there is nobody to publish to', async () => {
+      await showDraft([]);
+      const publish = container.querySelector<HTMLButtonElement>('[data-testid="publish"]');
+      expect(publish, 'the button still exists so the screen is not mysterious').not.toBeNull();
+      expect(publish?.disabled).toBe(true);
+    });
   });
 });
 

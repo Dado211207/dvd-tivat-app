@@ -125,6 +125,16 @@ export function stateTimestamp(record: Intervention): string | null {
   }
 }
 
+/** One member the server confirms may be called out, with the role it counted. */
+export type OperationalRoleName = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
+
+export interface EligibleRecipient {
+  readonly memberId: string;
+  readonly fullName: string;
+  readonly role: OperationalRoleName;
+  readonly specialties: readonly string[];
+}
+
 export interface RecipientFacts {
   readonly memberId: string;
   readonly memberName: string;
@@ -313,6 +323,9 @@ interface InterventionRow {
   created_at: string;
 }
 interface RecipientRow { member_id: string; member_name_at_publication: string }
+interface EligibleRecipientRow {
+  member_id: string; full_name: string; role: string; specialties: string[] | null;
+}
 interface AcknowledgementRow { member_id: string; opened_at: string }
 interface ResponseRow {
   member_id: string; answer: string; eta_minutes: number | null;
@@ -355,6 +368,49 @@ async function commandReturning<T>(
     return { ok: true, value: data as T };
   } catch (error) {
     return { ok: false, message: explainRefusal(String(error)) };
+  }
+}
+
+/**
+ * The members a call-out may actually be sent to.
+ *
+ * Read from the server rather than filtered here. The screen used to apply its
+ * own rule - active member row with a linked account - and that rule was wrong
+ * in a way nobody noticed until a withdrawn member appeared in the picker
+ * during the device test: their roster row was still active and still linked,
+ * but the account behind it had been withdrawn, so they could not have opened
+ * the call-out or answered it.
+ *
+ * `eligible_recipients()` applies the identical conditions `publish_intervention`
+ * enforces, so the list cannot offer somebody the server will refuse. The
+ * server refusing regardless is what makes a modified client harmless; this
+ * read only stops a commander being shown a name that would fail.
+ *
+ * Returns NULL when the list could not be read, and an empty array when the
+ * server read fine and nobody qualifies. Those are different sentences on the
+ * screen and a commander needs to know which one they are looking at: an empty
+ * picker that silently means "the server did not answer" is how somebody stands
+ * in front of a console at 03:00 believing the roster is empty.
+ *
+ * It never falls back to a client-side rule. Doing so would reintroduce the
+ * defect at exactly the worst moment, and quietly.
+ *
+ * A failure here does not take the rest of the console down with it: the other
+ * reads answer questions this one cannot, and a commander can still see a
+ * running intervention while the picker says it is unavailable.
+ */
+export async function fetchEligibleRecipients(): Promise<readonly EligibleRecipient[] | null> {
+  try {
+    const { data, error } = await accountBackend().rpc('eligible_recipients');
+    if (error || !data) return null;
+    return (data as unknown as EligibleRecipientRow[]).map((row) => ({
+      memberId: row.member_id,
+      fullName: row.full_name,
+      role: row.role as OperationalRoleName,
+      specialties: row.specialties ?? [],
+    }));
+  } catch {
+    return null;
   }
 }
 

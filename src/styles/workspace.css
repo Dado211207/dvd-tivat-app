@@ -1920,6 +1920,18 @@ dialog {
   flex: none;
 }
 
+/*
+ * A long Montenegrin name wraps onto a second line instead of pushing the
+ * availability chip off a 320px screen. `min-width: 0` is what actually allows
+ * it: a flex item will not shrink below its content width without it, however
+ * many wrapping rules are set on the text.
+ */
+.pick__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* ---------------------------------------------------------- fact blocks */
 
 .facts {
