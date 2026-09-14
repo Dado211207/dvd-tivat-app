@@ -50,16 +50,11 @@ import { readRouteParam } from '../router';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { PushNotificationPanel } from '../components/PushNotificationPanel';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
-import {
-  ATTENDANCE_SOURCE_LABEL,
-  INTERVENTION_KIND_LABEL,
-  INTERVENTION_STATUS_LABEL,
-  JOURNEY_LABEL,
-  JOURNEY_SYMBOL,
-  SERVER_ANSWER_LABEL,
-} from '@/i18n/labels';
+import { formatTime, JOURNEY_SYMBOL } from '@/i18n/labels';
+import { useText } from '@/i18n/useText';
 
 export function MobilisationView() {
+  const t = useText();
   return (
     <OperationalGate allow={['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER']} requiresMember>
       {/* The gate's `requiresMember` already refuses to render without one, so
@@ -71,8 +66,7 @@ export function MobilisationView() {
       {(context) =>
         context.memberId === null ? (
           <Notice tone="error">
-            <strong>Vas nalog nije povezan sa clanom drustva.</strong> Bez toga vas server ne moze
-            staviti na spisak pozvanih.
+            <strong>{t.mobilisation.noMemberTitle}</strong> {t.mobilisation.noMemberText}
           </Notice>
         ) : (
           <Mobilisation context={context} memberId={context.memberId} />
@@ -121,6 +115,7 @@ function requestedInterventionId(): string | null {
 }
 
 function Mobilisation({ memberId }: { context: OperationalContext; memberId: string }) {
+  const t = useText();
   const [data, setData] = useState<MyData>(EMPTY);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -233,20 +228,38 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
       setMessage({ tone: 'info', text: successText });
       await refresh(activeId);
     } else {
-      setMessage({ tone: 'error', text: outcome.message ?? 'Nije sacuvano.' });
+      setMessage({ tone: 'error', text: outcome.message ?? t.mobilisation.notSaved });
     }
     setBusy(false);
   };
 
+  /**
+   * Whether this member is in the middle of something.
+   *
+   * The screen's order changes on this one fact, and that is the whole point of
+   * the rearrangement. Everything used to be shown at once, in a fixed order,
+   * with general availability and a notification panel above the call-out: a
+   * firefighter woken at three in the morning scrolled past two panels about
+   * next week to reach the fire. Now the call-out is first whenever there is
+   * one, and availability - which is about next week - goes below it, closed.
+   */
+  const callOutIsOpen = active !== null && isOpenStatus(active.status);
+
+  const availability = (
+    <AvailabilityPanel data={data} busy={busy} onAct={act} collapsed={callOutIsOpen} />
+  );
+
   return (
     <div className="stack">
-      <PushNotificationPanel />
+      {/* Compact while it is already on: a paragraph explaining a thing that is
+          working is just something between a firefighter and their call-out.
+          When there IS an action to take it shows in full. */}
+      <PushNotificationPanel variant="compact" />
       {offline ? (
         <Notice tone="error">
-          <strong>Nema veze sa serverom.</strong> Prikazano stanje moze biti zastarjelo, a radnje
-          nece biti sacuvane dok se veza ne vrati.{' '}
+          <strong>{t.mobilisation.offlineTitle}</strong> {t.mobilisation.offlineText}{' '}
           <button type="button" className="btn btn--ghost" onClick={() => void refresh(activeId)}>
-            Pokusaj ponovo
+            {t.gate.retry}
           </button>
         </Notice>
       ) : null}
@@ -255,17 +268,17 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
           <Notice tone={message.tone === 'error' ? 'error' : 'info'}>{message.text}</Notice>
         </div>
       ) : null}
-      {loading ? <p role="status" className="muted small">Ucitavanje...</p> : null}
+      {loading ? <p role="status" className="muted small">{t.common.loading}</p> : null}
 
       <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
         <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
         {LIVE_STATUS_LABEL[liveStatus]}
       </p>
 
-      <AvailabilityPanel data={data} busy={busy} onAct={act} />
+      {callOutIsOpen ? null : availability}
 
       {data.interventions.length > 1 ? (
-        <Field label="Poziv" controlId="my-intervention">
+        <Field label={t.mobilisation.pickCallOut} controlId="my-intervention">
           {(props) => (
             <select
               {...props}
@@ -278,7 +291,7 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
             >
               {data.interventions.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {INTERVENTION_STATUS_LABEL[i.status] ?? i.status} - {i.title}
+                  {t.vocabulary.interventionStatus[i.status] ?? i.status} - {i.title}
                 </option>
               ))}
             </select>
@@ -287,9 +300,8 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
       ) : null}
 
       {active === null ? (
-        <EmptyState title="Nema poziva za vas">
-          Kada vas komandir pozove na intervenciju, pojavice se ovdje. Ovaj spisak pokazuje samo
-          pozive na kojima ste vi na spisku.
+        <EmptyState title={t.mobilisation.noCallOutTitle}>
+          {t.mobilisation.noCallOutText}
         </EmptyState>
       ) : (
         <CallOutCard
@@ -301,6 +313,8 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
           onAct={act}
         />
       )}
+
+      {callOutIsOpen ? availability : null}
     </div>
   );
 }
@@ -311,23 +325,23 @@ function AvailabilityPanel({
   data,
   busy,
   onAct,
+  collapsed,
 }: {
   data: MyData;
   busy: boolean;
   onAct: (run: () => Promise<{ ok: boolean; message?: string }>, text: string) => Promise<void>;
+  /** True while a call-out is open: this is about next week, that is about now. */
+  collapsed: boolean;
 }) {
+  const t = useText();
   const [note, setNote] = useState('');
   useEffect(() => {
     setNote(data.availabilityNote ?? '');
   }, [data.availabilityNote]);
 
-  return (
-    <section className="panel">
-      <h2 className="panel__title">Moja opsta dostupnost</h2>
-      <p className="muted small">
-        Ovo nije odgovor ni na jedan poziv. Govori samo da li ste uopste na raspolaganju ovih dana -
-        komandir to vidi i prije nego sto intervencija postoji.
-      </p>
+  const body = (
+    <>
+      <p className="muted small">{t.mobilisation.availabilityNote}</p>
 
       <div className="row-actions">
         <button
@@ -339,11 +353,11 @@ function AvailabilityPanel({
           onClick={() =>
             void onAct(
               () => setOwnAvailability(true, note.trim() === '' ? null : note.trim()),
-              'Zabiljezeno: dostupni ste.',
+              t.mobilisation.availableSavedYes,
             )
           }
         >
-          Dostupan sam
+          {t.mobilisation.availableYes}
         </button>
         <button
           type="button"
@@ -354,15 +368,19 @@ function AvailabilityPanel({
           onClick={() =>
             void onAct(
               () => setOwnAvailability(false, note.trim() === '' ? null : note.trim()),
-              'Zabiljezeno: niste dostupni.',
+              t.mobilisation.availableSavedNo,
             )
           }
         >
-          Nisam dostupan
+          {t.mobilisation.availableNo}
         </button>
       </div>
 
-      <Field label="Kratka napomena" hint="Na primjer: na godisnjem do 20.09." controlId="availability-note">
+      <Field
+        label={t.mobilisation.availabilityNoteLabel}
+        hint={t.mobilisation.availabilityNoteHint}
+        controlId="availability-note"
+      >
         {(props) => (
           <input
             {...props}
@@ -376,13 +394,34 @@ function AvailabilityPanel({
 
       <p className="muted small" data-testid="availability-state">
         {data.available === null
-          ? 'Jos se niste izjasnili.'
-          : `${data.available ? 'Dostupni ste' : 'Niste dostupni'}${
+          ? t.mobilisation.availabilityUnset
+          : `${data.available ? t.mobilisation.availabilityIsYes : t.mobilisation.availabilityIsNo}${
               data.availabilityChangedAt
-                ? ` od ${new Date(data.availabilityChangedAt).toLocaleString('sr-Latn')}`
+                ? ` ${t.mobilisation.availabilitySince} ${formatTime(data.availabilityChangedAt)}`
                 : ''
             }.`}
       </p>
+    </>
+  );
+
+  // Closed, not removed. Stating availability during a call-out is a real thing
+  // somebody occasionally needs to do, and hiding the capability to tidy the
+  // screen would be buying calm with a missing feature.
+  if (collapsed) {
+    return (
+      <section className="panel">
+        <details className="disclosure" data-testid="availability-disclosure">
+          <summary className="disclosure__summary">{t.mobilisation.availabilityShow}</summary>
+          <div className="disclosure__body">{body}</div>
+        </details>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel">
+      <h2 className="panel__title">{t.mobilisation.availabilityTitle}</h2>
+      {body}
     </section>
   );
 }
@@ -404,6 +443,7 @@ function CallOutCard({
   busy: boolean;
   onAct: (run: () => Promise<{ ok: boolean; message?: string }>, text: string) => Promise<void>;
 }) {
+  const t = useText();
   const [answer, setAnswer] = useState<ResponseAnswer | null>(null);
   const [eta, setEta] = useState<number | null>(null);
   const open = isOpenStatus(intervention.status);
@@ -412,7 +452,7 @@ function CallOutCard({
     <>
       <section className="panel panel--callout">
         <p className="eyebrow">
-          {INTERVENTION_KIND_LABEL[intervention.kind] ?? intervention.kind}
+          {t.vocabulary.interventionKind[intervention.kind] ?? intervention.kind}
           {intervention.otherKindNote ? ` - ${intervention.otherKindNote}` : ''}
         </p>
         <h2 className="callout__title" data-testid="callout-title">
@@ -423,37 +463,32 @@ function CallOutCard({
         </p>
         {intervention.assemblyPoint ? (
           <p className="callout__assembly">
-            Okupljanje: <strong>{intervention.assemblyPoint}</strong>
+            {t.mobilisation.assembly}: <strong>{intervention.assemblyPoint}</strong>
           </p>
         ) : null}
         <p className="callout__instructions">{intervention.instructions}</p>
         <p className="muted small">
-          {INTERVENTION_STATUS_LABEL[intervention.status] ?? intervention.status}
+          {t.vocabulary.interventionStatus[intervention.status] ?? intervention.status}
           {intervention.publishedAt
-            ? ` - objavljeno ${new Date(intervention.publishedAt).toLocaleString('sr-Latn')}`
+            ? ` - ${t.mobilisation.publishedAt} ${formatTime(intervention.publishedAt)}`
             : ''}
         </p>
         {!open ? (
-          <Notice tone="info">
-            Ova intervencija je zatvorena. Ostaje vidljiva zbog evidencije, ali se vise ne mijenja.
-          </Notice>
+          <Notice tone="info">{t.mobilisation.closedNotice}</Notice>
         ) : null}
       </section>
 
       <section className="panel">
-        <h3 className="panel__title">1. Jeste li vidjeli poziv</h3>
+        <h3 className="panel__title">{t.mobilisation.step1}</h3>
         {facts?.acknowledgedAt ? (
           <p data-testid="ack-state">
             <Chip tone="yes" symbol="+">
-              Otvorili ste ga {new Date(facts.acknowledgedAt).toLocaleString('sr-Latn')}
+              {t.mobilisation.ackDone} {formatTime(facts.acknowledgedAt)}
             </Chip>
           </p>
         ) : (
           <>
-            <p className="muted small">
-              Komandiru je vazno da zna da je poziv uopste stigao do vas - to nije isto sto i
-              odgovor.
-            </p>
+            <p className="muted small">{t.mobilisation.ackWhy}</p>
             <button
               type="button"
               className="btn btn--big btn--primary"
@@ -462,18 +497,18 @@ function CallOutCard({
               onClick={() =>
                 void onAct(
                   () => acknowledgeIntervention(intervention.id),
-                  'Zabiljezeno je da ste vidjeli poziv. To jos nije odgovor.',
+                  t.mobilisation.ackSaved,
                 )
               }
             >
-              Vidio sam poziv
+              {t.mobilisation.ackButton}
             </button>
           </>
         )}
       </section>
 
       <section className="panel">
-        <h3 className="panel__title">2. Vas odgovor</h3>
+        <h3 className="panel__title">{t.mobilisation.step2}</h3>
         {facts?.answer ? (
           <p data-testid="answer-state">
             <Chip
@@ -482,10 +517,10 @@ function CallOutCard({
               }
               symbol="="
             >
-              {SERVER_ANSWER_LABEL[facts.answer] ?? facts.answer}
-              {facts.etaMinutes ? ` (${facts.etaMinutes} min)` : ''}
+              {t.vocabulary.answer[facts.answer] ?? facts.answer}
+              {facts.etaMinutes ? ` (${facts.etaMinutes} ${t.timings.minutesShort})` : ''}
             </Chip>{' '}
-            <span className="muted small">Mozete ga promijeniti ispod.</span>
+            <span className="muted small">{t.mobilisation.answerChangeable}</span>
           </p>
         ) : null}
 
@@ -503,14 +538,14 @@ function CallOutCard({
                 if (option !== 'DOLAZIM_KASNIJE') setEta(null);
               }}
             >
-              {SERVER_ANSWER_LABEL[option] ?? option}
+              {t.vocabulary.answer[option] ?? option}
             </button>
           ))}
         </div>
 
         {answer === 'DOLAZIM_KASNIJE' ? (
           <>
-            <p className="muted small">Za koliko stizete?</p>
+            <p className="muted small">{t.mobilisation.etaQuestion}</p>
             <div className="row-actions">
               {ETA_BANDS.map((band) => (
                 <button
@@ -522,7 +557,7 @@ function CallOutCard({
                   disabled={busy}
                   onClick={() => setEta(band)}
                 >
-                  {band} min
+                  {band} {t.timings.minutesShort}
                 </button>
               ))}
             </div>
@@ -537,27 +572,22 @@ function CallOutCard({
           onClick={() =>
             void onAct(
               () => submitResponse(intervention.id, answer!, eta, false),
-              'Odgovor je zabiljezen na serveru.',
+              t.mobilisation.answerSaved,
             )
           }
         >
-          Posalji odgovor
+          {t.mobilisation.sendAnswer}
         </button>
-        <p className="muted small">
-          Odgovor je obecanje, ne evidencija prisustva. Prisustvo se biljezi posebno, nize.
-        </p>
+        <p className="muted small">{t.mobilisation.answerIsNotAttendance}</p>
       </section>
 
       <section className="panel">
-        <h3 className="panel__title">3. Gdje ste sada</h3>
-        <p className="muted small">
-          Ovo je samo vasa pozicija za ovaj poziv. <strong>Ne prijavljuje prisustvo</strong> - ni
-          "Na licu mjesta".
-        </p>
+        <h3 className="panel__title">{t.mobilisation.step3}</h3>
+        <p className="muted small">{t.mobilisation.journeyNote}</p>
         {facts?.journey ? (
           <p data-testid="journey-state">
             <Chip tone={facts.journey === 'ODUSTAJEM' ? 'no' : 'accent'} symbol={JOURNEY_SYMBOL[facts.journey] ?? '?'}>
-              {JOURNEY_LABEL[facts.journey] ?? facts.journey}
+              {t.vocabulary.journey[facts.journey] ?? facts.journey}
             </Chip>
           </p>
         ) : null}
@@ -573,23 +603,19 @@ function CallOutCard({
               onClick={() =>
                 void onAct(
                   () => setJourneyProgress(intervention.id, step),
-                  `Zabiljezeno: ${JOURNEY_LABEL[step] ?? step}. Prisustvo time nije prijavljeno.`,
+                  `${t.mobilisation.journeySavedPrefix} ${t.vocabulary.journey[step] ?? step}. ${t.mobilisation.journeySavedSuffix}`,
                 )
               }
             >
-              {JOURNEY_LABEL[step] ?? step}
+              {t.vocabulary.journey[step] ?? step}
             </button>
           ))}
         </div>
       </section>
 
       <section className="panel">
-        <h3 className="panel__title">4. Prisustvo</h3>
-        <p className="muted small">
-          Prijava biljezi da ste na zadatku od tog trenutka. Zapis nosi oznaku{' '}
-          <strong>prijavio se sam</strong> i <strong>ceka potvrdu komandira</strong> - do tada se ne
-          racuna kao ucesce.
-        </p>
+        <h3 className="panel__title">{t.mobilisation.step4}</h3>
+        <p className="muted small">{t.mobilisation.attendanceNote}</p>
 
         {intervals.length > 0 ? (
           <ul className="stack" data-testid="my-intervals">
@@ -602,27 +628,23 @@ function CallOutCard({
                       tone={state === 'CONFIRMED' ? 'yes' : state === 'REJECTED' ? 'no' : 'later'}
                       symbol={state === 'CONFIRMED' ? '+' : state === 'REJECTED' ? '-' : '~'}
                     >
-                      {state === 'CONFIRMED'
-                        ? 'Potvrdjeno'
-                        : state === 'REJECTED'
-                          ? 'Odbijeno'
-                          : 'Ceka potvrdu'}
+                      {t.vocabulary.attendanceState[state] ?? state}
                     </Chip>{' '}
                     <span className="muted small">
-                      {ATTENDANCE_SOURCE_LABEL[interval.source] ?? interval.source}
+                      {t.vocabulary.attendanceSource[interval.source] ?? interval.source}
                     </span>
                   </p>
                   <p className="muted small">
-                    {new Date(interval.startedAt).toLocaleString('sr-Latn')} -{' '}
-                    {interval.endedAt
-                      ? new Date(interval.endedAt).toLocaleString('sr-Latn')
-                      : 'jos traje'}
+                    {formatTime(interval.startedAt)} -{' '}
+                    {interval.endedAt ? formatTime(interval.endedAt) : t.mobilisation.stillRunning}
                     {state === 'CONFIRMED' && interval.endedAt
                       ? ` (${formatDurationMs(participationMs(interval))})`
                       : ''}
                   </p>
                   {interval.rejectionReason ? (
-                    <p className="muted small">Razlog odbijanja: {interval.rejectionReason}</p>
+                    <p className="muted small">
+                      {t.mobilisation.rejectionReason}: {interval.rejectionReason}
+                    </p>
                   ) : null}
                 </li>
               );
@@ -639,11 +661,11 @@ function CallOutCard({
             onClick={() =>
               void onAct(
                 () => checkOut(intervention.id, null),
-                'Odjava je zabiljezena. Zapis i dalje ceka potvrdu komandira.',
+                t.mobilisation.checkOutSaved,
               )
             }
           >
-            Odjavi se
+            {t.mobilisation.checkOut}
           </button>
         ) : (
           <button
@@ -657,11 +679,11 @@ function CallOutCard({
                   const result = await checkIn(intervention.id, null);
                   return result.ok ? { ok: true } : { ok: false, message: result.message };
                 },
-                'Prijava je zabiljezena. Ceka potvrdu komandira da bi se racunala kao ucesce.',
+                t.mobilisation.checkInSaved,
               )
             }
           >
-            Prijavi prisustvo
+            {t.mobilisation.checkIn}
           </button>
         )}
       </section>

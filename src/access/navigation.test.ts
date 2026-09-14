@@ -156,8 +156,9 @@ describe('the deployed navigation', () => {
     const offered = NAV_GROUPS.flatMap((group) => group.routes);
     expect(offered, 'Prijava gradjana must not be a destination').not.toContain('dojava');
     // Not by relegating it to a heading either. "Nije u upotrebi" was exactly
-    // that, and somebody still tapped it.
-    expect(NAV_GROUPS.map((g) => g.label)).not.toContain('Nije u upotrebi');
+    // that, and somebody still tapped it - which is also why the groups are now
+    // keyed by task rather than named after a state a destination is in.
+    expect(NAV_GROUPS.map((g) => g.key)).toEqual(['work', 'society']);
   });
 
   it('keeps the route resolvable rather than deleting the screen', () => {
@@ -178,7 +179,7 @@ describe('the deployed navigation', () => {
   });
 
   it('never mixes a simulation into the operational group', () => {
-    const operational = NAV_GROUPS.find((group) => group.label === 'Operativa');
+    const operational = NAV_GROUPS.find((group) => group.key === 'work');
     expect(operational, 'the operational group must exist').toBeDefined();
     for (const route of operational?.routes ?? []) {
       expect(
@@ -188,17 +189,38 @@ describe('the deployed navigation', () => {
     }
   });
 
-  it('does not offer a simulation that duplicates a server-backed screen', () => {
-    // The console, the call-out, the vehicle log, the roster and the archive
-    // all exist for real now. Offering a second, local copy of each is how a
-    // commander runs a call-out that reaches no server.
+  it('offers no simulation at all in the main navigation', () => {
+    /*
+     * Stronger than the rule it replaces, and for a reason.
+     *
+     * The old arrangement kept the station display in the rail on the argument
+     * that it duplicated nothing server-backed. True, and beside the point: a
+     * group label is not a separation, so during a demonstration it was one tap
+     * from a real call-out to a fictional screen, and afterwards nobody could
+     * say which they had been looking at.
+     *
+     * Every simulation now lives behind a closed disclosure on Settings -
+     * routes intact, code intact, each screen still announcing itself - which
+     * is somewhere nobody passes through while running an intervention.
+     */
     const offered = NAV_GROUPS.flatMap((group) => group.routes);
-    for (const route of ['dezurni', 'clan', 'vozila', 'clanovi', 'istorija'] as Route[]) {
-      expect(offered, `${route} duplicates a real screen`).not.toContain(route);
+    for (const route of ['dezurni', 'clan', 'vozila', 'clanovi', 'istorija', 'prikaz'] as Route[]) {
+      expect(offered, `${route} is a simulation and must not be in the rail`).not.toContain(route);
     }
-    // The station display has no server-backed equivalent, so it still earns
-    // its place - this is a judgement about duplication, not a purge.
-    expect(offered).toContain('prikaz');
+  });
+
+  it('still leads to the simulation from settings rather than deleting it', () => {
+    // Not offered is not the same as removed. Reviewed work stays in the tree
+    // and stays reachable; what changed is how deliberate reaching it has to be.
+    const settings = readFileSync(
+      resolve(process.cwd(), 'src/ui/views/SettingsView.tsx'),
+      'utf8',
+    );
+    for (const route of ['prikaz', 'dezurni', 'clan', 'clanovi', 'vozila', 'istorija']) {
+      expect(settings, `${route} must stay reachable from settings`).toContain(`'${route}'`);
+    }
+    // With the one exception, for the one reason that outranks completeness.
+    expect(settings, 'citizen reporting must not be offered anywhere').not.toContain("'dojava'");
   });
 
   it('accounts for every route exactly once', () => {

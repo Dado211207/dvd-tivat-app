@@ -188,43 +188,6 @@ body {
   outline-color: #9ce9ed;
 }
 
-.rail-note {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 13px;
-  margin-top: auto;
-  color: #c8d9de;
-  background: rgb(255 255 255 / 4%);
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 14px;
-}
-
-.rail-note__status {
-  flex: 0 0 8px;
-  width: 8px;
-  height: 8px;
-  margin-top: 4px;
-  background: #f2c96b;
-  border-radius: 50%;
-  box-shadow: 0 0 0 4px rgb(242 201 107 / 12%);
-}
-
-.rail-note__label {
-  display: block;
-  font-size: 0.64rem;
-  font-weight: 800;
-  color: #f2d88e;
-  letter-spacing: 0.1em;
-}
-
-.rail-note .rail-note__detail {
-  margin-top: 5px;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: #91aab4;
-}
-
 .masthead {
   position: relative;
   z-index: 10;
@@ -1521,8 +1484,7 @@ dialog {
     display: contents;
   }
 
-  .nav__label,
-  .rail-note {
+  .nav__label {
     display: none;
   }
 
@@ -1719,7 +1681,6 @@ dialog {
     border: 2px solid CanvasText;
   }
 
-  .rail-note__status,
   .local-pill span,
   .station-overview__status span {
     forced-color-adjust: none;
@@ -2359,4 +2320,164 @@ dialog {
   color: var(--c-ink-soft);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------------
+   Progressive disclosure.
+
+   Used where a capability must stay reachable but must not be the first thing
+   on the screen: the compose form while a call-out is running, general
+   availability while a firefighter is being called out, the simulation screens.
+
+   A native `<details>` on purpose. It is keyboard-operable, announced by a
+   screen reader as an expandable region, findable by the browser's own
+   in-page search when open, and needs no JavaScript to work - four things a
+   hand-built toggle has to re-earn one at a time.
+   --------------------------------------------------------------------------- */
+
+.disclosure__summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  /* A real target on a phone, not a line of text with a triangle beside it. */
+  min-height: 44px;
+  padding: 6px 2px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--c-ink);
+  cursor: pointer;
+}
+
+.disclosure__summary:focus-visible {
+  outline: var(--focus);
+  outline-offset: var(--focus-offset);
+  border-radius: 8px;
+}
+
+.disclosure__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   A small set of mutually exclusive choices, as buttons rather than a dropdown.
+
+   Two options at arm's length on a phone are two large targets that state what
+   they are. A `select` hides the alternative behind a tap and gives a smaller
+   hit area for nothing in return.
+   --------------------------------------------------------------------------- */
+
+.choice-set {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.choice-set__legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--c-ink-faint);
+  letter-spacing: 0.04em;
+}
+
+.choice-set__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.choice {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 16px;
+  cursor: pointer;
+  background: var(--c-surface);
+  border: 2px solid var(--c-line);
+  border-radius: 12px;
+}
+
+.choice--on {
+  border-color: var(--c-accent);
+  box-shadow: inset 0 0 0 1px var(--c-accent);
+}
+
+/* The radio stays a real radio: it carries the checked state, the group
+   semantics and the arrow-key behaviour a screen reader and a keyboard both
+   expect. It is enlarged rather than hidden behind a drawn substitute. */
+.choice input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--c-accent);
+}
+
+.choice:focus-within {
+  outline: var(--focus);
+  outline-offset: var(--focus-offset);
+}
+
+.choice__label {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   Notifications, once there is nothing to do about them.
+
+   One line on the firefighter's operational screen, with a way through to the
+   whole panel in Settings. The full panel still appears there whenever an
+   action IS needed - see `PushNotificationPanel`.
+   --------------------------------------------------------------------------- */
+
+.push-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.push-line__label {
+  font-weight: 600;
+  color: var(--c-ink-faint);
+}
+
+.push-line__link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+.link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+
+.link-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+
+.fact-list {
+  margin: 12px 0 0;
+}
+
+.panel__subtitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
 }

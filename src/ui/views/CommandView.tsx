@@ -65,25 +65,24 @@ import { OperationalGate, type OperationalContext } from '../components/Operatio
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Chip, EmptyState, Field, Notice, ScrollRegion } from '../components/primitives';
 import {
-  ATTENDANCE_SOURCE_LABEL,
-  ATTENDANCE_STATE_LABEL,
   ATTENDANCE_STATE_SYMBOL,
-  INTERVENTION_KIND_LABEL,
-  INTERVENTION_STATUS_LABEL,
-  JOURNEY_LABEL,
+  formatTime,
   JOURNEY_SYMBOL,
-  SERVER_ANSWER_LABEL,
   SERVER_ANSWER_SYMBOL,
 } from '@/i18n/labels';
+import type { Strings } from '@/i18n/strings.me';
+import { useText } from '@/i18n/useText';
 
 type Tab = 'poziv' | 'pregled' | 'prisustvo' | 'vozila';
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'poziv', label: 'Poziv' },
-  { id: 'pregled', label: 'Pregled' },
-  { id: 'prisustvo', label: 'Prisustvo' },
-  { id: 'vozila', label: 'Vozila' },
-];
+const TAB_IDS: readonly Tab[] = ['poziv', 'pregled', 'prisustvo', 'vozila'];
+
+function tabLabel(id: Tab, t: Strings): string {
+  return id === 'poziv' ? t.command.tabCallOut
+    : id === 'pregled' ? t.command.tabOverview
+    : id === 'prisustvo' ? t.command.tabAttendance
+    : t.command.tabVehicles;
+}
 
 export function CommandView() {
   return (
@@ -142,6 +141,7 @@ const EMPTY: ConsoleData = {
 };
 
 function CommandConsole({ context }: { context: OperationalContext }) {
+  const t = useText();
   const [tab, setTab] = useState<Tab>('poziv');
   const [data, setData] = useState<ConsoleData>(EMPTY);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -216,8 +216,8 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         if (!mounted.current || ticket !== generation.current) return;
         setLoadError(
           error instanceof Error && /permission/i.test(error.message)
-            ? 'Server je odbio citanje. Provjerite da li vas nalog jos ima ulogu.'
-            : 'Server trenutno nije dostupan. Prikaz nije osvjezen.',
+            ? 'REFUSED_READ'
+            : 'UNAVAILABLE',
         );
       } finally {
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
@@ -249,35 +249,35 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       setMessage({ tone: 'info', text: successText });
       await refresh(selectedId);
     } else {
-      setMessage({ tone: 'error', text: outcome.message ?? 'Promjena nije sacuvana.' });
+      setMessage({ tone: 'error', text: outcome.message ?? t.command.notSaved });
     }
   };
 
   return (
     <div className="stack">
-      <div className="tabs" role="tablist" aria-label="Dijelovi komandnog ekrana">
-        {TABS.map((t) => (
+      <div className="tabs" role="tablist" aria-label={t.command.tabsLabel}>
+        {TAB_IDS.map((id) => (
           <button
-            key={t.id}
+            key={id}
             type="button"
             role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`panel-${t.id}`}
-            className={`tabs__tab ${tab === t.id ? 'tabs__tab--on' : ''}`}
-            data-testid={`cmd-tab-${t.id}`}
-            onClick={() => setTab(t.id)}
+            id={`tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls={`panel-${id}`}
+            className={`tabs__tab ${tab === id ? 'tabs__tab--on' : ''}`}
+            data-testid={`cmd-tab-${id}`}
+            onClick={() => setTab(id)}
           >
-            {t.label}
+            {tabLabel(id, t)}
           </button>
         ))}
       </div>
 
       {loadError ? (
         <Notice tone="error">
-          {loadError}{' '}
+          {loadError === 'REFUSED_READ' ? t.command.refusedRead : t.command.unavailable}{' '}
           <button type="button" className="btn btn--ghost" onClick={() => void refresh(selectedId)}>
-            Pokusaj ponovo
+            {t.gate.retry}
           </button>
         </Notice>
       ) : null}
@@ -286,7 +286,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           <Notice tone={message.tone === 'error' ? 'error' : 'info'}>{message.text}</Notice>
         </div>
       ) : null}
-      {loading ? <p role="status" className="muted small">Ucitavanje sa servera...</p> : null}
+      {loading ? <p role="status" className="muted small">{t.command.loading}</p> : null}
 
       {/* Says which of the two it is. "Uzivo" and "every twelve seconds" are
           different promises, and a commander deciding how much to trust what is
@@ -318,17 +318,17 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         `aria-controls="panel-<id>"`, but only one panel existed at a time and
         it carried the ACTIVE tab's id, so three of the four pointed at nothing.
       */}
-      {TABS.map((t) => (
+      {TAB_IDS.map((id) => (
         <div
-          key={t.id}
+          key={id}
           role="tabpanel"
-          id={`panel-${t.id}`}
-          aria-labelledby={`tab-${t.id}`}
+          id={`panel-${id}`}
+          aria-labelledby={`tab-${id}`}
           tabIndex={0}
           className="tabpanel"
-          hidden={tab !== t.id}
+          hidden={tab !== id}
         >
-          {t.id === 'poziv' ? (
+          {id === 'poziv' ? (
             <CallOutTab
               data={data}
               selected={selected}
@@ -336,11 +336,11 @@ function CommandConsole({ context }: { context: OperationalContext }) {
               onRefresh={() => void refresh(selectedId)}
             />
           ) : null}
-          {t.id === 'pregled' ? <OverviewTab data={data} selected={selected} /> : null}
-          {t.id === 'prisustvo' ? (
+          {id === 'pregled' ? <OverviewTab data={data} selected={selected} /> : null}
+          {id === 'prisustvo' ? (
             <AttendanceTab data={data} selected={selected} onDone={after} context={context} />
           ) : null}
-          {t.id === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
+          {id === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
         </div>
       ))}
     </div>
@@ -358,9 +358,10 @@ function InterventionPicker({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const t = useText();
   if (interventions.length === 0) return null;
   return (
-    <Field label="Intervencija" controlId="intervention-picker">
+    <Field label={t.command.pickIntervention} controlId="intervention-picker">
       {(props) => (
         <select
           {...props}
@@ -370,7 +371,7 @@ function InterventionPicker({
         >
           {interventions.map((i) => (
             <option key={i.id} value={i.id}>
-              {INTERVENTION_STATUS_LABEL[i.status] ?? i.status} - {i.title}
+              {t.vocabulary.interventionStatus[i.status] ?? i.status} - {i.title}
             </option>
           ))}
         </select>
@@ -394,6 +395,7 @@ function CallOutTab({
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
   onRefresh: () => void;
 }) {
+  const t = useText();
   const [kind, setKind] = useState<InterventionKind>('POZAR');
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -440,7 +442,7 @@ function CallOutTab({
         setError(result.message);
         return;
       }
-      await onDone({ ok: true }, 'Priprema poziva je sacuvana kao nacrt. Jos nije objavljena.');
+      await onDone({ ok: true }, t.command.draftSaved);
       setTitle('');
       setInstructions('');
       setLocation('');
@@ -460,9 +462,7 @@ function CallOutTab({
       const workerReached = result.ok ? await requestPushDelivery(result.value) : false;
       await onDone(
         result.ok ? { ok: true } : { ok: false, message: result.message },
-        workerReached
-          ? 'Poziv je objavljen. Push obrada je pokrenuta; pregled isporuke pokazuje sta je provajder prihvatio, a otvaranje poziva ostaje zasebna cinjenica.'
-          : 'Poziv je objavljen. Push poruke su ostale u redu za serversku obradu; ovo nije potvrda da je telefon zazvonio.',
+        workerReached ? t.command.publishedWorkerReached : t.command.publishedWorkerQueued,
       );
       setSelectedMembers(new Set());
     } finally {
@@ -484,7 +484,7 @@ function CallOutTab({
       );
       await onDone(
         result,
-        status === 'CLOSED' ? 'Intervencija je zatvorena.' : 'Intervencija je otkazana.',
+        status === 'CLOSED' ? t.command.closedMessage : t.command.cancelledMessage,
       );
       setCloseReason('');
     } finally {
@@ -495,17 +495,24 @@ function CallOutTab({
 
   const isDraft = selected?.status === 'DRAFT';
   const openIntervals = data.attendance.filter((a) => a.endedAt === null).length;
+  /**
+   * Whether a call-out is being RUN right now.
+   *
+   * The compose form used to sit at the top of this tab unconditionally, so a
+   * commander with a fire in progress opened their console onto a blank form
+   * for a DIFFERENT fire, and had to scroll past it to reach the one they were
+   * running. The running intervention comes first now and the form goes below
+   * it, closed - reachable in one tap, which is the right cost for starting a
+   * second call-out and the wrong cost for reading the first.
+   */
+  const running = selected !== null && !isDraft && isOpenStatus(selected.status);
 
-  return (
-    <div className="stack">
-      <section className="panel">
-        <h2 className="panel__title">Nova priprema poziva</h2>
-        <p className="muted small">
-          Nacrt vidi samo komanda. Niko nije pozvan dok ne pritisnete <strong>Objavi</strong>.
-        </p>
-        {error ? <Notice tone="error">{error}</Notice> : null}
+  const composer = (
+    <>
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      <p className="muted small">{t.command.newNote}</p>
 
-        <Field label="Vrsta" required controlId="new-kind">
+      <Field label={t.command.fieldKind} required controlId="new-kind">
           {(props) => (
             <select
               {...props}
@@ -515,7 +522,7 @@ function CallOutTab({
             >
               {INTERVENTION_KINDS.map((k) => (
                 <option key={k} value={k}>
-                  {INTERVENTION_KIND_LABEL[k] ?? k}
+                  {t.vocabulary.interventionKind[k] ?? k}
                 </option>
               ))}
             </select>
@@ -523,7 +530,7 @@ function CallOutTab({
         </Field>
 
         {kind === 'DRUGO' ? (
-          <Field label="Kratak opis vrste" required controlId="new-other">
+          <Field label={t.command.fieldOtherKind} required controlId="new-other">
             {(props) => (
               <input
                 {...props}
@@ -535,7 +542,12 @@ function CallOutTab({
           </Field>
         ) : null}
 
-        <Field label="Naslov" required hint="Kratko, da se vidi na zakljucanom ekranu." controlId="new-title">
+        <Field
+          label={t.command.fieldTitle}
+          required
+          hint={t.command.fieldTitleHint}
+          controlId="new-title"
+        >
           {(props) => (
             <input
               {...props}
@@ -547,9 +559,9 @@ function CallOutTab({
         </Field>
 
         <Field
-          label="Lokacija"
+          label={t.command.fieldLocation}
           required
-          hint="Upisana adresa ili opis mjesta. Sama koordinata nije dovoljna u tri ujutru."
+          hint={t.command.fieldLocationHint}
           controlId="new-location"
         >
           {(props) => (
@@ -562,7 +574,7 @@ function CallOutTab({
           )}
         </Field>
 
-        <Field label="Mjesto okupljanja" controlId="new-assembly">
+        <Field label={t.command.fieldAssembly} controlId="new-assembly">
           {(props) => (
             <input
               {...props}
@@ -573,7 +585,7 @@ function CallOutTab({
           )}
         </Field>
 
-        <Field label="Uputstvo ekipi" required controlId="new-instructions">
+        <Field label={t.command.fieldInstructions} required controlId="new-instructions">
           {(props) => (
             <textarea
               {...props}
@@ -592,41 +604,55 @@ function CallOutTab({
           disabled={busy}
           onClick={() => void create()}
         >
-          {busy ? 'Cuvanje...' : 'Sacuvaj nacrt'}
+          {busy ? t.command.saving : t.command.saveDraft}
         </button>
-      </section>
+    </>
+  );
+
+  const composerPanel = running ? (
+    <section className="panel">
+      <details className="disclosure" data-testid="new-call-out-disclosure">
+        <summary className="disclosure__summary">{t.command.newSummary}</summary>
+        <div className="disclosure__body">{composer}</div>
+      </details>
+    </section>
+  ) : (
+    <section className="panel">
+      <h2 className="panel__title">{t.command.newTitle}</h2>
+      {composer}
+    </section>
+  );
+
+  return (
+    <div className="stack">
+      {running ? null : composerPanel}
 
       {selected ? (
         <section className="panel">
           <h2 className="panel__title">
             {selected.title}{' '}
             <Chip tone={isOpenStatus(selected.status) ? 'alert' : 'neutral'} symbol="#">
-              {INTERVENTION_STATUS_LABEL[selected.status] ?? selected.status}
+              {t.vocabulary.interventionStatus[selected.status] ?? selected.status}
             </Chip>
           </h2>
           <dl className="facts">
-            <dt>Vrsta</dt>
+            <dt>{t.command.factKind}</dt>
             <dd>
-              {INTERVENTION_KIND_LABEL[selected.kind] ?? selected.kind}
+              {t.vocabulary.interventionKind[selected.kind] ?? selected.kind}
               {selected.otherKindNote ? ` - ${selected.otherKindNote}` : ''}
             </dd>
-            <dt>Lokacija</dt>
+            <dt>{t.command.factLocation}</dt>
             <dd data-testid="selected-location">{selected.incidentLocation}</dd>
-            <dt>Mjesto okupljanja</dt>
-            <dd>{selected.assemblyPoint ?? 'Nije navedeno'}</dd>
-            <dt>Uputstvo</dt>
+            <dt>{t.command.factAssembly}</dt>
+            <dd>{selected.assemblyPoint ?? t.command.notStated}</dd>
+            <dt>{t.command.factInstructions}</dt>
             <dd>{selected.instructions}</dd>
           </dl>
 
           {isDraft ? (
             <>
-              <h3>Kome se salje</h3>
-              <p className="muted small">
-                Spisak daje server: prikazani su samo clanovi koji zaista mogu da prime i otvore
-                poziv - aktivan clan, aktivan nalog i popunjen profil. Clan kome je nalog ukinut se
-                ne prikazuje i ne moze biti pozvan. Oznaka dostupnosti je opsta izjava clana, a ne
-                odgovor na ovaj poziv.
-              </p>
+              <h3>{t.command.recipientsTitle}</h3>
+              <p className="muted small">{t.command.recipientsNote}</p>
               {/*
                 An empty picker with no explanation reads as a screen that has
                 not finished loading. It has two entirely different causes and a
@@ -634,18 +660,17 @@ function CallOutTab({
               */}
               {eligibleUnavailable ? (
                 <Notice tone="error" testId="eligible-recipients-unavailable">
-                  <strong>Spisak clanova nije procitan sa servera.</strong> Ovo nije podatak da
-                  nema clanova - znaci da odgovor nije stigao. Osvjezite prikaz prije nego sto
-                  objavite poziv.
+                  <strong>{t.command.recipientsUnreadTitle}</strong> {t.command.recipientsUnreadText}
                 </Notice>
               ) : eligible.length === 0 ? (
                 <Notice tone="warn" testId="no-eligible-recipients">
-                  <strong>Nijedan clan trenutno ne moze da primi poziv.</strong> Poziv se moze
-                  poslati samo clanu sa aktivnim nalogom i popunjenim profilom. Clan kome je nalog
-                  ukinut se ovdje ne prikazuje.
+                  <strong>{t.command.recipientsNoneTitle}</strong> {t.command.recipientsNoneText}
                 </Notice>
               ) : null}
-              <ScrollRegion label="Spisak clanova za poziv" className="table-wrap table-wrap--tall">
+              <ScrollRegion
+                label={t.command.recipientsListLabel}
+                className="table-wrap table-wrap--tall"
+              >
                 <ul className="pick-list" data-testid="recipient-picker">
                   {eligible.map((m) => {
                     const availability = availableBy.get(m.memberId);
@@ -668,11 +693,13 @@ function CallOutTab({
                               tone={availability.available ? 'yes' : 'no'}
                               symbol={availability.available ? '+' : '-'}
                             >
-                              {availability.available ? 'Dostupan' : 'Nije dostupan'}
+                              {availability.available
+                                ? t.command.availableYes
+                                : t.command.availableNo}
                             </Chip>
                           ) : (
                             <Chip tone="unknown" symbol="?">
-                              Nije izjasnjen
+                              {t.command.availableUnknown}
                             </Chip>
                           )}
                         </label>
@@ -682,7 +709,7 @@ function CallOutTab({
                 </ul>
               </ScrollRegion>
               <p className="muted small" data-testid="selected-recipient-count">
-                Izabrano: {selectedMembers.size}
+                {t.command.selectedCount}: {selectedMembers.size}
               </p>
               <div className="row-actions">
                 <button
@@ -692,7 +719,7 @@ function CallOutTab({
                   disabled={busy || selectedMembers.size === 0}
                   onClick={() => setConfirming('PUBLISH')}
                 >
-                  Objavi poziv
+                  {t.command.publish}
                 </button>
                 <button
                   type="button"
@@ -701,7 +728,7 @@ function CallOutTab({
                   disabled={busy}
                   onClick={() => setConfirming('CANCEL')}
                 >
-                  Odbaci nacrt
+                  {t.command.discardDraft}
                 </button>
               </div>
             </>
@@ -709,7 +736,7 @@ function CallOutTab({
 
           {isOpenStatus(selected.status) ? (
             <>
-              <h3>Stanje intervencije</h3>
+              <h3>{t.command.statusTitle}</h3>
               <div className="row-actions">
                 {SETTABLE_STATUSES.map((status) => (
                   <button
@@ -726,12 +753,17 @@ function CallOutTab({
                           status,
                           selected.version,
                         );
-                        await onDone(result, `Stanje je promijenjeno u: ${INTERVENTION_STATUS_LABEL[status] ?? status}.`);
+                        await onDone(
+                          result,
+                          `${t.command.statusChanged}: ${
+                            t.vocabulary.interventionStatus[status] ?? status
+                          }.`,
+                        );
                         setBusy(false);
                       })()
                     }
                   >
-                    {INTERVENTION_STATUS_LABEL[status] ?? status}
+                    {t.vocabulary.interventionStatus[status] ?? status}
                   </button>
                 ))}
               </div>
@@ -743,7 +775,7 @@ function CallOutTab({
                   disabled={busy}
                   onClick={() => setConfirming('CLOSE')}
                 >
-                  Zatvori intervenciju
+                  {t.command.closeIntervention}
                 </button>
               </div>
             </>
@@ -751,42 +783,43 @@ function CallOutTab({
 
           {selected.closeReason ? (
             <p className="muted small">
-              Zatvoreno: <strong>{selected.closeReason}</strong>
+              {t.command.closedWithNote}: <strong>{selected.closeReason}</strong>
             </p>
           ) : null}
         </section>
       ) : (
-        <EmptyState title="Nema nijedne intervencije">
-          Napravite prvi nacrt gore. Dok ne objavite, niko ga ne vidi.
+        <EmptyState title={t.command.noInterventionTitle}>
+          {t.command.noInterventionText}
         </EmptyState>
       )}
+
+      {running ? composerPanel : null}
 
       {confirming === 'PUBLISH' ? (
         <ConfirmDialog
           open
-          title="Objaviti poziv?"
-          confirmLabel="Objavi"
+          title={t.command.confirmPublishTitle}
+          confirmLabel={t.command.confirmPublishAction}
           onCancel={() => setConfirming(null)}
           onConfirm={() => void publish()}
         >
           <p>
-            Poziv ide na <strong>{selectedMembers.size}</strong> clanova. Spisak se zamrzava u
-            trenutku objave.
+            {t.command.confirmPublishToPrefix} <strong>{selectedMembers.size}</strong>{' '}
+            {t.command.confirmPublishToSuffix}
           </p>
-          <p className="muted small">
-            Clanovi koji su ukljucili Web Push mogu dobiti operativno upozorenje. Ostalima poziv
-            ostaje vidljiv u aplikaciji. <strong>Prihvatanje od push servisa nije dokaz da je telefon
-            zazvonio niti da je clan otvorio poziv.</strong> Nema SMS, Viber ni automatskog telefonskog
-            poziva.
-          </p>
+          <p className="muted small">{t.command.confirmPublishTransport}</p>
         </ConfirmDialog>
       ) : null}
 
       {confirming === 'CANCEL' || confirming === 'CLOSE' ? (
         <ConfirmDialog
           open
-          title={confirming === 'CLOSE' ? 'Zatvoriti intervenciju?' : 'Odbaciti nacrt?'}
-          confirmLabel={confirming === 'CLOSE' ? 'Zatvori' : 'Odbaci'}
+          title={
+            confirming === 'CLOSE' ? t.command.confirmCloseTitle : t.command.confirmDiscardTitle
+          }
+          confirmLabel={
+            confirming === 'CLOSE' ? t.command.confirmCloseAction : t.command.confirmDiscardAction
+          }
           confirmDisabled={closeReason.trim().length < 2}
           onCancel={() => {
             setConfirming(null);
@@ -799,14 +832,19 @@ function CallOutTab({
                   if (!selected) return;
                   setBusy(true);
                   const result = await discardDraft(selected.id, closeReason.trim());
-                  await onDone(result, 'Nacrt je odbacen i ostaje zabiljezen kao otkazan.');
+                  await onDone(result, t.command.draftDiscarded);
                   setCloseReason('');
                   setBusy(false);
                   setConfirming(null);
                 })())
           }
         >
-          <Field label="Razlog" required hint="Ostaje trajno na zapisu." controlId="close-reason">
+          <Field
+            label={t.command.fieldReason}
+            required
+            hint={t.command.reasonStaysHint}
+            controlId="close-reason"
+          >
             {(props) => (
               <input
                 {...props}
@@ -818,8 +856,8 @@ function CallOutTab({
           </Field>
           {confirming === 'CLOSE' && openIntervals > 0 ? (
             <Notice tone="warn">
-              Jos <strong>{openIntervals}</strong> clanova je prijavljeno i nije se odjavilo. Ostaju
-              otvoreni na zapisu - vrijeme im se nece izmisliti.
+              {t.command.openIntervalsPrefix} <strong>{openIntervals}</strong>{' '}
+              {t.command.openIntervalsSuffix}
             </Notice>
           ) : null}
         </ConfirmDialog>
@@ -827,7 +865,7 @@ function CallOutTab({
 
       <p className="muted small">
         <button type="button" className="btn btn--ghost" onClick={onRefresh}>
-          Osvjezi sa servera
+          {t.command.refresh}
         </button>
       </p>
     </div>
@@ -845,13 +883,18 @@ function OverviewTab({
   data: ConsoleData;
   selected: Intervention | null;
 }) {
+  const t = useText();
   if (!selected) {
-    return <EmptyState title="Izaberite intervenciju">Pregled prikazuje stanje jedne intervencije.</EmptyState>;
+    return (
+      <EmptyState title={t.command.pickInterventionTitle}>
+        {t.command.overviewNeedsOne}
+      </EmptyState>
+    );
   }
   if (selected.status === 'DRAFT') {
     return (
-      <EmptyState title="Nacrt jos nije objavljen">
-        Niko nije pozvan, pa nema odziva za prikaz.
+      <EmptyState title={t.command.draftNotPublishedTitle}>
+        {t.command.draftNotPublishedText}
       </EmptyState>
     );
   }
@@ -881,27 +924,22 @@ function OverviewTab({
   return (
     <div className="stack">
       <section className="panel">
-        <h2 className="panel__title">Sada na terenu</h2>
-        <p className="muted small">
-          Stanje u ovom trenutku. Sve kumulativne brojke i vremena su nize, u pregledu odziva.
-        </p>
+        <h2 className="panel__title">{t.command.nowOnScene}</h2>
+        <p className="muted small">{t.command.nowOnSceneNote}</p>
         <div className="totals" data-testid="overview-totals">
-          <Count label="Trenutno na zadatku" value={onTask} testId="count-present" />
-          <Count label="Vozila na terenu" value={vehiclesOut} testId="count-vehicles" />
+          <Count label={t.command.countOnTask} value={onTask} testId="count-present" />
+          <Count label={t.command.countVehiclesOut} value={vehiclesOut} testId="count-vehicles" />
         </div>
         {data.audit === null ? (
           /* Said plainly rather than shown as a screen full of "Nije
              zabiljezeno", which would read as "nobody did anything". */
-          <Notice tone="info">
-            Hronologija nije procitana sa servera, pa pojedina vremena kretanja i imena koja su
-            mijenjala stanje nisu prikazana.
-          </Notice>
+          <Notice tone="info">{t.command.auditMissing}</Notice>
         ) : null}
       </section>
 
       <section className="panel">
-        <h2 className="panel__title">Ko je gdje</h2>
-        <ScrollRegion label="Pregled odziva po clanu" className="table-wrap table-wrap--cards">
+        <h2 className="panel__title">{t.command.whoIsWhere}</h2>
+        <ScrollRegion label={t.command.whoIsWhereLabel} className="table-wrap table-wrap--cards">
           {/* Five facts per member is exactly the table a telephone cannot show
               side by side. Below 640px each row becomes a card - see
               `.table--cards` - rather than collapsing any of them into one
@@ -909,11 +947,11 @@ function OverviewTab({
           <table className="table table--cards" data-testid="overview-table">
             <thead>
               <tr>
-                <th scope="col">Clan</th>
-                <th scope="col">Otvorio</th>
-                <th scope="col">Odgovor</th>
-                <th scope="col">Kretanje</th>
-                <th scope="col">Prisustvo</th>
+                <th scope="col">{t.timings.colMember}</th>
+                <th scope="col">{t.command.colOpened}</th>
+                <th scope="col">{t.timings.colAnswer}</th>
+                <th scope="col">{t.timings.colMovement}</th>
+                <th scope="col">{t.timings.colAttendance}</th>
               </tr>
             </thead>
             <tbody>
@@ -924,14 +962,14 @@ function OverviewTab({
                 return (
                   <tr key={r.memberId}>
                     <th scope="row">{r.memberName}</th>
-                    <td data-label="Otvorio">
+                    <td data-label={t.command.colOpened}>
                       {r.acknowledgedAt ? (
-                        <Chip tone="yes" symbol="+">Otvorio</Chip>
+                        <Chip tone="yes" symbol="+">{t.command.chipOpened}</Chip>
                       ) : (
-                        <Chip tone="unknown" symbol="?">Nije otvorio</Chip>
+                        <Chip tone="unknown" symbol="?">{t.command.chipNotOpened}</Chip>
                       )}
                     </td>
-                    <td data-label="Odgovor">
+                    <td data-label={t.timings.colAnswer}>
                       {r.answer ? (
                         <Chip
                           tone={
@@ -943,38 +981,39 @@ function OverviewTab({
                           }
                           symbol={SERVER_ANSWER_SYMBOL[r.answer] ?? '?'}
                         >
-                          {SERVER_ANSWER_LABEL[r.answer] ?? r.answer}
-                          {r.etaMinutes ? ` (${r.etaMinutes} min)` : ''}
+                          {t.vocabulary.answer[r.answer] ?? r.answer}
+                          {r.etaMinutes ? ` (${r.etaMinutes} ${t.timings.minutesShort})` : ''}
                         </Chip>
                       ) : (
-                        <Chip tone="unknown" symbol="?">Bez odgovora</Chip>
+                        <Chip tone="unknown" symbol="?">{t.vocabulary.noAnswer}</Chip>
                       )}
                     </td>
-                    <td data-label="Kretanje">
+                    <td data-label={t.timings.colMovement}>
                       {r.journey ? (
                         <Chip
                           tone={r.journey === 'ODUSTAJEM' ? 'no' : 'accent'}
                           symbol={JOURNEY_SYMBOL[r.journey] ?? '?'}
                         >
-                          {JOURNEY_LABEL[r.journey] ?? r.journey}
+                          {t.vocabulary.journey[r.journey] ?? r.journey}
                         </Chip>
                       ) : (
-                        <Chip tone="unknown" symbol="?">Nije javio</Chip>
+                        <Chip tone="unknown" symbol="?">{t.command.chipNoMovement}</Chip>
                       )}
                     </td>
-                    <td data-label="Prisustvo">
+                    <td data-label={t.timings.colAttendance}>
                       {open ? (
-                        <Chip tone="alert" symbol="*">Prijavljen</Chip>
+                        <Chip tone="alert" symbol="*">{t.command.chipCheckedIn}</Chip>
                       ) : confirmed.length > 0 ? (
                         <Chip tone="yes" symbol="+">
-                          Potvrdjeno {formatDurationMs(
+                          {t.command.chipConfirmed}{' '}
+                          {formatDurationMs(
                             confirmed.reduce((sum, i) => sum + participationMs(i), 0),
                           )}
                         </Chip>
                       ) : intervals.length > 0 ? (
-                        <Chip tone="later" symbol="~">Ceka potvrdu</Chip>
+                        <Chip tone="later" symbol="~">{t.command.chipAwaiting}</Chip>
                       ) : (
-                        <Chip tone="unknown" symbol="?">Nema zapisa</Chip>
+                        <Chip tone="unknown" symbol="?">{t.command.chipNoRecord}</Chip>
                       )}
                     </td>
                   </tr>
@@ -999,11 +1038,8 @@ function OverviewTab({
         `src/ui/components/timings.tsx`.
       */}
       <section className="panel">
-        <h2 className="panel__title">Vremena odziva po clanu</h2>
-        <p className="muted small">
-          Svako vrijeme dolazi sa servera. Trajanja su racunata iz punih vremenskih oznaka, ne iz
-          prikazanih minuta, a ono sto nije zabiljezeno je oznaceno kao takvo.
-        </p>
+        <h2 className="panel__title">{t.archive.timingsTitle}</h2>
+        <p className="muted small">{t.command.timingsNote}</p>
         <ResponseTimings timings={timings} />
       </section>
 
@@ -1038,6 +1074,7 @@ function AttendanceTab({
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
   context: OperationalContext;
 }) {
+  const t = useText();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [reasonFor, setReasonFor] = useState<
     null | { id: string; action: 'REJECT' | 'UNCONFIRM' | 'CORRECT' }
@@ -1046,7 +1083,11 @@ function AttendanceTab({
   const [busy, setBusy] = useState(false);
 
   if (!selected) {
-    return <EmptyState title="Izaberite intervenciju">Prisustvo se vodi po intervenciji.</EmptyState>;
+    return (
+      <EmptyState title={t.command.pickInterventionTitle}>
+        {t.command.attendanceNeedsOne}
+      </EmptyState>
+    );
   }
 
   const pending = data.attendance.filter((a) => attendanceState(a) === 'PENDING');
@@ -1065,8 +1106,10 @@ function AttendanceTab({
       await onDone(
         { ok: true },
         failures.length === 0
-          ? `Potvrdjeno zapisa: ${result.value.length}.`
-          : `Potvrdjeno ${result.value.length - failures.length}, nije potvrdjeno ${failures.length}.`,
+          ? `${t.command.confirmedMany}: ${result.value.length}.`
+          : `${t.command.confirmedSome} ${result.value.length - failures.length}, ${
+              t.command.notConfirmedSome
+            } ${failures.length}.`,
       );
       setPicked(new Set());
     }
@@ -1076,26 +1119,25 @@ function AttendanceTab({
   return (
     <div className="stack">
       <section className="panel">
-        <h2 className="panel__title">Zvanicno vrijeme ucesca</h2>
+        <h2 className="panel__title">{t.command.officialTitle}</h2>
         <p className="big-number" data-testid="official-total">
           {formatDurationMs(officialSeconds)}
         </p>
-        <p className="muted small">
-          Racuna se <strong>samo potvrdjeno i zatvoreno</strong> prisustvo. Zapis koji ceka potvrdu
-          ili je odbijen ne ulazi u ovu brojku - ni djelimicno.
-        </p>
+        <p className="muted small">{t.command.officialNote}</p>
         {open.length > 0 ? (
           <Notice tone="warn">
-            Jos <strong>{open.length}</strong> zapisa je otvoreno. Otvoren zapis nema trajanje dok se
-            clan ne odjavi, pa se ne racuna.
+            {t.command.openRecordsPrefix} <strong>{open.length}</strong>{' '}
+            {t.command.openRecordsSuffix}
           </Notice>
         ) : null}
       </section>
 
       <section className="panel">
-        <h2 className="panel__title">Ceka potvrdu ({pending.length})</h2>
+        <h2 className="panel__title">
+          {t.command.pendingTitle} ({pending.length})
+        </h2>
         {pending.length === 0 ? (
-          <EmptyState title="Nema zapisa koji cekaju" />
+          <EmptyState title={t.command.pendingEmpty} />
         ) : (
           <>
             <div className="row-actions">
@@ -1109,7 +1151,7 @@ function AttendanceTab({
                   )
                 }
               >
-                {picked.size === pending.length ? 'Ponisti izbor' : 'Izaberi sve'}
+                {picked.size === pending.length ? t.command.pickNone : t.command.pickAll}
               </button>
               <button
                 type="button"
@@ -1118,14 +1160,10 @@ function AttendanceTab({
                 disabled={busy || picked.size === 0}
                 onClick={() => void confirmPicked()}
               >
-                Potvrdi izabrano ({picked.size})
+                {t.command.confirmPicked} ({picked.size})
               </button>
             </div>
-            <p className="muted small">
-              Potvrda <strong>ne trazi napomenu</strong>: trideset istih recenica ne bi bile zapis
-              nego smece. Odbijanje i povlacenje potvrde trazе razlog, jer mijenjaju ono sto je clan
-              rekao o sebi.
-            </p>
+            <p className="muted small">{t.command.confirmNoteRule}</p>
             <ul className="stack" data-testid="pending-list">
               {pending.map((interval) => (
                 <li key={interval.id} className="card">
@@ -1143,15 +1181,13 @@ function AttendanceTab({
                     <span>
                       <strong>{interval.memberName}</strong>{' '}
                       <Chip tone={interval.source === 'SELF_DECLARED' ? 'later' : 'accent'} symbol="~">
-                        {ATTENDANCE_SOURCE_LABEL[interval.source] ?? interval.source}
+                        {t.vocabulary.attendanceSource[interval.source] ?? interval.source}
                       </Chip>
                     </span>
                   </label>
                   <p className="muted small">
-                    {new Date(interval.startedAt).toLocaleString('sr-Latn')} -{' '}
-                    {interval.endedAt
-                      ? new Date(interval.endedAt).toLocaleString('sr-Latn')
-                      : 'jos je prijavljen'}
+                    {formatTime(interval.startedAt)} -{' '}
+                    {interval.endedAt ? formatTime(interval.endedAt) : t.command.stillCheckedIn}
                   </p>
                   <div className="row-actions">
                     <button
@@ -1164,13 +1200,13 @@ function AttendanceTab({
                           setBusy(true);
                           await onDone(
                             await confirmAttendance(interval.id, null),
-                            'Prisustvo je potvrdjeno.',
+                            t.command.confirmedOneMessage,
                           );
                           setBusy(false);
                         })()
                       }
                     >
-                      Potvrdi
+                      {t.command.confirmOne}
                     </button>
                     <button
                       type="button"
@@ -1182,7 +1218,7 @@ function AttendanceTab({
                         setReason('');
                       }}
                     >
-                      Odbij
+                      {t.command.reject}
                     </button>
                     <button
                       type="button"
@@ -1193,7 +1229,7 @@ function AttendanceTab({
                         setReason('');
                       }}
                     >
-                      Ispravi vrijeme
+                      {t.command.correctTime}
                     </button>
                   </div>
                 </li>
@@ -1204,9 +1240,11 @@ function AttendanceTab({
       </section>
 
       <section className="panel">
-        <h2 className="panel__title">Potvrdjeno ({confirmed.length})</h2>
+        <h2 className="panel__title">
+          {t.command.confirmedTitle} ({confirmed.length})
+        </h2>
         {confirmed.length === 0 ? (
-          <EmptyState title="Jos nista nije potvrdjeno" />
+          <EmptyState title={t.command.confirmedEmpty} />
         ) : (
           <ul className="stack" data-testid="confirmed-list">
             {confirmed.map((interval) => (
@@ -1214,7 +1252,7 @@ function AttendanceTab({
                 <p>
                   <strong>{interval.memberName}</strong>{' '}
                   <Chip tone="yes" symbol={ATTENDANCE_STATE_SYMBOL.CONFIRMED ?? '+'}>
-                    {ATTENDANCE_STATE_LABEL.CONFIRMED ?? 'Potvrdjeno'}
+                    {t.vocabulary.attendanceState.CONFIRMED ?? t.command.chipConfirmed}
                   </Chip>{' '}
                   {formatDurationMs(participationMs(interval))}
                 </p>
@@ -1228,7 +1266,7 @@ function AttendanceTab({
                     setReason('');
                   }}
                 >
-                  Povuci potvrdu
+                  {t.command.unconfirm}
                 </button>
               </li>
             ))}
@@ -1238,21 +1276,22 @@ function AttendanceTab({
 
       {rejected.length > 0 ? (
         <section className="panel">
-          <h2 className="panel__title">Odbijeno ({rejected.length})</h2>
-          <p className="muted small">
-            Odbijen zapis ostaje na evidenciji sa razlogom. Ne brise se - brisanje bi sakrilo da je
-            neko tvrdio da je bio tu.
-          </p>
+          <h2 className="panel__title">
+            {t.command.rejectedTitle} ({rejected.length})
+          </h2>
+          <p className="muted small">{t.command.rejectedNote}</p>
           <ul className="stack" data-testid="rejected-list">
             {rejected.map((interval) => (
               <li key={interval.id} className="card">
                 <p>
                   <strong>{interval.memberName}</strong>{' '}
                   <Chip tone="no" symbol={ATTENDANCE_STATE_SYMBOL.REJECTED ?? '-'}>
-                    {ATTENDANCE_STATE_LABEL.REJECTED ?? 'Odbijeno'}
+                    {t.vocabulary.attendanceState.REJECTED ?? t.command.rejectedTitle}
                   </Chip>
                 </p>
-                <p className="muted small">Razlog: {interval.rejectionReason}</p>
+                <p className="muted small">
+                  {t.command.reasonLabel}: {interval.rejectionReason}
+                </p>
               </li>
             ))}
           </ul>
@@ -1260,11 +1299,8 @@ function AttendanceTab({
       ) : null}
 
       <section className="panel">
-        <h2 className="panel__title">Upisi prisustvo za clana</h2>
-        <p className="muted small">
-          Zapis koji komanda upise nosi oznaku <strong>Upisala komanda</strong> i i dalje ceka
-          potvrdu. "Zapisao sam" i "stojim iza toga" nisu ista tvrdnja.
-        </p>
+        <h2 className="panel__title">{t.command.recordForMemberTitle}</h2>
+        <p className="muted small">{t.command.recordForMemberNote}</p>
         <div className="row-actions">
           {data.recipients.slice(0, 40).map((r) => {
             const openFor = data.attendance.find(
@@ -1283,20 +1319,22 @@ function AttendanceTab({
                     if (openFor) {
                       await onDone(
                         await checkOut(selected.id, r.memberId),
-                        `${r.memberName}: odjava je zabiljezena.`,
+                        `${r.memberName}: ${t.command.checkOutRecorded}`,
                       );
                     } else {
                       const result = await checkIn(selected.id, r.memberId);
                       await onDone(
                         result.ok ? { ok: true } : { ok: false, message: result.message },
-                        `${r.memberName}: prijava je zabiljezena i ceka potvrdu.`,
+                        `${r.memberName}: ${t.command.checkInRecorded}`,
                       );
                     }
                     setBusy(false);
                   })()
                 }
               >
-                {openFor ? `Odjavi ${r.memberName}` : `Prijavi ${r.memberName}`}
+                {openFor
+                  ? `${t.command.checkOutMember} ${r.memberName}`
+                  : `${t.command.checkInMember} ${r.memberName}`}
               </button>
             );
           })}
@@ -1308,12 +1346,12 @@ function AttendanceTab({
           open
           title={
             reasonFor.action === 'REJECT'
-              ? 'Odbiti zapis prisustva?'
+              ? t.command.confirmRejectTitle
               : reasonFor.action === 'UNCONFIRM'
-                ? 'Povuci potvrdu?'
-                : 'Ispraviti vrijeme?'
+                ? t.command.confirmUnconfirmTitle
+                : t.command.confirmCorrectTitle
           }
-          confirmLabel="Sacuvaj"
+          confirmLabel={t.common.save}
           confirmDisabled={reason.trim().length < 2}
           onCancel={() => {
             setReasonFor(null);
@@ -1333,10 +1371,10 @@ function AttendanceTab({
               await onDone(
                 outcome,
                 action === 'REJECT'
-                  ? 'Zapis je odbijen i ostaje vidljiv sa razlogom.'
+                  ? t.command.rejectedMessage
                   : action === 'UNCONFIRM'
-                    ? 'Potvrda je povucena. Zapis je ponovo u cekanju.'
-                    : 'Ispravka je zabiljezena sa razlogom.',
+                    ? t.command.unconfirmedMessage
+                    : t.command.correctedMessage,
               );
               setReasonFor(null);
               setReason('');
@@ -1344,7 +1382,12 @@ function AttendanceTab({
             })()
           }
         >
-          <Field label="Razlog" required hint="Trajno ostaje uz zapis, sa vasim imenom i vremenom." controlId="attendance-reason">
+          <Field
+            label={t.command.fieldReason}
+            required
+            hint={t.command.reasonPermanentHint}
+            controlId="attendance-reason"
+          >
             {(props) => (
               <input
                 {...props}
@@ -1354,7 +1397,9 @@ function AttendanceTab({
               />
             )}
           </Field>
-          <p className="muted small">Odluku potpisuje: {context.fullName}</p>
+          <p className="muted small">
+            {t.command.signedBy}: {context.fullName}
+          </p>
         </ConfirmDialog>
       ) : null}
     </div>
@@ -1374,6 +1419,7 @@ function VehiclesTab({
   selected: Intervention | null;
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
 }) {
+  const t = useText();
   const [busy, setBusy] = useState(false);
   const openBy = new Map(
     data.movements.filter((m) => m.returnedAt === null).map((m) => [m.vehicleId, m] as const),
@@ -1381,14 +1427,11 @@ function VehiclesTab({
 
   return (
     <div className="stack">
-      <Notice tone="info">
-        Izlazak vozila je svoja cinjenica. Ne prijavljuje nicije prisustvo i ne mijenja nicij
-        odgovor.
-      </Notice>
+      <Notice tone="info">{t.command.vehiclesNote}</Notice>
 
       {data.vehicles.length === 0 ? (
-        <EmptyState title="Nema unesenih vozila">
-          Vozila se unose na ekranu Evidencija drustva.
+        <EmptyState title={t.command.vehiclesEmptyTitle}>
+          {t.command.vehiclesEmptyText}
         </EmptyState>
       ) : (
         <ul className="stack" data-testid="vehicle-list">
@@ -1399,16 +1442,16 @@ function VehiclesTab({
                 <p>
                   <strong>{vehicle.callsign}</strong> - {vehicle.name}{' '}
                   {!vehicle.active ? (
-                    <Chip tone="no" symbol="-">Van upotrebe</Chip>
+                    <Chip tone="no" symbol="-">{t.command.vehicleOutOfService}</Chip>
                   ) : out ? (
-                    <Chip tone="accent" symbol="*">Na terenu</Chip>
+                    <Chip tone="accent" symbol="*">{t.command.vehicleOnScene}</Chip>
                   ) : (
-                    <Chip tone="neutral" symbol="=">U bazi</Chip>
+                    <Chip tone="neutral" symbol="=">{t.command.vehicleAtStation}</Chip>
                   )}
                 </p>
                 {out ? (
                   <p className="muted small">
-                    Izaslo: {new Date(out.departedAt).toLocaleString('sr-Latn')}
+                    {t.command.vehicleDeparted}: {formatTime(out.departedAt)}
                     {out.purpose ? ` - ${out.purpose}` : ''}
                   </p>
                 ) : null}
@@ -1423,7 +1466,7 @@ function VehiclesTab({
                       if (out) {
                         await onDone(
                           await recordVehicleReturn(out.id),
-                          `${vehicle.callsign}: povratak je zabiljezen.`,
+                          `${vehicle.callsign}: ${t.command.returnRecorded}`,
                         );
                       } else {
                         const result = await recordVehicleDeparture(
@@ -1433,14 +1476,14 @@ function VehiclesTab({
                         );
                         await onDone(
                           result.ok ? { ok: true } : { ok: false, message: result.message },
-                          `${vehicle.callsign}: izlazak je zabiljezen.`,
+                          `${vehicle.callsign}: ${t.command.departureRecorded}`,
                         );
                       }
                       setBusy(false);
                     })()
                   }
                 >
-                  {out ? 'Zabiljezi povratak' : 'Zabiljezi izlazak'}
+                  {out ? t.command.recordReturn : t.command.recordDeparture}
                 </button>
               </li>
             );

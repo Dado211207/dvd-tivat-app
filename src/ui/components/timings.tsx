@@ -27,12 +27,8 @@
 
 import type { InterventionSummary, RecipientTimings } from '@/auth/metrics';
 import { formatDurationOrNotMeasured } from '@/auth/duration';
-import {
-  formatTimeOrNotRecorded,
-  INTERVENTION_STATUS_LABEL,
-  JOURNEY_LABEL,
-  SERVER_ANSWER_LABEL,
-} from '@/i18n/labels';
+import { formatTimeOrNotRecorded, notRecorded } from '@/i18n/labels';
+import { useText } from '@/i18n/useText';
 import { EmptyState, ScrollRegion } from './primitives';
 
 /** One labelled fact inside a cell. The label is never dropped to save space. */
@@ -59,84 +55,95 @@ export function ResponseTimings({
   timings: readonly RecipientTimings[];
   testId?: string;
 }) {
+  const t = useText();
   if (timings.length === 0) {
-    return <EmptyState title="Niko nije pozvan na ovu intervenciju" />;
+    return <EmptyState title={t.timings.nobodyInvited} />;
   }
 
   return (
-    <ScrollRegion label="Vremena odziva po clanu" className="table-wrap table-wrap--cards">
+    <ScrollRegion label={t.timings.perMemberLabel} className="table-wrap table-wrap--cards">
       <table className="table table--cards" data-testid={testId}>
         <thead>
           <tr>
-            <th scope="col">Clan</th>
-            <th scope="col">Otvaranje</th>
-            <th scope="col">Odgovor</th>
-            <th scope="col">Kretanje</th>
-            <th scope="col">Dolazak</th>
-            <th scope="col">Prisustvo</th>
+            <th scope="col">{t.timings.colMember}</th>
+            <th scope="col">{t.timings.colOpened}</th>
+            <th scope="col">{t.timings.colAnswer}</th>
+            <th scope="col">{t.timings.colMovement}</th>
+            <th scope="col">{t.timings.colArrival}</th>
+            <th scope="col">{t.timings.colAttendance}</th>
           </tr>
         </thead>
         <tbody>
-          {timings.map((t) => (
-            <tr key={t.memberId} data-testid={`timing-row-${t.memberId}`}>
-              <th scope="row">{t.memberName}</th>
+          {timings.map((row) => (
+            <tr key={row.memberId} data-testid={`timing-row-${row.memberId}`}>
+              <th scope="row">{row.memberName}</th>
 
-              <td data-label="Otvaranje">
-                <Fact label="Vrijeme" value={formatTimeOrNotRecorded(t.openedAt)} />
-                <Fact label="Od objave" value={formatDurationOrNotMeasured(t.toOpenMs)} />
+              <td data-label={t.timings.colOpened}>
+                <Fact label={t.timings.factTime} value={formatTimeOrNotRecorded(row.openedAt)} />
+                <Fact label={t.timings.factSincePublication} value={formatDurationOrNotMeasured(row.toOpenMs)} />
               </td>
 
-              <td data-label="Odgovor">
+              <td data-label={t.timings.colAnswer}>
                 <Fact
-                  label="Odgovor"
-                  value={t.answer === null ? 'Nije zabiljezeno' : SERVER_ANSWER_LABEL[t.answer] ?? t.answer}
+                  label={t.timings.colAnswer}
+                  value={
+                    row.answer === null
+                      ? notRecorded()
+                      : t.vocabulary.answer[row.answer] ?? row.answer
+                  }
                 />
-                <Fact label="Vrijeme" value={formatTimeOrNotRecorded(t.answeredAt)} />
-                <Fact label="Od objave" value={formatDurationOrNotMeasured(t.toAnswerMs)} />
-                <Fact label="Od otvaranja" value={formatDurationOrNotMeasured(t.openToAnswerMs)} />
+                <Fact label={t.timings.factTime} value={formatTimeOrNotRecorded(row.answeredAt)} />
+                <Fact label={t.timings.factSincePublication} value={formatDurationOrNotMeasured(row.toAnswerMs)} />
+                <Fact label={t.timings.factSinceOpening} value={formatDurationOrNotMeasured(row.openToAnswerMs)} />
                 {/* The member's own estimate, never a measurement, and labelled
                     so it cannot be mistaken for one. */}
                 <Fact
-                  label="Najavio (procjena)"
-                  value={t.etaMinutes === null ? 'Nije zabiljezeno' : `${t.etaMinutes} min`}
+                  label={t.timings.factEstimate}
+                  value={
+                    row.etaMinutes === null
+                      ? notRecorded()
+                      : `${row.etaMinutes} ${t.timings.minutesShort}`
+                  }
                 />
               </td>
 
-              <td data-label="Kretanje">
-                {t.movements.length === 0 ? (
-                  <Fact label="Javljeno" value="Nije zabiljezeno" />
+              <td data-label={t.timings.colMovement}>
+                {row.movements.length === 0 ? (
+                  <Fact label={t.timings.factReported} value={notRecorded()} />
                 ) : (
-                  t.movements.map((m) => (
+                  row.movements.map((m) => (
                     <Fact
                       key={`${m.step}-${m.at}`}
-                      label={JOURNEY_LABEL[m.step] ?? m.step}
+                      label={t.vocabulary.journey[m.step] ?? m.step}
                       value={formatTimeOrNotRecorded(m.at)}
                     />
                   ))
                 )}
               </td>
 
-              <td data-label="Dolazak">
+              <td data-label={t.timings.colArrival}>
                 {/* Arrival is the member's statement that they are on scene. It
                     is not attendance, which is the column beside it. */}
-                <Fact label="Na licu mjesta" value={formatTimeOrNotRecorded(t.arrivedAt)} />
-                <Fact label="Od objave" value={formatDurationOrNotMeasured(t.toArriveMs)} />
+                <Fact label={t.timings.factOnScene} value={formatTimeOrNotRecorded(row.arrivedAt)} />
+                <Fact label={t.timings.factSincePublication} value={formatDurationOrNotMeasured(row.toArriveMs)} />
               </td>
 
-              <td data-label="Prisustvo">
-                <Fact label="Prijava" value={formatTimeOrNotRecorded(t.firstCheckInAt)} />
+              <td data-label={t.timings.colAttendance}>
+                <Fact label={t.timings.factCheckIn} value={formatTimeOrNotRecorded(row.firstCheckInAt)} />
                 <Fact
-                  label="Odjava"
+                  label={t.timings.factCheckOut}
                   value={
-                    t.stillCheckedIn ? 'Jos je prijavljen' : formatTimeOrNotRecorded(t.lastCheckOutAt)
+                    row.stillCheckedIn
+                      ? t.timings.factStillCheckedIn
+                      : formatTimeOrNotRecorded(row.lastCheckOutAt)
                   }
                 />
-                <Fact label="Potvrdjeno" value={formatDurationOrNotMeasured(t.confirmedMs)} />
-                {t.pendingIntervals > 0 ? (
-                  <Fact label="Ceka potvrdu" value={`${t.pendingIntervals}`} />
+                <Fact label={t.timings.factConfirmed} value={formatDurationOrNotMeasured(row.confirmedMs)} />
+                {row.pendingIntervals > 0 ? (
+                  <Fact label={t.timings.factAwaitingConfirmation} value={`${row.pendingIntervals}`} />
                 ) : null}
-                {t.rejectedIntervals > 0 ? (
-                  <Fact label="Odbijeno" value={`${t.rejectedIntervals}`} />
+                {row.rejectedIntervals > 0 ? (
+                  <Fact label={t.timings.factRejected} value={`${row.rejectedIntervals}`} />
                 ) : null}
               </td>
             </tr>
@@ -180,7 +187,7 @@ function Milestone({
  * is an end, and calling that unrecorded would suggest somebody failed to write
  * something down.
  */
-function ongoingOr(ms: number | null, stillRunning: boolean, running = 'Jos traje'): string {
+function ongoingOr(ms: number | null, stillRunning: boolean, running: string): string {
   if (stillRunning) return running;
   return formatDurationOrNotMeasured(ms);
 }
@@ -211,23 +218,21 @@ export function OperationalSummary({
 
 /** The first of each kind of event, and how long after publication it happened. */
 export function MilestonePanel({ summary }: { summary: InterventionSummary }) {
+  const t = useText();
   return (
     <>
       <section className="panel">
-        <h2 className="panel__title">Vremena odziva drustva</h2>
-        <p className="muted small">
-          Svako vrijeme je mjereno od objave poziva, iz vremena koje je upisao server. Prvi
-          dogadjaj je izabran po vremenu, nikada po redoslijedu u spisku.
-        </p>
+        <h2 className="panel__title">{t.timings.societyTitle}</h2>
+        <p className="muted small">{t.timings.societyNote}</p>
         <div className="milestones">
           <Milestone
-            label="Prvo otvaranje poziva"
+            label={t.timings.firstOpen}
             at={summary.firstOpenedAt}
             ms={summary.toFirstOpenMs}
             testId="first-open"
           />
           <Milestone
-            label="Prvi odgovor"
+            label={t.timings.firstAnswer}
             at={summary.firstAnsweredAt}
             ms={summary.toFirstAnswerMs}
             testId="first-answer"
@@ -236,25 +241,25 @@ export function MilestonePanel({ summary }: { summary: InterventionSummary }) {
               first, and "the first who said they were coming" is the
               operational fact a commander acts on. */}
           <Milestone
-            label="Prvi odgovor Dolazim"
+            label={t.timings.firstComing}
             at={summary.firstComingAt}
             ms={summary.toFirstComingMs}
             testId="first-coming"
           />
           <Milestone
-            label="Prvi dolazak na lice mjesta"
+            label={t.timings.firstArrive}
             at={summary.firstArrivedAt}
             ms={summary.toFirstArriveMs}
             testId="first-arrive"
           />
           <Milestone
-            label="Prva prijava prisustva"
+            label={t.timings.firstCheckIn}
             at={summary.firstCheckInAt}
             ms={summary.toFirstCheckInMs}
             testId="first-checkin"
           />
           <Milestone
-            label="Prvi izlazak vozila"
+            label={t.timings.firstVehicle}
             at={summary.firstVehicleOutAt}
             ms={summary.toFirstVehicleOutMs}
             testId="first-vehicle"
@@ -273,62 +278,63 @@ export function MilestonePanel({ summary }: { summary: InterventionSummary }) {
  * decided that is an incomplete record.
  */
 export function InterventionDurationPanel({ summary }: { summary: InterventionSummary }) {
+  const t = useText();
   return (
     <>
       <section className="panel">
-        <h2 className="panel__title">Trajanje intervencije</h2>
+        <h2 className="panel__title">{t.timings.durationTitle}</h2>
         <dl className="facts" data-testid="intervention-duration">
           <div>
-            <dt>Objavljeno</dt>
+            <dt>{t.timings.published}</dt>
             <dd>{formatTimeOrNotRecorded(summary.publishedAt)}</dd>
           </div>
           <div>
-            <dt>Zatvoreno</dt>
-            <dd>{summary.closedAt === null ? 'Jos traje' : formatTimeOrNotRecorded(summary.closedAt)}</dd>
+            <dt>{t.timings.closed}</dt>
+            <dd>{summary.closedAt === null ? t.timings.stillRunning : formatTimeOrNotRecorded(summary.closedAt)}</dd>
           </div>
           <div>
-            <dt>Ukupno trajanje</dt>
+            <dt>{t.timings.totalDuration}</dt>
             <dd data-testid="total-duration">
-              {ongoingOr(summary.totalMs, summary.closedAt === null && summary.publishedAt !== null)}
+              {ongoingOr(summary.totalMs, summary.closedAt === null && summary.publishedAt !== null, t.timings.stillRunning)}
             </dd>
           </div>
           <div>
-            <dt>Ukupno potvrdjeno ucesce</dt>
+            <dt>{t.timings.totalConfirmed}</dt>
             <dd data-testid="total-confirmed">{formatDurationOrNotMeasured(summary.confirmedMs)}</dd>
           </div>
         </dl>
 
         {summary.states.length === 0 ? null : (
-          <ScrollRegion label="Vrijeme provedeno u svakom stanju" className="table-wrap table-wrap--cards">
+          <ScrollRegion label={t.timings.statePeriodsLabel} className="table-wrap table-wrap--cards">
             <table className="table table--cards" data-testid="state-periods">
               <thead>
                 <tr>
-                  <th scope="col">Stanje</th>
-                  <th scope="col">Od</th>
-                  <th scope="col">Do</th>
-                  <th scope="col">Trajanje</th>
-                  <th scope="col">Promijenio</th>
+                  <th scope="col">{t.timings.colState}</th>
+                  <th scope="col">{t.timings.colFrom}</th>
+                  <th scope="col">{t.timings.colTo}</th>
+                  <th scope="col">{t.timings.colDuration}</th>
+                  <th scope="col">{t.timings.colChangedBy}</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.states.map((period) => (
                   <tr key={`${period.status}-${period.from}`}>
                     <th scope="row">
-                      {INTERVENTION_STATUS_LABEL[period.status] ?? period.status}
+                      {t.vocabulary.interventionStatus[period.status] ?? period.status}
                     </th>
-                    <td data-label="Od" className="small mono">
+                    <td data-label={t.timings.colFrom} className="small mono">
                       {formatTimeOrNotRecorded(period.from)}
                     </td>
-                    <td data-label="Do" className="small mono">
-                      {period.to === null ? 'Jos traje' : formatTimeOrNotRecorded(period.to)}
+                    <td data-label={t.timings.colTo} className="small mono">
+                      {period.to === null ? t.timings.stillRunning : formatTimeOrNotRecorded(period.to)}
                     </td>
-                    <td data-label="Trajanje">
-                      {ongoingOr(period.durationMs, period.to === null)}
+                    <td data-label={t.timings.colDuration}>
+                      {ongoingOr(period.durationMs, period.to === null, t.timings.stillRunning)}
                     </td>
-                    <td data-label="Promijenio">
+                    <td data-label={t.timings.colChangedBy}>
                       {/* The first period was created by publishing, not
                           entered by a transition, so it names nobody. */}
-                      {period.enteredBy ?? 'Objavom poziva'}
+                      {period.enteredBy ?? t.timings.byPublication}
                     </td>
                   </tr>
                 ))}
@@ -343,24 +349,22 @@ export function InterventionDurationPanel({ summary }: { summary: InterventionSu
 
 /** Nine tallies, each its own fact, none of them implying another. */
 export function SummaryCounts({ summary }: { summary: InterventionSummary }) {
+  const t = useText();
   return (
     <>
       <section className="panel">
-        <h2 className="panel__title">Odziv u brojkama</h2>
-        <p className="muted small">
-          Svaka brojka je svoja cinjenica. Ko je otvorio poziv nije ko je odgovorio, ko je
-          odgovorio nije ko je dosao, a prijavljeno prisustvo nije potvrdjeno prisustvo.
-        </p>
+        <h2 className="panel__title">{t.timings.countsTitle}</h2>
+        <p className="muted small">{t.timings.countsNote}</p>
         <div className="totals" data-testid="summary-counts">
-          <Tally label="Pozvano" value={summary.invited} testId="tally-invited" />
-          <Tally label="Otvorilo" value={summary.opened} testId="tally-opened" />
-          <Tally label="Odgovorilo" value={summary.responded} testId="tally-responded" />
-          <Tally label="Dolazim" value={summary.coming} testId="tally-coming" />
-          <Tally label="Dolazim kasnije" value={summary.delayed} testId="tally-delayed" />
-          <Tally label="Ne mogu" value={summary.declined} testId="tally-declined" />
-          <Tally label="Javilo dolazak" value={summary.arrived} testId="tally-arrived" />
-          <Tally label="Prijavilo prisustvo" value={summary.present} testId="tally-present" />
-          <Tally label="Potvrdjeno prisustvo" value={summary.confirmedMembers} testId="tally-confirmed" />
+          <Tally label={t.timings.tallyInvited} value={summary.invited} testId="tally-invited" />
+          <Tally label={t.timings.tallyOpened} value={summary.opened} testId="tally-opened" />
+          <Tally label={t.timings.tallyResponded} value={summary.responded} testId="tally-responded" />
+          <Tally label={t.timings.tallyComing} value={summary.coming} testId="tally-coming" />
+          <Tally label={t.timings.tallyDelayed} value={summary.delayed} testId="tally-delayed" />
+          <Tally label={t.timings.tallyDeclined} value={summary.declined} testId="tally-declined" />
+          <Tally label={t.timings.tallyArrived} value={summary.arrived} testId="tally-arrived" />
+          <Tally label={t.timings.tallyPresent} value={summary.present} testId="tally-present" />
+          <Tally label={t.timings.tallyConfirmed} value={summary.confirmedMembers} testId="tally-confirmed" />
         </div>
       </section>
     </>
@@ -375,28 +379,26 @@ export function SummaryCounts({ summary }: { summary: InterventionSummary }) {
  * exactly the arithmetic a record exists to have already done.
  */
 export function VehiclePanel({ summary }: { summary: InterventionSummary }) {
+  const t = useText();
   return (
     <>
       <section className="panel">
-        <h2 className="panel__title">Vozila</h2>
-        <p className="muted small">
-          Izlazak vozila je zapis o vozilu. On nikada ne stvara prisustvo clana - to je posebna
-          cinjenica koju clan prijavljuje sam.
-        </p>
+        <h2 className="panel__title">{t.timings.vehiclesTitle}</h2>
+        <p className="muted small">{t.timings.vehiclesNote}</p>
         {summary.vehicles.length === 0 ? (
-          <EmptyState title="Nijedno vozilo nije evidentirano na ovoj intervenciji" />
+          <EmptyState title={t.timings.noVehicles} />
         ) : (
-          <ScrollRegion label="Vozila i vrijeme van baze" className="table-wrap table-wrap--cards">
+          <ScrollRegion label={t.timings.vehiclesLabel} className="table-wrap table-wrap--cards">
             <table className="table table--cards" data-testid="vehicle-periods">
               <thead>
                 <tr>
-                  <th scope="col">Vozilo</th>
-                  <th scope="col">Izlazak</th>
-                  <th scope="col">Povratak</th>
-                  <th scope="col">Van baze</th>
-                  <th scope="col">Evidentirao izlazak</th>
-                  <th scope="col">Evidentirao povratak</th>
-                  <th scope="col">Namjena</th>
+                  <th scope="col">{t.timings.colVehicle}</th>
+                  <th scope="col">{t.timings.colDeparture}</th>
+                  <th scope="col">{t.timings.colReturn}</th>
+                  <th scope="col">{t.timings.colAway}</th>
+                  <th scope="col">{t.timings.colDepartureBy}</th>
+                  <th scope="col">{t.timings.colReturnBy}</th>
+                  <th scope="col">{t.timings.colPurpose}</th>
                 </tr>
               </thead>
               <tbody>
@@ -405,25 +407,25 @@ export function VehiclePanel({ summary }: { summary: InterventionSummary }) {
                     <th scope="row">
                       {vehicle.callsign} - {vehicle.vehicleName}
                     </th>
-                    <td data-label="Izlazak" className="small mono">
+                    <td data-label={t.timings.colDeparture} className="small mono">
                       {formatTimeOrNotRecorded(vehicle.departedAt)}
                     </td>
-                    <td data-label="Povratak" className="small mono">
+                    <td data-label={t.timings.colReturn} className="small mono">
                       {vehicle.returnedAt === null
-                        ? 'Jos nije vraceno'
+                        ? t.timings.notReturned
                         : formatTimeOrNotRecorded(vehicle.returnedAt)}
                     </td>
-                    <td data-label="Van baze">
-                      {ongoingOr(vehicle.awayMs, vehicle.returnedAt === null, 'Jos je van baze')}
+                    <td data-label={t.timings.colAway}>
+                      {ongoingOr(vehicle.awayMs, vehicle.returnedAt === null, t.timings.stillAway)}
                     </td>
-                    <td data-label="Evidentirao izlazak" className="small">
-                      {vehicle.departedBy ?? 'Nije zabiljezeno'}
+                    <td data-label={t.timings.colDepartureBy} className="small">
+                      {vehicle.departedBy ?? notRecorded()}
                     </td>
-                    <td data-label="Evidentirao povratak" className="small">
-                      {vehicle.returnedBy ?? 'Nije zabiljezeno'}
+                    <td data-label={t.timings.colReturnBy} className="small">
+                      {vehicle.returnedBy ?? notRecorded()}
                     </td>
-                    <td data-label="Namjena" className="small">
-                      {vehicle.purpose ?? 'Nije upisana'}
+                    <td data-label={t.timings.colPurpose} className="small">
+                      {vehicle.purpose ?? t.timings.purposeNotRecorded}
                     </td>
                   </tr>
                 ))}
