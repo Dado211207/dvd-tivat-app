@@ -261,7 +261,16 @@ not had migration `202609150012` applied, has no Edge Function deployed, holds n
 VAPID or worker secret, and has no scheduled invocation. The repository variable
 `VITE_WEB_PUSH_PUBLIC_KEY` is not set, so a deployed build reports
 `NOT_CONFIGURED` and offers no opt-in. This is a permission blocker, not a
-decision: the Supabase management calls this session needed were not approved.
+decision: the Supabase management calls this session needed were not approved,
+and `api.github.com/repos/.../actions/variables` answers **403** through this
+environment's egress proxy while `/actions/runs` answers 200.
+
+**Web Push is optional to the deployment, on purpose.** The handoff made
+`VITE_WEB_PUSH_PUBLIC_KEY` mandatory in the Pages workflow, which would have
+stopped the whole application publishing until somebody generated VAPID keys -
+for a feature the application itself already treats as absent-by-default. The
+workflow warns and deploys without push instead. Deployment and push
+configuration are now independent, in both directions.
 
 Until that configuration exists, **no push alert can be sent at all**, and no
 claim about one should be made. The in-app call-out path is unaffected.
