@@ -13,9 +13,9 @@
  * see, and which any single-status design would flatten into one of its three
  * parts.
  *
- * **What this screen never claims.** Publishing creates `QUEUED` outbox rows.
- * There is no transport, so the confirmation says exactly that. Nothing here may
- * ever read as "the members were notified".
+ * **What this screen never claims.** Publishing creates an in-app obligation and,
+ * only for opted-in devices, a Web Push outbox row. Provider acceptance still is
+ * not proof that a phone made a sound or that the member opened the call-out.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -56,6 +56,7 @@ import {
   type VehicleMovement,
 } from '@/auth/operations';
 import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
+import { requestPushDelivery } from '@/notifications/push';
 import { formatDurationMs } from '@/auth/duration';
 import { recipientTimings, summarise } from '@/auth/metrics';
 import { OperationalSummary, ResponseTimings } from '../components/timings';
@@ -456,9 +457,12 @@ function CallOutTab({
     setBusy(true);
     try {
       const result = await publishIntervention(selected.id, [...selectedMembers]);
+      const workerReached = result.ok ? await requestPushDelivery(result.value) : false;
       await onDone(
         result.ok ? { ok: true } : { ok: false, message: result.message },
-        'Poziv je objavljen. Obavjestenja su STAVLJENA U RED - kanal za slanje jos ne postoji, pa niko nije stvarno obavijesten.',
+        workerReached
+          ? 'Poziv je objavljen. Push obrada je pokrenuta; pregled isporuke pokazuje sta je provajder prihvatio, a otvaranje poziva ostaje zasebna cinjenica.'
+          : 'Poziv je objavljen. Push poruke su ostale u redu za serversku obradu; ovo nije potvrda da je telefon zazvonio.',
       );
       setSelectedMembers(new Set());
     } finally {
@@ -770,8 +774,10 @@ function CallOutTab({
             trenutku objave.
           </p>
           <p className="muted small">
-            Obavjestenja se upisuju u red cekanja. Kanal za slanje jos ne postoji, pa{' '}
-            <strong>niko nece biti stvarno obavijesten</strong> - ni porukom, ni pozivom.
+            Clanovi koji su ukljucili Web Push mogu dobiti operativno upozorenje. Ostalima poziv
+            ostaje vidljiv u aplikaciji. <strong>Prihvatanje od push servisa nije dokaz da je telefon
+            zazvonio niti da je clan otvorio poziv.</strong> Nema SMS, Viber ni automatskog telefonskog
+            poziva.
           </p>
         </ConfirmDialog>
       ) : null}

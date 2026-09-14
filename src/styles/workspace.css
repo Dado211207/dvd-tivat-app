@@ -598,6 +598,57 @@ body {
   border-bottom: 1px solid var(--c-line);
 }
 
+.push-panel {
+  border-color: color-mix(in srgb, var(--c-alert) 45%, var(--c-line));
+  box-shadow: 0 12px 32px rgb(92 23 23 / 8%);
+}
+
+.push-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.push-panel__head .panel__title {
+  margin-bottom: 0;
+}
+
+.push-panel__state {
+  flex: 0 0 auto;
+  border: 1px solid var(--c-line);
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.push-panel__state--on {
+  border-color: color-mix(in srgb, var(--c-yes) 55%, var(--c-line));
+  color: var(--c-yes);
+  background: color-mix(in srgb, var(--c-yes) 10%, transparent);
+}
+
+.push-panel__state--denied,
+.push-panel__state--error {
+  border-color: color-mix(in srgb, var(--c-alert) 55%, var(--c-line));
+  color: var(--c-alert);
+}
+
+@media (max-width: 520px) {
+  .push-panel__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .push-panel__state {
+    align-self: flex-start;
+  }
+}
+
 .card h2 {
   font-family: var(--font-display);
   font-size: 1.12rem;

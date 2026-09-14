@@ -350,26 +350,28 @@ subject of [DATABASE.md §6](./DATABASE.md#6-attendance--the-primary-capability)
 Facts 7 and 8 are the pair that was previously collapsed into one, and
 collapsing them is what let a self-declared claim be reported as participation.
 
-Tested: publishing creates a `QUEUED` outbox row **and nothing else** — no
-response, no acknowledgement, no attendance, no delivery attempt. Answering
+Tested: publishing creates a `QUEUED` in-app outbox row and, only for a recipient
+who opted in on an active device, a separate `QUEUED` Web Push row — no response,
+no acknowledgement and no attendance. A provider attempt is made later by the
+server worker. Answering
 `DOLAZIM` creates **no** attendance. Opening creates **no** response and no
 attendance. A vehicle departure creates **no** attendance. A self-declared
 interval contributes **nothing** to `confirmed_seconds` until command confirms
 it, and a rejected one contributes nothing ever.
 
-Nothing in this system may report `delivered`. There is no notification
-transport, and the outbox cannot leave `QUEUED` without one.
+Nothing in this system may translate `PROVIDER_ACCEPTED` into "the member was
+alerted". Provider acceptance, device acknowledgement, opening and answering are
+four separate facts.
 
 ## 8. Not enforced yet
 
 Honest list of what this slice does **not** do:
 
-- **Nothing is ever sent to anybody.** Publishing a call-out writes rows saying
-  a message is *owed* to each recipient. There is no push, email, SMS, Viber or
-  telephone transport in this application, so a member learns about a call-out
-  only by opening the application. **No screen may say a member was notified**,
-  and the interface says the opposite where it matters — the publish
-  confirmation and the banner on every server-backed screen.
+- Web Push is opt-in per device and best-effort. An active operational account
+  may register only its own subscription; another account cannot read or claim
+  it. The worker re-checks account/member eligibility immediately before a send.
+  There is still no email, SMS, Viber or telephone transport, and no screen may
+  treat provider acceptance as proof that a person heard or opened anything.
 - ~~No screen is connected to interventions, responses, vehicle movements or
   attendance.~~ **Resolved 2026-09-13.** `poziv`, `mobilizacija` and `arhiva`
   read and write the hosted project through the same commands this file

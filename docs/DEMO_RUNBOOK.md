@@ -23,20 +23,17 @@ person's role does not permit.
 
 ---
 
-## 2. The one thing that must never be claimed
+## 2. The notification claim must stay exact
 
-**No notification of any kind is sent. There is no push, email, SMS, Viber or
-telephone transport in this application at all.**
+Web Push is optional per device and works only after the hosted migration, Edge
+Function, secrets, scheduler and Pages public key are configured. The user must
+explicitly enable it. The provider accepting a message is **not** proof that the
+phone made a sound, displayed it promptly or that the member opened the call.
 
-Publishing a call-out writes rows that say a message is *owed* to each
-recipient. Nothing sends them. In the demonstration the members simply open the
-application and see the call-out, which is what a second phone or a second
-browser window is for.
-
-The interface says this itself - the confirmation after publishing, and the
-banner on every server-backed screen - so the demonstration does not depend on
-the presenter remembering to say it. Do not paraphrase it into "they get a
-notification".
+The alert deliberately says only `OPERATIVNI POZIV - DVD Tivat` and `Nova
+intervencija. Potvrdite prijem odmah.` on the lock screen. Title, location and
+instructions are fetched only after the app opens and the signed-in account is
+checked again. There is no email, SMS, Viber or automatic telephone call.
 
 **This application is not a replacement for calling the fire service.** It is an
 internal tool for a society's own members. Nothing in it should be described as
@@ -57,6 +54,7 @@ In **Settings -> Secrets and variables -> Actions -> Variables**, add:
 | --- | --- |
 | `VITE_SUPABASE_URL` | the project URL, `https://<ref>.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | the **publishable** key (`sb_publishable_...`) |
+| `VITE_WEB_PUSH_PUBLIC_KEY` | the public VAPID key matching the server-side private key |
 
 Both are public by design: every Supabase browser application ships them, and
 the publishable key grants nothing on its own - in this schema the `anon` role
@@ -67,6 +65,12 @@ fails the build if any secret reaches the output.
 Then run **Actions -> Deploy demonstration build -> Run workflow**. It enables
 GitHub Pages on the first run and prints the URL when it finishes. The workflow
 also runs by itself after CI passes on `main`.
+
+Web Push additionally needs migration `202609150012`, the deployed
+`send-web-push` Edge Function and its server-only VAPID private key and worker
+secret. Configure the one-minute scheduler for the bounded unacknowledged
+repeat. Follow `supabase/functions/send-web-push/README.md`; never copy a private
+key or worker secret into GitHub Pages variables or a tracked file.
 
 ### 3.2 Check the project is in its demonstration state
 
@@ -124,8 +128,8 @@ Roughly twelve minutes at a comfortable pace.
    instruction and a location. Say aloud that the location is invented.
 3. Save the draft. Nobody has been called yet - a draft has no recipients.
 4. Choose recipients: Ivo, Pero and Jovo. Publish.
-5. Read the confirmation out loud. It says the obligations are **queued and not
-   sent**, and names how many. This is the honesty point of the whole product.
+5. Read the confirmation out loud. It distinguishes an accepted push request
+   from a ringing phone and from the member opening the call.
 
 ### Firefighter (device B)
 
@@ -173,9 +177,10 @@ every command from those accounts, which is what the test suite proves.
 ## 6. Questions that will be asked
 
 **"Does it send a notification to their phone?"**
-Not yet. Nothing is sent today. The database already records what is owed to
-whom, so a transport can be added without changing how any of this works. That
-is a separate decision with its own cost and its own privacy questions.
+Only after the individual device opts in and the hosted Web Push worker is
+configured. It is best-effort: the app records the provider attempt separately
+from opening and answering, and does not promise that device settings allowed a
+sound. It does not send SMS, Viber or make a phone call.
 
 **"Can the commander just mark everybody present?"**
 A commander can record somebody's attendance, and it is stored as
@@ -204,8 +209,8 @@ automated suite and by a live run against the hosted project.
 
 Not done, and needed before anybody relies on it:
 
-- No notification transport. Somebody must open the application to see a
-  call-out.
+- Web Push must be deployed and pass the locked-screen physical-device matrix;
+  source code and provider acceptance alone are not operational evidence.
 - No real members, and no decision about how personal data would be handled.
 - Not tested by actual firefighters under actual conditions.
 - No offline queue: an action taken with no signal is refused, not stored and
@@ -231,7 +236,7 @@ private window) for the commander.
 | 2 | Share -> **Add to Home Screen**, then open from the Home Screen | It opens without Safari's address bar. The icon is the teal bell |
 | 3 | On the laptop, sign in as **komandir@example.invalid** | The identity pill top right shows the name and `COMMANDER` |
 | 4 | **Poziv i intervencija**: fill title, location, instruction. Save the draft | The draft appears below the form. Nobody has been called |
-| 5 | Choose Ivo, Pero and Jovo. Press **Objavi** | The confirmation says obligations are **queued and nobody will actually be notified**. Read it aloud |
+| 5 | Choose Ivo, Pero and Jovo. Press **Objavi** | The confirmation says Push is attempted only for opted-in devices and that provider acceptance is not proof the phone rang. Read it aloud |
 | 6 | On the phone, sign in as **vatrogasac1@example.invalid** | **Moj poziv** shows the call-out you just published |
 | 7 | Press **Dostupan sam** | The panel records availability with a time |
 | 8 | Press **1. Otvorio sam poziv** | The button is replaced by *when* you opened it. Opening is a fact, not a toggle |
@@ -257,6 +262,13 @@ private window) for the commander.
 | 27 | Turn the phone **sideways** | Nothing is cut off at the notch, nothing scrolls sideways, and the archive tables are readable cards rather than columns running off the screen |
 | 28 | On the laptop, sign in as **vatrogasac1@example.invalid** instead | The navigation does **not** offer `Poziv i intervencija` or `Evidencija drustva`, and the account screen shows their own account without the owner's list |
 | 29 | In the commander's recipient picker, look for the withdrawn member | They are **not there**. The list comes from the server, by the same rule publishing enforces |
+| 30 | On iPhone, open the installed Home Screen app as Ivo and press **Ukljuci operativne notifikacije** | iOS asks for notification permission only after this tap; the panel then says `Ukljucene` |
+| 31 | Fully leave the Home Screen app, lock the phone, and publish a new fictional call-out to Ivo from the laptop | A generic `OPERATIVNI POZIV - DVD Tivat` notification should arrive without exposing title or location. Record actual latency and whether sound/vibration occurred; do not infer it |
+| 32 | Press the notification | The installed app opens `Moj poziv` on the exact intervention and still requires the correct signed-in account |
+| 33 | Repeat with sound enabled, silent mode and Focus/Do Not Disturb | Record each real result. A failure to make sound is a failed alarm case, not a passed push case |
+| 34 | Do not open the next alert for at least two minutes | At most one repeat appears after the configured scheduler reaches the 90-second threshold |
+| 35 | Open/acknowledge the next call immediately | No repeat should be sent for that recipient |
+| 36 | Withdraw the fictional account after queueing but before a scheduled retry | The worker records `ACCESS_REVOKED` and does not send the retry |
 
 ---
 

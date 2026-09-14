@@ -29,14 +29,13 @@ export const SIM_BANNER_TEXT =
  * screens where they are not. A banner that is wrong in that direction is worse
  * than no banner, because it teaches people to ignore it everywhere else.
  *
- * It still has to carry the one thing that IS not real: there is no notification
- * transport. Publishing a call-out writes obligations to send; nothing sends
- * them. That must be visible on the screens where a call-out is published and
- * received, not buried in documentation.
+ * Web Push is an optional, device-bound transport. It is deliberately described
+ * without claiming that a provider acceptance proves a phone rang or that the
+ * web app can override the device's sound and focus settings.
  */
 export const SERVER_BANNER_TITLE = 'STVARNI PODACI';
 export const SERVER_BANNER_TEXT =
-  'Ovaj ekran radi na serveru. Prijava, uloga i pristup su stvarni i provjeravaju se pri svakom zahtjevu. Obavjestenja se upisuju u red za slanje, ali se ne salju: nema push, SMS, Viber ni telefonskih poziva.';
+  'Ovaj ekran radi na serveru. Prijava, uloga i pristup se provjeravaju pri svakom zahtjevu. Web Push radi samo na uredjaju na kojem ga clan ukljuci; prihvatanje poruke od servisa nije dokaz da je telefon zazvonio. Nema SMS, Viber ni automatskog telefonskog poziva.';
 
 export const LOCAL_DATA_NOTE =
   'Podaci se cuvaju samo u ovom pregledacu, na ovom uredjaju. Nista se ne sinhronizuje izmedju uredjaja niti se salje na server. Brisanje podataka pregledaca brise i ovo.';

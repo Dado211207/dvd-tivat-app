@@ -5,9 +5,9 @@ name: Deploy demonstration build
 #
 # WHAT THIS DEPLOYMENT IS. A demonstration against a Supabase project that
 # holds only fictional members, fictional accounts and clearly labelled
-# exercises. It sends no notification of any kind: there is no push, email,
-# SMS, Viber or telephone transport in the application at all, and publishing a
-# call-out only writes rows that say a message is owed.
+# exercises. Optional Web Push is enabled only for devices that explicitly opt
+# in; there is no email, SMS, Viber or telephone transport. Provider acceptance
+# is recorded separately from a member opening the call-out.
 #
 # WHAT GOES INTO THE BUNDLE. The project URL and the PUBLISHABLE key, both of
 # which every Supabase browser application ships and neither of which grants
@@ -20,7 +20,10 @@ name: Deploy demonstration build
 # this workflow, or anywhere else the build can read; `npm run verify:bundle`
 # fails the job if anything of the sort reaches the output.
 #
-# Setting the two variables is a one-time step, described in docs/DEMO_RUNBOOK.md.
+# Setting the two required public variables is a one-time step, described in
+# docs/DEMO_RUNBOOK.md. A third, VITE_WEB_PUSH_PUBLIC_KEY, is optional: without
+# it the application deploys and works exactly as before, and simply offers no
+# Web Push opt-in.
 # Without them this workflow fails early and loudly rather than publishing a
 # copy that looks right and refuses every operational screen.
 #
@@ -69,6 +72,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_WEB_PUSH_PUBLIC_KEY: ${{ vars.VITE_WEB_PUSH_PUBLIC_KEY }}
         run: |
           # Without these the deployed copy would look like the application but
           # refuse every operational screen, which is worse than not deploying:
@@ -84,11 +88,39 @@ jobs:
               echo "::error::That is a SECRET key. Only the publishable key may be built in."
               exit 1 ;;
           esac
+          # Web Push is OPTIONAL, and the deployment must not depend on it.
+          #
+          # Requiring this variable made a missing push key fatal to publishing
+          # the whole application - which is wrong twice over: the society's
+          # call-out screens have nothing to do with push, and the application
+          # itself already treats an unset key as a supported state, reporting
+          # NOT_CONFIGURED and offering no opt-in. A pipeline that refuses what
+          # the code handles is a pipeline that stops a deployment for no
+          # reason, most likely on the evening somebody needs it.
+          #
+          # Set, it must still be a real unpadded P-256 public key: a malformed
+          # one would ship a build whose subscribe call fails on every device.
+          if [ -z "$VITE_WEB_PUSH_PUBLIC_KEY" ]; then
+            echo "::warning::VITE_WEB_PUSH_PUBLIC_KEY is not set." \
+                 "Deploying without Web Push: the call-out screens work as" \
+                 "before and the notification panel will say it is not connected."
+          elif ! printf '%s' "$VITE_WEB_PUSH_PUBLIC_KEY" | grep -Eq '^[A-Za-z0-9_-]{87}$'; then
+            echo "::error::VITE_WEB_PUSH_PUBLIC_KEY is not a valid unpadded P-256 public key."
+            exit 1
+          fi
+          # A private key must never reach a build. The public VAPID key is 87
+          # characters; anything longer presented here is not one.
+          case "$VITE_WEB_PUSH_PUBLIC_KEY" in
+            *BEGIN*PRIVATE*|*' '*)
+              echo "::error::That does not look like a public VAPID key. Only the public key may be built in."
+              exit 1 ;;
+          esac
 
       - name: Point the build at the configured project
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_WEB_PUSH_PUBLIC_KEY: ${{ vars.VITE_WEB_PUSH_PUBLIC_KEY }}
         run: |
           # Written to a .env file rather than passed as environment variables:
           # an empty environment variable silently overrides everything else,
@@ -96,6 +128,7 @@ jobs:
           {
             printf 'VITE_SUPABASE_URL=%s\n' "$VITE_SUPABASE_URL"
             printf 'VITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$VITE_SUPABASE_PUBLISHABLE_KEY"
+            printf 'VITE_WEB_PUSH_PUBLIC_KEY=%s\n' "$VITE_WEB_PUSH_PUBLIC_KEY"
           } > .env.production.local
 
       - uses: actions/configure-pages@v5

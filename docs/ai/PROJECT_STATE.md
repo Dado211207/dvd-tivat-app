@@ -4,7 +4,7 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 
 ---
 
@@ -35,20 +35,17 @@ explicit owner decision.
 ## Repository and branch
 
 - Repository: `Dado211207/dvd-tivat-app` — **public**, and must stay public.
-- Latest merge checkpoint: `4093a0c63e28953d9d0df86168d1027db8ac5d83` — the
-  normal merge commit of PR #23, presentation stabilisation. Two parents
-  (`c9fb4e84`, the previous `main`, and `f29ed83e`, the reviewed head) and a
-  tree byte-identical to that head. CI was green on `f29ed83e` before the merge.
-  Earlier ones, still nameable because they are history: `c9fb4e84` (PR #22,
-  documentation), `a60483ae` (PR #20, slice 3b), `0f1cace7` (PR #19) and
-  `45d53640` (PR #18).
+- Latest verified historical merge checkpoint: `7fa8ec33274da36957f7953dbb31c23f6dcbeb4a`
+  — normal merge commit of PR #25, the final presentation-stabilisation follow-up.
+  Check GitHub rather than treating this historical checkpoint as a moving
+  current-head claim.
 - Earlier checkpoints, still nameable because they are history: `55fdb093`
   (PR #16, slice 3a) and `7d00d9bb` (PR #17, documentation only).
   **Check GitHub for the moving live `main` rather than trusting any SHA here
   as current** (see the note under the PR table).
-- No active implementation branch. `claude/dvd-tivat-app-dev-n8wctb` is merged
-  (PR #23) and finished, as are `claude/presentation-readiness`,
-  `claude/slice-3b-real-operations` and `claude/slice-3b-attendance-truth`.
+- Active implementation branch: `codex/web-push-notifications`, started from
+  historical checkpoint `7fa8ec3`. It contains Web Push source work only; no
+  hosted migration, function deployment or physical-device success is claimed.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.
 
 ### Pull requests — live state at 2026-09-12
@@ -122,9 +119,9 @@ Proposed and owner-approved sequencing, smallest reviewable PR first:
 |---|---|---|
 | 3a | Write paths and admin CRUD: intervention drafts, members, groups, vehicles, account linking | **Merged in PR #16. Migration `202609120005` applied to the hosted project 2026-09-12** |
 | **3b-0** | **Attendance truth** — provenance, confirmation/rejection, the two write paths that were missing entirely (acknowledgement, vehicle movements), and the withdrawn-account identity fix | **Merged in PR #18. Migration `202609130006` applied to the hosted project 2026-09-12 and smoke-tested there** |
-| 3b | General availability (C2), journey progress (C3) and the member-facing response flow on real data | Next |
-| 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | Before push, not after |
-| 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | |
+| 3b | General availability (C2), journey progress (C3) and the member-facing response flow on real data | **Merged and hosted** |
+| 3c | PWA shell: manifest, icons, service worker, install onboarding, offline state | **Merged and hosted** |
+| 3d | Push delivery: Edge Function, VAPID secrets, `notification_outbox` wired to a transport | **Implemented on `codex/web-push-notifications`; local client tests/build pass. Hosted setup and physical-device proof remain** |
 | 3e | Public feed: aggregate-only, enforced in the database | |
 | 3f | Field-use and accessibility pass, live verification, owner test checklist | |
 
@@ -252,6 +249,32 @@ wake somebody is the failure mode this whole application exists to avoid — whi
 is also why C8's Viber and telephone fallback is not optional.
 
 ## Status of the latest slice
+
+**Web Push, reviewed but NOT yet deployed.** A handoff patch adding protected
+Web Push call-out alerts was applied onto `7fa8ec3` (no conflict, hash verified)
+on branch `claude/web-push-notifications`, and seven defects found in review were
+fixed - full detail in `docs/ai/WORK_LOG.md`. The most serious: repairing a push
+registration could silently re-enable an alarm a member had turned off.
+
+**Nothing hosted has changed.** The Supabase project `yskhdzrdbywrpfowckpn` has
+not had migration `202609150012` applied, has no Edge Function deployed, holds no
+VAPID or worker secret, and has no scheduled invocation. The repository variable
+`VITE_WEB_PUSH_PUBLIC_KEY` is not set, so a deployed build reports
+`NOT_CONFIGURED` and offers no opt-in. This is a permission blocker, not a
+decision: the Supabase management calls this session needed were not approved,
+and `api.github.com/repos/.../actions/variables` answers **403** through this
+environment's egress proxy while `/actions/runs` answers 200.
+
+**Web Push is optional to the deployment, on purpose.** The handoff made
+`VITE_WEB_PUSH_PUBLIC_KEY` mandatory in the Pages workflow, which would have
+stopped the whole application publishing until somebody generated VAPID keys -
+for a feature the application itself already treats as absent-by-default. The
+workflow warns and deploys without push instead. Deployment and push
+configuration are now independent, in both directions.
+
+Until that configuration exists, **no push alert can be sent at all**, and no
+claim about one should be made. The in-app call-out path is unaffected.
+
 
 **The measured record.** Nine defects from an independent hosted-browser review,
 fixed on branch `claude/dvd-tivat-app-dev-n8wctb`. Full detail is in
@@ -584,7 +607,7 @@ From the owner, a DVD Tivat firefighter-rescuer. Do not ask again.
 
 ## The live Supabase project
 
-A project exists and **all eleven migrations are applied to it**. The first
+A project exists and **migrations 001-011 are applied to it**. The first
 seven were verified by a structural fingerprint matching a local PostgreSQL 16
 built from the same files; the four added on 2026-09-13 were applied after a
 preflight that confirmed each was additive, and verified by a postflight query.
@@ -602,12 +625,13 @@ Recorded here so nobody has to rediscover it:
 | **Contents** | Eight fictional accounts, seven fictional members, two groups, three vehicles. No interventions between demonstrations. Every address is on the reserved `.invalid` domain and cannot receive mail. Passwords are **not** in this repository |
 | Publishable key | Safe in the client bundle by design; it is **not** a secret |
 | Secret key | Must exist only as a GitHub Actions secret or a git-ignored `.env.local`. Never in a tracked file, never in the bundle, never in a transcript |
+| Web Push 012 | Present only on the active implementation branch. Not yet applied, deployed or physically verified on the hosted project |
 
 ### The published copy, confirmed 2026-09-13
 
-`https://dado211207.github.io/dvd-tivat-app/` serves the build from
-`4093a0c` - the merge of PR #23. CI passed on `main` and the
-`Deploy demonstration build` workflow published on its own, as designed.
+`https://dado211207.github.io/dvd-tivat-app/` serves the presentation build
+following historical merge checkpoint `7fa8ec3` (PR #25). Web Push changes on
+the active branch are not part of that public build yet.
 
 Checked by fetching the live files, not by trusting the workflow's own report:
 
@@ -635,12 +659,9 @@ says the hosted project itself was tested by CI.
 
 ## Known limitations (accurate, not aspirational)
 
-- **Identity, access and the society's records use the schema; the incident path
-  does not.** Members, groups, vehicles and the account-to-member link are real
-  server records with a real screen (`Evidencija drustva`, slice 3a). Drafting a
-  call-out has a tested server command but no screen yet. Interventions,
-  responses, vehicle movements and attendance are still device-local fictional
-  state, and each of those screens says so on itself.
+- Identity, roster, intervention, response, movement, attendance, vehicle and
+  archive paths all use the hosted schema on the operational screens. The older
+  simulation routes remain separate and explicitly labelled.
 - Real sign-up through the app's own registration form, with a real deliverable
   email, has not yet been exercised end-to-end — every verification so far either
   used privileged SQL to create accounts directly, or the app's internal modules
@@ -650,7 +671,10 @@ says the hosted project itself was tested by CI.
 - **No password reset.** It needs a configured mail provider (B2). Whether email
   confirmation is currently on or off is **unresolved** — two conflicting
   observations are recorded under Owner action items; do not assume either.
-- No notification transport of any kind. No push, SMS, email or call.
+- Web Push source is implemented but is not operational until migration 012,
+  the Edge Function, server-only secrets, public VAPID build variable and
+  scheduler are configured and the locked-device matrix passes. There is no
+  SMS, email, Viber or automatic call.
 - No session invalidation for a suspended account: suspension removes the role
   immediately so every request is refused, but an already-issued JWT stays
   syntactically valid until expiry.
@@ -666,26 +690,27 @@ says the hosted project itself was tested by CI.
   operational journey was exercised there against disposable fictional data.
   What is still missing on the hosted project is **data and screens**, not
   schema.
-- A browser prototype is **no evidence** that a locked Android or iPhone will
-  raise an alarm.
+- A browser or service-worker test is **no evidence** that a locked Android or
+  iPhone raised an alarm. Record physical arrival, latency and actual sound
+  separately on both platforms.
 - ~~The PWA itself is not built.~~ **Resolved 2026-09-13:** manifest, icons,
   installable standalone shell, a service worker that caches only the shell and
   never a server answer, honest offline and update states, and a GitHub Pages
-  workflow. **Still no native application**, and the deployment needs two
-  repository variables set once — see docs/DEMO_RUNBOOK.md §3.1.
+  workflow. **Still no native application**. Web Push adds one public repository
+  variable plus server-only secrets — see docs/DEMO_RUNBOOK.md §3.1.
 - **No offline queue.** An action taken with no signal is refused and not
   stored; the interface says so rather than pretending it was saved.
-- **No notification transport of any kind.** Publishing writes rows saying a
-  message is owed. Nothing sends them, and nothing in the interface may say a
-  member was notified.
+- **No guaranteed siren.** Web Push requests high urgency and a vibration
+  pattern where supported, but a PWA cannot override silent mode, Focus, battery
+  policy or platform delivery. Provider acceptance is not member acknowledgement.
 
 ## Blockers needing an owner decision
 
 | # | Blocker | State |
 |---|---|---|
-| B1 | Supabase project | **Resolved.** The owner created one and approved its use; **all seven migrations are applied and fingerprint-verified there** |
+| B1 | Supabase project | **Resolved for migrations 001-011.** Migration 012 is new Web Push work and is not yet claimed as hosted or fingerprint-verified |
 | B2 | Email verification | **Decided:** "Confirm email" is to be turned **off** in the Supabase dashboard for now, so an account is usable immediately. **Whether it actually is off is unresolved** — two conflicting observations are recorded under Owner action items. An SMTP provider is still needed before real registration at scale: Supabase's default sender only reaches project-team addresses and is rate-limited |
-| B3 | Notification transport | **Decided and now active work, not deferred.** PWA Web Push, server-sent from an Edge Function (C1, C8) — slice 3d. Still unbuilt and unproven: nothing may be promised about delivery. **Every platform claim below is UNVERIFIED** and must be checked against Apple/W3C documentation and a real device before it is relied on: that iOS requires the PWA on the home screen, that iOS ignores application-controlled sound and `vibrate`, and that Apple Critical Alerts need an entitlement a PWA cannot hold. See the paragraph under "Slice 3" — these were asserted from general knowledge, not read from an official source |
+| B3 | Notification transport | **Implementation complete on the active branch, deployment and device acceptance open.** PWA Web Push is server-sent from an Edge Function, opt-in per device, privacy-safe on the lock screen, bounded to one unacknowledged repeat and re-checks access immediately before send. It still cannot be called reliable or alarm-grade until the hosted setup and iPhone/Android locked-screen matrix pass |
 | B4 | Emergency number to display | **Resolved: 112.** The non-emergency notice names it rather than inventing one |
 | B5 | Response visibility | **Resolved:** every member called to an intervention may see the others' responses. That is how a crew coordinates |
 | B6 | Second break-glass owner | **Resolved:** one owner only, enforced by the unique index. No second owner for now |
@@ -732,7 +757,7 @@ What is left, in order:
 1. ~~Open the slice 3b pull request and merge it on green CI.~~ **Done — PR #20
    merged normally on 2026-09-13.** So is PR #23, the presentation-stabilisation
    slice, merged normally the same day with CI green on its exact head.
-2. ~~Set the two repository variables.~~ **Done by the owner on 2026-09-13.**
+2. ~~Set the original two repository variables.~~ **Done by the owner on 2026-09-13.**
    The public URL serves a build pointed at the hosted project, confirmed by
    fetching it: `https://dado211207.github.io/dvd-tivat-app/` returns 200, its
    bundle carries the project URL, and it contains no secret key. The earlier
@@ -749,8 +774,10 @@ What is left, in order:
    different networks, where a mobile radio or a corporate proxy blocking
    WebSockets would show up. Record which of *Uzivo* or *Osvjezavanje na svakih
    12 sekundi* the status line showed, and on which network.
-5. Only then notification transport (**B3**), which must not be promised before
-   it is built and tested on a real device. Nothing today sends anything.
+5. Finish Web Push (**B3**): green database/browser CI, reviewed merge, hosted
+   migration and Edge Function, server-only secrets, public VAPID build variable,
+   protected scheduler, Pages deployment and the locked-device acceptance in
+   the runbook. The source implementation is not the hosted proof.
 
 Not blocking the demonstration, and worth doing after it:
 
@@ -791,7 +818,7 @@ Follow [OWNER_BOOTSTRAP.md](../OWNER_BOOTSTRAP.md) first.
 If any of these behaves differently from the expected column, that is a defect —
 record it here rather than working around it.
 
-**B1 is resolved** — the project exists, **all seven migrations are on it**, and
+**B1 is resolved for migrations 001-011** — the project exists and
 identity, access, the roster and the whole operational journey have been
 exercised against it through the application's own data layer.
 

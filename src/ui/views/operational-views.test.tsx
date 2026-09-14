@@ -1181,29 +1181,29 @@ async function settle(): Promise<void> {
 }
 
 /**
- * The one claim that must never appear.
+ * The one distinction that must never disappear.
  *
- * No push, email, SMS, Viber or telephone transport exists in this application.
- * Publishing writes rows saying a message is owed; nothing sends them. Every
- * sentence the commander sees about notification therefore has to deny delivery
- * in the same breath, and a demonstration must not be able to imply otherwise.
+ * Web Push provider acceptance is not proof that a phone made a sound and is not
+ * the member's acknowledgement. The application must keep those facts separate,
+ * and must not imply that SMS, Viber or telephone transport was added with Push.
  *
  * Pinned as exact text on purpose. Reword it and this fails, which forces
  * whoever rewrites it to decide again whether the new wording still says
  * "nobody was notified" - rather than letting it drift into "notifications
  * sent" one adjective at a time.
  */
-describe('nothing ever claims a member was notified', () => {
+describe('push transport never fabricates device or member acknowledgement', () => {
   const source = readFileSync(resolve(process.cwd(), 'src/ui/views/CommandView.tsx'), 'utf8');
 
-  it('the publish confirmation says nobody will actually be notified', () => {
-    expect(source).toContain('niko nece biti stvarno obavijesten');
-    expect(source).toContain('Kanal za slanje jos ne postoji');
+  it('the publish confirmation separates provider acceptance from a ringing phone', () => {
+    expect(source).toContain('Prihvatanje od push servisa nije dokaz');
+    expect(source).toContain('Nema SMS, Viber ni automatskog telefonskog');
   });
 
-  it('the message after publishing says the same', () => {
-    expect(source).toContain('STAVLJENA U RED');
-    expect(source).toContain('niko nije stvarno obavijesten');
+  it('the message after publishing reports worker and queue states honestly', () => {
+    expect(source).toContain('Push obrada je pokrenuta');
+    expect(source).toContain('Push poruke su ostale u redu za serversku obradu');
+    expect(source).toContain('ovo nije potvrda da je telefon zazvonio');
   });
 
   it('no screen carries a bare claim of delivery', () => {

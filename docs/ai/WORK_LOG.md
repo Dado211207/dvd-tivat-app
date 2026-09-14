@@ -1,7 +1,119 @@
-# Work log
+## 2026-09-14 - Reviewing the Web Push handoff
 
-Newest entry first. One entry per unit of work, written in the same commit as the work itself.
-Record what was done, what was verified, and what the next concrete action is.
+A patch arrived from another environment, based on `7fa8ec3` and carrying
+protected Web Push. It applied onto the real `origin/main` with no conflict -
+main had not moved. Its SHA-256 matched the one stated in the handoff. What
+follows is the review, which is the part that mattered.
+
+**The consent defect.** `repairWebPushRegistration` created a subscription when
+it found none. That reads as harmless repair and is not: `disableWebPush`
+unsubscribes locally, so the next time a member opened their call-out screen the
+repair made a fresh subscription and registered it with the server. **Turning
+the alarm off lasted until the next page load**, silently. Opt-in has to mean
+opt-in, so repair now re-registers a subscription the browser ALREADY holds and
+can never create one. Proved by restoring the old body and watching two of the
+new tests fail.
+
+**A queued alert could wake somebody about something they were reading.** The
+acknowledgement check ran only before a REPEAT. On the recovery path a QUEUED
+row whose immediate wake-up failed can sit for minutes while the member opens
+the call-out in the application; the next scheduled scan would then alarm them
+about it. Checked before every attempt now, the first included.
+
+**Smaller, all real.** The scheduler's secret was compared with `===`, which
+short-circuits at the first differing byte. `notificationclick` navigated every
+open window and focused the first, which would pull a commander's console away
+from what they were doing on the same device. `requestedInterventionId` was a
+second hash-query parser standing beside the router's own. The panel's state
+chip was not announced, so the button that changes it told a screen-reader user
+nothing.
+
+**The comments.** The patch stripped the explanatory comments out of
+`publish_intervention` while replacing its body. `DATABASE.md` already records
+what that cost once - thirteen functions hashing differently for no behavioural
+reason - so the exact repository text is restored and the new push block is
+commented in the same voice.
+
+**A test that was wrong about a function that was right.** The patch expected
+`ELIGIBLE_MEMBER_REQUIRED` where registration raises
+`OPERATIONAL_ACCESS_REQUIRED`. `current_dvd_role()` was tightened in an earlier
+slice to require a complete profile, so an unfinished account has no operational
+role and is turned away one gate earlier; the second refusal is unreachable for
+it. Expectation corrected with the reason written down, and every case in that
+block now also asserts that **nothing was stored** - the property, rather than
+the error string.
+
+**What had no tests at all.** The worker's policy - how long before a repeat,
+how many attempts exist, the five conditions re-checked at send time, and
+exactly which three fields may reach a locked screen - lived inside an Edge
+Function that only runs in Deno against a live push service. It is a pure module
+now, imported by the function and exercised by Vitest: 23 tests, including one
+that tries to widen the payload by passing a title and a location and proves
+neither survives. Two database tests cover the atomic claim under three
+concurrent workers and the delivery-close reason the schema will accept.
+
+**Not done, and not claimed.** The hosted migration, the Edge Function
+deployment, the VAPID and worker secrets and the scheduled invocation all need
+Supabase MCP calls that this session could not get approved. Nothing was applied
+to `yskhdzrdbywrpfowckpn`; its schema is unchanged and it still has no Edge
+Functions. The hosted fictional test and the physical-device test follow from
+that configuration and are equally outstanding.
+
+---
+
+## 2026-09-14 - Device-bound Web Push, implementation before hosted proof
+
+Owner priority: a selected firefighter must receive an urgent notification even
+when the PWA is not open. Implemented the source slice on
+`codex/web-push-notifications`, without claiming it is deployed or that a
+physical phone sounded.
+
+**Implemented**
+
+- Additive migration `202609150012`: a protected per-user Web Push subscription
+  registry; self-only RLS; security-definer register/revoke functions; the same
+  full recipient eligibility check used by publication; and WEB_PUSH outbox
+  fan-out only for recipients with an active device.
+- `send-web-push` Edge Function: command-role or scheduler authentication,
+  server-only VAPID private key and worker secret, privacy-safe payload, atomic
+  outbox claim, per-device provider attempts, expired-endpoint revocation and a
+  fresh access/member/profile check immediately before sending.
+- One immediate high-urgency alert plus at most one repeat after 90 seconds if
+  that member has not opened the intervention. Concurrent invocations cannot
+  both claim the same attempt.
+- Service worker notification title `OPERATIVNI POZIV - DVD Tivat`, generic
+  body, Android vibration request where supported, replacement tag, persistent
+  interaction request and a protected deep link to the exact intervention.
+- Firefighter opt-in panel, including iPhone Home Screen installation guidance,
+  permission denial handling, self-repair of an existing browser subscription
+  and per-device disable.
+- Pages build requires only the public VAPID key. No service-role key, VAPID
+  private key or worker secret can enter a `VITE_*` variable.
+
+**Verified locally**
+
+- Strict TypeScript and ESLint pass.
+- The final full Vitest run passed **472/472** across 25 files. The focused
+  push/service-worker set passed 15/15 during development.
+- Production build succeeded and `verify:bundle` scanned 21 files without
+  finding a secret.
+- PostgreSQL tests were not run in this environment: PostgreSQL 16 is absent.
+- Browser tests were not run: all 212 attempts stopped before page launch
+  because Chromium was absent, and the allowed environment could not download
+  it (three 30-second CDN timeouts/502). They are **not** reported as passed.
+
+**Still required before merge/deployment**
+
+Run the database and full Playwright suites in CI, review the exact head, apply
+and fingerprint migration 012, set server-only secrets, deploy the Edge
+Function, configure the one-minute protected scheduler, add the public VAPID
+repository variable, deploy Pages, then perform the runbook's locked-screen
+iPhone and Android matrix. Provider acceptance, notification arrival, sound,
+opening and answering must be recorded as separate facts.
+
+The PWA cannot promise a custom siren or override silent mode, Focus, battery
+policy or platform delivery. Keep the approved operational fallback until field
+tests establish measured reliability.
 
 ---
 

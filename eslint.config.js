@@ -56,6 +56,14 @@ export default tseslint.config(
     },
   },
   {
+    // Supabase Edge Functions run in Deno. They authenticate every request in
+    // their own code because the scheduled worker uses a separate secret.
+    files: ['supabase/functions/**/*.ts'],
+    languageOptions: {
+      globals: { Deno: 'readonly' },
+    },
+  },
+  {
     // The domain layer is pure: no browser, no clock, no randomness.
     files: ['src/domain/**/*.ts'],
     ignores: ['src/domain/**/*.test.ts'],
