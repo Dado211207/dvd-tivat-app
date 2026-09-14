@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string;
   /** The publishable key. Public by design; grants nothing without a session. */
   readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  /** Public VAPID key. The matching private key exists only in the Edge Function secret store. */
+  readonly VITE_WEB_PUSH_PUBLIC_KEY?: string;
 }
 
 interface ImportMeta {

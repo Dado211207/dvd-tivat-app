@@ -541,13 +541,42 @@ QUEUED → SENT_TO_PROVIDER → PROVIDER_ACCEPTED → DEVICE_ACKNOWLEDGED
                           ↘ PROVIDER_REJECTED / FAILED / UNKNOWN
 ```
 
-Publishing writes `QUEUED` and nothing else. There is no transport, so no row
-can currently leave `QUEUED`, and nothing in the system may say "delivered".
-Provider outcomes live in `notification_delivery_attempts`, one row per attempt,
-kept separate from whether a human opened or answered anything.
+Publishing always writes an `IN_APP` row. Migration `202609150012` also writes
+one `WEB_PUSH` row when that recipient has at least one active, non-expired
+device subscription. The Edge Function claims that row atomically, sends the
+same privacy-safe alert to each active device and records each provider attempt.
+Provider acceptance still must not be displayed as "the member was notified":
+it is separate from a device receipt, a human opening and a human answer.
 
 `dedupe_key` is unique, so a retried fan-out cannot alert the same member twice.
-`attempt_count` is capped at 10, so retries are bounded.
+The worker also claims a row only when its current state and attempt count still
+match, so two simultaneous invocations cannot both send it. The Web Push worker
+is deliberately bounded at two attempts: the immediate alert and one repeat
+after 90 seconds, only while the member has not opened the intervention.
+When an opening is found, the row receives `delivery_closed_at` and
+`delivery_close_reason = 'MEMBER_OPENED'`; it no longer enters scheduled scans.
+That closure is not described as a device delivery receipt — the authoritative
+opening remains the separate `intervention_acknowledgements` row.
+
+### Web Push subscription authority
+
+`web_push_subscriptions` stores endpoint, public encryption key, authentication
+secret and expiration per authenticated user. RLS lets an active operational
+account read only its own registrations. Inserts and revocations are available
+only through `register_web_push_subscription()` and
+`revoke_web_push_subscription()`; direct client writes are revoked.
+
+Registration re-runs the same recipient eligibility rule used at publication:
+active member, linked account, completed profile, active access grant and an
+operational role. The server worker re-checks those facts immediately before
+each send, so suspending an account after publication stops an unsent or repeated
+alert. A subscription endpoint already owned by another account cannot be
+claimed by a modified client.
+
+The endpoint and key material never enter the notification payload or an error
+message. The payload contains only intervention id and publication time. Title,
+location and instructions are fetched after the application opens and RLS has
+checked the signed-in account again.
 
 ## 8. Indexes
 
@@ -557,6 +586,7 @@ For the live board and the historical filters:
 - `attendance_intervals(intervention_id, started_at)` and `(member_id, started_at desc)`
 - a partial index on open attendance intervals and on open vehicle movements
 - a partial index on pending outbox rows
+- a partial index for queued/in-flight/accepted Web Push work
 
 ## 9. Timestamps
 
@@ -627,16 +657,24 @@ a row they could not already read, and where no notice arrives the client polls
 in the foreground instead. `REPLICA IDENTITY` is deliberately left at the
 default: the old row would only matter to a client that read payloads.
 
-## 12. Not built yet
+## 12. Web Push deployment boundary
+
+The migration and Edge Function being present in this repository does not make
+the hosted transport active. The function must be deployed, VAPID and worker
+secrets must be set server-side, the public VAPID key must be added to the Pages
+build, and a one-minute scheduled invocation must be configured for the single
+unacknowledged repeat. Exact setup and the physical-device acceptance are in
+[DEMO_RUNBOOK.md](./DEMO_RUNBOOK.md).
+
+## 13. Not built yet
 
 Stated as a boundary rather than a list of absences, because the interesting part
 is where "built" stops and "usable" starts.
 
 This section was stale and is corrected here rather than quietly rewritten:
-it claimed `202609120005` was not applied to the hosted project and that no
-screen published a real call-out. Both were true when written and neither has
-been true since 12 September. All eleven migrations are applied, and the
-commander, firefighter and archive screens all run against the real database.
+the commander, firefighter and archive screens already run against the real
+database. Migration `202609150012` is new in this branch and is not described as
+hosted until its application and fingerprint are independently verified.
 
 **Genuinely not built:**
 
@@ -647,6 +685,6 @@ commander, firefighter and archive screens all run against the real database.
   the export itself, with its formula-injection escaping, is not written.
 - No `intervention_updates` write command (the table and its read policy exist).
 - No seed file of fictional data for a real project.
-- **No general availability and no journey progress.** Both are designed in
-  [ai/PROJECT_STATE.md](./ai/PROJECT_STATE.md) and neither has a migration yet.
-- No notification transport.
+- No guaranteed alarm transport that can override a phone's sound, Focus or
+  battery policy. Web Push is best-effort and must pass the physical-device
+  matrix before operational use.

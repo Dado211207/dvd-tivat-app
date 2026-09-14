@@ -30,6 +30,16 @@ function loadWorker() {
   const handlers = new Map<string, (event: unknown) => void>();
   const cachePut = vi.fn();
   const cacheAdd = vi.fn();
+  const showNotification = vi.fn(
+    async (
+      _title: string,
+      _options: NotificationOptions & {
+        renotify?: boolean;
+        silent?: boolean;
+        data?: { route?: string };
+      },
+    ) => undefined,
+  );
 
   const scope = {
     location: new URL(`${ORIGIN}/app/`),
@@ -37,7 +47,8 @@ function loadWorker() {
       handlers.set(type, handler);
     },
     skipWaiting: vi.fn(),
-    clients: { claim: vi.fn() },
+    registration: { scope: `${ORIGIN}/app/`, showNotification },
+    clients: { claim: vi.fn(), matchAll: vi.fn(async () => []), openWindow: vi.fn() },
     caches: {
       open: vi.fn(async () => ({ put: cachePut, add: cacheAdd })),
       match: vi.fn(async () => undefined),
@@ -51,7 +62,7 @@ function loadWorker() {
   const run = new Function('self', 'caches', 'fetch', 'Request', 'Response', 'URL', SW_SOURCE);
   run(scope, scope.caches, scope.fetch, Request, Response, URL);
 
-  return { handlers, scope, cachePut, cacheAdd };
+  return { handlers, scope, cachePut, cacheAdd, showNotification };
 }
 
 function fetchEvent(
@@ -83,7 +94,7 @@ describe('the service worker never caches what the server said', () => {
 
   it('registers the handlers it is meant to', () => {
     expect([...worker.handlers.keys()].sort()).toEqual(
-      ['activate', 'fetch', 'install', 'message'].sort(),
+      ['activate', 'fetch', 'install', 'message', 'notificationclick', 'push'].sort(),
     );
   });
 
@@ -131,5 +142,50 @@ describe('the service worker never caches what the server said', () => {
     // point at the telephone rather than at itself.
     expect(SW_SOURCE).toMatch(/nije kanal za hitne slucajeve/i);
     expect(SW_SOURCE).toMatch(/pozovite zvanicnu vatrogasnu sluzbu/i);
+  });
+
+  it('shows an urgent but privacy-safe notification for a pushed call-out', async () => {
+    let work: Promise<unknown> | undefined;
+    worker.handlers.get('push')!({
+      data: {
+        json: () => ({
+          interventionId: '11111111-1111-4111-8111-111111111111',
+          publishedAt: 1_800_000_000_000,
+          title: 'must not appear',
+          location: 'must not appear',
+        }),
+      },
+      waitUntil: (promise: Promise<unknown>) => {
+        work = promise;
+      },
+    });
+    await work;
+
+    expect(worker.showNotification).toHaveBeenCalledTimes(1);
+    const [title, options] = worker.showNotification.mock.calls[0]!;
+    expect(title).toBe('OPERATIVNI POZIV - DVD Tivat');
+    expect(options.body).toBe('Nova intervencija. Potvrdite prijem odmah.');
+    expect(JSON.stringify(options)).not.toMatch(/must not appear/);
+    expect(options.data.route).toContain('11111111-1111-4111-8111-111111111111');
+    expect(options.renotify).toBe(true);
+    expect(options.silent).toBe(false);
+  });
+
+  it('opens the exact protected call-out when the notification is pressed', async () => {
+    const route = './#/mobilizacija?intervention=11111111-1111-4111-8111-111111111111';
+    let work: Promise<unknown> | undefined;
+    const close = vi.fn();
+    worker.handlers.get('notificationclick')!({
+      notification: { close, data: { route } },
+      waitUntil: (promise: Promise<unknown>) => {
+        work = promise;
+      },
+    });
+    await work;
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(worker.scope.clients.openWindow).toHaveBeenCalledWith(
+      `${ORIGIN}/app/#/mobilizacija?intervention=11111111-1111-4111-8111-111111111111`,
+    );
   });
 });

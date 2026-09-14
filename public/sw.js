@@ -22,7 +22,7 @@
  */
 
 // Bump on any change to this file or to what it caches.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = `dvd-tivat-shell-${VERSION}`;
 
 self.addEventListener('install', (event) => {
@@ -53,6 +53,59 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   // Sent by the page when the person presses "Osvjezi", never on our own.
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// Push carries no incident detail. A locked phone may be visible to anybody;
+// location, title and instructions are fetched only after the app opens and
+// the server re-checks the signed-in account.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+
+  const interventionId =
+    typeof data.interventionId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.interventionId)
+      ? data.interventionId
+      : null;
+  const route = interventionId
+    ? `./#/mobilizacija?intervention=${encodeURIComponent(interventionId)}`
+    : './#/mobilizacija';
+
+  event.waitUntil(
+    self.registration.showNotification('OPERATIVNI POZIV - DVD Tivat', {
+      body: 'Nova intervencija. Potvrdite prijem odmah.',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      tag: interventionId ? `dvd-call-${interventionId}` : 'dvd-call',
+      renotify: true,
+      requireInteraction: true,
+      silent: false,
+      vibrate: [400, 150, 400, 150, 700],
+      timestamp: typeof data.publishedAt === 'number' ? data.publishedAt : Date.now(),
+      data: { route },
+      actions: [{ action: 'open', title: 'Otvori poziv' }],
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const route = event.notification.data?.route ?? './#/mobilizacija';
+  const destination = new URL(route, self.registration.scope).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+      for (const client of clients) {
+        if (typeof client.navigate === 'function') await client.navigate(destination);
+        if (typeof client.focus === 'function') return client.focus();
+      }
+      return self.clients.openWindow(destination);
+    }),
+  );
 });
 
 /** A document, offline, with nothing cached. It states what it does not know. */

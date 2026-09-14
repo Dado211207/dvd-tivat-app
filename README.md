@@ -15,19 +15,23 @@ facts that no single action is allowed to fake**.
 > 2026. The earlier citizen-report screen is abandoned research, kept only
 > behind an explicitly experimental heading.
 
-> **It sends no notification of any kind.** There is no push, email, SMS, Viber
-> or telephone transport in this application at all. Publishing a call-out writes
-> rows saying a message is *owed* to each recipient; nothing sends them, and
-> nothing in the interface may say a member was notified. Every member, contact
-> label, vehicle and location in this repository is invented.
+> **Web Push is device-bound and opt-in.** The source contains a protected Web
+> Push subscription registry, a server-side sender and a privacy-safe service
+> worker notification. It works only after the hosted migration, Edge Function,
+> VAPID secrets, scheduler and public VAPID build variable are configured. A
+> provider accepting a message is not proof that a phone made a sound or that a
+> member opened the call-out. There is no email, SMS, Viber or telephone
+> transport. Every member, contact label, vehicle and location in this repository
+> is invented.
 >
 > **The operational path runs against the real server.** *Poziv i intervencija*
 > drafts, publishes, runs and closes an intervention. *Moj poziv* is where a
 > firefighter states availability, opens the call-out, answers, reports movement
 > and records arrival and departure. *Arhiva i ucesce* is the record afterwards.
 > *Nalozi i pristup* and *Evidencija drustva* cover accounts and the society's
-> roster. All seven migrations are applied to the hosted project and
-> fingerprint-verified against a local PostgreSQL built from the same files.
+> roster. Migrations 001-011 are applied to the hosted project. Migration 012
+> is the new Web Push slice and is not called hosted until its postflight and
+> fingerprint verification are complete.
 >
 > **The earlier prototype screens remain, clearly labelled**, under a
 > *Prototip (simulacija)* heading. They run on device-local fictional state
@@ -39,8 +43,9 @@ facts that no single action is allowed to fake**.
 
 Status: **a working prototype of the whole journey, on real data behind real
 access control.** Nothing is agreed with DVD Tivat yet, no real member exists in
-it, and nothing here is ready to be relied on in an emergency — there is no
-notification transport and no offline queue. See
+it, and nothing here is ready to be relied on in an emergency — Web Push still
+needs hosted configuration and physical-device acceptance, and there is no
+offline mutation queue. See
 [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) §7 for the honest readiness
 summary.
 
@@ -125,20 +130,19 @@ actor selector from being the first thing anybody sees.
 
 | Absent | Why |
 |---|---|
-| Any real notification | Nobody may be alerted by a demonstration. Delivery is recorded as `NIJE_POKUSANO` and never anything else, enforced by a test |
+| Guaranteed alarm delivery | Web Push is best-effort. Device settings, Focus modes, network and platform policy can suppress or delay sound; provider acceptance and member opening remain separate facts |
 | An actor selector on a real screen | It is not rendered there at all, so it cannot be tabbed to, announced by a screen reader or found by a script. It switches only the fictional prototype screens and protects nothing — which is why each of those says so on itself |
 | An offline queue | An action taken with no signal is refused and the interface says so. Storing it and sending it later without saying which of the two happened would be worse than refusing |
 | Real member data | The repository is public. Everything is invented |
 | Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
 | Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
 | Password reset | No mail provider is configured, so a reset form would send nothing while looking as though it had. The screen says that instead of offering one |
-| Any notification transport | Publishing writes `QUEUED` rows saying a message is owed. There is no push, email, SMS, Viber or telephone sender, and nothing in the interface may say a member was notified. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
+| Email, SMS, Viber or telephone transport | Only optional Web Push is implemented. It is intentionally not described as proof that a member was alerted. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
 | A native application | The shell is an installable PWA: manifest, icons, standalone display, and a service worker that caches only the shell and never a server answer. No app store packaging |
 
-**A browser prototype is not evidence that a locked Android or iPhone will raise
-an alarm.** Whether that is achievable at all depends on platform permissions,
-store policy and delivery acknowledgements, and it is a separate investigation
-([PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) Phase 3) that has not been done.
+**Code and automated tests are not evidence that a locked Android or iPhone will
+raise an alarm.** That requires the physical-device matrix in the runbook. A PWA
+cannot promise a custom siren or override the phone's silent and focus settings.
 
 ## Documentation
 
@@ -164,9 +168,9 @@ store policy and delivery acknowledgements, and it is a separate investigation
 ## Built with
 
 TypeScript, React and Vite; Vitest, Playwright and axe-core for verification; PostgreSQL for the
-row-level-security suite. Identity and access run on Supabase; organisational administration has a
-tested server path awaiting hosted migration `202609120005`; the incident, response, attendance and
-notification screens still have no connected backend. Only the project URL and the publishable key are configured, both public by design and both
+row-level-security suite. Identity, operations and access run on Supabase. Web Push uses a protected
+subscription table and an Edge Function; its private VAPID key and worker secret stay server-side.
+Only the project URL, Supabase publishable key and public VAPID key may enter the browser build, all public by design and
 kept out of tracked files - see [.env.example](.env.example). Reasoning and rejected alternatives in
 [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

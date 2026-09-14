@@ -5,6 +5,62 @@ Record what was done, what was verified, and what the next concrete action is.
 
 ---
 
+## 2026-09-14 - Device-bound Web Push, implementation before hosted proof
+
+Owner priority: a selected firefighter must receive an urgent notification even
+when the PWA is not open. Implemented the source slice on
+`codex/web-push-notifications`, without claiming it is deployed or that a
+physical phone sounded.
+
+**Implemented**
+
+- Additive migration `202609150012`: a protected per-user Web Push subscription
+  registry; self-only RLS; security-definer register/revoke functions; the same
+  full recipient eligibility check used by publication; and WEB_PUSH outbox
+  fan-out only for recipients with an active device.
+- `send-web-push` Edge Function: command-role or scheduler authentication,
+  server-only VAPID private key and worker secret, privacy-safe payload, atomic
+  outbox claim, per-device provider attempts, expired-endpoint revocation and a
+  fresh access/member/profile check immediately before sending.
+- One immediate high-urgency alert plus at most one repeat after 90 seconds if
+  that member has not opened the intervention. Concurrent invocations cannot
+  both claim the same attempt.
+- Service worker notification title `OPERATIVNI POZIV - DVD Tivat`, generic
+  body, Android vibration request where supported, replacement tag, persistent
+  interaction request and a protected deep link to the exact intervention.
+- Firefighter opt-in panel, including iPhone Home Screen installation guidance,
+  permission denial handling, self-repair of an existing browser subscription
+  and per-device disable.
+- Pages build requires only the public VAPID key. No service-role key, VAPID
+  private key or worker secret can enter a `VITE_*` variable.
+
+**Verified locally**
+
+- Strict TypeScript and ESLint pass.
+- The final full Vitest run passed **472/472** across 25 files. The focused
+  push/service-worker set passed 15/15 during development.
+- Production build succeeded and `verify:bundle` scanned 21 files without
+  finding a secret.
+- PostgreSQL tests were not run in this environment: PostgreSQL 16 is absent.
+- Browser tests were not run: all 212 attempts stopped before page launch
+  because Chromium was absent, and the allowed environment could not download
+  it (three 30-second CDN timeouts/502). They are **not** reported as passed.
+
+**Still required before merge/deployment**
+
+Run the database and full Playwright suites in CI, review the exact head, apply
+and fingerprint migration 012, set server-only secrets, deploy the Edge
+Function, configure the one-minute protected scheduler, add the public VAPID
+repository variable, deploy Pages, then perform the runbook's locked-screen
+iPhone and Android matrix. Provider acceptance, notification arrival, sound,
+opening and answering must be recorded as separate facts.
+
+The PWA cannot promise a custom siren or override silent mode, Focus, battery
+policy or platform delivery. Keep the approved operational fallback until field
+tests establish measured reliability.
+
+---
+
 ## 2026-09-13 (late evening) - The measured-record slice
 
 Nine defects from an independent hosted-browser review. Every one of them was
