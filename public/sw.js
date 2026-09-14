@@ -99,9 +99,20 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
-      for (const client of clients) {
-        if (typeof client.navigate === 'function') await client.navigate(destination);
-        if (typeof client.focus === 'function') return client.focus();
+      // ONE window is taken to the call-out, not all of them. Navigating every
+      // open tab would yank a commander's console away from what they were
+      // doing on the same device. `navigate()` resolves to the client that
+      // ended up on the destination, and that is the one to focus - the
+      // original reference can be stale afterwards in some browsers.
+      const [client] = clients;
+      if (client) {
+        const moved =
+          typeof client.navigate === 'function'
+            ? await client.navigate(destination).catch(() => null)
+            : null;
+        const target = moved ?? client;
+        if (typeof target.focus === 'function') return target.focus();
+        return undefined;
       }
       return self.clients.openWindow(destination);
     }),

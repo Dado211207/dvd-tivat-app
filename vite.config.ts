@@ -20,7 +20,15 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      // The Edge Function's sending policy. It runs in Deno in production, but
+      // the rules that decide whether a phone makes a noise - and what a locked
+      // screen may say - are pure, so they are tested here rather than only
+      // against a live push service.
+      'supabase/functions/**/*.test.ts',
+    ],
     // e2e/ is Playwright's; Vitest must not try to run those files.
     exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
   },

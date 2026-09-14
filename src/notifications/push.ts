@@ -115,15 +115,26 @@ export async function enableWebPush(): Promise<PushSubscription> {
   }
 }
 
+/**
+ * Re-registers a subscription this browser ALREADY holds, and never creates one.
+ *
+ * The distinction is the whole point. A browser can keep a push subscription
+ * the server has lost - a restored profile, a failed registration call, a row
+ * removed by hand - and re-sending it is repair. CREATING one here would not be
+ * repair, it would be enabling push without being asked.
+ *
+ * The first draft of this function did create one, and the consequence was
+ * worse than the inefficiency: `disableWebPush` unsubscribes locally, so the
+ * next time the member opened their call-out screen this function found no
+ * subscription, made a new one, and registered it. Turning the alarm off lasted
+ * until the next page load. Opt-in has to mean opt-in, so an absent
+ * subscription is now simply an absent subscription.
+ */
 export async function repairWebPushRegistration(): Promise<boolean> {
   if (pushCapability() !== 'AVAILABLE' || Notification.permission !== 'granted') return false;
   const registration = await navigator.serviceWorker.ready;
-  const subscription =
-    (await registration.pushManager.getSubscription()) ??
-    (await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey(),
-    }));
+  const subscription = await registration.pushManager.getSubscription();
+  if (subscription === null) return false;
   await saveSubscription(subscription);
   return true;
 }

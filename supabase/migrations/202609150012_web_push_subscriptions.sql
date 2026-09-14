@@ -169,6 +169,7 @@ begin
   from public.interventions where id = target_intervention for update;
   if current_status is null then raise exception 'INTERVENTION_NOT_FOUND'; end if;
 
+  -- Already published: this is a retry, not a second call-out.
   if current_status <> 'DRAFT' then
     if current_status in ('CLOSED', 'CANCELLED') then raise exception 'INTERVENTION_NOT_OPEN'; end if;
     return target_intervention;
@@ -178,10 +179,18 @@ begin
     raise exception 'NO_RECIPIENTS';
   end if;
 
+  -- Refuse the whole call-out rather than silently dropping somebody. A
+  -- commander who selected five people and got four must be told, not left to
+  -- discover it when one of them never answers. This also means a modified
+  -- client that posts an ineligible id directly gets an error, not a partial
+  -- publication.
   select count(*) into ineligible_count
   from unnest(recipient_member_ids) as requested(member_id)
   where not public.is_eligible_recipient(requested.member_id);
-  if ineligible_count > 0 then raise exception 'RECIPIENT_NOT_ELIGIBLE'; end if;
+
+  if ineligible_count > 0 then
+    raise exception 'RECIPIENT_NOT_ELIGIBLE';
+  end if;
 
   for member_row in
     select id, full_name, user_id from public.members
@@ -192,6 +201,10 @@ begin
     values (target_intervention, member_row.id, 1, member_row.full_name)
     on conflict do nothing;
 
+    -- The dedupe key now names its channel. Rows written before this migration
+    -- carry the older `<intervention>:<member>:1` form and are left alone: the
+    -- function returns early for anything that is not a DRAFT, so a published
+    -- intervention is never fanned out twice and the two forms never meet.
     insert into public.notification_outbox(
       intervention_id, member_id, channel, state, dedupe_key)
     values (
@@ -199,6 +212,10 @@ begin
       target_intervention::text || ':' || member_row.id::text || ':IN_APP:1')
     on conflict do nothing;
 
+    -- A Web Push row is queued ONLY for a member who has opted a device in.
+    -- Everybody else still gets the in-app obligation above: the call-out is
+    -- visible to them the moment they open the application, and push is an
+    -- extra way of being told, never the only one.
     if exists (
       select 1 from public.web_push_subscriptions subscription
       where subscription.user_id = member_row.user_id
@@ -228,8 +245,10 @@ begin
 
   insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id)
   values (
-    target_intervention, 'INTERVENTION_PUBLISHED',
-    jsonb_build_object('recipient_count', frozen_count), auth.uid());
+    target_intervention,
+    'INTERVENTION_PUBLISHED',
+    jsonb_build_object('recipient_count', frozen_count),
+    auth.uid());
 
   return target_intervention;
 end;

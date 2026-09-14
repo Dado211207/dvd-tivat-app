@@ -28,8 +28,11 @@ export function PushNotificationPanel() {
 
     void (async () => {
       try {
-        const repaired = await repairWebPushRegistration();
-        const subscription = repaired ? await currentPushSubscription() : null;
+        // Repair only re-registers a subscription this browser already holds.
+        // It cannot create one, so opening this screen never turns the alarm
+        // on for somebody who turned it off - see `repairWebPushRegistration`.
+        await repairWebPushRegistration();
+        const subscription = await currentPushSubscription();
         if (active) setState(subscription ? 'ON' : Notification.permission === 'denied' ? 'DENIED' : 'OFF');
       } catch {
         if (active) setState('ERROR');
@@ -67,7 +70,13 @@ export function PushNotificationPanel() {
           <p className="eyebrow">OPERATIVNA UZBUNA</p>
           <h2 className="panel__title" id="push-panel-title">Notifikacije za novi poziv</h2>
         </div>
-        <span className={`push-panel__state push-panel__state--${state.toLowerCase()}`}>
+        {/* Announced: the button that changes this state is pressed by
+            somebody who may not be able to see the chip change colour. */}
+        <span
+          role="status"
+          data-testid="push-state"
+          className={`push-panel__state push-panel__state--${state.toLowerCase()}`}
+        >
           {state === 'ON' ? 'Ukljucene' : state === 'BUSY' || state === 'CHECKING' ? 'Provjera...' : 'Iskljucene'}
         </span>
       </div>

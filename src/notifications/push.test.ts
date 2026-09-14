@@ -10,8 +10,10 @@ vi.mock('@/auth/supabaseClient', () => ({
 }));
 
 import {
+  disableWebPush,
   enableWebPush,
   pushCapability,
+  repairWebPushRegistration,
   requestPushDelivery,
 } from './push';
 
@@ -118,5 +120,81 @@ describe('device-bound Web Push client', () => {
     expect(backend.invoke).toHaveBeenCalledWith('send-web-push', {
       body: { intervention_id: '11111111-1111-4111-8111-111111111111' },
     });
+  });
+});
+
+/**
+ * Turning the alarm off has to stay off.
+ *
+ * The first version of `repairWebPushRegistration` created a subscription when
+ * it found none, which read as harmless repair and was not: `disableWebPush`
+ * unsubscribes locally, so the next time the member opened their call-out
+ * screen the repair made a fresh subscription and registered it. The opt-out
+ * lasted until the next page load, and nobody would have been told.
+ *
+ * Repair now means re-registering a subscription the browser ALREADY holds.
+ */
+describe('repair never enables push for somebody who did not ask', () => {
+  it('does nothing at all when this browser holds no subscription', async () => {
+    const browser = installPushBrowser({ permission: 'granted' });
+
+    await expect(repairWebPushRegistration()).resolves.toBe(false);
+
+    expect(browser.subscribe, 'repair must never create a subscription').not.toHaveBeenCalled();
+    expect(backend.rpc, 'and must never register one').not.toHaveBeenCalled();
+  });
+
+  it('re-registers a subscription the browser already holds', async () => {
+    // The case repair exists for: the device still has its endpoint, the server
+    // lost the row. Nothing is created; the existing endpoint is sent again.
+    const browser = installPushBrowser({ permission: 'granted', existingSubscription: true });
+
+    await expect(repairWebPushRegistration()).resolves.toBe(true);
+
+    expect(browser.subscribe).not.toHaveBeenCalled();
+    expect(backend.rpc).toHaveBeenCalledWith(
+      'register_web_push_subscription',
+      expect.objectContaining({ requested_endpoint: browser.oldSubscription.endpoint }),
+    );
+  });
+
+  it('survives the whole disable-then-revisit journey', async () => {
+    // End to end, as a member actually experiences it: switch it off, come
+    // back to the screen, and it is still off.
+    const browser = installPushBrowser({ permission: 'granted', existingSubscription: true });
+    await disableWebPush();
+    expect(backend.rpc).toHaveBeenCalledWith(
+      'revoke_web_push_subscription',
+      expect.objectContaining({ requested_endpoint: browser.oldSubscription.endpoint }),
+    );
+    expect(browser.oldUnsubscribe).toHaveBeenCalled();
+
+    // The browser now holds nothing, which is what a revisit sees.
+    backend.rpc.mockClear();
+    const revisit = installPushBrowser({ permission: 'granted' });
+    await expect(repairWebPushRegistration()).resolves.toBe(false);
+    expect(revisit.subscribe).not.toHaveBeenCalled();
+    expect(backend.rpc).not.toHaveBeenCalled();
+  });
+
+  it('never asks for permission on its own', async () => {
+    // Permission is requested from a user action and nowhere else. Repair runs
+    // on mount, so it must return before it could ever prompt.
+    for (const permission of ['default', 'denied'] as const) {
+      const browser = installPushBrowser({ permission, existingSubscription: true });
+      await expect(repairWebPushRegistration()).resolves.toBe(false);
+      expect(Notification.requestPermission).not.toHaveBeenCalled();
+      expect(browser.subscribe).not.toHaveBeenCalled();
+      expect(backend.rpc).not.toHaveBeenCalled();
+    }
+  });
+
+  it('stays out of the way on a browser that cannot do push at all', async () => {
+    installPushBrowser({ permission: 'granted', userAgent: 'Mozilla/5.0 (iPhone)' });
+    // An iPhone in the browser, not installed: the panel shows installation
+    // guidance and nothing may be registered behind it.
+    expect(pushCapability()).toBe('INSTALL_ON_IOS');
+    await expect(repairWebPushRegistration()).resolves.toBe(false);
+    expect(backend.rpc).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,16 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import webpush from 'npm:web-push@3.6.7';
+import {
+  alertPayload,
+  attemptsRemain,
+  holdForNow,
+  isRepeat,
+  MAX_ATTEMPTS,
+  stillEligible,
+  subscriptionUsable,
+} from './policy.ts';
 
 const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? 'https://dado211207.github.io';
-const retryAfterMs = 90_000;
 
 function headers(request: Request): Record<string, string> {
   const origin = request.headers.get('origin');
@@ -23,6 +31,22 @@ function requiredSecret(name: string): string {
   const value = Deno.env.get(name)?.trim();
   if (!value) throw new Error(`MISSING_${name}`);
   return value;
+}
+
+/**
+ * Compares the scheduler's secret without leaking its length or prefix through
+ * timing. `===` on a string short-circuits at the first differing byte, which
+ * over enough requests is measurable; this always walks the full width.
+ */
+function secretMatches(presented: string | null, expected: string): boolean {
+  if (presented === null) return false;
+  const a = new TextEncoder().encode(presented);
+  const b = new TextEncoder().encode(expected);
+  let difference = a.length ^ b.length;
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    difference |= (a[index] ?? 0) ^ (b[index] ?? 0);
+  }
+  return difference === 0;
 }
 
 function isUuid(value: unknown): value is string {
@@ -55,7 +79,7 @@ Deno.serve(async (request) => {
       return response(request, 400, { error: 'INVALID_INTERVENTION_ID' });
     }
 
-    const scheduler = request.headers.get('x-push-worker-secret') === workerSecret;
+    const scheduler = secretMatches(request.headers.get('x-push-worker-secret'), workerSecret);
     if (!scheduler) {
       const authorization = request.headers.get('authorization');
       if (!authorization?.startsWith('Bearer ')) return response(request, 401, { error: 'AUTH_REQUIRED' });
@@ -84,7 +108,7 @@ Deno.serve(async (request) => {
       .eq('channel', 'WEB_PUSH')
       .is('delivery_closed_at', null)
       .in('state', ['QUEUED', 'SENT_TO_PROVIDER', 'PROVIDER_ACCEPTED', 'PROVIDER_REJECTED'])
-      .lt('attempt_count', 2)
+      .lt('attempt_count', MAX_ATTEMPTS)
       .order('created_at', { ascending: true })
       .limit(50);
     if (isUuid(body.intervention_id)) outboxQuery = outboxQuery.eq('intervention_id', body.intervention_id);
@@ -97,33 +121,43 @@ Deno.serve(async (request) => {
     let skipped = 0;
 
     for (const row of rows ?? []) {
-      const updatedAt = Date.parse(String(row.updated_at));
-      const isRepeat = row.state === 'PROVIDER_ACCEPTED';
-      if (isRepeat && Date.now() - updatedAt < retryAfterMs) {
+      const state = String(row.state);
+      const repeat = isRepeat(state);
+      // Both waits, and the attempt ceiling, live in `policy.ts` where they are
+      // tested. The filter above narrows the read; this is the real decision.
+      if (holdForNow(state, row.updated_at as string | null, Date.now())) {
         skipped += 1;
         continue;
       }
-      if (row.state === 'SENT_TO_PROVIDER' && Date.now() - updatedAt < 30_000) {
+      if (!attemptsRemain(Number(row.attempt_count))) {
         skipped += 1;
         continue;
       }
 
-      if (isRepeat) {
-        const { data: opened } = await service
-          .from('intervention_acknowledgements')
-          .select('intervention_id')
-          .eq('intervention_id', row.intervention_id)
-          .eq('member_id', row.member_id)
-          .maybeSingle();
-        if (opened) {
-          await service.from('notification_outbox').update({
-            delivery_closed_at: new Date().toISOString(),
-            delivery_close_reason: 'MEMBER_OPENED',
-            updated_at: new Date().toISOString(),
-          }).eq('id', row.id).eq('state', row.state).eq('attempt_count', row.attempt_count);
-          skipped += 1;
-          continue;
-        }
+      /*
+       * Somebody who has already opened the call-out is not alarmed again.
+       *
+       * This used to run only before a REPEAT, which left a real hole on the
+       * recovery path: a QUEUED row whose immediate wake-up failed can sit for
+       * minutes, and the member may have opened the intervention through the
+       * in-app path in the meantime. The scheduler would then set off an alarm
+       * about something they are already looking at. Checked for every row now,
+       * first attempt included.
+       */
+      const { data: opened } = await service
+        .from('intervention_acknowledgements')
+        .select('intervention_id')
+        .eq('intervention_id', row.intervention_id)
+        .eq('member_id', row.member_id)
+        .maybeSingle();
+      if (opened) {
+        await service.from('notification_outbox').update({
+          delivery_closed_at: new Date().toISOString(),
+          delivery_close_reason: 'MEMBER_OPENED',
+          updated_at: new Date().toISOString(),
+        }).eq('id', row.id).eq('state', state).eq('attempt_count', row.attempt_count);
+        skipped += 1;
+        continue;
       }
 
       const { data: member } = await service
@@ -140,11 +174,13 @@ Deno.serve(async (request) => {
           ])
         : [{ data: null }, { data: null }];
 
-      const stillEligible =
-        member?.active === true &&
-        profile?.profile_complete === true &&
-        grant?.active === true &&
-        ['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER'].includes(String(grant?.role));
+      const eligible = stillEligible({
+        memberActive: member?.active,
+        userId,
+        profileComplete: profile?.profile_complete,
+        grantActive: grant?.active,
+        grantRole: grant?.role,
+      });
 
       const nextAttempt = Number(row.attempt_count) + 1;
       const claimedAt = new Date().toISOString();
@@ -152,7 +188,7 @@ Deno.serve(async (request) => {
         .from('notification_outbox')
         .update({ state: 'SENT_TO_PROVIDER', attempt_count: nextAttempt, updated_at: claimedAt })
         .eq('id', row.id)
-        .eq('state', row.state)
+        .eq('state', state)
         .eq('attempt_count', row.attempt_count)
         .select('id')
         .maybeSingle();
@@ -162,7 +198,7 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      if (!userId || !stillEligible) {
+      if (!eligible) {
         await service.from('notification_delivery_attempts').insert({
           outbox_id: row.id,
           provider: 'WEB_PUSH',
@@ -183,7 +219,7 @@ Deno.serve(async (request) => {
         .is('revoked_at', null);
 
       const activeSubscriptions = (subscriptions ?? []).filter((subscription) =>
-        !subscription.expiration_time || Date.parse(subscription.expiration_time) > Date.now());
+        subscriptionUsable(subscription.expiration_time as string | null, Date.now()));
       if (activeSubscriptions.length === 0) {
         await service.from('notification_delivery_attempts').insert({
           outbox_id: row.id, provider: 'WEB_PUSH', provider_status: 'NO_ACTIVE_SUBSCRIPTION',
@@ -201,10 +237,12 @@ Deno.serve(async (request) => {
         .select('published_at')
         .eq('id', row.intervention_id)
         .single();
-      const payload = JSON.stringify({
-        interventionId: row.intervention_id,
+      // The only place a payload is built. See `alertPayload` for the whole
+      // argument about what a locked screen may be allowed to say.
+      const payload = alertPayload({
+        interventionId: String(row.intervention_id),
         publishedAt: intervention?.published_at ? Date.parse(intervention.published_at) : Date.now(),
-        repeat: isRepeat,
+        repeat,
       });
 
       let rowAccepted = false;

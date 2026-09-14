@@ -116,6 +116,27 @@ describe('Web Push subscription authority and outbox fan-out', () => {
   });
 
   it('refuses a device when the account or member is no longer eligible', async () => {
+    /*
+     * What matters in every case below is that NOTHING IS STORED. The refusal
+     * code says which gate stopped it, and the gates are ordered - "do you have
+     * operational access at all" before "are you an eligible recipient" - so a
+     * single account can only ever meet the first one that applies to it.
+     *
+     * This block originally expected ELIGIBLE_MEMBER_REQUIRED for an
+     * incomplete profile. That refusal is unreachable for this account:
+     * `current_dvd_role()` was tightened in an earlier slice to require a
+     * complete profile, so an unfinished account has no operational role and is
+     * turned away one gate earlier. The function is right and the expectation
+     * was wrong; the inactive-member case below still reaches the second gate.
+     */
+    const stored = async (value: string): Promise<number> => {
+      const { rows } = await db.query<{ count: string }>(
+        'select count(*)::text as count from public.web_push_subscriptions where endpoint = $1',
+        [value],
+      );
+      return Number(rows[0]!.count);
+    };
+
     const incomplete = await createAccount(db, 'push-incomplete@example.invalid');
     await grantRole(db, incomplete.userId, 'FIREFIGHTER');
     incomplete.memberId = await createMember(db, 'Incomplete Push', incomplete.userId);
@@ -127,7 +148,8 @@ describe('Web Push subscription authority and outbox fan-out', () => {
           authSecret,
         ]),
       ),
-    ).toMatch(/ELIGIBLE_MEMBER_REQUIRED/);
+    ).toMatch(/OPERATIONAL_ACCESS_REQUIRED/);
+    expect(await stored(endpoint('incomplete')), 'nothing may be stored').toBe(0);
 
     const suspended = await createAccount(db, 'push-suspended@example.invalid');
     await completeProfile(db, suspended.userId, 'Suspended Push');
@@ -145,6 +167,7 @@ describe('Web Push subscription authority and outbox fan-out', () => {
         ]),
       ),
     ).toMatch(/OPERATIONAL_ACCESS_REQUIRED/);
+    expect(await stored(endpoint('suspended')), 'nothing may be stored').toBe(0);
 
     const inactiveMember = await createAccount(db, 'push-inactive-member@example.invalid');
     await completeProfile(db, inactiveMember.userId, 'Inactive Member');
@@ -162,6 +185,7 @@ describe('Web Push subscription authority and outbox fan-out', () => {
         ]),
       ),
     ).toMatch(/ELIGIBLE_MEMBER_REQUIRED/);
+    expect(await stored(endpoint('inactive-member')), 'nothing may be stored').toBe(0);
   });
 
   it('queues Web Push only for a recipient with an active subscription', async () => {
@@ -184,6 +208,92 @@ describe('Web Push subscription authority and outbox fan-out', () => {
     expect(rows.filter((row) => row.channel === 'WEB_PUSH')).toEqual([
       { member_id: firefighter.memberId, channel: 'WEB_PUSH', state: 'QUEUED' },
     ]);
+  });
+
+  /**
+   * The atomic claim, at the level it is actually enforced.
+   *
+   * The Edge Function claims a row with a CONDITIONAL update - it must still be
+   * in the state and attempt count the worker read. The whole no-duplicate-send
+   * argument rests on that being a real guarantee rather than a hopeful one, so
+   * it is exercised against PostgreSQL rather than described in a comment.
+   */
+  it('lets exactly one worker claim a queued alert, however many try', async () => {
+    await register(firefighter, endpoint('claim-race'));
+    const draft = await createDraft(db, commander.userId, { key: 'push-claim-race' });
+    await asUserCommitted(db, commander.userId, (client) =>
+      client.query('select public.publish_intervention($1, $2)', [draft, [firefighter.memberId]]),
+    );
+
+    const { rows: queued } = await db.query<{ id: string; attempt_count: number }>(
+      `select id, attempt_count from public.notification_outbox
+       where intervention_id = $1 and channel = 'WEB_PUSH'`,
+      [draft],
+    );
+    expect(queued).toHaveLength(1);
+    const row = queued[0]!;
+
+    // Three workers reading the same snapshot and racing to claim it.
+    const claim = () =>
+      db.query(
+        `update public.notification_outbox
+         set state = 'SENT_TO_PROVIDER', attempt_count = $2, updated_at = now()
+         where id = $1 and state = 'QUEUED' and attempt_count = $3
+         returning id`,
+        [row.id, Number(row.attempt_count) + 1, row.attempt_count],
+      );
+    const results = await Promise.all([claim(), claim(), claim()]);
+    const winners = results.filter((result) => result.rowCount === 1);
+    expect(winners, 'a second worker must not be able to send the same alert').toHaveLength(1);
+
+    const { rows: after } = await db.query<{ state: string; attempt_count: number }>(
+      'select state, attempt_count from public.notification_outbox where id = $1',
+      [row.id],
+    );
+    expect(after[0]).toEqual({ state: 'SENT_TO_PROVIDER', attempt_count: 1 });
+  });
+
+  /**
+   * Closing a row is what stops the scheduled repeat, and the schema only
+   * accepts a reason it recognises - so a typo cannot silently close deliveries
+   * for a reason nobody can audit later.
+   */
+  it('records why a delivery was closed, and refuses a reason it does not know', async () => {
+    await register(firefighter, endpoint('closed'));
+    const draft = await createDraft(db, commander.userId, { key: 'push-closed' });
+    await asUserCommitted(db, commander.userId, (client) =>
+      client.query('select public.publish_intervention($1, $2)', [draft, [firefighter.memberId]]),
+    );
+    const { rows } = await db.query<{ id: string }>(
+      `select id from public.notification_outbox where intervention_id = $1 and channel = 'WEB_PUSH'`,
+      [draft],
+    );
+    const id = rows[0]!.id;
+
+    await db.query(
+      `update public.notification_outbox
+       set delivery_closed_at = now(), delivery_close_reason = 'MEMBER_OPENED' where id = $1`,
+      [id],
+    );
+    const { rows: closed } = await db.query<{ delivery_close_reason: string }>(
+      'select delivery_close_reason from public.notification_outbox where id = $1',
+      [id],
+    );
+    expect(closed[0]?.delivery_close_reason).toBe('MEMBER_OPENED');
+
+    await expect(
+      db.query(
+        `update public.notification_outbox
+         set delivery_closed_at = now(), delivery_close_reason = 'BECAUSE_I_SAID_SO' where id = $1`,
+        [id],
+      ),
+    ).rejects.toThrow();
+
+    // A close time without a reason, or a reason without a time, is not a
+    // record of anything.
+    await expect(
+      db.query('update public.notification_outbox set delivery_close_reason = null where id = $1', [id]),
+    ).rejects.toThrow();
   });
 
   it('stops future Web Push fan-out after the user revokes the device', async () => {

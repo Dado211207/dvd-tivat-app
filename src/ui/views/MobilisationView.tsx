@@ -46,6 +46,7 @@ import {
 import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
 import { formatDurationMs } from '@/auth/duration';
 import { loadRoster } from '@/auth/roster';
+import { readRouteParam } from '../router';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { PushNotificationPanel } from '../components/PushNotificationPanel';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
@@ -99,9 +100,21 @@ const EMPTY: MyData = {
   availabilityChangedAt: null,
 };
 
+/**
+ * The intervention a pressed notification asked for, or null.
+ *
+ * Read through the router's own parser rather than a second copy of it: two
+ * hash parsers that can disagree is exactly how a deep link starts working
+ * everywhere except the one case nobody tested.
+ *
+ * **This is a hint, never an authority.** The id is checked against the
+ * interventions the SERVER returned for this account, so a link to somebody
+ * else's call-out selects nothing and the screen falls back to whatever this
+ * member may actually see. Row level security refuses it regardless; this only
+ * decides which of their own call-outs to open on.
+ */
 function requestedInterventionId(): string | null {
-  const query = window.location.hash.split('?')[1] ?? '';
-  const value = new URLSearchParams(query).get('intervention');
+  const value = readRouteParam('intervention');
   return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
     ? value
     : null;
