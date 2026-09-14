@@ -558,6 +558,26 @@ When an opening is found, the row receives `delivery_closed_at` and
 That closure is not described as a device delivery receipt — the authoritative
 opening remains the separate `intervention_acknowledgements` row.
 
+**The opening is checked before every attempt, including the first.** Review
+found the check running only before a repeat, which left a real hole on the
+recovery path: a `QUEUED` row whose immediate wake-up failed can sit for minutes
+while the member opens the call-out through the in-app path, and the next
+scheduled scan would then raise an alarm about something they were already
+looking at.
+
+`delivery_close_reason` is constrained to the reasons the schema recognises, so
+a closure cannot be recorded for a reason nobody can audit later. A close time
+without a reason, or a reason without a time, is rejected by the same
+constraint — half a record of a closure is not a record of one.
+
+The rules the worker applies — how long before a repeat, how many attempts exist
+at all, the five conditions re-checked at send time, and exactly which three
+fields may reach a locked screen — live in
+`supabase/functions/send-web-push/policy.ts` as pure functions. They run in Deno
+in production and under Vitest in CI, because a rule that decides whether a
+phone makes a noise at three in the morning should not be reachable only by a
+live push service.
+
 ### Web Push subscription authority
 
 `web_push_subscriptions` stores endpoint, public encryption key, authentication

@@ -250,6 +250,23 @@ is also why C8's Viber and telephone fallback is not optional.
 
 ## Status of the latest slice
 
+**Web Push, reviewed but NOT yet deployed.** A handoff patch adding protected
+Web Push call-out alerts was applied onto `7fa8ec3` (no conflict, hash verified)
+on branch `claude/web-push-notifications`, and seven defects found in review were
+fixed - full detail in `docs/ai/WORK_LOG.md`. The most serious: repairing a push
+registration could silently re-enable an alarm a member had turned off.
+
+**Nothing hosted has changed.** The Supabase project `yskhdzrdbywrpfowckpn` has
+not had migration `202609150012` applied, has no Edge Function deployed, holds no
+VAPID or worker secret, and has no scheduled invocation. The repository variable
+`VITE_WEB_PUSH_PUBLIC_KEY` is not set, so a deployed build reports
+`NOT_CONFIGURED` and offers no opt-in. This is a permission blocker, not a
+decision: the Supabase management calls this session needed were not approved.
+
+Until that configuration exists, **no push alert can be sent at all**, and no
+claim about one should be made. The in-app call-out path is unaffected.
+
+
 **The measured record.** Nine defects from an independent hosted-browser review,
 fixed on branch `claude/dvd-tivat-app-dev-n8wctb`. Full detail is in
 `docs/ai/WORK_LOG.md`; the headlines:
