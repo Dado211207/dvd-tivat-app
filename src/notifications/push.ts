@@ -152,17 +152,43 @@ export async function disableWebPush(): Promise<void> {
 }
 
 /**
+ * How long the commander's screen waits for the worker before moving on.
+ *
+ * The publication is already committed at this point, so this is not a deadline
+ * for the call-out - it is a deadline for the ACKNOWLEDGEMENT. A commander who
+ * has just sent a crew to a fire must see the confirmed call-out immediately,
+ * not a spinner tied to how fast a push service on another continent answers.
+ *
+ * Five seconds is long enough for a healthy round trip and short enough that
+ * nobody stands waiting. The request is NOT cancelled when it expires - the
+ * client library offers no way to - so the worker carries on sending on the
+ * server. Only the waiting stops, which is the part a commander can see.
+ */
+export const PUSH_WAKE_TIMEOUT_MS = 5_000;
+
+/**
  * Wake the server worker after publication. The call-out is already committed
  * if this fails; the outbox stays QUEUED for the scheduled retry and the UI
  * must never turn a failed worker request into a failed publication.
+ *
+ * Returns whether the worker ANSWERED IN TIME. That is all it can honestly
+ * mean: the server took the request and replied. It is not delivery, not
+ * acceptance by a push service, and certainly not a phone making a noise.
  */
 export async function requestPushDelivery(interventionId: string): Promise<boolean> {
+  const wake = accountBackend()
+    .functions.invoke('send-web-push', { body: { intervention_id: interventionId } })
+    .then(({ error }) => error === null)
+    .catch(() => false);
+
+  let expiry: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<boolean>((resolve) => {
+    expiry = setTimeout(() => resolve(false), PUSH_WAKE_TIMEOUT_MS);
+  });
+
   try {
-    const { error } = await accountBackend().functions.invoke('send-web-push', {
-      body: { intervention_id: interventionId },
-    });
-    return error === null;
-  } catch {
-    return false;
+    return await Promise.race([wake, deadline]);
+  } finally {
+    clearTimeout(expiry);
   }
 }
