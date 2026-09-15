@@ -240,9 +240,11 @@ first_attempt → displayed  intervals 4+5  (provider + handset + OS)
 ```
 
 Record the device, OS version, whether the app was installed to the Home Screen,
-and whether silent mode / Focus / Low Power Mode were on. **Low Power Mode and
-Focus both delay or suppress push delivery on iOS**, and a delay measured with
-either of them on is a measurement of the phone's settings, not of this system.
+and whether silent mode / Focus / Low Power Mode were on. Focus settings can
+silence notification alerts; that is different from delaying delivery to the
+device. The effect of Low Power Mode on this Web Push path is not established
+here. Compare settings one at a time in a controlled device test, and do not
+attribute a delay to either setting without that evidence.
 
 ---
 
