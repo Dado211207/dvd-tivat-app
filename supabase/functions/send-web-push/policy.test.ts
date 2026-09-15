@@ -14,12 +14,15 @@ import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_PAYLOAD_KEYS,
   alertPayload,
+  attemptStatus,
   attemptsRemain,
   CLAIM_STALE_AFTER_MS,
   holdForNow,
   isRepeat,
+  mapWithConcurrency,
   MAX_ATTEMPTS,
   REPEAT_AFTER_MS,
+  SEND_CONCURRENCY,
   stillEligible,
   subscriptionUsable,
 } from './policy';
@@ -187,5 +190,104 @@ describe('what may travel to a locked screen', () => {
     expect(sneaky).not.toContain('Pozar');
     expect(sneaky).not.toContain('Donja Lastva');
     expect(Object.keys(JSON.parse(sneaky)).sort()).toEqual([...ALLOWED_PAYLOAD_KEYS].sort());
+  });
+});
+
+describe('the crew is alerted together, not one after another', () => {
+  /** A unit of work that takes `ms` and records when it ran. */
+  const timed = (log: number[], ms: number) => async (value: number) => {
+    log.push(value);
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    return value * 2;
+  };
+
+  it('starts up to the limit at once instead of waiting for each', async () => {
+    // The defect this replaced: eight firefighters meant eight sequential HTTPS
+    // round trips, so the eighth phone rang last by seven round trips.
+    const started: number[] = [];
+    const began = Date.now();
+    await mapWithConcurrency([1, 2, 3, 4, 5, 6, 7, 8], 8, timed(started, 30));
+    expect(started).toHaveLength(8);
+    // Eight sequential 30ms units would be 240ms. Generous ceiling: the
+    // assertion is "not serialised", not a benchmark.
+    expect(Date.now() - began).toBeLessThan(200);
+  });
+
+  it('respects the limit rather than sending everything at once', async () => {
+    // A thundering herd is how a society gets rate limited on the one night it
+    // matters, so the width is bounded even when the list is long.
+    let inFlight = 0;
+    let peak = 0;
+    await mapWithConcurrency(Array.from({ length: 40 }, (_, index) => index), 4, async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return null;
+    });
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(peak).toBeGreaterThan(1);
+  });
+
+  it('returns results in the order of the input, not the order they finished', async () => {
+    const results = await mapWithConcurrency([50, 10, 30], 3, async (ms) => {
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      return ms;
+    });
+    expect(results.map((result) => (result.status === 'fulfilled' ? result.value : null)))
+      .toEqual([50, 10, 30]);
+  });
+
+  it('does not let one failed device abandon another member', async () => {
+    // The bug an unguarded `Promise.all` would have introduced while "fixing"
+    // the speed: the first rejection discards every other alert in flight.
+    const results = await mapWithConcurrency([1, 2, 3], 3, async (value) => {
+      if (value === 2) throw new Error('PROVIDER_REFUSED');
+      return value;
+    });
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected', 'fulfilled']);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2);
+  });
+
+  it('handles an empty list and a nonsense limit without hanging', async () => {
+    await expect(mapWithConcurrency([], 8, async () => 1)).resolves.toEqual([]);
+    await expect(mapWithConcurrency([1, 2], 0, async (value) => value)).resolves.toHaveLength(2);
+    await expect(mapWithConcurrency([1, 2], -5, async (value) => value)).resolves.toHaveLength(2);
+  });
+
+  it('keeps the width sane by default', () => {
+    expect(SEND_CONCURRENCY).toBeGreaterThan(1);
+    expect(SEND_CONCURRENCY).toBeLessThanOrEqual(16);
+  });
+});
+
+describe('which path delivered the alert is recorded', () => {
+  it('tells the commander wake-up apart from the scheduled sweep', () => {
+    // The whole point. A delay caused by the immediate request never arriving
+    // and a delay caused by the immediate request being slow have completely
+    // different fixes, and `ACCEPTED` alone could not tell them apart.
+    expect(attemptStatus('ACCEPTED', false)).toBe('ACCEPTED_IMMEDIATE');
+    expect(attemptStatus('ACCEPTED', true)).toBe('ACCEPTED_SCHEDULED');
+  });
+
+  it('leaves the refusal categories unchanged and path-free', () => {
+    // These say why nothing was sent, which does not depend on who asked.
+    for (const viaScheduler of [true, false]) {
+      expect(attemptStatus('REVOKED', viaScheduler)).toBe('ACCESS_REVOKED');
+      expect(attemptStatus('NONE', viaScheduler)).toBe('NO_ACTIVE_SUBSCRIPTION');
+    }
+  });
+
+  it('says nothing about the member, the device or the intervention', () => {
+    const everyStatus = [
+      attemptStatus('ACCEPTED', false), attemptStatus('ACCEPTED', true),
+      attemptStatus('REVOKED', false), attemptStatus('NONE', false),
+    ];
+    for (const status of everyStatus) {
+      // A status word is written to a table commanders can read. It is allowed
+      // to be a category and a path, and nothing else.
+      expect(status).toMatch(/^[A-Z_]+$/);
+      expect(status.length).toBeLessThan(40);
+    }
   });
 });

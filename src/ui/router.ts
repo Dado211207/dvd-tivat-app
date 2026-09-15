@@ -15,6 +15,10 @@ export const ROUTES = [
   'arhiva',
   'evidencija',
   'nalozi',
+  // This device's own settings. No server, and deliberately no role check: the
+  // person most in need of a refusal message they can read is the one who has
+  // been refused, so the language cannot sit behind the gate.
+  'podesavanja',
   // The local prototype. Device-local fictional state, no server, no authority.
   'dojava',
   'dezurni',

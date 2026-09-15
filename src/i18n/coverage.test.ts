@@ -21,15 +21,19 @@ import {
   JOURNEY_STEPS,
   RESPONSE_ANSWERS,
 } from '@/auth/operations';
-import {
-  ATTENDANCE_SOURCE_LABEL,
-  ATTENDANCE_STATE_LABEL,
-  AUDIT_EVENT_LABEL,
-  INTERVENTION_KIND_LABEL,
-  INTERVENTION_STATUS_LABEL,
-  JOURNEY_LABEL,
-  SERVER_ANSWER_LABEL,
-} from './labels';
+import { LANGUAGES } from './language';
+import { textFor } from './useText';
+
+/**
+ * Every assertion below runs once per language.
+ *
+ * A second language is a second chance to print `NA_LICU_MJESTA` on a board at
+ * three in the morning, and an English translation that quietly omitted a
+ * status would fail in exactly the same invisible way the Montenegrin one used
+ * to. The `Strings` type forces the KEYS to exist; this forces the values to be
+ * sentences a person can read.
+ */
+const VOCABULARIES = LANGUAGES.map((language) => [language, textFor(language).vocabulary] as const);
 
 /** SHOUTY_SNAKE_CASE - what the database calls things, never what a person reads. */
 const LOOKS_LIKE_AN_ENUM = /^[A-Z][A-Z0-9_]*$/;
@@ -42,36 +46,43 @@ function assertReadable(label: string | undefined, value: string): void {
   expect(label?.trim(), `${value} has an empty label`).not.toBe('');
 }
 
-describe('every vocabulary the database enforces', () => {
+describe.each(VOCABULARIES)('every vocabulary the database enforces (%s)', (_language, words) => {
   it.each([...INTERVENTION_KINDS])('kind %s reads as words', (kind) => {
-    assertReadable(INTERVENTION_KIND_LABEL[kind], kind);
+    assertReadable(words.interventionKind[kind], kind);
   });
 
   it.each([...INTERVENTION_STATUSES])('status %s reads as words', (status) => {
-    assertReadable(INTERVENTION_STATUS_LABEL[status], status);
+    assertReadable(words.interventionStatus[status], status);
   });
 
   it.each([...RESPONSE_ANSWERS])('answer %s reads as words', (answer) => {
-    assertReadable(SERVER_ANSWER_LABEL[answer], answer);
+    assertReadable(words.answer[answer], answer);
   });
 
   it.each([...JOURNEY_STEPS])('journey step %s reads as words', (step) => {
-    assertReadable(JOURNEY_LABEL[step], step);
+    assertReadable(words.journey[step], step);
   });
 
   it.each(['SELF_DECLARED', 'COMMAND_RECORDED', 'UNKNOWN'])(
     'attendance source %s reads as words',
     (source) => {
-      assertReadable(ATTENDANCE_SOURCE_LABEL[source], source);
+      assertReadable(words.attendanceSource[source], source);
     },
   );
 
   it.each(['PENDING', 'CONFIRMED', 'REJECTED'])('attendance state %s reads as words', (state) => {
-    assertReadable(ATTENDANCE_STATE_LABEL[state], state);
+    assertReadable(words.attendanceState[state], state);
   });
+
+  it.each(['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER', 'CITIZEN'])(
+    'role %s reads as words',
+    (role) => {
+      assertReadable(words.role[role], role);
+    },
+  );
 });
 
-describe('every event a command can record', () => {
+describe.each(VOCABULARIES)('every event a command can record (%s)', (language, words) => {
   /** Read from the migrations, so a new event type cannot slip past unlabelled. */
   const recorded = (() => {
     const dir = resolve(process.cwd(), 'supabase/migrations');
@@ -105,12 +116,12 @@ describe('every event a command can record', () => {
   });
 
   it('gives each one a sentence', () => {
-    const missing = recorded.filter((type) => AUDIT_EVENT_LABEL[type] === undefined);
+    const missing = recorded.filter((type) => words.auditEvent[type] === undefined);
     expect(missing, 'an unlabelled event prints its database spelling in the archive').toEqual([]);
   });
 
   it('never labels one with its own database spelling', () => {
-    for (const [type, label] of Object.entries(AUDIT_EVENT_LABEL)) {
+    for (const [type, label] of Object.entries(words.auditEvent)) {
       expect(label, type).not.toMatch(LOOKS_LIKE_AN_ENUM);
       expect(label.trim(), type).not.toBe('');
     }
@@ -119,30 +130,34 @@ describe('every event a command can record', () => {
   it('never claims anybody was notified', () => {
     // Publishing writes obligations to send. Nothing sends them, and no
     // sentence in the chronology may imply otherwise.
-    for (const label of Object.values(AUDIT_EVENT_LABEL)) {
-      expect(label).not.toMatch(/obavijest|poslao poruk|poslat[ao]/i);
+    for (const label of Object.values(words.auditEvent)) {
+      expect(label, label).not.toMatch(/obavijest|poslao poruk|poslat[ao]/i);
+      expect(label, label).not.toMatch(/\bnotif|\balert(ed|s)?\b|\bpaged\b/i);
     }
   });
 
   it('never describes a movement as attendance', () => {
     // Reporting a position and being present are different facts, and the
     // archive is the place where blurring them would do the most damage.
-    expect(AUDIT_EVENT_LABEL.JOURNEY_PROGRESS_SET).not.toMatch(/prisus/i);
+    const movement = words.auditEvent.JOURNEY_PROGRESS_SET as string;
+    expect(movement, language).not.toMatch(/prisus/i);
+    expect(movement, language).not.toMatch(/attend|present\b/i);
   });
 });
 
-describe('the words themselves', () => {
-  const EVERY_LABEL = [
-    ...Object.values(INTERVENTION_KIND_LABEL),
-    ...Object.values(INTERVENTION_STATUS_LABEL),
-    ...Object.values(SERVER_ANSWER_LABEL),
-    ...Object.values(JOURNEY_LABEL),
-    ...Object.values(ATTENDANCE_SOURCE_LABEL),
-    ...Object.values(ATTENDANCE_STATE_LABEL),
-    ...Object.values(AUDIT_EVENT_LABEL),
-  ];
+describe.each(VOCABULARIES)('the words themselves (%s)', (language, words) => {
+  const EVERY_LABEL = Object.values(words).flatMap((entry) =>
+    typeof entry === 'string' ? [entry] : Object.values(entry),
+  );
 
-  it('carries no diacritics, per the brief', () => {
+  it('found labels to check at all', () => {
+    expect(EVERY_LABEL.length).toBeGreaterThan(30);
+  });
+
+  it('carries no diacritics in the local language, per the brief', () => {
+    // English is not held to this: it has none to avoid. The rule exists
+    // because this interface writes Montenegrin in plain Latin letters.
+    if (language !== 'me') return;
     for (const label of EVERY_LABEL) {
       expect(label, label).not.toMatch(/[čćžšđČĆŽŠĐ]/);
     }

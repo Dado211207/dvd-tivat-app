@@ -26,7 +26,7 @@ import {
   formatTimeOrNotRecorded,
   formatTimeWithZone,
   forSentence,
-  NOT_RECORDED,
+  notRecorded,
   SOCIETY_TIME_ZONE,
   timeZoneIsSupported,
 } from './labels';
@@ -89,10 +89,10 @@ describe('times are shown in the society’s own timezone', () => {
 
 describe('a time that was never recorded', () => {
   it('says so in words rather than showing a dash or a zero', () => {
-    expect(formatTimeOrNotRecorded(null)).toBe(NOT_RECORDED);
-    expect(formatTimeOrNotRecorded(undefined)).toBe(NOT_RECORDED);
-    expect(formatTimeOrNotRecorded('')).toBe(NOT_RECORDED);
-    expect(NOT_RECORDED).toBe('Nije zabiljezeno');
+    expect(formatTimeOrNotRecorded(null)).toBe(notRecorded());
+    expect(formatTimeOrNotRecorded(undefined)).toBe(notRecorded());
+    expect(formatTimeOrNotRecorded('')).toBe(notRecorded());
+    expect(notRecorded()).toBe('Nije zabiljezeno');
   });
 
   it('shows a real time when there is one', () => {

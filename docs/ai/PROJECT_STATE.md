@@ -4,7 +4,7 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 
 ---
 
@@ -250,11 +250,57 @@ is also why C8's Viber and telephone fallback is not optional.
 
 ## Status of the latest slice
 
-**Web Push, reviewed but NOT yet deployed.** A handoff patch adding protected
-Web Push call-out alerts was applied onto `7fa8ec3` (no conflict, hash verified)
-on branch `claude/web-push-notifications`, and seven defects found in review were
-fixed - full detail in `docs/ai/WORK_LOG.md`. The most serious: repairing a push
-registration could silently re-enable an alarm a member had turned off.
+**Language, navigation and push latency**, on branch
+`claude/ux-language-push-latency` from `4e944e1`. Three deliverables:
+
+1. **Crnogorski and English**, chosen on a new `podesavanja` route and
+   remembered on that device. `strings.me.ts` is the source of truth;
+   `strings.en.ts` is typed `typeof me`, so an untranslated sentence is a
+   compile error. **Nothing about the language reaches the server.** Times stay
+   in Europe/Podgorica in both languages; only the way an instant is written
+   follows the language. Member-entered and stored content is never translated.
+   Coverage of the server vocabulary now runs against both bundles - 40
+   assertions became 80, and roles are included.
+2. **Navigation by task.** Two groups (Rad, Drustvo) replacing three captions
+   over three links. **Every simulation, including the station display, left the
+   rail** and is reached from Settings behind a closed disclosure - routes,
+   code and each screen's own notice untouched. Three screens now lead with what
+   the person came for; the secondary panel closes below it, in one render
+   position so a half-typed draft cannot be unmounted away.
+3. **Push latency: three defects fixed, and the diagnosis made possible.** Sends
+   were strictly sequential in two nested loops, the commander's screen waited
+   for the whole fan-out with no deadline, and `provider_status` could not
+   distinguish the commander's immediate wake-up from the once-a-minute
+   scheduler. That last one is the fix that matters: it is the difference
+   between "fast" and "a minute late", and it needed no migration. See
+   `docs/PUSH_LATENCY.md`.
+
+**The hosted push timing baseline was NOT captured.** The Supabase MCP
+connection available to that session returned "requires approval" and then
+`You do not have permission to perform this action` on every attempt to read
+`notification_outbox` and `notification_delivery_attempts`. So it is **unknown**
+whether the owner's delayed notification came through the immediate path or the
+scheduled one. `docs/PUSH_LATENCY.md` §5 has the queries that answer it.
+
+**Hosting: stay on GitHub Pages.** Reasoning in `docs/HOSTING_DECISION.md`.
+Nothing was changed; no DNS, no deployment, no secret.
+
+Defects found and fixed while doing the above: a rail note claiming "LOKALNA
+SIMULACIJA - bez stvarnih poziva i obavjestenja" on **every** screen including
+the server-backed ones; eight timestamps rendering in the device's time zone
+rather than Montenegro's; and the archive asserting publishing sent nothing,
+which Web Push made false.
+
+---
+
+### Historical: the Web Push handoff review
+
+**Web Push, reviewed but NOT yet deployed** (as recorded on 2026-09-14). A
+handoff patch adding protected Web Push call-out alerts was applied onto
+`7fa8ec3` (no conflict, hash verified) on branch `claude/web-push-notifications`,
+and seven defects found in review were fixed - full detail in
+`docs/ai/WORK_LOG.md`. The most serious: repairing a push registration could
+silently re-enable an alarm a member had turned off.
 
 **Nothing hosted has changed.** The Supabase project `yskhdzrdbywrpfowckpn` has
 not had migration `202609150012` applied, has no Edge Function deployed, holds no
@@ -546,12 +592,16 @@ scripts/check-bundle-secrets.mjs  reads the built artifact; no secret may ship
 | `arhiva` (Arhiva i ucesce) | **The server.** The chronology of a closed intervention, per-intervention participation, and server-computed totals per member |
 | `nalozi` (Nalozi i pristup) | **The server.** Sign-in, registration, profile, role, status, the owner directory and its two commands |
 | `evidencija` (Evidencija drustva) | **The server**, from slice 3a. The society's real members, groups and vehicles, and the account-to-member link. ADMIN or OWNER only |
+| `podesavanja` (Podesavanja) | **This device.** Language, this device's notification opt-in, and the way through to the prototype screens. No server, and deliberately no role check: the person most in need of a refusal message they can read is the one who has been refused |
 | `clanovi` (Clanovi) | Device-local **fictional** roster with the actor selector. Easy to confuse with `evidencija` and must not be: this one edits invented demonstration data and touches no server record |
 | `dezurni`, `clan`, `vozila`, `prikaz`, `istorija` | Device-local fictional state and the actor selector. Each carries a banner saying so |
 | `dojava` | Abandoned research, local only |
 
-The navigation is grouped to match: **Operativa** and **Evidencija drustva** are
-the server, **Prototip (simulacija)** is not.
+The navigation is two groups named for the task: **Rad** (`poziv`,
+`mobilizacija`, `arhiva`) and **Drustvo** (`evidencija`, `nalozi`,
+`podesavanja`). **No simulation is in the rail at all** - every prototype screen
+is reached from Settings, behind a closed disclosure, because a group label is
+not a separation. `dojava` is not offered even there.
 
 The actor selector is rendered **only** on a simulated route. On a server-backed
 one it is absent from the DOM entirely, so it cannot be tabbed to, announced by a

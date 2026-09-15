@@ -40,6 +40,15 @@ export const ROUTE_AUDIENCE: Record<Route, readonly OperationalRole[] | 'ANY'> =
   evidencija: ['OWNER', 'ADMIN'],
   nalozi: 'ANY',
 
+  /**
+   * Settings is 'ANY' for the same kind of reason as `nalozi`, and a stronger
+   * one. It changes only this device: the language somebody reads and whether
+   * this phone makes a noise. Putting the language behind a role check would
+   * mean the person most in need of a refusal message they can read - somebody
+   * suspended, or awaiting approval - is the one who cannot change its language.
+   */
+  podesavanja: 'ANY',
+
   // The local prototype.
   dojava: 'ANY',
   dezurni: 'ANY',

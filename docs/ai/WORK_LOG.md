@@ -1,3 +1,100 @@
+## 2026-09-15 - A language, a navigation that matches the task, and where the push delay went
+
+Three jobs that turned out to share one root. Adding a second language means
+every product-authored sentence has to leave the JSX it was written in; once
+they are all in one file a reader can see how many of them a firefighter is
+asked to scroll past before reaching the fire.
+
+**The language.** `strings.me.ts` is the source of truth and `strings.en.ts` is
+typed `typeof me`, so a sentence added to one and not the other does not
+compile. That one line of type is the whole completeness guarantee and it costs
+nothing. The choice lives on the device: nothing is sent to the server, stored
+against a member, or carried between devices - a reading preference is not
+account state, and making it one would mean a column, a write path, an RLS rule
+and one more thing that can fail during a call-out. It is a module store rather
+than React context because every date formatter in the application reads it
+without a component around it.
+
+Crnogorski is the default and the browser language is deliberately not
+consulted. A factory default nobody changed is not a statement that a
+firefighter reads English at three in the morning.
+
+Times stay in Europe/Podgorica in both languages. That is the thing
+"locale-aware formatting" could most easily have broken: the record answers
+"when did this happen" and the answer has to be one instant for everybody. What
+follows the language is how that instant is written down.
+
+**The navigation.** Three group headings stood over a total of three links for a
+firefighter. A group of one is a caption. Two groups now, named for the task:
+Rad and Drustvo.
+
+The simulation left the rail entirely, including the station display that
+earlier reasoning had kept on the grounds that it duplicated nothing. True, and
+beside the point - a label is not a separation, and one tap from a real call-out
+to a fictional one is one tap too few. It is reached from Settings now, behind a
+closed disclosure, routes and code untouched.
+
+**Three screens led with the wrong thing.** The commander's console opened onto
+a blank form for a DIFFERENT call-out while one was running. The firefighter's
+screen put general availability and a notification panel above the fire. Each
+now leads with what the person came for, and the secondary panel closes below
+it.
+
+The trap in that change is worth recording. The obvious way to move a panel is
+to render it in one of two places depending on a flag, and that unmounts it when
+the flag flips, taking its `useState` with it - a commander who had half-typed a
+second call-out would have lost it the moment they published the first. Same
+class of fault as the resume reset. Both panels stay in one position and only
+their shape changes.
+
+**Defects found while moving the text.**
+
+- The rail claimed "LOKALNA SIMULACIJA - bez stvarnih poziva i obavjestenja" on
+  EVERY screen, two elements above a badge saying the screen ran on real data.
+  Since Web Push it was false as well as contradictory.
+- Eight timestamps used `toLocaleString('sr-Latn')`, which renders in the
+  DEVICE's zone, so one stored check-in printed one time on the firefighter's
+  screen and another in the archive.
+- The archive said publishing wrote obligations "bez stvarnog slanja". True
+  before Web Push; false afterwards for every member who has opted a device in.
+- Two delivery-honesty tests read the VIEW SOURCE for Montenegrin phrases. They
+  would have gone on passing while an English translation promised delivery,
+  because they never looked at English. They walk both bundles now.
+
+**The push delay.** Read the code rather than guessing, and found three things.
+Every alert was sent strictly one at a time - each row in sequence, each device
+within a row in sequence, a full HTTPS round trip inside both loops - so the
+eighth firefighter was alerted after seven prior round trips. The commander's
+screen waited for the whole fan-out with no deadline. And `provider_status`
+recorded `ACCEPTED` whether the commander's immediate wake-up did the work or it
+failed silently and the once-a-minute scheduler picked the row up a minute
+later.
+
+That third one is the important one: those two have completely different fixes
+and could not be told apart afterwards. It now records `ACCEPTED_IMMEDIATE` or
+`ACCEPTED_SCHEDULED`, and `attempted_at` is written at the instant the attempt
+STARTS rather than when the provider answered, so the society's own delay
+separates from the push service's. No migration: the column is free text, the
+timestamp already existed and was settable, and nothing in the interface reads
+either.
+
+**What could not be done.** No hosted timing baseline was captured. The Supabase
+MCP connection returned "requires approval" and then "You do not have permission
+to perform this action" on every attempt to read the outbox and the delivery
+attempts. So whether the owner's delayed notification came through the immediate
+path or the scheduled one is still UNKNOWN. `docs/PUSH_LATENCY.md` carries the
+queries that answer it in about two minutes, and says plainly which intervals a
+server can never measure.
+
+**Hosting.** Recommendation is to stay on GitHub Pages and change nothing. The
+product is one static folder; the only line where Netlify wins is preview
+deployments, which CI screenshots already cover for one reviewer, and which
+could be added without leaving Pages. Against that: a second vendor holding
+deploy credentials, and a changed origin - and the origin is load-bearing for
+push, because `ALLOWED_ORIGIN` on the Edge Function decides whether the
+commander's immediate wake-up is refused by CORS. Reasoning in
+`docs/HOSTING_DECISION.md`.
+
 ## 2026-09-14 - Reviewing the Web Push handoff
 
 A patch arrived from another environment, based on `7fa8ec3` and carrying

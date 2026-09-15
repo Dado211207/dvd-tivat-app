@@ -151,3 +151,79 @@ export function alertPayload(input: AlertPayload): string {
 
 /** The exact keys `alertPayload` may produce. The test asserts against this. */
 export const ALLOWED_PAYLOAD_KEYS = ['interventionId', 'publishedAt', 'repeat'] as const;
+
+// ---------------------------------------------------------------------------
+// Latency
+// ---------------------------------------------------------------------------
+
+/**
+ * How many pushes may be in flight at once.
+ *
+ * The first version sent strictly one at a time: every row in sequence, and
+ * within a row every device in sequence, each a full HTTPS round trip to a push
+ * service. A call-out to eight firefighters therefore alerted the eighth person
+ * only after seven prior round trips had completed - and the commander's screen
+ * was blocked for all of it.
+ *
+ * Bounded rather than unbounded because a push service is a shared resource and
+ * a thundering herd is how a society gets rate-limited on the one night it
+ * matters. Eight is comfortably above a realistic call-out's device count while
+ * staying a polite number of simultaneous connections.
+ */
+export const SEND_CONCURRENCY = 8;
+
+/**
+ * Runs `work` over `items` with at most `limit` in flight, preserving order.
+ *
+ * `Promise.all` over the whole list would be unbounded; a `for await` loop is
+ * what caused the latency. This is the middle: a fixed number of workers
+ * pulling from a shared cursor.
+ *
+ * Never rejects. Each result is settled so one failed device cannot abandon
+ * another member's alert - which is exactly the bug an unguarded `Promise.all`
+ * would introduce while "fixing" the speed.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  work: (item: T, index: number) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let cursor = 0;
+  const width = Math.max(1, Math.min(limit, items.length));
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      try {
+        results[index] = { status: 'fulfilled', value: await work(items[index] as T, index) };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: width }, () => worker()));
+  return results;
+}
+
+/**
+ * Which path delivered this attempt, recorded so it can be told apart later.
+ *
+ * The owner reported a substantial delay and there was no way to answer the
+ * first question that matters: did the commander's immediate wake-up do the
+ * work, or did it fail silently and leave the once-a-minute scheduler to pick
+ * it up? Those have completely different fixes, and `ACCEPTED` alone could not
+ * distinguish them.
+ *
+ * It is a status word, not a measurement: `attempted_at` minus the outbox row's
+ * `created_at` is the measurement, and it was always there.
+ */
+export function attemptStatus(outcome: 'ACCEPTED' | 'REVOKED' | 'NONE', viaScheduler: boolean): string {
+  const path = viaScheduler ? 'SCHEDULED' : 'IMMEDIATE';
+  if (outcome === 'ACCEPTED') return `ACCEPTED_${path}`;
+  if (outcome === 'REVOKED') return 'ACCESS_REVOKED';
+  return 'NO_ACTIVE_SUBSCRIPTION';
+}

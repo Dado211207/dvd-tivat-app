@@ -19,13 +19,13 @@
  * `act` are all this needs.
  */
 
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessGateway, OperationalRole } from '@/auth/access';
 import { AccessProvider } from '@/auth/AccessProvider';
+import { LANGUAGES } from '@/i18n/language';
+import { textFor } from '@/i18n/useText';
 import { ArchiveView } from './ArchiveView';
 import { CommandView } from './CommandView';
 import { MobilisationView } from './MobilisationView';
@@ -575,10 +575,25 @@ describe('the archive renders on real data', () => {
     });
 
     it('never says anybody was notified', async () => {
+      /*
+       * This line used to read "i upisao N obaveza za slanje (bez stvarnog
+       * slanja)", and the test pinned that exact phrase. It was true when no
+       * channel existed. Web Push made "without actually sending" FALSE for
+       * every member who has opted a device in, and a record asserting that
+       * about a call-out which did send is worse than one that says nothing.
+       *
+       * So the assertion is the property rather than the sentence: the line
+       * names how many members were called out, and claims nothing whatever
+       * about a phone.
+       */
       const lines = await showWithAudit();
       const published = lines.find((l) => /objavio poziv/.test(l));
-      expect(published).toMatch(/bez stvarnog slanja/);
+      expect(published, 'the publication line must exist').toBeDefined();
+      expect(published, 'it must say who was called out').toMatch(/\d/);
       expect(published).not.toMatch(/obavijest/i);
+      expect(published, 'nothing here may claim a message reached anybody').not.toMatch(
+        /poslato|isporuceno|dostavljeno|primio poruku/i,
+      );
     });
 
     it('orders the record oldest first', async () => {
@@ -1192,29 +1207,63 @@ async function settle(): Promise<void> {
  * "nobody was notified" - rather than letting it drift into "notifications
  * sent" one adjective at a time.
  */
-describe('push transport never fabricates device or member acknowledgement', () => {
-  const source = readFileSync(resolve(process.cwd(), 'src/ui/views/CommandView.tsx'), 'utf8');
+describe.each(LANGUAGES)(
+  'push transport never fabricates device or member acknowledgement (%s)',
+  (language) => {
+    const t = textFor(language);
 
-  it('the publish confirmation separates provider acceptance from a ringing phone', () => {
-    expect(source).toContain('Prihvatanje od push servisa nije dokaz');
-    expect(source).toContain('Nema SMS, Viber ni automatskog telefonskog');
-  });
+    it('the publish confirmation separates provider acceptance from a ringing phone', () => {
+      const shown = t.command.confirmPublishTransport;
+      // Acceptance and a ringing phone, named as different things in the same
+      // breath - which is the only place a reader can be stopped from treating
+      // them as one.
+      expect(shown, language).toMatch(
+        language === 'me' ? /prihvatanje od push servisa nije dokaz/i : /is not proof that a phone rang/i,
+      );
+      expect(shown, language).toMatch(
+        language === 'me' ? /nema sms, viber/i : /no sms, no viber/i,
+      );
+    });
 
-  it('the message after publishing reports worker and queue states honestly', () => {
-    expect(source).toContain('Push obrada je pokrenuta');
-    expect(source).toContain('Push poruke su ostale u redu za serversku obradu');
-    expect(source).toContain('ovo nije potvrda da je telefon zazvonio');
-  });
+    it('the message after publishing reports worker and queue states honestly', () => {
+      // Two outcomes, two sentences. Neither of them is "sent".
+      expect(t.command.publishedWorkerReached, language).toMatch(
+        language === 'me' ? /server je primio zahtjev/i : /server accepted the request/i,
+      );
+      expect(t.command.publishedWorkerQueued, language).toMatch(
+        language === 'me' ? /nije potvrda da je telefon zazvonio/i : /not confirmation that a phone rang/i,
+      );
+      for (const sentence of [t.command.publishedWorkerReached, t.command.publishedWorkerQueued]) {
+        expect(sentence, language).not.toMatch(/\bnotified\b|\bdelivered\b|obavijesteni|isporuceno/i);
+      }
+    });
 
-  it('no screen carries a bare claim of delivery', () => {
-    for (const file of ['CommandView.tsx', 'MobilisationView.tsx', 'ArchiveView.tsx']) {
-      const text = readFileSync(resolve(process.cwd(), `src/ui/views/${file}`), 'utf8');
-      // "obavijesteni su" / "poslato je" / "isporuceno" - any of these as a
-      // statement of fact would be false today, whatever surrounds them.
-      expect(text, file).not.toMatch(/obavijesteni su|poslato je|isporuceno|dostavljeno/i);
-    }
-  });
-});
+    it('no sentence in the product carries a bare claim of delivery', () => {
+      /*
+       * Every string, in both languages, rather than a grep over three files.
+       *
+       * The old version read the VIEW SOURCE, which stopped working the moment
+       * the sentences moved into a bundle - and would have gone on passing
+       * while an English translation quietly promised delivery, because it was
+       * never looking at English at all.
+       */
+      const walk = (value: unknown): string[] =>
+        typeof value === 'string'
+          ? [value]
+          : typeof value === 'object' && value !== null
+            ? Object.values(value).flatMap(walk)
+            : [];
+
+      const everySentence = walk(t);
+      expect(everySentence.length, 'there must be sentences to check').toBeGreaterThan(200);
+      for (const sentence of everySentence) {
+        expect(sentence, `${language}: "${sentence}"`).not.toMatch(
+          /obavijesteni su|poslato je|isporuceno|dostavljeno|\bwere notified\b|\bhas been delivered\b|\bwas delivered\b/i,
+        );
+      }
+    });
+  },
+);
 
 /**
  * The resting state, which is how these screens look almost all of the time.

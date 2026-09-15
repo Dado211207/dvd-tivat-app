@@ -260,176 +260,34 @@ export const T = {
 // ---------------------------------------------------------------------------
 // Time
 //
-// Every timestamp in this system is stored `timestamptz` and travels as UTC.
-// It is displayed in EUROPE/PODGORICA, always - never in the timezone of the
-// device doing the reading.
+// Moved to `src/i18n/time.ts` when the interface gained a second language. The
+// fixed Europe/Podgorica zone and the whole argument for it live there; what
+// changed is that the same instant is now WRITTEN the way the chosen language
+// writes it, while remaining the same instant.
 //
-// That distinction is not pedantry. The record answers "when did this happen",
-// and the answer has to be the same sentence for everybody: a commander
-// reviewing an intervention from abroad, a laptop whose clock region was never
-// set, and the phone that was at the fire. A device-local rendering makes the
-// same stored fact print three different times, and nothing on the screen
-// would say which one to believe.
-//
-// Montenegro observes summer time, so the offset is +1 or +2 depending on the
-// date. The IANA database knows this and we do not, which is exactly why the
-// zone is named rather than an offset being added by hand.
+// Re-exported here so that every screen already printing a time became
+// language-aware without a single call site changing.
 // ---------------------------------------------------------------------------
 
-export const SOCIETY_TIME_ZONE = 'Europe/Podgorica';
-
-/** What an unrecorded fact says. Never a zero, a dash, or a guessed value. */
-export const NOT_RECORDED = 'Nije zabiljezeno';
-
-/**
- * Builds a formatter, or null if the runtime has no timezone data.
- *
- * A runtime built without full ICU throws on a named zone. Falling back to
- * device-local time would then be silently wrong, so `zonedParts` reports the
- * failure to its callers instead of hiding it, and `timeZoneIsSupported()`
- * lets a test assert the real path is the one in use.
- */
-function buildFormatter(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat | null {
-  try {
-    return new Intl.DateTimeFormat('en-GB', { ...options, timeZone: SOCIETY_TIME_ZONE });
-  } catch {
-    return null;
-  }
-}
-
-const DATE_AND_TIME = buildFormatter({
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-});
-
-const TIME_ONLY = buildFormatter({
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-});
-
-/** True when times really are being rendered in Podgorica rather than fallback. */
-export function timeZoneIsSupported(): boolean {
-  return DATE_AND_TIME !== null && TIME_ONLY !== null;
-}
-
-interface ZonedParts {
-  readonly day: string;
-  readonly month: string;
-  readonly year: string;
-  readonly hour: string;
-  readonly minute: string;
-  readonly second: string;
-}
-
-/**
- * Null for an unusable timestamp or an unusable runtime. Also null if any
- * expected piece is missing, rather than composing "undefined.09.2026." out of
- * whatever did arrive - a visibly absent time is recoverable, a malformed one
- * that looks like data is not.
- */
-function zonedParts(formatter: Intl.DateTimeFormat | null, iso: string): ZonedParts | null {
-  if (formatter === null) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const found: Record<string, string> = {};
-  for (const part of formatter.formatToParts(date)) found[part.type] = part.value;
-
-  const { day = '', month = '', year = '', hour = '', minute = '', second = '' } = found;
-  if (hour === '' || minute === '' || second === '') return null;
-  return { day, month, year, hour, minute, second };
-}
-
-/**
- * A full date and time, in Podgorica: "13.09.2026. 18:40:21".
- *
- * The year is present on purpose. An archive is read months and years later,
- * and "13.09." alone cannot tell last year's fire from this one's.
- *
- * SECONDS ARE PRESENT for the same reason, and were added after an independent
- * review of the hosted application: a chronology to the minute showed several
- * events that had clearly happened in sequence - a member opening a call-out,
- * answering it, and setting off - as though they had happened at the same
- * instant. On a record of an incident, "we cannot tell which came first" is a
- * defect, not a detail.
- *
- * Nothing computes a duration from this string. Every duration in the
- * application is elapsed milliseconds between two server timestamps; see
- * `src/auth/duration.ts`.
- */
-export function formatTime(iso: string): string {
-  const parts = zonedParts(DATE_AND_TIME, iso);
-  if (parts === null) return '-';
-  return `${parts.day}.${parts.month}.${parts.year}. ${parts.hour}:${parts.minute}:${parts.second}`;
-}
-
-/** The full date and time with the zone named, for a record header. */
-export function formatTimeWithZone(iso: string): string {
-  const shown = formatTime(iso);
-  return shown === '-' ? shown : `${shown} (lokalno vrijeme, Crna Gora)`;
-}
-
-/** Just the clock, in Podgorica: "18:40:21". For rows already dated by context. */
-export function formatClock(iso: string): string {
-  const parts = zonedParts(TIME_ONLY, iso);
-  if (parts === null) return '-';
-  return `${parts.hour}:${parts.minute}:${parts.second}`;
-}
-
-/**
- * A time, or an honest statement that there isn't one.
- *
- * Use this wherever the timestamp may legitimately be absent. Printing a dash
- * or falling back to a different column would both read as an answer.
- */
-export function formatTimeOrNotRecorded(iso: string | null | undefined): string {
-  if (iso === null || iso === undefined || iso === '') return NOT_RECORDED;
-  return formatTime(iso);
-}
+export {
+  formatClock,
+  formatCount,
+  formatTime,
+  formatTimeOrNotRecorded,
+  formatTimeWithZone,
+  notRecorded,
+  SOCIETY_TIME_ZONE,
+  timeZoneIsSupported,
+} from './time';
 
 // ---------------------------------------------------------------------------
-// Server-side vocabulary.
+// Symbols for the server's vocabulary.
 //
-// These label the values the DATABASE stores, not the local prototype's. They
-// are kept apart from the simulation labels above on purpose: the two
-// vocabularies look similar and mean different things, and one screen showing
-// the other's words is exactly how a demonstration starts implying a server is
-// involved when it is not.
-//
-// Local language, no diacritics, as the interface convention requires.
+// The WORDS moved to `strings.me.ts` and `strings.en.ts` when the interface
+// gained a second language. These did not, because they are not words: every
+// status and answer is paired with a text symbol so that meaning never rests on
+// colour alone, and a symbol means the same thing in both languages.
 // ---------------------------------------------------------------------------
-
-export const INTERVENTION_KIND_LABEL: Record<string, string> = {
-  POZAR: 'Pozar',
-  SAOBRACAJNA_NEZGODA: 'Saobracajna nezgoda',
-  TEHNICKA_POMOC: 'Tehnicka pomoc',
-  VJEZBA: 'Vjezba',
-  TEST: 'Test',
-  DRUGO: 'Drugo',
-};
-
-export const INTERVENTION_STATUS_LABEL: Record<string, string> = {
-  DRAFT: 'Nacrt',
-  PUBLISHED: 'Objavljeno',
-  ASSEMBLING: 'Okupljanje',
-  DEPLOYED: 'Na terenu',
-  CONTAINED: 'Pod kontrolom',
-  CLOSED: 'Zatvoreno',
-  CANCELLED: 'Otkazano',
-};
-
-export const SERVER_ANSWER_LABEL: Record<string, string> = {
-  DOLAZIM: 'Dolazim',
-  DOLAZIM_KASNIJE: 'Dolazim kasnije',
-  NE_MOGU: 'Ne mogu',
-};
 
 export const SERVER_ANSWER_SYMBOL: Record<string, string> = {
   DOLAZIM: '+',
@@ -438,13 +296,6 @@ export const SERVER_ANSWER_SYMBOL: Record<string, string> = {
 };
 
 /** Where a member is for one call-out. Never a statement about attendance. */
-export const JOURNEY_LABEL: Record<string, string> = {
-  KRECEM: 'Krecem',
-  U_PUTU: 'U putu',
-  NA_LICU_MJESTA: 'Na licu mjesta',
-  ODUSTAJEM: 'Odustajem',
-};
-
 export const JOURNEY_SYMBOL: Record<string, string> = {
   KRECEM: '>',
   U_PUTU: '>>',
@@ -452,60 +303,11 @@ export const JOURNEY_SYMBOL: Record<string, string> = {
   ODUSTAJEM: '-',
 };
 
-/** Who asserted an attendance interval. Separate from whether command confirmed it. */
-export const ATTENDANCE_SOURCE_LABEL: Record<string, string> = {
-  SELF_DECLARED: 'Prijavio se sam',
-  COMMAND_RECORDED: 'Upisala komanda',
-  UNKNOWN: 'Nepoznato porijeklo',
-};
-
-export const ATTENDANCE_STATE_LABEL: Record<string, string> = {
-  PENDING: 'Ceka potvrdu',
-  CONFIRMED: 'Potvrdjeno',
-  REJECTED: 'Odbijeno',
-};
-
 export const ATTENDANCE_STATE_SYMBOL: Record<string, string> = {
   PENDING: '~',
   CONFIRMED: '+',
   REJECTED: '-',
 };
-
-// ---------------------------------------------------------------------------
-// The recorded chronology
-//
-// One sentence per event type in `operational_audit`. Written as sentences a
-// member would say rather than as field names, because the archive is read by
-// people who were at the incident, not by anybody debugging it.
-//
-// The distinctions the rest of the system keeps apart are kept apart here too.
-// Reporting movement is never described as attendance; publishing is never
-// described as notifying, because nothing is sent; a confirmation is always
-// named as the commander's act, not as the member's.
-// ---------------------------------------------------------------------------
-
-export const AUDIT_EVENT_LABEL: Record<string, string> = {
-  INTERVENTION_DRAFTED: 'je pripremio nacrt poziva',
-  INTERVENTION_DRAFT_UPDATED: 'je izmijenio nacrt prije objave',
-  INTERVENTION_DRAFT_DISCARDED: 'je odbacio nacrt',
-  // Never "obavijestio". Publishing writes obligations; no channel sends them.
-  INTERVENTION_PUBLISHED: 'je objavio poziv',
-  INTERVENTION_STATUS_CHANGED: 'je promijenio stanje intervencije',
-  INTERVENTION_CLOSED: 'je zatvorio intervenciju',
-  INTERVENTION_CANCELLED: 'je otkazao intervenciju',
-  JOURNEY_PROGRESS_SET: 'je javio kretanje',
-  ATTENDANCE_CHECK_IN: 'je zabiljezio dolazak',
-  ATTENDANCE_CHECK_OUT: 'je zabiljezio odlazak',
-  ATTENDANCE_CONFIRMED: 'je potvrdio prijavu prisustva',
-  ATTENDANCE_UNCONFIRMED: 'je povukao potvrdu prisustva',
-  ATTENDANCE_REJECTED: 'je odbio prijavu prisustva',
-  ATTENDANCE_CORRECTED: 'je ispravio zapis o prisustvu',
-  VEHICLE_DEPARTED: 'je evidentirao izlazak vozila',
-  VEHICLE_RETURNED: 'je evidentirao povratak vozila',
-};
-
-/** Somebody whose account has no profile name on the server. Never blank. */
-export const UNNAMED_ACTOR = 'Nepoznat nalog';
 
 /**
  * A note somebody typed, placed inside a sentence the application builds.

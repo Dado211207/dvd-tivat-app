@@ -24,18 +24,26 @@ facts that no single action is allowed to fake**.
 > transport. Every member, contact label, vehicle and location in this repository
 > is invented.
 >
-> **The operational path runs against the real server.** *Poziv i intervencija*
-> drafts, publishes, runs and closes an intervention. *Moj poziv* is where a
+> **The operational path runs against the real server.** The navigation is two
+> groups named for the task somebody came to do. *Rad* holds *Poziv*, which
+> drafts, publishes, runs and closes an intervention; *Moj poziv*, where a
 > firefighter states availability, opens the call-out, answers, reports movement
-> and records arrival and departure. *Arhiva i ucesce* is the record afterwards.
-> *Nalozi i pristup* and *Evidencija drustva* cover accounts and the society's
-> roster. Migrations 001-011 are applied to the hosted project. Migration 012
-> is the new Web Push slice and is not called hosted until its postflight and
-> fingerprint verification are complete.
+> and records arrival and departure; and *Arhiva*, the record afterwards.
+> *Drustvo* holds *Evidencija*, *Nalozi* and *Podesavanja*. Migrations 001-011
+> are applied to the hosted project. Migration 012 is the Web Push slice and is
+> not called hosted until its postflight and fingerprint verification are
+> complete.
 >
-> **The earlier prototype screens remain, clearly labelled**, under a
-> *Prototip (simulacija)* heading. They run on device-local fictional state
-> driven by an actor selector and say so in a banner on every one of them.
+> **The interface is offered in Crnogorski and English**, chosen on
+> *Podesavanja* and remembered on that device. Nothing about the choice is sent
+> to the server. What members have written - intervention titles, names,
+> instructions, notes - is never translated.
+>
+> **The earlier prototype screens remain, clearly labelled**, but they are no
+> longer in the navigation: they are reached from *Podesavanja*, behind a closed
+> disclosure, because a group label is not a separation and one tap from a real
+> call-out to a fictional one is one tap too few. They run on device-local
+> fictional state driven by an actor selector and say so on every one of them.
 >
 > The actor selector is a demonstration control, **not a login** — and it is not
 > rendered at all on a server-backed screen, so it cannot be tabbed to,
@@ -99,11 +107,12 @@ recreates schemas, so point it only at a scratch database.
 
 | Screen | For | What it does |
 |---|---|---|
-| **Poziv i intervencija** | Owner, administrator, commander | Draft, choose recipients, publish, set status, see who did what, confirm attendance, record vehicle movements, close |
+| **Poziv** | Owner, administrator, commander | Draft, choose recipients, publish, set status, see who did what, confirm attendance, record vehicle movements, close |
 | **Moj poziv** | Any member with an account | State general availability, open the call-out, answer with an ETA, report movement, record arrival and departure |
-| **Arhiva i ucesce** | Any member with an account | The chronology of a finished intervention and confirmed participation per member |
-| **Evidencija drustva** | Owner and administrator | Members, groups, vehicles and the account-to-member link |
-| **Nalozi i pristup** | **Real accounts** | Sign in and register against the real project; the owner sees every registered account and can assign a role or withdraw access with a mandatory reason, with a permanent audit beneath |
+| **Arhiva** | Any member with an account | The chronology of a finished intervention and confirmed participation per member |
+| **Evidencija** | Owner and administrator | Members, groups, vehicles and the account-to-member link |
+| **Nalozi** | **Real accounts** | Sign in and register against the real project; the owner sees every registered account and can assign a role or withdraw access with a mandatory reason, with a permanent audit beneath |
+| **Podesavanja** | Anyone, including signed out | Language, this device's notifications, and the way through to the prototype screens. Deliberately outside the access gate: the person most in need of a refusal message they can read is the one who has been refused |
 
 ### The earlier prototype, on device-local fictional state
 

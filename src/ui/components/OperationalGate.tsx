@@ -21,6 +21,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { accessObstacle, hasOperationalAccess, type OperationalRole } from '@/auth/access';
+import type { Strings } from '@/i18n/strings.me';
+import { useText } from '@/i18n/useText';
 import { useAccess } from '@/auth/AccessProvider';
 import { fetchOwnMemberId } from '@/auth/operations';
 import { Notice } from './primitives';
@@ -48,6 +50,7 @@ export interface OperationalGateProps {
 }
 
 export function OperationalGate({ allow, requiresMember, children }: OperationalGateProps) {
+  const t = useText();
   const { access, reload } = useAccess();
   const obstacle = accessObstacle(access);
   const [member, setMember] = useState<MemberLoad>({ kind: 'LOADING' });
@@ -105,12 +108,12 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   };
 
   if (obstacle !== null) {
-    return <Blocked obstacle={obstacle} onRetry={retry} />;
+    return <Blocked obstacle={obstacle} onRetry={retry} t={t} />;
   }
   if (!hasOperationalAccess(access)) {
     // Unreachable while accessObstacle covers every roleless case; kept as a
     // fail-closed default rather than a cast that assumes it.
-    return <Blocked obstacle="AWAITING_APPROVAL" onRetry={retry} />;
+    return <Blocked obstacle="AWAITING_APPROVAL" onRetry={retry} t={t} />;
   }
 
   // `hasOperationalAccess` narrows the snapshot to SIGNED_IN but its `role` is
@@ -118,28 +121,32 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   // account with no operational grant. Check it rather than cast it: a cast
   // here would be asserting the exact thing this screen must not assume.
   const role = access.role;
-  if (role === null) return <Blocked obstacle="AWAITING_APPROVAL" onRetry={retry} />;
+  if (role === null) return <Blocked obstacle="AWAITING_APPROVAL" onRetry={retry} t={t} />;
 
   if (!allow.includes(role)) {
+    // Named with the server's own meaning in both languages. "Komandir" is the
+    // role that may publish a call-out, and "Commander" has to be that same
+    // role - a refusal that softens what a role means is a refusal nobody can
+    // act on.
+    const roleName = (id: OperationalRole) => t.vocabulary.role[id] ?? id;
     return (
       <Notice tone="info">
-        <strong>Ovaj ekran nije za vasu ulogu.</strong> Prijavljeni ste kao{' '}
-        <strong>{ROLE_TEXT[role]}</strong>. Ovaj ekran koriste:{' '}
-        {allow.map((r) => ROLE_TEXT[r]).join(', ')}. Server bi svaku radnju odavde ionako odbio.
+        <strong>{t.gate.wrongRoleTitle}</strong> {t.gate.wrongRoleSignedInAs}{' '}
+        <strong>{roleName(role)}</strong>. {t.gate.wrongRoleUsedBy}{' '}
+        {allow.map(roleName).join(', ')}. {t.gate.wrongRoleServerWouldRefuse}
       </Notice>
     );
   }
 
   if (member.kind === 'LOADING') {
-    return <p role="status">Ucitavanje operativnih podataka...</p>;
+    return <p role="status">{t.gate.loadingOperational}</p>;
   }
   if (member.kind === 'FAILED') {
     return (
       <Notice tone="error">
-        <strong>Server trenutno nije dostupan.</strong> Podaci nisu ucitani, pa ovaj ekran ne
-        prikazuje stanje.{' '}
+        <strong>{t.gate.dataUnavailableTitle}</strong> {t.gate.dataUnavailableText}{' '}
         <button type="button" className="btn btn--ghost" onClick={retry}>
-          Pokusaj ponovo
+          {t.gate.retry}
         </button>
       </Notice>
     );
@@ -148,11 +155,9 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   if (requiresMember && member.memberId === null) {
     return (
       <Notice tone="warn">
-        <strong>Vas nalog nije povezan sa clanom drustva.</strong> Zbog toga vas ne mozemo staviti
-        na spisak pozvanih, niti mozete prijaviti svoje prisustvo. Administrator to povezuje na
-        ekranu <strong>Evidencija drustva</strong>. Do tada ovaj ekran nema sta da prikaze za vas.{' '}
+        <strong>{t.gate.noMemberTitle}</strong> {t.gate.noMemberText} {t.gate.noMemberUntilThen}{' '}
         <button type="button" className="btn btn--ghost" onClick={retry}>
-          Provjeri ponovo
+          {t.gate.recheck}
         </button>
       </Notice>
     );
@@ -170,82 +175,80 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   );
 }
 
-const ROLE_TEXT: Record<OperationalRole, string> = {
-  OWNER: 'Vlasnik',
-  ADMIN: 'Administrator',
-  COMMANDER: 'Komandir',
-  FIREFIGHTER: 'Vatrogasac',
-};
-
 /**
  * Why somebody is being kept out, and the one thing they can do next.
  *
  * Each case names an action rather than a state. "Niste prijavljeni" with no
  * route to the sign-in screen is a dead end on a phone at the station.
+ *
+ * The wording is the reason Settings sits outside every gate: somebody refused
+ * here is precisely the person who most needs to be able to read the refusal,
+ * and the language switch has to stay reachable from a screen like this one.
  */
-function Blocked({ obstacle, onRetry }: { obstacle: string; onRetry: () => void }) {
+function Blocked({
+  obstacle,
+  onRetry,
+  t,
+}: {
+  obstacle: string;
+  onRetry: () => void;
+  t: Strings;
+}) {
   switch (obstacle) {
     case 'NOT_CONFIGURED':
       return (
         <Notice tone="warn">
-          <strong>Ova kopija nije povezana sa serverom.</strong> Operativni ekrani rade samo kada su
-          podeseni pristupni podaci projekta. Prototip i dalje radi lokalno.
+          <strong>{t.gate.notConfiguredTitle}</strong> {t.gate.notConfiguredText}
         </Notice>
       );
     case 'LOADING':
-      return <p role="status">Provjera pristupa...</p>;
+      return <p role="status">{t.gate.loadingAccess}</p>;
     case 'SIGN_IN_REQUIRED':
       return (
         <Notice tone="info">
-          <strong>Prijavite se da biste vidjeli ovaj ekran.</strong> Operativni podaci se citaju sa
-          servera tek kada server potvrdi ko ste.{' '}
+          <strong>{t.gate.signInRequiredTitle}</strong> {t.gate.signInRequiredText}{' '}
           <a className="btn btn--primary" href={hrefFor('nalozi')}>
-            Idi na prijavu
+            {t.gate.goToSignIn}
           </a>
         </Notice>
       );
     case 'SERVER_UNREACHABLE':
       return (
         <Notice tone="error">
-          <strong>Server nije dostupan.</strong> Ne prikazujemo nista umjesto stvarnog stanja, jer
-          zastarjeli podaci na intervenciji su gori od praznog ekrana.{' '}
+          <strong>{t.gate.serverUnreachableTitle}</strong> {t.gate.serverUnreachableText}{' '}
           <button type="button" className="btn btn--ghost" onClick={onRetry}>
-            Pokusaj ponovo
+            {t.gate.retry}
           </button>
         </Notice>
       );
     case 'ACCOUNT_BROKEN':
       return (
         <Notice tone="error">
-          <strong>Nalog nije potpun.</strong> Server nema vas profil. Javite se vlasniku naloga -
-          ovo se ne popravlja iz aplikacije.
+          <strong>{t.gate.accountBrokenTitle}</strong> {t.gate.accountBrokenText}
         </Notice>
       );
     case 'PROFILE_REQUIRED':
       return (
         <Notice tone="info">
-          <strong>Dopunite profil.</strong> Upisite ime i prezime da bi vas server mogao prepoznati
-          kao clana.{' '}
+          <strong>{t.gate.profileRequiredTitle}</strong> {t.gate.profileRequiredText}{' '}
           <a className="btn btn--primary" href={hrefFor('nalozi')}>
-            Dopuni profil
+            {t.gate.completeProfile}
           </a>
         </Notice>
       );
     case 'SUSPENDED':
       return (
         <Notice tone="error">
-          <strong>Vas pristup je ukinut.</strong> Operativni ekrani su zatvoreni, a server odbija
-          svaku radnju. Razlog i vrijeme su zabiljezeni; javite se vlasniku naloga.
+          <strong>{t.gate.suspendedTitle}</strong> {t.gate.suspendedText}
         </Notice>
       );
     case 'AWAITING_APPROVAL':
     default:
       return (
         <Notice tone="info">
-          <strong>Nalog ceka odobrenje.</strong> Vlasnik dodjeljuje ulogu, i tek tada se operativni
-          ekrani otvaraju.{' '}
+          <strong>{t.gate.awaitingApprovalTitle}</strong> {t.gate.awaitingApprovalText}{' '}
           <button type="button" className="btn btn--ghost" onClick={onRetry}>
-            Provjeri pristup ponovo
+            {t.gate.recheckAccess}
           </button>
         </Notice>
       );

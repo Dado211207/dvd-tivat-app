@@ -52,6 +52,13 @@ test.describe('an automatic re-read does not disturb the person using the screen
 
     // Type something and leave it unsent, then move to another tab. This is the
     // state a commander is in when a firefighter answers.
+    //
+    // The compose form is behind a disclosure while a call-out is RUNNING - the
+    // console leads with the intervention in progress rather than with a blank
+    // form for a different one. Opening it is the extra step a second call-out
+    // now costs, and the point of this test is that everything after it
+    // survives: the `<details>` stays open and the draft stays typed.
+    await page.getByTestId('new-call-out-disclosure').locator('summary').click();
     await page.getByTestId('new-title').fill('Pozar u Donjoj Lastvi (izmisljeno)');
     await page.getByRole('tab', { name: 'Pregled' }).click();
     await expect(page.getByTestId('overview-table')).toBeVisible();
@@ -68,6 +75,10 @@ test.describe('an automatic re-read does not disturb the person using the screen
       page.getByTestId('new-title'),
       'an unsent draft must survive an automatic re-read',
     ).toHaveValue('Pozar u Donjoj Lastvi (izmisljeno)');
+    await expect(
+      page.getByTestId('new-call-out-disclosure'),
+      'and the form must still be open, not folded away with the draft inside',
+    ).toHaveJSProperty('open', true);
   });
 
   test('no loading line flashes while it happens', async ({ page }) => {

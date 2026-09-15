@@ -1,12 +1,17 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { applyStoredLanguage } from './i18n/language';
 import { AccessProvider } from './auth/AccessProvider';
 import { registerServiceWorker } from './pwa';
 import { AppStateProvider } from './state/AppStateContext';
 import './styles/global.css';
 import './styles/workspace.css';
 import 'leaflet/dist/leaflet.css';
+
+// Before the first render, so nothing paints in one language and re-paints in
+// the other, and so `<html lang>` is right for a screen reader from the start.
+applyStoredLanguage();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');

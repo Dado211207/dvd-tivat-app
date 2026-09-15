@@ -45,9 +45,18 @@ test.describe('the navigation offers only what the role can use', () => {
 
   test('the owner is offered everything', async ({ page }) => {
     await openOperational(page, 'poziv', 'OWNER');
-    for (const route of ['poziv', 'mobilizacija', 'arhiva', 'evidencija', 'nalozi']) {
+    for (const route of ['poziv', 'mobilizacija', 'arhiva', 'evidencija', 'nalozi', 'podesavanja']) {
       await expect(page.getByTestId(`nav-${route}`), route).toBeVisible();
     }
+  });
+
+  test('settings are offered to a firefighter too, because they are this device', async ({ page }) => {
+    // Language and notifications are settings of one browser, not facts about
+    // an account. Putting them behind a role check would mean the person most
+    // in need of a refusal message they can read is the one who cannot change
+    // its language.
+    await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
+    await expect(page.getByTestId('nav-podesavanja')).toBeVisible();
   });
 
   /**
@@ -67,15 +76,16 @@ test.describe('the navigation offers only what the role can use', () => {
     }
   });
 
-  test('no simulation that duplicates a real screen is offered', async ({ page }) => {
+  test('no simulation at all is offered in the rail', async ({ page }) => {
     // A commander who runs a call-out on the local simulation by accident finds
-    // nothing on the server afterwards. The station display stays, because no
-    // server-backed screen does what it does.
+    // nothing on the server afterwards. The station display used to stay on the
+    // argument that it duplicated nothing - true, and beside the point: a group
+    // label is not a separation, and one tap is one tap. Every simulation is
+    // behind a closed disclosure on Settings now.
     await openOperational(page, 'poziv', 'COMMANDER');
-    for (const route of ['dezurni', 'clan', 'vozila', 'clanovi', 'istorija']) {
+    for (const route of ['dezurni', 'clan', 'vozila', 'clanovi', 'istorija', 'prikaz']) {
       await expect(page.getByTestId(`nav-${route}`), route).toHaveCount(0);
     }
-    await expect(page.getByTestId('nav-prikaz')).toBeVisible();
   });
 
   test('the active destination is marked', async ({ page }) => {

@@ -101,8 +101,33 @@ test.describe('the firefighter screen', () => {
   test('shows the call-out with each action as its own step', async ({ page }) => {
     await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
     await expect(page.getByTestId('callout-title')).toBeVisible();
-    for (const id of ['available-yes', 'available-no', 'answer-DOLAZIM', 'check-in']) {
-      await expect(page.getByTestId(id)).toBeVisible();
+    // Opening it, answering it, reporting movement and stating attendance are
+    // four separate facts, each with its own control, all in front of the
+    // member while a call-out is running.
+    //
+    // Step one is either its button or the record that it already happened -
+    // this member acknowledged the call-out in the fixture - and the test
+    // accepts whichever, because what it is asserting is that the step is on
+    // the screen rather than folded into one of the others.
+    await expect(
+      page.locator('[data-testid="acknowledge"], [data-testid="ack-state"]'),
+    ).toHaveCount(1);
+    for (const id of ['answer-DOLAZIM', 'journey-KRECEM', 'check-in']) {
+      await expect(page.getByTestId(id), id).toBeVisible();
+    }
+  });
+
+  test('general availability is still reachable during a call-out, one tap away', async ({ page }) => {
+    // It is about next week; the call-out is about now, so it closes below it.
+    // Closed is not gone: hiding a capability to tidy a screen would be buying
+    // calm with a missing feature.
+    await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
+    const disclosure = page.getByTestId('availability-disclosure');
+    await expect(page.getByTestId('available-yes')).toBeHidden();
+
+    await disclosure.locator('summary').click();
+    for (const id of ['available-yes', 'available-no', 'availability-note']) {
+      await expect(page.getByTestId(id), id).toBeVisible();
     }
   });
 

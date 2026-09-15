@@ -1,4 +1,18 @@
+/**
+ * Turning the alarm on for one device, and saying honestly what that buys.
+ *
+ * Two shapes, one behaviour. `full` is the whole panel, used on Settings where
+ * somebody has come to change something. `compact` is for the firefighter's
+ * operational screen, and it collapses to a single line ONLY when notifications
+ * are already on - because then there is nothing to do, and a paragraph
+ * explaining a thing that is already working is just something between a
+ * firefighter and their call-out. When there IS an action to take, `compact`
+ * shows the same panel as `full`: hiding the button behind a second screen would
+ * be tidiness bought with somebody not being woken up.
+ */
+
 import { useEffect, useState } from 'react';
+import { useText } from '@/i18n/useText';
 import {
   currentPushSubscription,
   disableWebPush,
@@ -7,11 +21,17 @@ import {
   repairWebPushRegistration,
   type PushCapability,
 } from '@/notifications/push';
+import { hrefFor } from '../router';
 import { Notice } from './primitives';
 
 type State = 'CHECKING' | 'OFF' | 'ON' | 'BUSY' | 'DENIED' | 'ERROR';
 
-export function PushNotificationPanel() {
+export interface PushNotificationPanelProps {
+  readonly variant?: 'full' | 'compact';
+}
+
+export function PushNotificationPanel({ variant = 'full' }: PushNotificationPanelProps) {
+  const t = useText();
   const [capability, setCapability] = useState<PushCapability>('UNSUPPORTED');
   const [state, setState] = useState<State>('CHECKING');
 
@@ -63,50 +83,64 @@ export function PushNotificationPanel() {
     }
   };
 
+  const stateText =
+    state === 'ON' ? t.push.stateOn
+      : state === 'BUSY' || state === 'CHECKING' ? t.push.stateChecking
+      : t.push.stateOff;
+
+  // Settled and working: one line, and a way through to the whole thing.
+  if (variant === 'compact' && state === 'ON') {
+    return (
+      <p className="push-line" data-testid="push-compact">
+        <span className="push-line__label">{t.push.title}</span>
+        <span
+          role="status"
+          data-testid="push-state"
+          className="push-panel__state push-panel__state--on"
+        >
+          {stateText}
+        </span>
+        <a className="push-line__link" href={hrefFor('podesavanja')}>{t.push.openSettings}</a>
+      </p>
+    );
+  }
+
   return (
-    <section className="panel push-panel" aria-labelledby="push-panel-title">
+    <div className="push-panel" data-testid="push-panel">
       <div className="push-panel__head">
-        <div>
-          <p className="eyebrow">OPERATIVNA UZBUNA</p>
-          <h2 className="panel__title" id="push-panel-title">Notifikacije za novi poziv</h2>
-        </div>
-        {/* Announced: the button that changes this state is pressed by
-            somebody who may not be able to see the chip change colour. */}
+        {/* Settings already puts a heading above this panel; the operational
+            screen does not, so the compact variant brings its own. */}
+        {variant === 'compact' ? (
+          <div>
+            <p className="eyebrow">{t.push.eyebrow}</p>
+            <h3 className="panel__subtitle">{t.push.title}</h3>
+          </div>
+        ) : null}
+        {/* Announced: the button that changes this state is pressed by somebody
+            who may not be able to see the chip change colour. */}
         <span
           role="status"
           data-testid="push-state"
           className={`push-panel__state push-panel__state--${state.toLowerCase()}`}
         >
-          {state === 'ON' ? 'Ukljucene' : state === 'BUSY' || state === 'CHECKING' ? 'Provjera...' : 'Iskljucene'}
+          {stateText}
         </span>
       </div>
 
       {capability === 'INSTALL_ON_IOS' ? (
-        <Notice tone="info">
-          Na iPhoneu prvo izaberite <strong>Podijeli - Dodaj na pocetni ekran</strong>, otvorite
-          DVD Tivat sa te ikone, pa ovdje ukljucite notifikacije.
-        </Notice>
+        <Notice tone="info">{t.push.installOnIos}</Notice>
       ) : capability === 'UNSUPPORTED' ? (
-        <Notice tone="warn">Ovaj pregledac ne podrzava pouzdane Web Push notifikacije.</Notice>
+        <Notice tone="warn">{t.push.unsupported}</Notice>
       ) : capability === 'NOT_CONFIGURED' ? (
-        <Notice tone="warn">Push servis jos nije povezan sa ovom objavljenom verzijom.</Notice>
+        <Notice tone="warn">{t.push.notConfigured}</Notice>
       ) : state === 'DENIED' ? (
-        <Notice tone="warn">
-          Notifikacije su odbijene u podesavanjima telefona. Dozvolite ih za DVD Tivat, pa otvorite
-          aplikaciju ponovo.
-        </Notice>
+        <Notice tone="warn">{t.push.denied}</Notice>
       ) : state === 'ERROR' ? (
-        <Notice tone="error">Notifikacija nije podesena. Provjerite vezu i pokusajte ponovo.</Notice>
+        <Notice tone="error">{t.push.failed}</Notice>
       ) : state === 'ON' ? (
-        <Notice tone="info">
-          Ovaj uredjaj je prijavljen za <strong>OPERATIVNI POZIV</strong>. Sistem ce pokusati da
-          prikaze upozorenje i kada aplikacija nije otvorena. Zvuk zavisi od podesavanja telefona.
-        </Notice>
+        <Notice tone="info">{t.push.enabledExplanation}</Notice>
       ) : (
-        <p className="muted small">
-          Upozorenje ne otkriva lokaciju na zakljucanom ekranu. Otvaranje notifikacije vodi u
-          prijavljenu aplikaciju i konkretan poziv.
-        </p>
+        <p className="muted small">{t.push.privacyExplanation}</p>
       )}
 
       {capability === 'AVAILABLE' ? (
@@ -116,10 +150,14 @@ export function PushNotificationPanel() {
           disabled={state === 'BUSY' || state === 'CHECKING' || state === 'DENIED'}
           onClick={() => void (state === 'ON' ? disable() : enable())}
         >
-          {state === 'ON' ? 'Iskljuci na ovom uredjaju' : 'Ukljuci operativne notifikacije'}
+          {state === 'ON' ? t.push.disable : t.push.enable}
         </button>
       ) : null}
-    </section>
+
+      {/* Push is best-effort and opt-in. The approved telephone fallback is the
+          thing a real alarm still rests on, and this screen is where somebody
+          decides how much to rely on the phone in their hand. */}
+      <p className="muted small">{t.push.fallbackReminder}</p>
+    </div>
   );
 }
-

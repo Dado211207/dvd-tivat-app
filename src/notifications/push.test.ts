@@ -12,6 +12,7 @@ vi.mock('@/auth/supabaseClient', () => ({
 import {
   disableWebPush,
   enableWebPush,
+  PUSH_WAKE_TIMEOUT_MS,
   pushCapability,
   repairWebPushRegistration,
   requestPushDelivery,
@@ -120,6 +121,47 @@ describe('device-bound Web Push client', () => {
     expect(backend.invoke).toHaveBeenCalledWith('send-web-push', {
       body: { intervention_id: '11111111-1111-4111-8111-111111111111' },
     });
+  });
+
+  it('stops waiting for a worker that does not answer, without failing the call-out', async () => {
+    // The commander has just sent a crew to a fire. The publication is already
+    // committed; holding their screen on a push service somewhere else is a
+    // product defect, not caution. The wake-up carries on server-side.
+    vi.useFakeTimers();
+    try {
+      installPushBrowser();
+      let settled: boolean | 'pending' = 'pending';
+      backend.invoke.mockImplementationOnce(() => new Promise(() => {}));
+
+      const request = requestPushDelivery('11111111-1111-4111-8111-111111111111')
+        .then((value) => (settled = value));
+
+      await vi.advanceTimersByTimeAsync(PUSH_WAKE_TIMEOUT_MS - 1);
+      expect(settled, 'must not give up early').toBe('pending');
+
+      await vi.advanceTimersByTimeAsync(2);
+      await request;
+      // False means "not confirmed", and the caller phrases it that way. It
+      // must never mean the call-out failed.
+      expect(settled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports success when the worker answers inside the deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      installPushBrowser();
+      backend.invoke.mockImplementationOnce(
+        () => new Promise((resolve) => setTimeout(() => resolve({ error: null }), 200)),
+      );
+      const request = requestPushDelivery('11111111-1111-4111-8111-111111111111');
+      await vi.advanceTimersByTimeAsync(250);
+      await expect(request).resolves.toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
