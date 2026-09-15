@@ -625,8 +625,17 @@ function CallOutTab({
 
   return (
     <div className="stack">
-      {running ? null : composerPanel}
-
+      {/*
+        ONE render position, always.
+        
+        The obvious way to move a panel is to render it in one of two places
+        depending on a flag - and that unmounts it when the flag flips, taking
+        its `useState` with it. Publishing the selected draft flips `running`,
+        so a commander who had half-typed an unrelated second call-out would
+        have lost it at exactly the wrong moment. That is the same class of
+        fault as the resume reset, and `live-updates.spec.ts` exists because of
+        it. The panel stays here and only its shape changes.
+      */}
       {selected ? (
         <section className="panel">
           <h2 className="panel__title">
@@ -793,7 +802,7 @@ function CallOutTab({
         </EmptyState>
       )}
 
-      {running ? composerPanel : null}
+      {composerPanel}
 
       {confirming === 'PUBLISH' ? (
         <ConfirmDialog

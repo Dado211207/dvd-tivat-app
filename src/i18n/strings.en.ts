@@ -458,7 +458,7 @@ export const en: Strings = {
     closedMessage: 'The intervention is closed.',
     cancelledMessage: 'The intervention is cancelled.',
     noInterventionTitle: 'There is no intervention',
-    noInterventionText: 'Make the first draft above. Until you publish it, nobody sees it.',
+    noInterventionText: 'Make the first draft below. Until you publish it, nobody sees it.',
 
     confirmPublishTitle: 'Publish the call-out?',
     confirmPublishAction: 'Publish',

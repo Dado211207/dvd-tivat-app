@@ -275,8 +275,9 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         {LIVE_STATUS_LABEL[liveStatus]}
       </p>
 
-      {callOutIsOpen ? null : availability}
-
+      {/* Rendered once, below - never in one of two positions. Moving a panel
+          by rendering it somewhere else unmounts it and takes its state with
+          it, and this one holds a note somebody may be halfway through typing. */}
       {data.interventions.length > 1 ? (
         <Field label={t.mobilisation.pickCallOut} controlId="my-intervention">
           {(props) => (
@@ -314,7 +315,7 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         />
       )}
 
-      {callOutIsOpen ? availability : null}
+      {availability}
     </div>
   );
 }

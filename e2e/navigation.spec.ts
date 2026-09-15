@@ -31,17 +31,17 @@ test('every route stays reachable without page overflow at compact widths', asyn
     .evaluateAll((links) =>
       links.map((link) => link.getAttribute('data-testid')!.replace(/^nav-/, '')),
     );
-  // The deployed sidebar, exactly. Citizen reporting and the simulations that
-  // duplicate a server-backed screen are deliberately NOT offered - their
-  // routes and code remain, and `src/access/navigation.test.ts` pins that
-  // distinction. Adding a route to the sidebar has to change this line.
+  // The deployed rail, exactly. Citizen reporting and EVERY simulation are
+  // deliberately not offered - their routes and code remain, reachable from
+  // Settings, and `src/access/navigation.test.ts` pins that distinction.
+  // Adding a destination to the rail has to change this line.
   expect(routes.slice().sort()).toEqual([
     'arhiva',
     'evidencija',
     'mobilizacija',
     'nalozi',
+    'podesavanja',
     'poziv',
-    'prikaz',
   ]);
 
   for (const width of [320, 720, 1024]) {

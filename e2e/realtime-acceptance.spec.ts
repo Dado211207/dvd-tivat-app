@@ -412,9 +412,17 @@ test.describe('the two sessions really are independent', () => {
       expect(a).not.toContain(FIREFIGHTER.userId);
       expect(b).not.toContain(COMMANDER.userId);
 
-      // And the server agrees about who each of them is.
-      await expect(pair.commander.locator('.identity-pill__role')).toContainText('COMMANDER');
-      await expect(pair.firefighter.locator('.identity-pill__role')).toContainText('FIREFIGHTER');
+      // And the server agrees about who each of them is. The pill shows the
+      // role in words now rather than its database spelling - `COMMANDER` on a
+      // screen is the same defect `src/i18n/coverage.test.ts` forbids
+      // everywhere else - so the assertion reads the word and then checks the
+      // raw enum is NOT what a person is being shown.
+      const commanderRole = pair.commander.locator('.identity-pill__role');
+      const firefighterRole = pair.firefighter.locator('.identity-pill__role');
+      await expect(commanderRole).toContainText('Komandir');
+      await expect(firefighterRole).toContainText('Vatrogasac');
+      await expect(commanderRole).not.toContainText('COMMANDER');
+      await expect(firefighterRole).not.toContainText('FIREFIGHTER');
       expect(COMMANDER_MEMBER).not.toBe(FIREFIGHTER_MEMBER);
     } finally {
       await pair.close();

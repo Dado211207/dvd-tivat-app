@@ -84,7 +84,7 @@ export const me = {
     simulationBadgeText:
       'Izmisljeni podaci u ovom pregledacu. Nema push, SMS ni telefonskih poziva, i nema provjere prava.',
     simulationNotice:
-      'Ovaj ekran radi na lokalnoj simulaciji: podaci su izmisljeni, cuvaju se samo u ovom pregledacu i biraju se preko izbora simuliranog ucesnika. Server ne ucestvuje i ovdje nema provjere prava.',
+      'Ovaj ekran jos radi na lokalnoj simulaciji: podaci su izmisljeni, cuvaju se samo u ovom pregledacu i biraju se preko izbora simuliranog ucesnika. Server ne ucestvuje i ovdje nema provjere prava.',
     simulationBackToWork: 'Stvarni rad je u grupi Rad.',
     simulatedActor: 'Simulirani ucesnik',
     simulatedActorHint: 'Demonstracija. Ovo nije prijava i ne daje nikakva prava.',
@@ -492,7 +492,7 @@ export const me = {
     closedMessage: 'Intervencija je zatvorena.',
     cancelledMessage: 'Intervencija je otkazana.',
     noInterventionTitle: 'Nema nijedne intervencije',
-    noInterventionText: 'Napravite prvi nacrt gore. Dok ne objavite, niko ga ne vidi.',
+    noInterventionText: 'Napravite prvi nacrt ispod. Dok ne objavite, niko ga ne vidi.',
 
     confirmPublishTitle: 'Objaviti poziv?',
     confirmPublishAction: 'Objavi',

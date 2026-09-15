@@ -260,7 +260,7 @@ private window) for the commander.
 | 25 | In **Arhiva**, open the closed intervention | The chronology shows **every** movement - Krecem, U putu and Na licu mjesta as three lines - plus each state change, each with a time and **who did it** |
 | 26 | Look at the archive list row for the closed intervention | It reads `Zatvoreno` beside the **closure** time, not the publication time |
 | 27 | Turn the phone **sideways** | Nothing is cut off at the notch, nothing scrolls sideways, and the archive tables are readable cards rather than columns running off the screen |
-| 28 | On the laptop, sign in as **vatrogasac1@example.invalid** instead | The navigation does **not** offer `Poziv i intervencija` or `Evidencija drustva`, and the account screen shows their own account without the owner's list |
+| 28 | On the laptop, sign in as **vatrogasac1@example.invalid** instead | The navigation does **not** offer `Poziv` or `Evidencija`, and the account screen shows their own account without the owner's list |
 | 29 | In the commander's recipient picker, look for the withdrawn member | They are **not there**. The list comes from the server, by the same rule publishing enforces |
 | 30 | On iPhone, open the installed Home Screen app as Ivo and press **Ukljuci operativne notifikacije** | iOS asks for notification permission only after this tap; the panel then says `Ukljucene` |
 | 31 | Fully leave the Home Screen app, lock the phone, and publish a new fictional call-out to Ivo from the laptop | A generic `OPERATIVNI POZIV - DVD Tivat` notification should arrive without exposing title or location. Record actual latency and whether sound/vibration occurred; do not infer it |
