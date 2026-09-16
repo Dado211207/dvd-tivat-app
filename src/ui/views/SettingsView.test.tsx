@@ -77,11 +77,13 @@ describe('choosing a language', () => {
 
     expect(activeLanguage()).toBe('en');
     expect(container.textContent).toContain(en.settings.languageTitle);
-    expect(container.textContent).toContain(en.settings.notificationsTitle);
+    // The notification panel brings its own heading now, so this is the string
+    // a person actually reads on the screen.
+    expect(container.textContent).toContain(en.push.title);
     expect(
       container.textContent,
       'no Montenegrin sentence may survive the switch',
-    ).not.toContain(me.settings.notificationsTitle);
+    ).not.toContain(me.push.title);
   });
 
   it('and back again', async () => {
@@ -89,7 +91,7 @@ describe('choosing a language', () => {
     await click(languageRadio('en'));
     await click(languageRadio('me'));
     expect(activeLanguage()).toBe('me');
-    expect(container.textContent).toContain(me.settings.notificationsTitle);
+    expect(container.textContent).toContain(me.push.title);
   });
 
   it('remembers the choice on this device', async () => {

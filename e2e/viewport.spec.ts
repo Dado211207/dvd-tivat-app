@@ -110,6 +110,17 @@ async function clippedText(page: Page): Promise<string[]> {
         ' .workspace-heading__title',
     );
     for (const el of candidates) {
+      /*
+       * Text that is MEANT to be clipped is not cut off.
+       *
+       * `.sr-only` is a 1px box holding a full sentence for a screen reader, so
+       * it fails every measurement here by design - which is the point of the
+       * technique, not a defect in it. The page's `h1` is one of these: the
+       * route name is announced and structural, and drawing it would be the
+       * duplicate page title this redesign removed.
+       */
+      if (el.closest('.sr-only')) continue;
+
       const style = getComputedStyle(el);
       const scrolls =
         style.overflowX === 'auto' || style.overflowX === 'scroll' ||
@@ -287,7 +298,29 @@ test.describe('a form field is usable on a narrow screen', () => {
     // browser's default width on a desktop, too narrow to read a whole entry
     // back. The cause was a CSS selector matching only `input[type="text"]`,
     // which these inputs - written without a `type` at all - never matched.
-    for (const id of ['new-title', 'new-location']) {
+    //
+    // The composer is behind a closed disclosure while a call-out is running -
+    // deliberately, so a blank form for a different fire does not dominate the
+    // console during this one. Open it the way a commander would.
+    const disclosure = page.getByTestId('new-call-out-disclosure');
+    if (await disclosure.count()) await disclosure.locator('summary').click();
+
+    // The two fields now sit on the two steps of the compose sequence, so each
+    // is measured on the step it belongs to. A hidden step has no box at all,
+    // which is why walking it matters rather than querying both at once.
+    const steps = [
+      { id: 'new-title', reach: async () => undefined },
+      {
+        id: 'new-location',
+        reach: async () => {
+          await page.getByTestId('new-title').fill('Izmisljeni naslov za mjerenje');
+          await page.getByTestId('wizard-next').click();
+        },
+      },
+    ];
+
+    for (const { id, reach } of steps) {
+      await reach();
       const field = page.getByTestId(id);
       const box = await field.boundingBox();
       expect(box, `${id} must be rendered`).not.toBeNull();

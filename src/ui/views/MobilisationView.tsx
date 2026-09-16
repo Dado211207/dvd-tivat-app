@@ -41,16 +41,24 @@ import {
   type Intervention,
   type JourneyStep,
   type RecipientFacts,
-  type ResponseAnswer,
 } from '@/auth/operations';
 import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
 import { formatDurationMs } from '@/auth/duration';
 import { loadRoster } from '@/auth/roster';
 import { readRouteParam } from '../router';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
+import {
+  factStates,
+  nextStep,
+  type AttendanceStanding,
+  type CallOutState,
+  type CallOutStep,
+  type FactState,
+} from './callOutStep';
+import { IncidentCard } from '../components/IncidentCard';
 import { PushNotificationPanel } from '../components/PushNotificationPanel';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
-import { formatTime, JOURNEY_SYMBOL } from '@/i18n/labels';
+import { formatTime } from '@/i18n/labels';
 import { useText } from '@/i18n/useText';
 
 export function MobilisationView() {
@@ -218,6 +226,23 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
   );
   const openInterval = myIntervals.find((a) => a.endedAt === null && a.rejectedAt === null) ?? null;
 
+  /**
+   * Where this member's attendance stands, read from the records themselves.
+   *
+   * Order matters and it is not arbitrary. An open interval is the live fact -
+   * they are on the task now - and outranks anything already closed. Otherwise
+   * a confirmed record is the strongest thing they have, and a closed record
+   * nobody has confirmed is a claim waiting on a commander. Rejected records
+   * count as nothing here; they are still readable in the list below.
+   */
+  const attendance: AttendanceStanding = openInterval !== null
+    ? 'OPEN'
+    : myIntervals.some((a) => attendanceState(a) === 'CONFIRMED')
+      ? 'CONFIRMED'
+      : myIntervals.some((a) => attendanceState(a) === 'PENDING')
+        ? 'PENDING'
+        : 'NONE';
+
   const act = async (
     run: () => Promise<{ ok: boolean; message?: string }>,
     successText: string,
@@ -251,10 +276,6 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
 
   return (
     <div className="stack">
-      {/* Compact while it is already on: a paragraph explaining a thing that is
-          working is just something between a firefighter and their call-out.
-          When there IS an action to take it shows in full. */}
-      <PushNotificationPanel variant="compact" />
       {offline ? (
         <Notice tone="error">
           <strong>{t.mobilisation.offlineTitle}</strong> {t.mobilisation.offlineText}{' '}
@@ -269,11 +290,6 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         </div>
       ) : null}
       {loading ? <p role="status" className="muted small">{t.common.loading}</p> : null}
-
-      <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
-        <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
-        {LIVE_STATUS_LABEL[liveStatus]}
-      </p>
 
       {/* Rendered once, below - never in one of two positions. Moving a panel
           by rendering it somewhere else unmounts it and takes its state with
@@ -309,13 +325,29 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
           intervention={active}
           facts={myFacts}
           intervals={myIntervals}
-          openInterval={openInterval}
+          attendance={attendance}
           busy={busy}
           onAct={act}
         />
       )}
 
       {availability}
+
+      {/*
+        Notifications and the live indicator, at the bottom, together.
+
+        Both were above the fire. The push panel rendered in FULL whenever push
+        was unavailable or not yet configured - which is most devices most of
+        the time - so five lines about notification setup stood between a
+        firefighter and the incident. Neither is something anybody acts on while
+        a call-out is running, and neither is hidden: they are simply last.
+      */}
+      <PushNotificationPanel variant={callOutIsOpen ? 'compact' : 'full'} />
+
+      <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
+        <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
+        {LIVE_STATUS_LABEL[liveStatus]}
+      </p>
     </div>
   );
 }
@@ -433,261 +465,525 @@ function CallOutCard({
   intervention,
   facts,
   intervals,
-  openInterval,
+  attendance,
   busy,
   onAct,
 }: {
   intervention: Intervention;
   facts: RecipientFacts | null;
   intervals: readonly AttendanceInterval[];
-  openInterval: AttendanceInterval | null;
+  attendance: AttendanceStanding;
+  busy: boolean;
+  onAct: (run: () => Promise<{ ok: boolean; message?: string }>, text: string) => Promise<void>;
+}) {
+  const open = isOpenStatus(intervention.status);
+
+  const state: CallOutState = {
+    acknowledged: (facts?.acknowledgedAt ?? null) !== null,
+    answer: facts?.answer ?? null,
+    journey: facts?.journey ?? null,
+    attendance,
+    open,
+  };
+  const step = nextStep(state);
+
+  /*
+   * Two columns wherever there is width, one where there is not.
+   *
+   * Stacked, the incident card alone fills a phone held sideways - so the one
+   * dominant action, the entire point of the screen, sat below the fold on a
+   * landscape phone and below a lot of whitespace on a desktop. What is scarce
+   * in landscape is height, not width, and the incident and the action are
+   * exactly the two things somebody needs at once.
+   *
+   * The DOM order never changes: incident, then action, then what they have
+   * told the commander, then everything else. A screen reader and the tab key
+   * walk the same sequence at every size; only where the boxes land moves.
+   */
+  return (
+    <div className="callout">
+      <div className="callout__incident">
+        <IncidentCard intervention={intervention} />
+      </div>
+      <div className="callout__actions">
+        <NextAction
+          step={step}
+          state={state}
+          intervention={intervention}
+          busy={busy}
+          onAct={onAct}
+        />
+        <MyStatus state={state} facts={facts} />
+        <SecondaryActions
+          state={state}
+          intervention={intervention}
+          intervals={intervals}
+          busy={busy}
+          onAct={onAct}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What happened and where, first and largest.
+ *
+ * Everything a person woken at three in the morning needs before they decide
+ * anything: the kind of incident, its title, where it is, where to gather, and
+ * what they were told to bring. Nothing about their own state, nothing about
+ * notifications, nothing about next week.
+ */
+/**
+ * The one thing to do now, at the size of the one thing to do now.
+ *
+ * Each branch writes exactly ONE fact, which is the rule the whole schema rests
+ * on: opening is not answering, answering is not arriving, arriving is not
+ * attendance, and none of these buttons quietly records another.
+ */
+function NextAction({
+  step,
+  state,
+  intervention,
+  busy,
+  onAct,
+}: {
+  step: CallOutStep;
+  state: CallOutState;
+  intervention: Intervention;
   busy: boolean;
   onAct: (run: () => Promise<{ ok: boolean; message?: string }>, text: string) => Promise<void>;
 }) {
   const t = useText();
-  const [answer, setAnswer] = useState<ResponseAnswer | null>(null);
-  const [eta, setEta] = useState<number | null>(null);
-  const open = isOpenStatus(intervention.status);
+  const [wantsEta, setWantsEta] = useState(false);
+
+  if (step === 'DONE') {
+    const why = !state.open
+      ? t.callout.doneClosed
+      : state.journey === 'ODUSTAJEM'
+        ? t.callout.doneTurnedBack
+        : t.callout.doneDeclined;
+    return (
+      <section className="act act--settled" data-testid="next-action" data-step={step}>
+        <p className="act__eyebrow">{t.callout.nothingLabel}</p>
+        <p className="act__title">{t.callout.doneTitle}</p>
+        <p className="act__why">{why}</p>
+      </section>
+    );
+  }
 
   return (
-    <>
-      <section className="panel panel--callout">
-        <p className="eyebrow">
-          {t.vocabulary.interventionKind[intervention.kind] ?? intervention.kind}
-          {intervention.otherKindNote ? ` - ${intervention.otherKindNote}` : ''}
-        </p>
-        <h2 className="callout__title" data-testid="callout-title">
-          {intervention.title}
-        </h2>
-        <p className="callout__where" data-testid="callout-location">
-          {intervention.incidentLocation}
-        </p>
-        {intervention.assemblyPoint ? (
-          <p className="callout__assembly">
-            {t.mobilisation.assembly}: <strong>{intervention.assemblyPoint}</strong>
-          </p>
-        ) : null}
-        <p className="callout__instructions">{intervention.instructions}</p>
-        <p className="muted small">
-          {t.vocabulary.interventionStatus[intervention.status] ?? intervention.status}
-          {intervention.publishedAt
-            ? ` - ${t.mobilisation.publishedAt} ${formatTime(intervention.publishedAt)}`
-            : ''}
-        </p>
-        {!open ? (
-          <Notice tone="info">{t.mobilisation.closedNotice}</Notice>
-        ) : null}
-      </section>
+    <section className="act" data-testid="next-action" data-step={step}>
+      {/* On every step, so the card is recognisable as THE card before anybody
+          has read a word of it. Three of the six steps are a single button and
+          used to open straight onto their caveat, which reads as a note rather
+          than as the thing being asked for. */}
+      <p className="act__eyebrow">{t.callout.nextLabel}</p>
 
-      <section className="panel">
-        <h3 className="panel__title">{t.mobilisation.step1}</h3>
-        {facts?.acknowledgedAt ? (
-          <p data-testid="ack-state">
-            <Chip tone="yes" symbol="+">
-              {t.mobilisation.ackDone} {formatTime(facts.acknowledgedAt)}
-            </Chip>
-          </p>
-        ) : (
-          <>
-            <p className="muted small">{t.mobilisation.ackWhy}</p>
+      {step === 'ACKNOWLEDGE' ? (
+        <>
+          <p className="act__why">{t.callout.doAcknowledgeWhy}</p>
+          <button
+            type="button"
+            className="act__button act__button--primary"
+            data-testid="acknowledge"
+            disabled={busy}
+            onClick={() =>
+              void onAct(
+                () => acknowledgeIntervention(intervention.id),
+                t.mobilisation.ackSaved,
+              )
+            }
+          >
+            {t.callout.doAcknowledge}
+          </button>
+        </>
+      ) : null}
+
+      {step === 'ANSWER' ? (
+        <>
+          <p className="act__title">{t.callout.doAnswer}</p>
+          {/*
+            One tap is the answer.
+            
+            It used to take two: choose a chip, then press a separate "Posalji
+            odgovor" button that sat there disabled until you had. That is a
+            second tap on the most time-critical control on the screen, and the
+            failure it invites - believing you answered when you only
+            highlighted - is exactly the one a commander cannot see. An answer
+            is changeable, so a mis-tap costs one more tap; a missed send costs
+            a commander a member they think is coming.
+            
+            "Dolazim kasnije" still takes two, because the second tap records a
+            DIFFERENT fact: how long. That is a real question, not a commit step.
+          */}
+          <div className="act__choices">
             <button
               type="button"
-              className="btn btn--big btn--primary"
-              data-testid="acknowledge"
-              disabled={busy || !open}
+              className="act__choice act__choice--yes"
+              data-testid="answer-DOLAZIM"
+              disabled={busy}
               onClick={() =>
                 void onAct(
-                  () => acknowledgeIntervention(intervention.id),
-                  t.mobilisation.ackSaved,
+                  () => submitResponse(intervention.id, 'DOLAZIM', null, false),
+                  t.mobilisation.answerSaved,
                 )
               }
             >
-              {t.mobilisation.ackButton}
+              {t.vocabulary.answer.DOLAZIM}
             </button>
-          </>
-        )}
-      </section>
-
-      <section className="panel">
-        <h3 className="panel__title">{t.mobilisation.step2}</h3>
-        {facts?.answer ? (
-          <p data-testid="answer-state">
-            <Chip
-              tone={
-                facts.answer === 'DOLAZIM' ? 'yes' : facts.answer === 'DOLAZIM_KASNIJE' ? 'later' : 'no'
-              }
-              symbol="="
-            >
-              {t.vocabulary.answer[facts.answer] ?? facts.answer}
-              {facts.etaMinutes ? ` (${facts.etaMinutes} ${t.timings.minutesShort})` : ''}
-            </Chip>{' '}
-            <span className="muted small">{t.mobilisation.answerChangeable}</span>
-          </p>
-        ) : null}
-
-        <div className="row-actions">
-          {(['DOLAZIM', 'DOLAZIM_KASNIJE', 'NE_MOGU'] as const).map((option) => (
             <button
-              key={option}
               type="button"
-              className={`btn btn--big ${answer === option ? 'btn--primary' : 'btn--ghost'}`}
-              data-testid={`answer-${option}`}
-              aria-pressed={answer === option}
-              disabled={busy || !open}
-              onClick={() => {
-                setAnswer(option);
-                if (option !== 'DOLAZIM_KASNIJE') setEta(null);
-              }}
+              className="act__choice act__choice--later"
+              data-testid="answer-DOLAZIM_KASNIJE"
+              aria-expanded={wantsEta}
+              disabled={busy}
+              onClick={() => setWantsEta(true)}
             >
-              {t.vocabulary.answer[option] ?? option}
+              {t.vocabulary.answer.DOLAZIM_KASNIJE}
             </button>
-          ))}
-        </div>
+            <button
+              type="button"
+              className="act__choice act__choice--no"
+              data-testid="answer-NE_MOGU"
+              disabled={busy}
+              onClick={() =>
+                void onAct(
+                  () => submitResponse(intervention.id, 'NE_MOGU', null, false),
+                  t.mobilisation.answerSaved,
+                )
+              }
+            >
+              {t.vocabulary.answer.NE_MOGU}
+            </button>
+          </div>
+          {wantsEta ? (
+            <div className="act__eta" data-testid="eta-bands">
+              <p className="act__why">{t.callout.etaQuestion}</p>
+              <div className="act__choices act__choices--eta">
+                {ETA_BANDS.map((band) => (
+                  <button
+                    key={band}
+                    type="button"
+                    className="act__choice act__choice--eta"
+                    data-testid={`eta-${band}`}
+                    disabled={busy}
+                    onClick={() =>
+                      void onAct(
+                        () => submitResponse(intervention.id, 'DOLAZIM_KASNIJE', band, false),
+                        t.mobilisation.answerSaved,
+                      )
+                    }
+                  >
+                    {band} {t.timings.minutesShort}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
 
-        {answer === 'DOLAZIM_KASNIJE' ? (
-          <>
-            <p className="muted small">{t.mobilisation.etaQuestion}</p>
-            <div className="row-actions">
-              {ETA_BANDS.map((band) => (
+      {step === 'MOVE' ? (
+        <>
+          <p className="act__title">{t.callout.doMove}</p>
+          <p className="act__why">{t.callout.doMoveWhy}</p>
+          <div className="act__choices act__choices--journey">
+            {JOURNEY_STEPS.map((journeyStep: JourneyStep) => (
+              <button
+                key={journeyStep}
+                type="button"
+                className={`act__choice ${
+                  state.journey === journeyStep ? 'act__choice--on' : ''
+                } ${journeyStep === 'ODUSTAJEM' ? 'act__choice--no' : ''}`}
+                data-testid={`journey-${journeyStep}`}
+                aria-pressed={state.journey === journeyStep}
+                disabled={busy}
+                onClick={() =>
+                  void onAct(
+                    () => setJourneyProgress(intervention.id, journeyStep),
+                    `${t.mobilisation.journeySavedPrefix} ${
+                      t.vocabulary.journey[journeyStep] ?? journeyStep
+                    }. ${t.mobilisation.journeySavedSuffix}`,
+                  )
+                }
+              >
+                {t.vocabulary.journey[journeyStep] ?? journeyStep}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {step === 'CHECK_IN' ? (
+        <>
+          <p className="act__why">{t.callout.doCheckInWhy}</p>
+          <button
+            type="button"
+            className="act__button act__button--primary"
+            data-testid="check-in"
+            disabled={busy}
+            onClick={() =>
+              void onAct(async () => {
+                const result = await checkIn(intervention.id, null);
+                return result.ok ? { ok: true } : { ok: false, message: result.message };
+              }, t.mobilisation.checkInSaved)
+            }
+          >
+            {t.callout.doCheckIn}
+          </button>
+        </>
+      ) : null}
+
+      {step === 'CHECK_OUT' ? (
+        <>
+          <p className="act__why">{t.callout.doCheckOutWhy}</p>
+          <button
+            type="button"
+            className="act__button act__button--primary"
+            data-testid="check-out"
+            disabled={busy}
+            onClick={() =>
+              void onAct(() => checkOut(intervention.id, null), t.mobilisation.checkOutSaved)
+            }
+          >
+            {t.callout.doCheckOut}
+          </button>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * The four facts, compact, with their own names kept.
+ *
+ * This is what the four numbered panels were actually for - letting a member
+ * see what they have and have not told the commander - reduced to the size that
+ * job needs. Each one carries a word as well as a colour, because a station
+ * wall in sunlight and colour vision deficiency both defeat colour alone.
+ */
+function MyStatus({
+  state,
+  facts,
+}: {
+  state: CallOutState;
+  facts: RecipientFacts | null;
+}) {
+  const t = useText();
+  const label: Record<string, string> = {
+    acknowledged: t.callout.factAcknowledged,
+    answered: t.callout.factAnswered,
+    moving: t.callout.factMoving,
+    attending: t.callout.factAttending,
+  };
+  const detail: Record<string, string | null> = {
+    acknowledged: facts?.acknowledgedAt ? formatTime(facts.acknowledgedAt) : null,
+    answered: facts?.answer
+      ? `${t.vocabulary.answer[facts.answer] ?? facts.answer}${
+          facts.etaMinutes ? ` (${facts.etaMinutes} ${t.timings.minutesShort})` : ''
+        }`
+      : null,
+    moving: facts?.journey ? (t.vocabulary.journey[facts.journey] ?? facts.journey) : null,
+    /*
+     * Says which of the four it is, in words.
+     *
+     * The strip used to print "ne" for anybody without an OPEN interval, which
+     * told a member who had worked ninety minutes and checked out that their
+     * attendance was nothing. `Ceka potvrdu` is the true answer there, and it
+     * is also the sentence that keeps the product's central distinction in
+     * front of them: their own report is a claim until a commander confirms it.
+     */
+    attending:
+      state.attendance === 'OPEN'
+        ? t.mobilisation.stillRunning
+        : state.attendance === 'PENDING'
+          ? t.callout.attendancePending
+          : state.attendance === 'CONFIRMED'
+            ? t.callout.attendanceConfirmed
+            : null,
+  };
+
+  // `+`, `~`, `-` - never colour alone, and never a tick that means two
+  // different things. `~` is the one that says "recorded, not yet counted".
+  const MARK: Record<FactState['mark'], string> = { YES: '+', PARTIAL: '~', NO: '-' };
+
+  return (
+    <section className="my-status" aria-labelledby="my-status-title" data-testid="my-status">
+      <h2 className="my-status__title" id="my-status-title">{t.callout.myStatus}</h2>
+      <ul className="my-status__list">
+        {factStates(state).map((fact) => (
+          <li
+            key={fact.key}
+            className={`my-status__item my-status__item--${fact.mark.toLowerCase()}`}
+            data-testid={`fact-${fact.key}`}
+            data-mark={fact.mark}
+          >
+            <span className="my-status__mark" aria-hidden="true">{MARK[fact.mark]}</span>
+            <span className="my-status__label">{label[fact.key]}</span>
+            <span className="my-status__value">
+              {detail[fact.key] ?? (fact.mark === 'NO' ? t.callout.factPending : t.callout.factDone)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Everything still reachable, one tap away and not in the way.
+ *
+ * Nothing was removed when the four panels went. Changing an answer, correcting
+ * a movement already reported, and reading one's own attendance records all
+ * still exist - they are simply not competing with the fire for the top of the
+ * screen. Hiding a capability to make a screen look calmer would be buying calm
+ * with a missing feature; closing it is not the same thing.
+ */
+function SecondaryActions({
+  state,
+  intervention,
+  intervals,
+  busy,
+  onAct,
+}: {
+  state: CallOutState;
+  intervention: Intervention;
+  intervals: readonly AttendanceInterval[];
+  busy: boolean;
+  onAct: (run: () => Promise<{ ok: boolean; message?: string }>, text: string) => Promise<void>;
+}) {
+  const t = useText();
+  const open = isOpenStatus(intervention.status);
+  const step = nextStep(state);
+  if (!open && intervals.length === 0) return null;
+
+  return (
+    <section className="panel">
+      <details className="disclosure" data-testid="more-actions">
+        <summary className="disclosure__summary">{t.callout.moreActions}</summary>
+        <div className="disclosure__body">
+          {open && state.answer !== null ? (
+            <div>
+              <p className="muted small">{t.callout.changeAnswer}</p>
+              <div className="row-actions">
+                {(['DOLAZIM', 'NE_MOGU'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`btn btn--big ${
+                      state.answer === option ? 'btn--primary' : 'btn--ghost'
+                    }`}
+                    data-testid={`change-answer-${option}`}
+                    aria-pressed={state.answer === option}
+                    disabled={busy}
+                    onClick={() =>
+                      void onAct(
+                        () => submitResponse(intervention.id, option, null, false),
+                        t.mobilisation.answerSaved,
+                      )
+                    }
+                  >
+                    {t.vocabulary.answer[option] ?? option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Movement is reachable even when the dominant action has moved past
+              it: somebody who reported being on scene may have to correct it. */}
+          {open && step !== 'MOVE' && state.answer !== null ? (
+            <div>
+              {/*
+                The warning travels WITH the buttons it warns about.
+
+                It used to live only on the `MOVE` step, so once a member had
+                reported being on scene it disappeared - and these buttons, the
+                ones that include `Na licu mjesta`, sat here with nothing saying
+                that tapping them is not reporting attendance. That is the one
+                confusion this whole schema is built to prevent, and it was
+                being prevented in the one state where it had already passed.
+              */}
+              <p className="muted small">{t.callout.doMoveWhy}</p>
+              <div className="row-actions">
+              {JOURNEY_STEPS.map((journeyStep: JourneyStep) => (
                 <button
-                  key={band}
+                  key={journeyStep}
                   type="button"
-                  className={`btn btn--big ${eta === band ? 'btn--primary' : 'btn--ghost'}`}
-                  data-testid={`eta-${band}`}
-                  aria-pressed={eta === band}
+                  className={`btn ${state.journey === journeyStep ? 'btn--primary' : 'btn--ghost'}`}
+                  data-testid={`journey-${journeyStep}`}
+                  aria-pressed={state.journey === journeyStep}
                   disabled={busy}
-                  onClick={() => setEta(band)}
+                  onClick={() =>
+                    void onAct(
+                      () => setJourneyProgress(intervention.id, journeyStep),
+                      `${t.mobilisation.journeySavedPrefix} ${
+                        t.vocabulary.journey[journeyStep] ?? journeyStep
+                      }. ${t.mobilisation.journeySavedSuffix}`,
+                    )
+                  }
                 >
-                  {band} {t.timings.minutesShort}
+                  {t.vocabulary.journey[journeyStep] ?? journeyStep}
                 </button>
               ))}
+              </div>
             </div>
-          </>
-        ) : null}
+          ) : null}
 
-        <button
-          type="button"
-          className="btn btn--big btn--primary"
-          data-testid="submit-answer"
-          disabled={busy || !open || answer === null || (answer === 'DOLAZIM_KASNIJE' && eta === null)}
-          onClick={() =>
-            void onAct(
-              () => submitResponse(intervention.id, answer!, eta, false),
-              t.mobilisation.answerSaved,
-            )
-          }
-        >
-          {t.mobilisation.sendAnswer}
-        </button>
-        <p className="muted small">{t.mobilisation.answerIsNotAttendance}</p>
-      </section>
-
-      <section className="panel">
-        <h3 className="panel__title">{t.mobilisation.step3}</h3>
-        <p className="muted small">{t.mobilisation.journeyNote}</p>
-        {facts?.journey ? (
-          <p data-testid="journey-state">
-            <Chip tone={facts.journey === 'ODUSTAJEM' ? 'no' : 'accent'} symbol={JOURNEY_SYMBOL[facts.journey] ?? '?'}>
-              {t.vocabulary.journey[facts.journey] ?? facts.journey}
-            </Chip>
-          </p>
-        ) : null}
-        <div className="row-actions">
-          {JOURNEY_STEPS.map((step: JourneyStep) => (
-            <button
-              key={step}
-              type="button"
-              className={`btn btn--big ${facts?.journey === step ? 'btn--primary' : 'btn--ghost'}`}
-              data-testid={`journey-${step}`}
-              aria-pressed={facts?.journey === step}
-              disabled={busy || !open}
-              onClick={() =>
-                void onAct(
-                  () => setJourneyProgress(intervention.id, step),
-                  `${t.mobilisation.journeySavedPrefix} ${t.vocabulary.journey[step] ?? step}. ${t.mobilisation.journeySavedSuffix}`,
-                )
-              }
-            >
-              {t.vocabulary.journey[step] ?? step}
-            </button>
-          ))}
+          {intervals.length > 0 ? (
+            <>
+              <p className="muted small">{t.callout.attendanceRecord}</p>
+              <ul className="stack" data-testid="my-intervals">
+                {intervals.map((interval) => {
+                  const intervalState = attendanceState(interval);
+                  return (
+                    <li key={interval.id} className="card">
+                      <p>
+                        <Chip
+                          tone={
+                            intervalState === 'CONFIRMED'
+                              ? 'yes'
+                              : intervalState === 'REJECTED'
+                                ? 'no'
+                                : 'later'
+                          }
+                          symbol={
+                            intervalState === 'CONFIRMED'
+                              ? '+'
+                              : intervalState === 'REJECTED'
+                                ? '-'
+                                : '~'
+                          }
+                        >
+                          {t.vocabulary.attendanceState[intervalState] ?? intervalState}
+                        </Chip>{' '}
+                        <span className="muted small">
+                          {t.vocabulary.attendanceSource[interval.source] ?? interval.source}
+                        </span>
+                      </p>
+                      <p className="muted small">
+                        {formatTime(interval.startedAt)} -{' '}
+                        {interval.endedAt
+                          ? formatTime(interval.endedAt)
+                          : t.mobilisation.stillRunning}
+                        {intervalState === 'CONFIRMED' && interval.endedAt
+                          ? ` (${formatDurationMs(participationMs(interval))})`
+                          : ''}
+                      </p>
+                      {interval.rejectionReason ? (
+                        <p className="muted small">
+                          {t.mobilisation.rejectionReason}: {interval.rejectionReason}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : null}
         </div>
-      </section>
-
-      <section className="panel">
-        <h3 className="panel__title">{t.mobilisation.step4}</h3>
-        <p className="muted small">{t.mobilisation.attendanceNote}</p>
-
-        {intervals.length > 0 ? (
-          <ul className="stack" data-testid="my-intervals">
-            {intervals.map((interval) => {
-              const state = attendanceState(interval);
-              return (
-                <li key={interval.id} className="card">
-                  <p>
-                    <Chip
-                      tone={state === 'CONFIRMED' ? 'yes' : state === 'REJECTED' ? 'no' : 'later'}
-                      symbol={state === 'CONFIRMED' ? '+' : state === 'REJECTED' ? '-' : '~'}
-                    >
-                      {t.vocabulary.attendanceState[state] ?? state}
-                    </Chip>{' '}
-                    <span className="muted small">
-                      {t.vocabulary.attendanceSource[interval.source] ?? interval.source}
-                    </span>
-                  </p>
-                  <p className="muted small">
-                    {formatTime(interval.startedAt)} -{' '}
-                    {interval.endedAt ? formatTime(interval.endedAt) : t.mobilisation.stillRunning}
-                    {state === 'CONFIRMED' && interval.endedAt
-                      ? ` (${formatDurationMs(participationMs(interval))})`
-                      : ''}
-                  </p>
-                  {interval.rejectionReason ? (
-                    <p className="muted small">
-                      {t.mobilisation.rejectionReason}: {interval.rejectionReason}
-                    </p>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-
-        {openInterval ? (
-          <button
-            type="button"
-            className="btn btn--big btn--primary"
-            data-testid="check-out"
-            disabled={busy || !open}
-            onClick={() =>
-              void onAct(
-                () => checkOut(intervention.id, null),
-                t.mobilisation.checkOutSaved,
-              )
-            }
-          >
-            {t.mobilisation.checkOut}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn--big btn--primary"
-            data-testid="check-in"
-            disabled={busy || !open}
-            onClick={() =>
-              void onAct(
-                async () => {
-                  const result = await checkIn(intervention.id, null);
-                  return result.ok ? { ok: true } : { ok: false, message: result.message };
-                },
-                t.mobilisation.checkInSaved,
-              )
-            }
-          >
-            {t.mobilisation.checkIn}
-          </button>
-        )}
-      </section>
-    </>
+      </details>
+    </section>
   );
 }

@@ -1,14 +1,15 @@
 /**
  * Turning the alarm on for one device, and saying honestly what that buys.
  *
- * Two shapes, one behaviour. `full` is the whole panel, used on Settings where
- * somebody has come to change something. `compact` is for the firefighter's
- * operational screen, and it collapses to a single line ONLY when notifications
- * are already on - because then there is nothing to do, and a paragraph
- * explaining a thing that is already working is just something between a
- * firefighter and their call-out. When there IS an action to take, `compact`
- * shows the same panel as `full`: hiding the button behind a second screen would
- * be tidiness bought with somebody not being woken up.
+ * Two shapes. `full` is the whole panel, with its own heading: Settings, and the
+ * firefighter's screen when no call-out is running. `compact` is one line with
+ * the current state and a way through to Settings, used whenever a call-out IS
+ * running - because a fire is not the moment to configure notifications, and
+ * five lines about notification setup between a firefighter and the incident is
+ * what this replaced.
+ *
+ * Nothing is hidden by that. The full panel is one tap away in Settings, and the
+ * compact line still says whether alerts are on.
  */
 
 import { useEffect, useState } from 'react';
@@ -88,15 +89,24 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
       : state === 'BUSY' || state === 'CHECKING' ? t.push.stateChecking
       : t.push.stateOff;
 
-  // Settled and working: one line, and a way through to the whole thing.
-  if (variant === 'compact' && state === 'ON') {
+  /*
+   * Compact means COMPACT, whatever the state.
+   *
+   * This used to collapse only when push was already on - so on a device where
+   * push is unsupported or not yet configured, which is most devices most of
+   * the time, the full five-line panel rendered anyway. The caller asks for
+   * compact when a call-out is running, and a running call-out is never the
+   * moment to set up notifications. The state is still shown, and the whole
+   * panel is one tap away in Settings.
+   */
+  if (variant === 'compact') {
     return (
       <p className="push-line" data-testid="push-compact">
         <span className="push-line__label">{t.push.title}</span>
         <span
           role="status"
           data-testid="push-state"
-          className="push-panel__state push-panel__state--on"
+          className={`push-panel__state push-panel__state--${state.toLowerCase()}`}
         >
           {stateText}
         </span>
@@ -106,16 +116,14 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
   }
 
   return (
-    <div className="push-panel" data-testid="push-panel">
+    <section className="push-panel" data-testid="push-panel" aria-labelledby="push-panel-title">
       <div className="push-panel__head">
-        {/* Settings already puts a heading above this panel; the operational
-            screen does not, so the compact variant brings its own. */}
-        {variant === 'compact' ? (
-          <div>
-            <p className="eyebrow">{t.push.eyebrow}</p>
-            <h3 className="panel__subtitle">{t.push.title}</h3>
-          </div>
-        ) : null}
+        {/* The panel owns its heading wherever it appears, so no caller has to
+            supply one and no caller can accidentally supply a second. */}
+        <div>
+          <p className="eyebrow">{t.push.eyebrow}</p>
+          <h2 className="panel__subtitle" id="push-panel-title">{t.push.title}</h2>
+        </div>
         {/* Announced: the button that changes this state is pressed by somebody
             who may not be able to see the chip change colour. */}
         <span
@@ -158,6 +166,6 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
           thing a real alarm still rests on, and this screen is where somebody
           decides how much to rely on the phone in their hand. */}
       <p className="muted small">{t.push.fallbackReminder}</p>
-    </div>
+    </section>
   );
 }

@@ -166,4 +166,38 @@ test.describe('screenshots', { tag: '@screenshots' }, () => {
     await expect(page.getByTestId('archive-title')).toBeVisible();
     await capture(page, '12-arhiva-ucesce.png');
   });
+
+  /**
+   * The two screens that matter, at the size they are actually read.
+   *
+   * VIEWPORT-ONLY, not full page, and that is the whole point of these two.
+   * A full-page capture paints a `position: fixed` bar at the current scroll
+   * offset and stretches the image to the document height, so it can show
+   * neither where the bottom navigation sits nor - far more important - what a
+   * person sees WITHOUT SCROLLING. "Can somebody tell what to do in a few
+   * seconds" is a question about the first screenful, and only a viewport
+   * capture answers it.
+   */
+  /*
+   * One role per test, deliberately.
+   *
+   * `openOperational` twice on one page does not give you a second person: the
+   * hash-only navigation never reloads the document, so the access snapshot
+   * fetched for the first role is still the one the gate is holding - and a
+   * firefighter is correctly refused the commander's console. Two tests, two
+   * fresh pages, two sessions.
+   */
+  test('captures the firefighter first screenful on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
+    await expect(page.getByTestId('callout-title')).toBeVisible();
+    await capture(page, '13-moj-poziv-telefon.png', false);
+  });
+
+  test('captures the commander first screenful on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openOperational(page, 'poziv', 'COMMANDER');
+    await expect(page.getByTestId('selected-title')).toBeVisible();
+    await capture(page, '14-poziv-telefon.png', false);
+  });
 });

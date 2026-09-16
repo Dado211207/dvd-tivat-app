@@ -26,6 +26,105 @@ const USER_ID = '99999999-9999-4999-8999-999999999999';
 export type FixtureRole = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
 
 /**
+ * The situations the screens have to be legible in, not just the happy one.
+ *
+ * The fixture answered exactly one state - a commander, an active account, one
+ * published call-out - so every browser test was a test of the busiest screen
+ * this application ever shows. The states nobody had looked at in a browser are
+ * the ones a firefighter is most likely to meet: no call-out running, an
+ * account still awaiting approval, a suspended account, a draft half-written.
+ * An empty state that is wrong is as bad as a full one that is wrong, and it is
+ * far easier to ship without noticing.
+ */
+export interface FixtureOptions {
+  /**
+   * What `current_dvd_role()` answers.
+   *
+   * `null` is a real answer, not an absence: an account that exists, is signed
+   * in and has no operational grant yet. That is what "awaiting approval" is -
+   * the gate derives it from a null role, there is no account status spelling
+   * it - and a fixture that could not express it could not test it.
+   */
+  readonly role?: FixtureRole | null;
+  /**
+   * What `current_account_status()` answers.
+   *
+   * Exactly the five values the function can return - see `ACCOUNT_STATUSES` in
+   * `src/auth/access.ts`. Anything else is narrowed to null by the client and
+   * shows as "server unreachable", which is the right way to fail on an
+   * unrecognised value and the wrong thing for a test to be asserting.
+   */
+  readonly accountStatus?:
+    | 'ANONYMOUS'
+    | 'UNKNOWN'
+    | 'SUSPENDED'
+    | 'PROFILE_REQUIRED'
+    | 'ACTIVE';
+  /**
+   * What the `interventions` table holds.
+   *
+   * `PUBLISHED_AND_DRAFT` is the case the brief cares most about: a commander
+   * running one call-out with another half-written, which is where losing a
+   * typed draft would actually cost something.
+   */
+  readonly interventions?: 'PUBLISHED' | 'NONE' | 'DRAFT' | 'PUBLISHED_AND_DRAFT';
+  /** Seeded into this device's storage before the application boots. */
+  readonly language?: 'me' | 'en';
+  /** False leaves the browser with no session, so the gate asks for sign-in. */
+  readonly signedIn?: boolean;
+}
+
+const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
+
+function interventionRows(which: NonNullable<FixtureOptions['interventions']>): unknown[] {
+  const published = {
+    id: INTERVENTION_ID,
+    kind: 'VJEZBA',
+    other_kind_note: null,
+    title: 'Vjezba: provjera opreme',
+    instructions: 'Okupljanje u bazi DVD Tivat. Ponijeti naprtnjace.',
+    incident_location: 'Poligon iznad Donje Lastve (izmisljena lokacija)',
+    assembly_point: 'Baza DVD Tivat',
+    latitude: null,
+    longitude: null,
+    status: 'PUBLISHED',
+    version: 2,
+    published_at: '2026-09-13T08:00:00.000Z',
+    closed_at: null,
+    close_reason: null,
+    created_at: '2026-09-13T07:55:00.000Z',
+  };
+  const draft = {
+    ...published,
+    id: DRAFT_ID,
+    kind: 'POZAR',
+    title: 'Nacrt: dimnjak (izmisljeno)',
+    instructions: 'Jos nije objavljeno.',
+    incident_location: 'Izmisljena adresa 1',
+    assembly_point: null,
+    status: 'DRAFT',
+    version: 1,
+    published_at: null,
+    created_at: '2026-09-13T08:30:00.000Z',
+  };
+
+  switch (which) {
+    case 'NONE':
+      return [];
+    case 'DRAFT':
+      return [draft];
+    case 'PUBLISHED_AND_DRAFT':
+      // Newest first, the order `fetchInterventions` reads them in, so the
+      // console's "focus the open one" rule is genuinely exercised: the draft
+      // is newer and must NOT win.
+      return [draft, published];
+    case 'PUBLISHED':
+    default:
+      return [published];
+  }
+}
+
+/**
  * Rows shaped exactly as the tables are, because the client reads named columns
  * and a fixture with the wrong column name would hide the very class of defect
  * `db-tests/client_schema_contract.test.ts` exists to catch.
@@ -200,7 +299,24 @@ function json(route: Route, body: unknown, status = 200): Promise<void> {
  * `role` changes only what `current_dvd_role()` answers, which is exactly how
  * the real thing decides: the client never picks its own role.
  */
-export async function installFixtureProject(page: Page, role: FixtureRole = 'COMMANDER'): Promise<void> {
+export async function installFixtureProject(
+  page: Page,
+  roleOrOptions: FixtureRole | FixtureOptions = 'COMMANDER',
+): Promise<void> {
+  const options: FixtureOptions =
+    typeof roleOrOptions === 'string' ? { role: roleOrOptions } : roleOrOptions;
+  // `?? 'COMMANDER'` would turn an explicit `role: null` back into a commander,
+  // so the default is applied only when the key is genuinely absent.
+  const role = 'role' in options ? options.role : 'COMMANDER';
+  const accountStatus = options.accountStatus ?? 'ACTIVE';
+  const interventions = interventionRows(options.interventions ?? 'PUBLISHED');
+
+  if (options.language) {
+    await page.addInitScript((language) => {
+      window.localStorage.setItem('dvd-tivat.language', language);
+    }, options.language);
+  }
+
   await page.route(`**://${PROJECT_HOST}/**`, async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
@@ -231,7 +347,8 @@ export async function installFixtureProject(page: Page, role: FixtureRole = 'COM
 
     if (path.startsWith('/rest/v1/rpc/')) {
       const name = path.replace('/rest/v1/rpc/', '');
-      if (name === 'current_dvd_role') return json(route, role);
+      if (name === 'current_dvd_role') return json(route, role ?? null);
+      if (name === 'current_account_status') return json(route, accountStatus);
       // Any command not named here answers "fine" - these tests are about what
       // the screens SHOW, and the commands themselves are proven against a real
       // PostgreSQL in db-tests/ and against the hosted project separately.
@@ -242,7 +359,7 @@ export async function installFixtureProject(page: Page, role: FixtureRole = 'COM
       const table = path.replace('/rest/v1/', '').split('?')[0] ?? '';
       if (route.request().method() !== 'GET') return json(route, []);
 
-      const rows = TABLES[table] ?? [];
+      const rows = table === 'interventions' ? interventions : (TABLES[table] ?? []);
       // `.single()` and `.maybeSingle()` ask PostgREST for ONE OBJECT, not an
       // array, through this header. A fixture that always answers with an array
       // makes every such read look like a missing row - which is how this first
@@ -262,7 +379,9 @@ export async function installFixtureProject(page: Page, role: FixtureRole = 'COM
   });
 
   // A session in storage, so the client starts signed in rather than needing a
-  // sign-in form driven on every test.
+  // sign-in form driven on every test. Skipped deliberately when the point of
+  // the test is what a signed-OUT person sees.
+  if (options.signedIn === false) return;
   await page.addInitScript(
     ([ref, userId]) => {
       const session = {
@@ -279,8 +398,12 @@ export async function installFixtureProject(page: Page, role: FixtureRole = 'COM
   );
 }
 
-export async function openOperational(page: Page, route: string, role: FixtureRole = 'COMMANDER') {
-  await installFixtureProject(page, role);
+export async function openOperational(
+  page: Page,
+  route: string,
+  roleOrOptions: FixtureRole | FixtureOptions = 'COMMANDER',
+) {
+  await installFixtureProject(page, roleOrOptions);
   await page.goto(`http://127.0.0.1:4174/#/${route}`);
   await page.waitForSelector('main');
 }

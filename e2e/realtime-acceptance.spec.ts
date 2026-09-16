@@ -104,6 +104,31 @@ async function selectDraft(page: Page, text: string): Promise<void> {
   await picker.selectOption(value ?? '');
 }
 
+/**
+ * Write and publish one call-out, the way a commander does it.
+ *
+ * Four steps now - what happened, where and what to do, who, and a last look -
+ * across two server operations. Every test that needs a published call-out to
+ * exist before it can test something else goes through here rather than
+ * repeating the sequence, so a change to the sequence is one edit, not five.
+ */
+async function publishTo(commander: Page, title: string, match: string): Promise<void> {
+  await commander.getByTestId('new-title').fill(title);
+  await commander.getByTestId('wizard-next').click();
+  await commander.getByTestId('new-location').fill('Poligon (izmisljena lokacija)');
+  await commander.getByTestId('new-instructions').fill('Okupljanje u bazi.');
+  await commander.getByTestId('create-draft').click();
+  await selectDraft(commander, match);
+  await commander
+    .getByTestId('recipient-picker')
+    .locator('li', { hasText: FIREFIGHTER.name })
+    .getByRole('checkbox')
+    .check();
+  await commander.getByTestId('to-review').click();
+  await commander.getByTestId('publish').click();
+  await commander.getByRole('button', { name: 'Objavi', exact: true }).click();
+}
+
 /** Both screens must be genuinely subscribed before anything is asserted about delivery. */
 async function bothLive(pair: Pair): Promise<void> {
   for (const page of [pair.commander, pair.firefighter]) {
@@ -129,19 +154,27 @@ test.describe('two independent sessions, no navigation and no manual refresh', (
       // ---------------------------------------------------------------- 1
       // The commander publishes. Typed into the form on the open screen,
       // exactly as a person would.
+      // Step one of the sequence: what happened.
       await commander.getByTestId('new-title').fill('Vjezba: dvostruka provjera (izmisljeno)');
-      await commander.getByTestId('new-instructions').fill('Okupljanje u bazi.');
+      await commander.getByTestId('wizard-next').click();
+      // Step two: where, and what to do there.
       await commander.getByTestId('new-location').fill('Poligon (izmisljena lokacija)');
+      await commander.getByTestId('new-instructions').fill('Okupljanje u bazi.');
       await commander.getByTestId('create-draft').click();
       // Select the draft that was just saved. The console keeps whatever was
       // selected, so a person picks the new one here exactly as the test does.
       await selectDraft(commander, 'dvostruka provjera');
+      // Step three: who.
       await expect(commander.getByTestId('recipient-picker')).toBeVisible();
       await commander
         .getByTestId('recipient-picker')
         .locator('li', { hasText: FIREFIGHTER.name })
         .getByRole('checkbox')
         .check();
+      await commander.getByTestId('to-review').click();
+      // Step four: the last look before a telephone rings in somebody's pocket.
+      await expect(commander.getByTestId('review-count')).toContainText('1');
+      await expect(commander.getByTestId('review-names')).toContainText(FIREFIGHTER.name);
       await commander.getByTestId('publish').click();
       await commander.getByRole('button', { name: 'Objavi', exact: true }).click();
 
@@ -154,7 +187,12 @@ test.describe('two independent sessions, no navigation and no manual refresh', (
 
       // ---------------------------------------------------------------- 3
       await firefighter.getByTestId('acknowledge').click();
-      await expect(firefighter.getByTestId('ack-state')).toBeVisible();
+      // The acknowledgement is recorded in the status strip rather than in a
+      // panel of its own. Still its own fact, still never inferred from another.
+      await expect(firefighter.getByTestId('fact-acknowledged')).toHaveAttribute(
+        'data-mark',
+        'YES',
+      );
 
       // ---------------------------------------------------------------- 4
       // The commander sees the opening AND how long it took, without moving.
@@ -171,8 +209,11 @@ test.describe('two independent sessions, no navigation and no manual refresh', (
       ).toContainText(/\d+ s|\d+ min/, { timeout: REALTIME_BUDGET });
 
       // ---------------------------------------------------------------- 5
+      // One tap IS the answer now. It used to take two - choose a chip, then
+      // press a separate send button - and the failure that invites, believing
+      // you answered when you only highlighted, is the one a commander cannot
+      // see. If a send button ever comes back, this line stops working.
       await firefighter.getByTestId('answer-DOLAZIM').click();
-      await firefighter.getByTestId('submit-answer').click();
 
       // ---------------------------------------------------------------- 6
       await expect(row, 'the answer must arrive without a refresh').toContainText(
@@ -280,18 +321,7 @@ test.describe('two independent sessions, no navigation and no manual refresh', (
       await bothLive(pair);
 
       // Publish first, so there is something both screens are watching.
-      await commander.getByTestId('new-title').fill('Vjezba: prekid veze (izmisljeno)');
-      await commander.getByTestId('new-instructions').fill('Okupljanje u bazi.');
-      await commander.getByTestId('new-location').fill('Poligon (izmisljena lokacija)');
-      await commander.getByTestId('create-draft').click();
-      await selectDraft(commander, 'prekid veze');
-      await commander
-        .getByTestId('recipient-picker')
-        .locator('li', { hasText: FIREFIGHTER.name })
-        .getByRole('checkbox')
-        .check();
-      await commander.getByTestId('publish').click();
-      await commander.getByRole('button', { name: 'Objavi', exact: true }).click();
+      await publishTo(commander, 'Vjezba: prekid veze (izmisljeno)', 'prekid veze');
       await expect(firefighter.getByRole('heading', { name: /prekid veze/ })).toBeVisible({
         timeout: REALTIME_BUDGET,
       });

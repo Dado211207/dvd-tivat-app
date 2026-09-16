@@ -105,12 +105,11 @@ export function SettingsView() {
         <p className="muted small">{t.settings.contentNotTranslated}</p>
       </section>
 
-      <section className="panel" aria-labelledby="settings-notifications">
-        <h2 className="panel__title" id="settings-notifications">
-          {t.settings.notificationsTitle}
-        </h2>
+      {/* No heading here: the panel brings its own, and two headings saying the
+          same thing is what this whole pass is removing. */}
+      <div className="panel">
         <PushNotificationPanel variant="full" />
-      </section>
+      </div>
 
       <section className="panel" aria-labelledby="settings-display">
         <h2 className="panel__title" id="settings-display">{t.settings.displayTitle}</h2>

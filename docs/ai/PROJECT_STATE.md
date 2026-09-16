@@ -4,7 +4,7 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-15
+Last updated: 2026-09-16
 
 ---
 
@@ -250,8 +250,56 @@ is also why C8's Viber and telephone fallback is not optional.
 
 ## Status of the latest slice
 
-**Language, navigation and push latency**, on branch
-`claude/ux-language-push-latency` from `4e944e1`. Three deliverables:
+**The clarity redesign**, on branch `claude/dvd-tivat-app-dev-n8wctb` from
+`92c7e74` (the merge of PR #27). The previous pass fixed the navigation; the
+screens a person arrives at were still crowded. This pass is about what a
+firefighter and a commander see once they are there.
+
+Full reasoning, with the measurements that drove it, is in `docs/UX_AUDIT.md`
+part two. The short version:
+
+1. **One dominant action on the firefighter's screen.**
+   `src/ui/views/callOutStep.ts` is a pure function answering "what is left for
+   this member?", and its answer is the only large thing on the screen. The four
+   facts the schema keeps apart stay four separate facts, as a one-line strip
+   rather than four equal-weight panels of which three were already finished.
+   Every other action remains reachable one disclosure away. `Dolazim` and `Ne
+   mogu` now commit in one tap, not two.
+2. **The commander lands on the incident and the response counts.** One shared
+   `IncidentCard` for both roles, `ODZIV` with six separately-counted answers
+   below it, four tabs on one row at 390px in both languages, and the
+   intervention picker demoted to a switcher that appears only when there is
+   something to switch between.
+3. **A call-out is written in a four-step sequence** - what happened, where and
+   what to do, who, then a review showing the incident and the names before
+   anything reaches a telephone. It uses the two server operations that already
+   existed; the split between steps two and three is exactly the write boundary.
+4. **A half-typed call-out survives a reload** (`src/ui/views/callOutDraft.ts`),
+   and is cleared the moment the draft reaches the server.
+
+**Two defects found while redesigning, both predating this pass:**
+
+- The status strip printed `Prisustvo: ne` to a member who had checked in,
+  worked ninety minutes and checked out - because attendance was read as a
+  boolean and a CLOSED interval is not "checked in". It is four states now
+  (`AttendanceStanding`), and `~` with the words `Ceka potvrdu` is what that
+  member sees.
+- The `Ne prijavljuje prisustvo - ni "Na licu mjesta"` warning was shown only
+  while reporting movement was the current step, so it vanished once a member
+  reported being on scene - leaving the movement buttons reachable with nothing
+  warning about them. It now travels with those buttons.
+
+**No schema, RLS, authorization, role-meaning, audit, server-workflow or Web
+Push change.** The push panel's shape changed (one line during a call-out, the
+full panel in Settings and when nothing is running); nothing about what it does.
+Permission is still never requested without a press.
+
+---
+
+### Previous slice: language, navigation and push latency
+
+On branch `claude/ux-language-push-latency` from `4e944e1`, merged as PR #27
+(`92c7e74`). Three deliverables:
 
 1. **Crnogorski and English**, chosen on a new `podesavanja` route and
    remembered on that device. `strings.me.ts` is the source of truth;
