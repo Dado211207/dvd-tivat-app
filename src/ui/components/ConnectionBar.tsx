@@ -9,9 +9,11 @@
  */
 
 import { useAppUpdate, useOnline } from '@/pwa';
+import { useText } from '@/i18n/useText';
 import { Notice } from './primitives';
 
 export function ConnectionBar() {
+  const t = useText();
   const online = useOnline();
   const { updateReady, applyUpdate } = useAppUpdate();
 
@@ -19,8 +21,7 @@ export function ConnectionBar() {
     return (
       <div data-testid="offline-bar">
         <Notice tone="error">
-          <strong>Uredjaj nije na mrezi.</strong> Operativni ekrani ne mogu da procitaju stanje sa
-          servera, a sve sto sada unesete nece biti sacuvano. Cim se veza vrati, pokusajte ponovo.
+          <strong>{t.connection.offlineTitle}</strong> {t.connection.offlineText}
         </Notice>
       </div>
     );
@@ -30,10 +31,9 @@ export function ConnectionBar() {
     return (
       <div data-testid="update-bar">
         <Notice tone="info">
-          <strong>Nova verzija je spremna.</strong> Primjenjuje se tek kada vi to zatrazite, da se
-          aplikacija ne bi promijenila usred rada.{' '}
+          <strong>{t.connection.updateTitle}</strong> {t.connection.updateText}{' '}
           <button type="button" className="btn btn--primary" onClick={applyUpdate}>
-            Osvjezi aplikaciju
+            {t.connection.updateAction}
           </button>
         </Notice>
       </div>

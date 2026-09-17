@@ -104,6 +104,8 @@ matching the owner's decision. Its merge commit is
 | #16 | **Merged normally** 2026-09-12 into `55fdb093`, by the owner. Slice 3a. Implementation checkpoint `cb074eb`; final reviewed head `a5821f4` |
 | #17 | **Merged normally** 2026-09-12 into `7d00d9bb`, on the owner's authorisation. Documentation-only post-merge synchronisation, from `codex/post-merge-slice-3a-docs`. Not authored by this session. Merged head `81e9bda` |
 | #18 | **Merged normally** 2026-09-12 into `45d53640`, on the owner's authorisation. Slice 3b-0: attendance truth and the withdrawn-account identity fix. Merged head `dc0134c5` |
+| #27 | **Merged normally** 2026-09-15 into `92c7e74`. Language, task-ordered navigation, push-latency diagnosis |
+| #28 | **Merged normally** 2026-09-17 into `e050141`, on green CI run `35136122173` (attempt 1) on its exact head `b2cba92`. The clarity redesign. Pages deploy run `35165704526` succeeded on the merge commit, and the served bundle was verified to contain the new chunks |
 
 > **Why this table names checkpoints and not "the current head".** A branch head
 > moves; a line in a file does not. Writing one here is exactly how `main` came to
@@ -276,6 +278,22 @@ part two. The short version:
    existed; the split between steps two and three is exactly the write boundary.
 4. **A half-typed call-out survives a reload** (`src/ui/views/callOutDraft.ts`),
    and is cleared the moment the draft reaches the server.
+
+Merged as `e050141`. A follow-up on the same branch then closed the one thing
+the brief asked for that the redesign had not reached: **the loading, offline,
+permission-denied and server-error states, in both languages.**
+
+- The offline and "new version ready" bars were written straight into
+  `ConnectionBar` and never left it, so they stayed Montenegrin on an English
+  screen - on every operational screen, and in the one state where being
+  understood matters most.
+- **`REFUSED_READ` on the commander's console was unreachable code.** It was
+  guarded by `error instanceof Error && /permission/i.test(error.message)`, and
+  a PostgREST failure is a PLAIN OBJECT (`{ message, details, hint, code }`),
+  not an `Error` - so the first half was always false. A commander whose role
+  had been taken away was told the server was unavailable and to wait for it.
+  `isPermissionDenied` in `supabaseClient.ts` now reads the `42501` code and
+  the message off whatever shape was thrown, via `errorMessageOf`.
 
 **Two defects found while redesigning, both predating this pass:**
 

@@ -72,6 +72,25 @@ export interface FixtureOptions {
   readonly language?: 'me' | 'en';
   /** False leaves the browser with no session, so the gate asks for sign-in. */
   readonly signedIn?: boolean;
+  /**
+   * Make the server fail, in the two ways that read differently to a person.
+   *
+   * `ACCESS` breaks the access check itself, so the gate cannot decide who this
+   * is and says the server is unreachable. `READS` lets the gate succeed and
+   * then refuses the table reads with a policy error, which is the case a
+   * commander meets when a role is changed underneath them - the console has to
+   * say "refused" rather than "unavailable", because those call for different
+   * things from the person reading them.
+   */
+  readonly serverFails?: 'ACCESS' | 'READS';
+  /**
+   * Hold every answer this long, so the loading state can actually be looked at.
+   *
+   * Without it the fixture answers instantly and "Ucitavanje..." exists for a
+   * frame nobody can catch - which is why it had never been checked in a
+   * browser at all.
+   */
+  readonly slowMs?: number;
 }
 
 const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
@@ -332,6 +351,12 @@ export async function installFixtureProject(
       });
     }
 
+    // Everything after the authentication handshake, so the session is real and
+    // only the DATA is slow - which is the shape of an actual bad connection.
+    if (options.slowMs && !path.startsWith('/auth/v1/')) {
+      await new Promise((resolve) => setTimeout(resolve, options.slowMs));
+    }
+
     if (path.startsWith('/auth/v1/user')) {
       return json(route, { id: USER_ID, email: 'ivo@example.invalid', aud: 'authenticated' });
     }
@@ -347,6 +372,14 @@ export async function installFixtureProject(
 
     if (path.startsWith('/rest/v1/rpc/')) {
       const name = path.replace('/rest/v1/rpc/', '');
+
+      // A 500 on the access check is what the gate cannot recover from: it
+      // genuinely does not know who this is, so it must show nothing rather
+      // than guess. Stale data on an intervention is worse than a blank screen.
+      if (options.serverFails === 'ACCESS') {
+        return json(route, { message: 'fixture: access check failed' }, 500);
+      }
+
       if (name === 'current_dvd_role') return json(route, role ?? null);
       if (name === 'current_account_status') return json(route, accountStatus);
       // Any command not named here answers "fine" - these tests are about what
@@ -357,6 +390,31 @@ export async function installFixtureProject(
 
     if (path.startsWith('/rest/v1/')) {
       const table = path.replace('/rest/v1/', '').split('?')[0] ?? '';
+
+      /*
+       * A policy refusal, not an outage.
+       *
+       * PostgREST answers 403 with `42501` when a row-level policy says no, and
+       * the console tells the two apart on the word "permission" - see the
+       * `REFUSED_READ` branch in `CommandView`. They call for different things
+       * from the person reading them: an outage is waited out, a refusal means
+       * somebody changed what this account may see.
+       *
+       * `profiles` is deliberately still readable, because that is the real
+       * shape of this failure: a member whose ROLE is taken away keeps the
+       * own-row policy on their own profile and loses the operational tables.
+       * Refusing everything instead broke the access check itself, and the gate
+       * then - correctly - reported an unreachable server, so the console was
+       * never reached and the branch under test never ran.
+       */
+      if (options.serverFails === 'READS' && table !== 'profiles') {
+        return json(
+          route,
+          { code: '42501', message: 'permission denied for table ' + table },
+          403,
+        );
+      }
+
       if (route.request().method() !== 'GET') return json(route, []);
 
       const rows = table === 'interventions' ? interventions : (TABLES[table] ?? []);

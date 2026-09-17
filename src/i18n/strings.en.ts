@@ -157,6 +157,16 @@ export const en: Strings = {
     noMemberUntilThen: 'Until then this screen has nothing to show for you.',
   },
 
+  connection: {
+    offlineTitle: 'This device is offline.',
+    offlineText:
+      'The operational screens cannot read the current state from the server, and anything you enter now will not be saved. Try again as soon as the connection returns.',
+    updateTitle: 'A new version is ready.',
+    updateText:
+      'It is applied only when you ask for it, so the application cannot change under you mid-task.',
+    updateAction: 'Refresh the application',
+  },
+
   push: {
     eyebrow: 'OPERATIONAL ALERT',
     title: 'Notifications for a new call-out',

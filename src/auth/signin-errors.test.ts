@@ -28,6 +28,8 @@ import {
   GENERIC_CREDENTIAL_ERROR,
   NETWORK_BLOCKED_HINT,
   NETWORK_UNREACHABLE_ERROR,
+  errorMessageOf,
+  isPermissionDenied,
   isUnreachable,
 } from './supabaseClient';
 
@@ -114,5 +116,71 @@ describe('what the three messages may contain', () => {
     for (const message of ALL) {
       expect(message).toMatch(/pokusa|pitajte|mozete/i);
     }
+  });
+});
+
+/**
+ * Telling a POLICY REFUSAL from a server that is down.
+ *
+ * Both leave a screen without data, and they ask opposite things of the person
+ * reading them: an outage is waited out, a refusal means somebody changed what
+ * this account may see and waiting will not fix it.
+ */
+describe('reading the message off whatever was thrown', () => {
+  it('reads an Error', () => {
+    expect(errorMessageOf(new TypeError('Failed to fetch'))).toBe('TypeError: Failed to fetch');
+  });
+
+  it('reads a PostgREST failure, which is a plain object and not an Error', () => {
+    /*
+     * The shape that caused the defect. supabase-js rejects with
+     * `{ message, details, hint, code }` - `instanceof Error` is FALSE for it,
+     * so every check written as `error instanceof Error && test(error.message)`
+     * silently skipped every error the server ever sent.
+     */
+    const postgrest = {
+      message: 'permission denied for table interventions',
+      details: null,
+      hint: null,
+      code: '42501',
+    };
+    expect(postgrest instanceof Error, 'the premise of the defect').toBe(false);
+    expect(errorMessageOf(postgrest)).toBe('permission denied for table interventions');
+  });
+
+  it('reads a bare string, and gives up quietly on anything else', () => {
+    expect(errorMessageOf('something went wrong')).toBe('something went wrong');
+    for (const value of [null, undefined, 42, {}, []]) {
+      expect(errorMessageOf(value), String(value)).toBe('');
+    }
+  });
+});
+
+describe('telling a refusal from an outage', () => {
+  it('recognises the PostgreSQL insufficient-privilege code', () => {
+    expect(isPermissionDenied({ message: 'nope', code: '42501' })).toBe(true);
+  });
+
+  it('recognises the wording even when no code is carried', () => {
+    expect(isPermissionDenied(new Error('permission denied for table members'))).toBe(true);
+    expect(isPermissionDenied({ message: 'insufficient privilege' })).toBe(true);
+  });
+
+  it('does not mistake an unreachable server for a refusal', () => {
+    // The whole point. A commander told "your account may have lost its role"
+    // when the server is merely down goes looking for a person to ring; one
+    // told "wait for the server" when their role was revoked waits forever.
+    for (const error of [
+      new TypeError('Failed to fetch'),
+      { message: 'NetworkError when attempting to fetch resource.' },
+      new Error('timeout of 5000ms exceeded'),
+    ]) {
+      expect(isPermissionDenied(error), String(error)).toBe(false);
+      expect(isUnreachable(error), String(error)).toBe(true);
+    }
+  });
+
+  it('does not mistake an ordinary server error for a refusal', () => {
+    expect(isPermissionDenied({ message: 'relation does not exist', code: '42P01' })).toBe(false);
   });
 });

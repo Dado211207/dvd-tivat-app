@@ -336,3 +336,50 @@ reporting attendance. The warning now travels with the buttons it warns about.
 - **No capability removed.** Where something moved, this document says where.
 - **The seven simulation screens** keep their own layout and their
   Montenegrin-only copy. They are reached from a closed disclosure in Settings.
+
+---
+
+## 10. The states nobody looks at
+
+Added after the redesign merged, closing the part of its brief the redesign had
+not reached: **loading, offline, permission-denied and server-error, in both
+languages.** The empty and refused-account states were covered; these four were
+not, and two of them were broken.
+
+| State | How it is reached | What it says |
+|---|---|---|
+| Still loading | the access check has not answered | `Provjera pristupa...` / `Checking access...`, as `role="status"` |
+| Offline | the device loses its connection | `Uredjaj nije na mrezi` / `This device is offline`, and what that means for what is being typed |
+| Refused read | a policy denies the operational tables | `Server je odbio citanje. Provjerite da li vas nalog jos ima ulogu.` |
+| Server unreachable | the access check itself fails | `Server nije dostupan`, and nothing operational is rendered |
+
+### 10a. The offline bar was never translated
+
+It was written into `ConnectionBar` and never left it, so on an English screen -
+on every operational screen - the one notice that matters most when the
+connection dies was in a language the reader had explicitly not chosen. Both it
+and the "new version ready" bar are in the string bundles now.
+
+### 10b. The permission-denied branch could not run
+
+The console distinguishes `REFUSED_READ` from `UNAVAILABLE` because the two ask
+opposite things of the person: an outage is waited out, a refusal means somebody
+changed what this account may see and waiting will not fix it.
+
+The guard was `error instanceof Error && /permission/i.test(error.message)`. A
+PostgREST failure is a plain object - `{ message, details, hint, code }` - not
+an `Error`, so the first half was false for every error the server has ever
+sent. `REFUSED_READ` was dead code, and a commander whose role had been revoked
+was told to wait for a server that was working perfectly.
+
+`isPermissionDenied` in `src/auth/supabaseClient.ts` reads PostgreSQL's `42501`
+and the message off whatever shape was thrown, through `errorMessageOf` -
+extracted from `isUnreachable`, which had this right all along.
+
+### 10c. Known and deliberately not fixed here
+
+`fetchInterventions` swallows its error and returns `[]`, so a refused read of
+that one table renders as "there are no interventions" rather than as a refusal.
+Same class of fault, and real. Fixing it means changing the data layer's error
+contract across many functions, which does not belong in a change about screen
+states — recorded rather than quietly left.
