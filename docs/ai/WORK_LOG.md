@@ -1,3 +1,153 @@
+## 2026-09-16 - Rank, not colour: making one thing on the screen obviously the thing to do
+
+The last pass fixed the navigation and the screens were still crowded. That is
+the useful part of the finding: fewer destinations does not help somebody who
+has arrived. This pass is about the arrival.
+
+**Measure before designing.** A real browser at 390x844, the size this
+application is designed around. The firefighter's screen was 2096px tall with
+the incident title 26% down it, behind five blocks of chrome: the masthead, a
+page title, a paragraph describing the page, a five-line notification panel, and
+the connection status. Below the incident, four cards of identical weight - seen
+it, answered, movement, attendance - each with its own explanatory paragraph.
+For the member in the fixture, three of the four were already done.
+
+So the defect is not colour and not spacing. It is rank. Nothing on that screen
+said which of the four things mattered now, and at three in the morning in
+gloves that is not a screen anybody can read in a few seconds.
+
+**One function, one action.** `callOutStep.ts` answers a single question: given
+what this member has and has not recorded, what is left? The screen renders that
+one answer large and reduces the rest to a line. The function is pure, so every
+position a member can be in is a test rather than a screenshot somebody has to
+remember to take.
+
+The ordering has one rule that is not obvious. `CHECK_OUT` is decided BEFORE
+`ACKNOWLEDGE`, because a commander can check a member in from their own console
+- so a member can legitimately be checked in having never opened the call-out on
+their own phone. Asking that person to tidy up an acknowledgement before they
+may check out would be the screen tidying its own sequence at the expense of the
+one person actually standing at the fire.
+
+**What the four cards were for, kept.** The strip shows all four facts with a
+mark and a word each. That visibility is why the cards existed and it is worth
+keeping; a full panel each was not. And it holds the invariant the whole schema
+rests on: being on scene is not attendance, and this screen says so in a row
+rather than implying otherwise by omission.
+
+**Two taps became one.** `Dolazim` and `Ne mogu` used to require choosing a chip
+and then pressing a separate send button that sat disabled until you had. That
+is a second tap on the most time-critical control in the product, and the
+failure it invites - believing you answered when you only highlighted - is
+exactly the one a commander cannot see. An answer is changeable, so a mis-tap
+costs one more tap; a missed send costs a commander a member they think is
+coming.
+
+### Two defects the redesign surfaced
+
+Neither was introduced by this work and neither had a test.
+
+**The strip denied an evening.** A member who checked in, worked ninety minutes
+and checked out again has no OPEN attendance interval. Attendance was a boolean
+reading exactly that, so the strip printed `Prisustvo: ne` - to somebody who had
+been at the incident all evening. Attendance is not a boolean: it has four
+positions, and the difference between the last two, recorded and confirmed, is
+the entire product. It is `AttendanceStanding` now, and that member sees `~`
+with the words `Ceka potvrdu`.
+
+**The warning vanished when it had already been needed.** `Ne prijavljuje
+prisustvo - ni "Na licu mjesta"` was rendered only while reporting movement was
+the current step. The moment a member reported being on scene it disappeared -
+and the movement buttons, `Na licu mjesta` among them, stayed reachable under
+the disclosure with nothing saying that pressing one is not reporting
+attendance. The warning was being shown in every state except the one after it
+had mattered. It travels with the buttons now.
+
+### The commander
+
+The console opened onto the incident's static facts as a definition list - an
+uppercase label column beside every value, two pairs to a row, so at 390px a
+location had about 172px and wrapped over three lines beside a label that fitted
+on one - and the one question a commander actually has during a call-out, who is
+coming, lived on a different tab.
+
+`IncidentCard` is now one component both roles use, so a commander and a
+firefighter standing at the same incident read the same description of it.
+`ODZIV` sits directly below it with six separately-counted answers. `Na terenu`
+counts reported positions and never implies attendance; that stays on its own
+tab where confirmation lives.
+
+Three smaller things, all found by looking at a screenshot rather than at code.
+The four tabs wrapped onto two rows at 390px, leaving `Vozila` alone on the
+second and reading as a separate group of controls. The intervention picker was
+labelled `Intervencija (nije obavezno)` - because it was built from the `Field`
+primitive, which prints an optional marker, and it is not a field at all: it is
+the switch deciding which fire the console is about. And the live-connection
+line sat above everything, qualifying a screenful nobody had read yet.
+
+**A call-out is written in a sequence now.** Four steps: what happened, where
+and what to do, who, and a last look before a telephone rings in somebody's
+pocket. It uses the two server operations that already existed, and the split
+between step two and step three is exactly the write boundary between them - so
+no step carries half-entered state across a write.
+
+Both halves keep every step MOUNTED and hide the inactive one. Rendering only
+the current step destroys its `useState` on every move, which is the same fault
+class as the resume reset that `live-updates.spec.ts` exists for. And between
+opening the form and pressing `Sacuvaj nacrt` there was no record of a call-out
+anywhere, so a reload took the address of the fire with it: `callOutDraft.ts`
+keeps it on the commander's own device and clears it the moment the server has
+it.
+
+### Tests that had to change, and why that is not weakening them
+
+Three browser tests asserted that all four action controls were visible at once.
+They were - that was the design, and the design was the defect. The rewrite
+asserts the property that survives rather than the arrangement that did not:
+exactly ONE element claims to be the next action, it is the right one for this
+member's state, and every other control still exists one disclosure away. If a
+future change starts folding two acts into one button, the count and the step
+both break.
+
+The new `clarity.spec.ts` asserts position and count rather than presence:
+the incident is first, the action is inside the first viewport rather than
+merely somewhere on the page, and nothing scrolls sideways at any size. A screen
+can pass every functional assertion in this suite and still be unreadable, and
+that is exactly what happened.
+
+The fixture answered one situation - commander, active account, one published
+call-out - so every browser test looked at the busiest screen this application
+ever shows. It takes options now, and the quiet states are covered: no call-out
+running, no intervention at all, a draft beside a running call-out, a suspended
+account, an account still awaiting approval, signed out, and both languages.
+
+One of those exposed a mistake in the test rather than the product: there is no
+`AWAITING_APPROVAL` account status on the wire. The five values the server can
+return are in `ACCOUNT_STATUSES`, and awaiting approval is what the gate DERIVES
+from a signed-in account with a null role. A fixture answering an invented value
+made the client narrow it away and show "server unreachable" - the right way to
+fail on an unrecognised value, and the wrong thing for a test to assert.
+
+The clipped-text scan in `viewport.spec.ts` found a real one: `Podesavanja` was
+being cut at 52px in the bottom navigation on a 320px phone, because the
+scrolling-row rule sets `white-space: nowrap` and that still applied, so the
+`overflow-wrap: anywhere` on the label could never fire. It also flagged the
+page's `sr-only` `h1`, which is a 1px box holding a sentence for a screen reader
+and is meant to be clipped - the scan skips `.sr-only` now.
+
+### What was deliberately not touched
+
+No schema, RLS, authorization, role meaning, audit history or server-side
+workflow. No Web Push change: not its delivery logic, payload, opt-in behaviour,
+repeat policy or configuration. The panel's shape changed - one line while a
+call-out is running, the full panel in Settings and when nothing is - and
+nothing about what it does. Permission is still never requested without a press.
+
+No capability was removed. Where something moved, `docs/UX_AUDIT.md` part two
+says where.
+
+---
+
 ## 2026-09-15 - A language, a navigation that matches the task, and where the push delay went
 
 Three jobs that turned out to share one root. Adding a second language means

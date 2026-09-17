@@ -63,6 +63,15 @@ import { OperationalSummary, ResponseTimings } from '../components/timings';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { IncidentCard } from '../components/IncidentCard';
+import {
+  clearDraft,
+  draftHasContent,
+  readStoredDraft,
+  storeDraft,
+  EMPTY_DRAFT,
+  type CallOutDraft,
+} from './callOutDraft';
 import { Chip, EmptyState, Field, Notice, ScrollRegion } from '../components/primitives';
 import {
   ATTENDANCE_STATE_SYMBOL,
@@ -82,6 +91,26 @@ function tabLabel(id: Tab, t: Strings): string {
     : id === 'pregled' ? t.command.tabOverview
     : id === 'prisustvo' ? t.command.tabAttendance
     : t.command.tabVehicles;
+}
+
+/**
+ * Writing a call-out, one question at a time.
+ *
+ * Four steps in the commander's head, two server operations underneath:
+ * `DETAILS` and `WHERE` end in `create_intervention_draft`, `WHO` and `REVIEW`
+ * in `publish_intervention`. The split is at the write, so no step has to carry
+ * half-entered state across one.
+ */
+type ComposeStep = 'DETAILS' | 'WHERE';
+type PublishStep = 'WHO' | 'REVIEW';
+
+const COMPOSE_STEPS: readonly ComposeStep[] = ['DETAILS', 'WHERE'];
+
+function composeStepLabel(id: ComposeStep | PublishStep, t: Strings): string {
+  return id === 'DETAILS' ? t.command.stepDetails
+    : id === 'WHERE' ? t.command.stepWhere
+    : id === 'WHO' ? t.command.stepWho
+    : t.command.stepReview;
 }
 
 export function CommandView() {
@@ -288,14 +317,6 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       ) : null}
       {loading ? <p role="status" className="muted small">{t.command.loading}</p> : null}
 
-      {/* Says which of the two it is. "Uzivo" and "every twelve seconds" are
-          different promises, and a commander deciding how much to trust what is
-          in front of them needs the difference. */}
-      <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
-        <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
-        {LIVE_STATUS_LABEL[liveStatus]}
-      </p>
-
       <InterventionPicker
         interventions={data.interventions}
         selectedId={selectedId}
@@ -343,6 +364,21 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           {id === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
         </div>
       ))}
+
+      {/*
+        Says which of the two it is. "Uzivo" and "every twelve seconds" are
+        different promises, and a commander deciding how much to trust what is
+        in front of them needs the difference.
+
+        It sits BELOW the console now. It qualifies everything above it, and it
+        was costing a line of the first screenful - the same reason the push
+        panel moved off the top of the firefighter's screen. Nobody opens this
+        console to read the transport status first.
+      */}
+      <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
+        <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
+        {LIVE_STATUS_LABEL[liveStatus]}
+      </p>
     </div>
   );
 }
@@ -359,24 +395,38 @@ function InterventionPicker({
   onSelect: (id: string) => void;
 }) {
   const t = useText();
-  if (interventions.length === 0) return null;
+
+  /*
+   * Nothing to pick, nothing to show.
+   *
+   * With one intervention on record the picker was a label, a marker reading
+   * "(nije obavezno)" and a dropdown holding a single option - three lines of
+   * the first screenful spent on a control that could not change anything. And
+   * "optional" was simply false: this is not a field somebody may leave blank,
+   * it is the switch that decides what the whole console is about. That is what
+   * `Field` is for and why this is no longer one.
+   */
+  if (interventions.length < 2) return null;
+
   return (
-    <Field label={t.command.pickIntervention} controlId="intervention-picker">
-      {(props) => (
-        <select
-          {...props}
-          data-testid="intervention-picker"
-          value={selectedId ?? ''}
-          onChange={(event) => onSelect(event.target.value)}
-        >
-          {interventions.map((i) => (
-            <option key={i.id} value={i.id}>
-              {t.vocabulary.interventionStatus[i.status] ?? i.status} - {i.title}
-            </option>
-          ))}
-        </select>
-      )}
-    </Field>
+    <div className="switcher">
+      <label className="switcher__label" htmlFor="intervention-picker">
+        {t.command.pickIntervention}
+      </label>
+      <select
+        id="intervention-picker"
+        className="switcher__select"
+        data-testid="intervention-picker"
+        value={selectedId ?? ''}
+        onChange={(event) => onSelect(event.target.value)}
+      >
+        {interventions.map((i) => (
+          <option key={i.id} value={i.id}>
+            {t.vocabulary.interventionStatus[i.status] ?? i.status} - {i.title}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
@@ -396,14 +446,37 @@ function CallOutTab({
   onRefresh: () => void;
 }) {
   const t = useText();
-  const [kind, setKind] = useState<InterventionKind>('POZAR');
-  const [title, setTitle] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [location, setLocation] = useState('');
-  const [assembly, setAssembly] = useState('');
-  const [otherNote, setOtherNote] = useState('');
+
+  /**
+   * The unsaved call-out, as one value rather than six.
+   *
+   * Six `useState` calls meant six places to remember whenever the form was
+   * restored, cleared or persisted, and the persistence below needs to write
+   * all of it or none. One object with one setter is the difference between a
+   * draft that is kept and a draft that is kept except for the field somebody
+   * forgot to add to the list.
+   *
+   * Seeded from this device's storage on the first render only. A `useState`
+   * initialiser runs once; doing it in an effect would flash an empty form and
+   * then overwrite whatever the commander had already started typing.
+   */
+  const [draft, setDraft] = useState<CallOutDraft>(() => readStoredDraft() ?? EMPTY_DRAFT);
+  const [restored] = useState(() => readStoredDraft() !== null);
+  const field = <K extends keyof CallOutDraft>(key: K, value: CallOutDraft[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * Persist on every keystroke.
+   *
+   * Cheap - one small JSON write - and the alternative is choosing a moment to
+   * save, which is always the moment before the one where the page went away.
+   */
+  useEffect(() => {
+    storeDraft(draft);
+  }, [draft]);
 
   // One key per compose session. A retried tap after a dropped connection must
   // return the SAME draft, never create a second call-out for one incident.
@@ -412,6 +485,12 @@ function CallOutTab({
   const [selectedMembers, setSelectedMembers] = useState<ReadonlySet<string>>(new Set());
   const [confirming, setConfirming] = useState<null | 'PUBLISH' | 'CLOSE' | 'CANCEL'>(null);
   const [closeReason, setCloseReason] = useState('');
+
+  // Where the commander is in each half of the sequence. Two pieces of state,
+  // not one, because the two halves are separated by a write to the server and
+  // a draft that exists is a different situation from one still being typed.
+  const [composeStep, setComposeStep] = useState<ComposeStep>('DETAILS');
+  const [publishStep, setPublishStep] = useState<PublishStep>('WHO');
 
   const availableBy = useMemo(
     () => new Map(data.availability.map((a) => [a.memberId, a] as const)),
@@ -430,24 +509,25 @@ function CallOutTab({
     setBusy(true);
     try {
       const result = await createDraft({
-        kind,
-        title: title.trim(),
-        instructions: instructions.trim(),
-        location: location.trim(),
+        kind: draft.kind as InterventionKind,
+        title: draft.title.trim(),
+        instructions: draft.instructions.trim(),
+        location: draft.location.trim(),
         idempotencyKey: idempotencyKey.current,
-        otherKindNote: kind === 'DRUGO' ? otherNote.trim() : null,
-        assemblyPoint: assembly.trim() === '' ? null : assembly.trim(),
+        otherKindNote: draft.kind === 'DRUGO' ? draft.otherNote.trim() : null,
+        assemblyPoint: draft.assembly.trim() === '' ? null : draft.assembly.trim(),
       });
       if (!result.ok) {
         setError(result.message);
         return;
       }
       await onDone({ ok: true }, t.command.draftSaved);
-      setTitle('');
-      setInstructions('');
-      setLocation('');
-      setAssembly('');
-      setOtherNote('');
+      // The server holds it now, so the copy on this device has done its job.
+      // Left behind it would reappear in the form the next time the console
+      // opened, as a second call-out for an incident already recorded.
+      setDraft(EMPTY_DRAFT);
+      clearDraft();
+      setComposeStep('DETAILS');
       idempotencyKey.current = `ui-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     } finally {
       setBusy(false);
@@ -507,18 +587,66 @@ function CallOutTab({
    */
   const running = selected !== null && !isDraft && isOpenStatus(selected.status);
 
-  const composer = (
-    <>
-      {error ? <Notice tone="error">{error}</Notice> : null}
-      <p className="muted small">{t.command.newNote}</p>
+  /*
+   * What has to be filled in before the draft can be saved.
+   *
+   * The server enforces this too - `create_intervention_draft` refuses an empty
+   * title, location or instruction - and this only decides whether the button
+   * that would fail is offered at all. A disabled button with nothing saying
+   * why is its own kind of confusion, so the step that is incomplete says so.
+   */
+  const detailsComplete =
+    draft.title.trim() !== '' && (draft.kind !== 'DRUGO' || draft.otherNote.trim() !== '');
+  const whereComplete = draft.location.trim() !== '' && draft.instructions.trim() !== '';
 
-      <Field label={t.command.fieldKind} required controlId="new-kind">
+  /*
+   * ---------------------------------------------------------------------------
+   * A CALL-OUT IS WRITTEN IN A SEQUENCE, NOT ON A FORM
+   * ---------------------------------------------------------------------------
+   *
+   * Six fields, a submit button and a recipient picker all at once is a page a
+   * commander has to read before they can start. The sequence asks one question
+   * at a time - what happened, then where and what to do, then who, then a last
+   * look before it goes - which is the order somebody thinks in anyway.
+   *
+   * BOTH STEPS STAY MOUNTED and the inactive one is `hidden`. Rendering only
+   * the current step would destroy its `useState` on every move between them,
+   * which is the exact fault class that `live-updates.spec.ts` exists for. The
+   * fields are also held in one object persisted to this device, so a reload
+   * does not lose them either - see `callOutDraft.ts`.
+   */
+  const composer = (
+    <div className="wizard" data-testid="new-call-out-wizard" data-step={composeStep}>
+      {error ? <Notice tone="error">{error}</Notice> : null}
+
+      {restored && draftHasContent(draft) ? (
+        <Notice tone="info" testId="draft-restored">{t.command.draftRestored}</Notice>
+      ) : null}
+
+      <ol className="wizard__steps" data-testid="wizard-steps">
+        {COMPOSE_STEPS.map((id, index) => (
+          <li
+            key={id}
+            className={`wizard__step ${composeStep === id ? 'wizard__step--on' : ''}`}
+            aria-current={composeStep === id ? 'step' : undefined}
+            data-testid={`wizard-step-${id}`}
+          >
+            <span className="wizard__num">{index + 1}</span>
+            <span className="wizard__name">{composeStepLabel(id, t)}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div hidden={composeStep !== 'DETAILS'}>
+        <p className="muted small">{t.command.newNote}</p>
+
+        <Field label={t.command.fieldKind} required controlId="new-kind">
           {(props) => (
             <select
               {...props}
               data-testid="new-kind"
-              value={kind}
-              onChange={(e) => setKind(e.target.value as InterventionKind)}
+              value={draft.kind}
+              onChange={(e) => field('kind', e.target.value)}
             >
               {INTERVENTION_KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -529,14 +657,14 @@ function CallOutTab({
           )}
         </Field>
 
-        {kind === 'DRUGO' ? (
+        {draft.kind === 'DRUGO' ? (
           <Field label={t.command.fieldOtherKind} required controlId="new-other">
             {(props) => (
               <input
                 {...props}
                 data-testid="new-other"
-                value={otherNote}
-                onChange={(e) => setOtherNote(e.target.value)}
+                value={draft.otherNote}
+                onChange={(e) => field('otherNote', e.target.value)}
               />
             )}
           </Field>
@@ -552,12 +680,26 @@ function CallOutTab({
             <input
               {...props}
               data-testid="new-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={draft.title}
+              onChange={(e) => field('title', e.target.value)}
             />
           )}
         </Field>
 
+        <div className="row-actions">
+          <button
+            type="button"
+            className="btn btn--primary"
+            data-testid="wizard-next"
+            disabled={!detailsComplete}
+            onClick={() => setComposeStep('WHERE')}
+          >
+            {t.command.wizardNext}
+          </button>
+        </div>
+      </div>
+
+      <div hidden={composeStep !== 'WHERE'}>
         <Field
           label={t.command.fieldLocation}
           required
@@ -568,8 +710,8 @@ function CallOutTab({
             <input
               {...props}
               data-testid="new-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              value={draft.location}
+              onChange={(e) => field('location', e.target.value)}
             />
           )}
         </Field>
@@ -579,8 +721,8 @@ function CallOutTab({
             <input
               {...props}
               data-testid="new-assembly"
-              value={assembly}
-              onChange={(e) => setAssembly(e.target.value)}
+              value={draft.assembly}
+              onChange={(e) => field('assembly', e.target.value)}
             />
           )}
         </Field>
@@ -591,22 +733,38 @@ function CallOutTab({
               {...props}
               data-testid="new-instructions"
               rows={3}
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
+              value={draft.instructions}
+              onChange={(e) => field('instructions', e.target.value)}
             />
           )}
         </Field>
 
-        <button
-          type="button"
-          className="btn btn--primary"
-          data-testid="create-draft"
-          disabled={busy}
-          onClick={() => void create()}
-        >
-          {busy ? t.command.saving : t.command.saveDraft}
-        </button>
-    </>
+        {/* Said before the button rather than discovered after it. Saving a
+            draft is not sending it, and a commander who believes otherwise has
+            a crew nobody called. */}
+        <Notice tone="info">{t.command.draftIsNotSent}</Notice>
+
+        <div className="row-actions">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            data-testid="wizard-back"
+            onClick={() => setComposeStep('DETAILS')}
+          >
+            {t.command.wizardBack}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            data-testid="create-draft"
+            disabled={busy || !detailsComplete || !whereComplete}
+            onClick={() => void create()}
+          >
+            {busy ? t.command.saving : t.command.saveDraft}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 
   const composerPanel = running ? (
@@ -637,29 +795,69 @@ function CallOutTab({
         it. The panel stays here and only its shape changes.
       */}
       {selected ? (
-        <section className="panel">
-          <h2 className="panel__title">
-            {selected.title}{' '}
-            <Chip tone={isOpenStatus(selected.status) ? 'alert' : 'neutral'} symbol="#">
-              {t.vocabulary.interventionStatus[selected.status] ?? selected.status}
-            </Chip>
-          </h2>
-          <dl className="facts">
-            <dt>{t.command.factKind}</dt>
-            <dd>
-              {t.vocabulary.interventionKind[selected.kind] ?? selected.kind}
-              {selected.otherKindNote ? ` - ${selected.otherKindNote}` : ''}
-            </dd>
-            <dt>{t.command.factLocation}</dt>
-            <dd data-testid="selected-location">{selected.incidentLocation}</dd>
-            <dt>{t.command.factAssembly}</dt>
-            <dd>{selected.assemblyPoint ?? t.command.notStated}</dd>
-            <dt>{t.command.factInstructions}</dt>
-            <dd>{selected.instructions}</dd>
-          </dl>
+        <>
+          {/*
+            The same card the firefighters are looking at.
 
+            This was a definition list: an uppercase label column beside every
+            value, two pairs to a row, so on a phone a location got half the
+            width and wrapped to three lines next to a label that fitted on one.
+            The status was a chip inside the heading and the kind was a row of
+            the list. Reading it took real effort in the one moment nobody has
+            any to spare.
+
+            It is now `IncidentCard` - the identical component the firefighter's
+            screen leads with. Every fact that was in the list is still here;
+            they are arranged the way somebody actually asks for them, and a
+            commander and a firefighter standing at the same incident now see
+            the same description of it.
+          */}
+          <IncidentCard intervention={selected} testId="selected" />
+
+          {/*
+            WHO IS COMING, second, on the tab the commander lands on.
+
+            The console opened onto the incident's static facts and a status
+            picker; the one question a commander actually has during a call-out -
+            who is coming - lived on a different tab. A compact summary here
+            answers it without a tap, and the full board is still one tap away.
+          */}
+          {!isDraft ? <ResponseBar data={data} /> : null}
+
+          {/* Only when it holds something. A closed intervention with no closing
+              note has no recipients to pick, no status to set and nothing to
+              close, and an empty bordered card below the incident would read as
+              a panel that failed to load. */}
+          {isDraft || isOpenStatus(selected.status) || selected.closeReason ? (
+          <section className="panel" data-testid="intervention-actions">
           {isDraft ? (
             <>
+              {/*
+                Steps three and four of the same sequence.
+
+                They live here rather than in the composer above because they
+                belong to a DIFFERENT server operation: the first two steps end
+                in `create_intervention_draft`, these two in
+                `publish_intervention`. Splitting them at the boundary the
+                server already draws means neither half has to carry state
+                across a write, and the draft is safe on the server before
+                anybody starts choosing who to wake.
+              */}
+              <ol className="wizard__steps" data-testid="publish-steps">
+                {(['WHO', 'REVIEW'] as const).map((id, index) => (
+                  <li
+                    key={id}
+                    className={`wizard__step ${publishStep === id ? 'wizard__step--on' : ''}`}
+                    aria-current={publishStep === id ? 'step' : undefined}
+                    data-testid={`publish-step-${id}`}
+                  >
+                    <span className="wizard__num">{index + 3}</span>
+                    <span className="wizard__name">{composeStepLabel(id, t)}</span>
+                  </li>
+                ))}
+              </ol>
+
+              <div hidden={publishStep !== 'WHO'}>
               <h3>{t.command.recipientsTitle}</h3>
               <p className="muted small">{t.command.recipientsNote}</p>
               {/*
@@ -724,11 +922,11 @@ function CallOutTab({
                 <button
                   type="button"
                   className="btn btn--primary"
-                  data-testid="publish"
-                  disabled={busy || selectedMembers.size === 0}
-                  onClick={() => setConfirming('PUBLISH')}
+                  data-testid="to-review"
+                  disabled={selectedMembers.size === 0}
+                  onClick={() => setPublishStep('REVIEW')}
                 >
-                  {t.command.publish}
+                  {t.command.wizardToReview}
                 </button>
                 <button
                   type="button"
@@ -739,6 +937,68 @@ function CallOutTab({
                 >
                   {t.command.discardDraft}
                 </button>
+              </div>
+              </div>
+
+              {/*
+                The last look before a telephone rings in somebody's pocket.
+
+                Publishing is the one act on this console that reaches other
+                people, and until now it was a button underneath a scrolling
+                list of names - the commander could see the crew they had ticked
+                or the incident they had written, never both. This shows exactly
+                what is about to be sent and to how many, in one screenful,
+                using the record the server already holds rather than the form
+                fields, so what is reviewed is what will actually go.
+              */}
+              <div hidden={publishStep !== 'REVIEW'} data-testid="publish-review">
+                <h3>{t.command.reviewTitle}</h3>
+                {/*
+                  A SUMMARY, not a second card.
+
+                  This rendered a full `IncidentCard` and the full card was
+                  already directly above it on the same screen - the identical
+                  block twice, which is the duplication this whole pass exists
+                  to remove. What the review step has to add is confirmation of
+                  what is about to be sent, in one line, plus the names.
+                */}
+                <p className="review__what" data-testid="review-what">
+                  <strong>{selected.title}</strong>
+                  {' - '}
+                  {selected.incidentLocation}
+                </p>
+                <p className="review__count" data-testid="review-count">
+                  <strong>{selectedMembers.size}</strong> {t.command.reviewRecipients}
+                </p>
+                <ul className="review__names" data-testid="review-names">
+                  {eligible
+                    .filter((m) => selectedMembers.has(m.memberId))
+                    .map((m) => (
+                      <li key={m.memberId}>{m.fullName}</li>
+                    ))}
+                </ul>
+                {/* Provider acceptance is not a ringing telephone. Said here,
+                    before publishing, not only in the confirmation. */}
+                <Notice tone="warn">{t.command.confirmPublishTransport}</Notice>
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    data-testid="review-back"
+                    onClick={() => setPublishStep('WHO')}
+                  >
+                    {t.command.wizardBack}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--danger btn--big"
+                    data-testid="publish"
+                    disabled={busy || selectedMembers.size === 0}
+                    onClick={() => setConfirming('PUBLISH')}
+                  >
+                    {t.command.publish}
+                  </button>
+                </div>
               </div>
             </>
           ) : null}
@@ -795,7 +1055,9 @@ function CallOutTab({
               {t.command.closedWithNote}: <strong>{selected.closeReason}</strong>
             </p>
           ) : null}
-        </section>
+          </section>
+          ) : null}
+        </>
       ) : (
         <EmptyState title={t.command.noInterventionTitle}>
           {t.command.noInterventionText}
@@ -878,6 +1140,51 @@ function CallOutTab({
         </button>
       </p>
     </div>
+  );
+}
+
+/**
+ * How the crew answered, in one glance.
+ *
+ * Six counts, each its own fact and none of them inferred from another - the
+ * same rule the board on the next tab keeps, at the size that fits above it.
+ * `Na terenu` is the count of members who reported being on scene, which is a
+ * statement about position and NOT about attendance; attendance is confirmed
+ * time and lives on its own tab.
+ */
+function ResponseBar({ data }: { data: ConsoleData }) {
+  const t = useText();
+  const recipients = data.recipients;
+  if (recipients.length === 0) return null;
+
+  const count = (predicate: (r: RecipientFacts) => boolean) =>
+    recipients.filter(predicate).length;
+
+  const cells = [
+    { key: 'invited', label: t.responseBar.invited, value: recipients.length, tone: '' },
+    { key: 'coming', label: t.responseBar.coming, value: count((r) => r.answer === 'DOLAZIM'), tone: 'yes' },
+    { key: 'later', label: t.responseBar.later, value: count((r) => r.answer === 'DOLAZIM_KASNIJE'), tone: 'later' },
+    { key: 'declined', label: t.responseBar.declined, value: count((r) => r.answer === 'NE_MOGU'), tone: 'no' },
+    { key: 'noanswer', label: t.responseBar.noAnswer, value: count((r) => r.answer === null), tone: 'unknown' },
+    { key: 'onscene', label: t.responseBar.onScene, value: count((r) => r.journey === 'NA_LICU_MJESTA'), tone: 'accent' },
+  ];
+
+  return (
+    <section className="response-bar" aria-labelledby="response-bar-title" data-testid="response-bar">
+      <h3 className="response-bar__title" id="response-bar-title">{t.responseBar.title}</h3>
+      <ul className="response-bar__list">
+        {cells.map((cell) => (
+          <li
+            key={cell.key}
+            className={`response-cell ${cell.tone ? `response-cell--${cell.tone}` : ''}`}
+            data-testid={`response-${cell.key}`}
+          >
+            <span className="response-cell__num">{cell.value}</span>
+            <span className="response-cell__label">{cell.label}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

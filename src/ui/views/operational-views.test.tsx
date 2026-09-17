@@ -392,18 +392,63 @@ describe('the commander console renders on real data', () => {
 });
 
 describe('the firefighter screen renders on real data', () => {
-  it('shows the call-out with each action as its own step', async () => {
+  it('leads with the incident, then ONE action, then what they have told them', async () => {
+    /*
+     * The property that replaced "each action as its own step".
+     *
+     * That test asserted four equally-sized panels were all on screen at once,
+     * which is precisely the crowding this redesign removed: a member who had
+     * already opened the call-out, already answered and already reported being
+     * on scene still scrolled past three finished things to reach the one act
+     * left to them.
+     *
+     * What matters now is stricter, not looser: the incident is first, exactly
+     * one action is offered, it is the RIGHT one for this member's recorded
+     * state, and every fact they have told the commander is still individually
+     * visible.
+     */
     const text = await show(<MobilisationView />, 'FIREFIGHTER');
     expect(text).not.toMatch(/Ova kopija nije povezana|nije za vasu ulogu/);
     expect(text).toContain('Vjezba: provjera opreme');
 
-    for (const id of ['available-yes', 'answer-DOLAZIM', 'journey-NA_LICU_MJESTA', 'check-in']) {
-      expect(container.querySelector(`[data-testid="${id}"]`), id).not.toBeNull();
-    }
-    // Already opened in the fixture, so the button is replaced by the record of
-    // WHEN it was opened. The first opening is a fact, not a toggle.
-    expect(container.querySelector('[data-testid="ack-state"]')).not.toBeNull();
+    // The fixture member opened it, answered Dolazim and reported being on
+    // scene - so the one thing left is to state attendance.
+    const actions = container.querySelectorAll('[data-testid="next-action"]');
+    expect(actions, 'exactly one dominant action').toHaveLength(1);
+    expect(actions[0]?.getAttribute('data-step')).toBe('CHECK_IN');
+    expect(container.querySelector('[data-testid="check-in"]')).not.toBeNull();
+
+    // And nothing else is competing with it at that size.
     expect(container.querySelector('[data-testid="acknowledge"]')).toBeNull();
+  });
+
+  it('keeps all four facts visible and separate, without a panel each', async () => {
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    const fact = (key: string) =>
+      container.querySelector(`[data-testid="fact-${key}"]`)?.getAttribute('data-mark');
+
+    expect(fact('acknowledged'), 'they opened it').toBe('YES');
+    expect(fact('answered'), 'they answered').toBe('YES');
+    expect(fact('moving'), 'they reported movement').toBe('YES');
+    /*
+     * The invariant the whole schema rests on: on scene is NOT attendance.
+     *
+     * `PARTIAL`, not `NO`. The fixture member has a closed ninety-minute
+     * interval that nobody has confirmed - so they DID attend, and it does not
+     * yet count. This used to print `NO`, telling somebody who had been at the
+     * incident all evening that their attendance was nothing.
+     */
+    expect(fact('attending'), 'recorded, not yet confirmed').toBe('PARTIAL');
+  });
+
+  it('keeps every other action reachable, one disclosure away', async () => {
+    // Not removed - moved. A member who reported being on scene by mistake must
+    // still be able to correct it while the screen asks them to check in.
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    const more = container.querySelector('[data-testid="more-actions"]');
+    expect(more, 'the other actions must still exist').not.toBeNull();
+    expect(more?.querySelector('[data-testid="journey-KRECEM"]')).not.toBeNull();
+    expect(more?.querySelector('[data-testid="change-answer-NE_MOGU"]')).not.toBeNull();
   });
 
   it('offers the opening button to somebody who has not opened it', async () => {
@@ -419,8 +464,61 @@ describe('the firefighter screen renders on real data', () => {
   });
 
   it('says in words that reporting movement is not reporting attendance', async () => {
+    /*
+     * The sentence now appears where it is acted on - beside the movement
+     * buttons - rather than on a panel every member scrolled past whatever they
+     * were doing. So the member who is ABOUT to report movement is the one
+     * shown it, which is when it can still change what they press.
+     */
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce([
+      { ...RECIPIENTS[0]!, journey: null, journeyAt: null },
+      RECIPIENTS[1]!,
+    ]);
+
     const text = await show(<MobilisationView />, 'FIREFIGHTER');
+    expect(
+      container.querySelector('[data-testid="next-action"]')?.getAttribute('data-step'),
+    ).toBe('MOVE');
     expect(text).toMatch(/ne prijavljuje prisustvo/i);
+  });
+
+  it('never lets the status strip merge movement into attendance', async () => {
+    // The same guarantee as a structural fact rather than a sentence, so it
+    // holds on every screen state and not only the one that carries the words.
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    expect(
+      container.querySelector('[data-testid="fact-moving"]')?.getAttribute('data-mark'),
+      'on scene',
+    ).toBe('YES');
+    // Never `YES`. Only a commander's confirmation makes attendance count, and
+    // this member's interval is unconfirmed.
+    expect(
+      container.querySelector('[data-testid="fact-attending"]')?.getAttribute('data-mark'),
+      'is not confirmed attendance',
+    ).toBe('PARTIAL');
+  });
+
+  it('marks attendance YES only once a commander has confirmed it', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchAttendance).mockResolvedValueOnce([
+      { ...PENDING_INTERVAL, verified: true },
+    ]);
+
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    expect(
+      container.querySelector('[data-testid="fact-attending"]')?.getAttribute('data-mark'),
+    ).toBe('YES');
+  });
+
+  it('marks attendance NO only when there is no record at all', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchAttendance).mockResolvedValueOnce([]);
+
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    expect(
+      container.querySelector('[data-testid="fact-attending"]')?.getAttribute('data-mark'),
+    ).toBe('NO');
   });
 
   it('shows a recorded arrival as awaiting the commander', async () => {

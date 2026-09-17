@@ -279,15 +279,17 @@ export function App() {
       </aside>
 
       <header className="masthead">
-        {/* No menu button, deliberately. Below 900px the rail is already a
-            horizontal strip of six large targets - see `workspace.css` - and a
-            drawer would put a tap in front of every navigation to save space
-            the strip does not cost. */}
-        <div className="workspace-heading">
-          <p className="workspace-heading__title">{t.routes[route].name}</p>
-          <p className="workspace-heading__description">{t.routes[route].description}</p>
-        </div>
-
+        {/*
+          NO PAGE TITLE HERE.
+          
+          The rail already says where you are, with an active marker. Repeating
+          it as a heading and then explaining it in a sentence underneath meant
+          a firefighter read the words "Moj poziv" three times before reaching
+          the fire, and lost about a fifth of a phone screen to doing so. Each
+          view now carries its own single `<h1>`, which is also what a screen
+          reader needs - one heading per page, naming the content rather than
+          the menu entry that led to it.
+        */}
         <div className="masthead__tools">
           <SignedInIdentity />
           {/* Strict isolation, not a disabled control: on a server-backed route
@@ -342,6 +344,17 @@ export function App() {
       <LiveRegion />
 
       <main ref={mainRef} tabIndex={-1} className={route === 'prikaz' ? 'main main--wide' : 'main'} id="main">
+        {/*
+          One `<h1>` per page, for the document structure, costing no pixels.
+          
+          A screen reader and an outline tool both want exactly one top-level
+          heading naming the page. A sighted person does not need it: the rail
+          already marks where they are, and on the firefighter's screen the thing
+          that should look largest is the incident, not the word "Moj poziv".
+          Heading LEVEL and visual size are separate questions, and this is the
+          answer that gets both right.
+        */}
+        <h1 className="sr-only">{t.routes[route].name}</h1>
         <ConnectionBar />
         {storageWarning ? <Notice tone="error">{storageWarning}</Notice> : null}
         <VisibleNotice />

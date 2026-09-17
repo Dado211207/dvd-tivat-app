@@ -98,22 +98,39 @@ test.describe('the commander console', () => {
 });
 
 test.describe('the firefighter screen', () => {
-  test('shows the call-out with each action as its own step', async ({ page }) => {
+  test('keeps each action its own step, with one of them dominant', async ({ page }) => {
+    /*
+     * Opening it, answering it, reporting movement and stating attendance stay
+     * four separate acts, written by four separate commands, and nothing on
+     * this screen makes one imply another.
+     *
+     * What changed is which of them is LARGE. This used to assert that all four
+     * controls were visible at once, and they were - four equal-weight cards,
+     * three of them already finished, and the one thing left to do looking
+     * exactly like the three above it. Somebody in gloves at three in the
+     * morning could not read that in a few seconds.
+     *
+     * So the assertion is now about rank, not about presence alone: exactly one
+     * element claims to be the next action, it is the right one for this
+     * member's state, and every other control still EXISTS one disclosure away.
+     * If a future change starts folding two acts into one button, the count and
+     * the step below both break.
+     */
     await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
     await expect(page.getByTestId('callout-title')).toBeVisible();
-    // Opening it, answering it, reporting movement and stating attendance are
-    // four separate facts, each with its own control, all in front of the
-    // member while a call-out is running.
-    //
-    // Step one is either its button or the record that it already happened -
-    // this member acknowledged the call-out in the fixture - and the test
-    // accepts whichever, because what it is asserting is that the step is on
-    // the screen rather than folded into one of the others.
-    await expect(
-      page.locator('[data-testid="acknowledge"], [data-testid="ack-state"]'),
-    ).toHaveCount(1);
-    for (const id of ['answer-DOLAZIM', 'journey-KRECEM', 'check-in']) {
-      await expect(page.getByTestId(id), id).toBeVisible();
+
+    const action = page.getByTestId('next-action');
+    await expect(action).toHaveCount(1);
+    // The fixture member opened it, answered Dolazim and reported being on
+    // scene, so the one thing left is to state attendance.
+    await expect(action).toHaveAttribute('data-step', 'CHECK_IN');
+    await expect(page.getByTestId('check-in')).toBeVisible();
+
+    // Present, not visible: a closed disclosure, not a deletion. A member who
+    // reported being on scene by mistake must still be able to correct it.
+    const more = page.getByTestId('more-actions');
+    for (const id of ['journey-KRECEM', 'journey-NA_LICU_MJESTA', 'change-answer-NE_MOGU']) {
+      await expect(more.getByTestId(id), id).toHaveCount(1);
     }
   });
 
@@ -132,13 +149,37 @@ test.describe('the firefighter screen', () => {
   });
 
   test('says in words that reporting movement is not reporting attendance', async ({ page }) => {
+    /*
+     * The sentence sits WITH the movement buttons now, wherever they are.
+     *
+     * It used to be on the movement panel only while that panel was the current
+     * step, so the moment a member reported being on scene it vanished - and
+     * the buttons, `Na licu mjesta` among them, stayed reachable with nothing
+     * saying that pressing one is not reporting attendance. The warning was
+     * being shown in every state except the one where it had already been
+     * needed.
+     */
     await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
-    await expect(page.getByText(/ne prijavljuje prisustvo/i)).toBeVisible();
+    const more = page.getByTestId('more-actions');
+    await more.locator('summary').click();
+    await expect(more.getByText(/ne prijavljuje prisustvo/i)).toBeVisible();
+    await expect(more.getByTestId('journey-NA_LICU_MJESTA')).toBeVisible();
   });
 
   test('shows a recorded arrival as waiting for the commander', async ({ page }) => {
+    /*
+     * In the status strip, without opening anything.
+     *
+     * This member checked in, worked ninety minutes and checked out; nobody has
+     * confirmed it. The strip used to print "ne" for exactly that person -
+     * telling somebody who had been at the incident all evening that their
+     * attendance was nothing - because the underlying fact was a boolean and a
+     * closed interval is not "checked in". It is a third state and it says so.
+     */
     await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
-    await expect(page.getByText(/ceka potvrdu/i).first()).toBeVisible();
+    const attending = page.getByTestId('fact-attending');
+    await expect(attending).toHaveAttribute('data-mark', 'PARTIAL');
+    await expect(attending).toContainText(/ceka potvrdu/i);
   });
 });
 

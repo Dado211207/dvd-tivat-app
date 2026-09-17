@@ -202,33 +202,6 @@ body {
   border-bottom: 1px solid var(--c-line);
 }
 
-.workspace-heading {
-  min-width: 0;
-}
-
-.eyebrow {
-  font-size: 0.68rem;
-  font-weight: 780;
-  color: var(--c-accent);
-  text-transform: uppercase;
-  letter-spacing: 0.13em;
-}
-
-.workspace-heading__title {
-  margin-top: 2px;
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 730;
-  line-height: 1.2;
-  letter-spacing: -0.035em;
-}
-
-.workspace-heading__description {
-  margin-top: 4px;
-  font-size: 0.78rem;
-  color: var(--c-ink-faint);
-}
-
 .masthead__tools {
   display: flex;
   gap: 16px;
@@ -1424,23 +1397,45 @@ dialog {
     min-height: 100%;
   }
 
+  /*
+   * BOTTOM NAVIGATION ON PHONES.
+   *
+   * The rail used to sit at the top, which put the menu, the masthead and a
+   * badge strip between a firefighter and the incident - and put the one thing
+   * they tap most at the far end of their thumb's reach. Fixed to the bottom it
+   * costs the page nothing above the fold, stays reachable one-handed, and is
+   * where anybody who has used a telephone since about 2015 expects it.
+   *
+   * `.main` gets matching bottom padding below so the last control on a screen
+   * is never sitting underneath it.
+   */
   .station-rail {
-    position: static;
+    position: fixed;
+    /* `top: 0` from the base sticky rule still applies unless it is cleared,
+       and with both edges set the box anchors to the top. */
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
     width: 100%;
     height: auto;
+    background: #0d1b24;
+    border-top: 1px solid rgb(255 255 255 / 10%);
     /*
      * The society's name sat under the iPhone status bar in the installed
      * application. The page is served `viewport-fit=cover` with a translucent
      * status bar, so the web view genuinely starts above the clock - the fix is
      * to pad, not to move the mark.
      */
-    padding: calc(14px + var(--safe-top)) calc(14px + var(--safe-right)) 10px
-      calc(14px + var(--safe-left));
+    padding: 6px calc(10px + var(--safe-right)) calc(6px + var(--safe-bottom))
+      calc(10px + var(--safe-left));
     overflow: visible;
   }
 
+  /* The society's name belongs at the top of the page, not in the thumb bar. */
   .masthead__identity {
-    padding: 0 4px 12px;
+    display: none;
   }
 
   .masthead__mark {
@@ -1519,14 +1514,6 @@ dialog {
     padding: 18px calc(18px + var(--safe-right)) 16px calc(18px + var(--safe-left));
   }
 
-  .workspace-heading__title {
-    font-size: 1.34rem;
-  }
-
-  .workspace-heading__description {
-    max-width: 25rem;
-  }
-
   .masthead__tools {
     flex: 1 1 260px;
     justify-content: flex-end;
@@ -1543,7 +1530,81 @@ dialog {
   }
 
   .main {
-    padding: 20px calc(16px + var(--safe-right)) 34px calc(16px + var(--safe-left));
+    /*
+     * The bottom bar is fixed, so the page must end above it.
+     *
+     * 112px, not 96px. The reserve was sized for a one-line bar; letting
+     * `Podesavanja` wrap - which it must, because it does not fit on one line
+     * at 320px - takes the bar to 82px measured, and 96px left fourteen pixels
+     * between the last line of a page and a bar that cannot be scrolled away
+     * from. A reserve that is only just enough is a reserve that stops being
+     * enough the first time a label gets longer.
+     */
+    padding: 16px calc(16px + var(--safe-right)) calc(112px + var(--safe-bottom))
+      calc(16px + var(--safe-left));
+  }
+
+  .foot {
+    padding-bottom: calc(112px + var(--safe-bottom));
+  }
+
+  /* Four to six destinations across the bar: icon over label, each its own
+     tap target, none of them scrolled out of reach. */
+  .nav {
+    justify-content: space-around;
+    margin-inline: 0;
+    padding-inline: 0;
+    overflow-x: visible;
+  }
+
+  .nav__link {
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    min-height: 52px;
+    padding: 4px 1px;
+    text-align: center;
+    /*
+     * MUST be cleared, not merely unmentioned.
+     *
+     * The scrolling-row rule above sets `nowrap`, and it still applied here -
+     * so `overflow-wrap: anywhere` on the label below could never fire and
+     * `Podesavanja` was silently cut at 52px on a 320px phone. Found by the
+     * clipped-text scan in `viewport.spec.ts`, which measures what a person
+     * can actually read rather than what the markup says is there.
+     */
+    white-space: normal;
+  }
+
+  /*
+   * Every label reserves two lines, whether it needs them or not.
+   *
+   * Measured: a destination gets a 66px box in this bar, and `Podesavanja` is
+   * 88px on one line at a size anybody can read. It has to wrap, and shortening
+   * it is not the answer - a bar saying one thing and the rail saying another
+   * is two names for one destination, which is precisely what this pass is
+   * removing. Truncation is worse still: a destination nobody is sure of.
+   *
+   * So the wrap stays and the BAR stops looking broken by it. Reserving the
+   * same two-line box on every label keeps the icons on one row and the bar's
+   * bottom edge level, so the long label reads as using the space it needs
+   * rather than as a layout that went wrong.
+   */
+  .nav__link__text {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 2.1em;
+    font-size: 0.66rem;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  .nav__link[aria-current='page'] {
+    /* Marked on the side the eye reaches first in a bottom bar: above the icon,
+       not under the label where the safe-area inset can swallow it. */
+    box-shadow: inset 0 3px #59d3dc;
   }
 
   .foot {
@@ -1719,6 +1780,38 @@ dialog {
 
 .tabs__tab:hover { color: var(--c-ink); }
 
+/*
+ * Switching which record the console is about.
+ *
+ * Deliberately NOT a `Field`. A field is something somebody fills in, so
+ * `Field` prints "(obavezno)" or "(nije obavezno)" beside its label - and this
+ * control is neither. It is a view switch, and calling it optional was telling
+ * a commander that the choice of which fire they are looking at does not
+ * matter. One quiet row, label beside control, and it only appears at all when
+ * there is more than one record to switch between.
+ */
+.switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.switcher__label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--c-ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.switcher__select {
+  flex: 1 1 12rem;
+  /* Never narrower than the phone allows, never wider than the text needs. */
+  min-width: 0;
+  min-height: 44px;
+}
+
 .tabs__tab--on {
   border-color: var(--c-line);
   background: var(--c-surface);
@@ -1727,6 +1820,38 @@ dialog {
      the panel below it, not merely tinted. */
   margin-bottom: -1px;
   padding-bottom: calc(0.55rem + 1px);
+}
+
+/*
+ * Four tabs, one row, on a telephone.
+ *
+ * `flex-wrap` put `Poziv / Pregled / Prisustvo` on one line and left `Vozila`
+ * alone on a second at 390px, which reads as two groups of controls rather than
+ * one set of four - and cost a whole row of the first screenful before the
+ * commander saw anything about the incident. Four equal columns hold every
+ * label in both languages at this size.
+ *
+ * A grid, not a horizontal scroller: with exactly four destinations, hiding one
+ * off the edge is worse than making all four slightly narrower.
+ *
+ * This block sits AFTER the rules it overrides on purpose. A media query adds
+ * no specificity, so `.tabs__tab { padding: ... }` below it would have won the
+ * cascade on equal specificity and the labels would have kept their full
+ * padding inside narrower columns - which is exactly what happened first time.
+ */
+@media (max-width: 559px) {
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .tabs__tab,
+  .tabs__tab--on {
+    padding-inline: 0.15rem;
+    font-size: 0.8rem;
+    text-align: center;
+  }
 }
 
 .organisation .stack {
@@ -2481,3 +2606,567 @@ dialog {
   font-size: 1rem;
   font-weight: 700;
 }
+
+/* ===========================================================================
+   THE CALL-OUT SCREEN
+   
+   Designed for one hand, in gloves, in the dark, by somebody who may not use
+   many applications. Three things in a fixed order: what happened, the one act
+   left to them, and what they have already told the commander.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   What happened and where. First, and unmistakably the incident.
+   --------------------------------------------------------------------------- */
+
+/* ------------------------------------------------------- the call-out screen */
+
+/*
+ * What is happening, and what to do about it.
+ *
+ * One column on a phone held upright, which is how most people read it. Two
+ * from 720px up - a phone held sideways, a tablet, a station desktop - where
+ * the incident and the one dominant action fit beside each other instead of
+ * the action falling off the bottom.
+ */
+.callout {
+  display: grid;
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.callout__actions {
+  display: grid;
+  gap: var(--sp-4);
+  align-content: start;
+  /* Without this a long instruction in the other column can widen the track. */
+  min-width: 0;
+}
+
+@media (min-width: 720px) {
+  .callout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+/*
+ * A phone held sideways has about 390px of height and three fixed bands eating
+ * it: the masthead, the tab strip and the navigation. Giving each of them back
+ * a little is what puts the next action on the screen rather than below it.
+ * Targets stay at or above the 44px accessibility floor; the 56px comfort size
+ * is not practical at this height and nothing here is a primary action.
+ */
+@media (orientation: landscape) and (max-height: 520px) {
+  .masthead {
+    padding-top: calc(10px + var(--safe-top));
+    padding-bottom: 9px;
+  }
+
+  .main {
+    padding-bottom: calc(72px + var(--safe-bottom));
+  }
+
+  .nav__link {
+    min-height: 44px;
+    padding-block: 2px;
+    font-size: 0.72rem;
+  }
+
+  .incident__title {
+    font-size: 1.5rem;
+  }
+}
+
+.incident {
+  padding: var(--sp-5);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  /* The one place a heavy urgent edge is earned. Everything else on the screen
+     is calm so that this reads as the exception rather than as decoration. */
+  border-left: 6px solid var(--c-alert);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+
+.incident__kind {
+  margin: 0 0 var(--sp-1);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--c-alert-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.incident__title {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-display);
+  /* Scales with the screen and stops growing on a desktop, where a 40px title
+     would just be shouting. */
+  font-size: clamp(1.5rem, 5.5vw, 2rem);
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--c-ink);
+}
+
+.incident__where {
+  margin: 0 0 var(--sp-3);
+  font-size: clamp(1.05rem, 4vw, 1.2rem);
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--c-ink-soft);
+}
+
+.incident__assembly {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: baseline;
+  padding: var(--sp-3);
+  margin: 0 0 var(--sp-3);
+  background: var(--c-accent-soft);
+  border-radius: var(--r-sm);
+}
+
+.incident__assembly-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--c-accent-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.incident__instructions {
+  margin: 0 0 var(--sp-3);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--c-ink);
+}
+
+.incident__meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--c-ink-faint);
+}
+
+/* ---------------------------------------------------------------------------
+   The one act left to them.
+   
+   Sized so it cannot be mistaken for anything else on the screen, and so it can
+   be hit with a gloved thumb without looking.
+   --------------------------------------------------------------------------- */
+
+.act {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--c-surface);
+  border: 2px solid var(--c-accent);
+  border-radius: var(--r-md);
+}
+
+/* Nothing is being asked. Calm, quiet, and visibly not a button. */
+.act--settled {
+  gap: var(--sp-1);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+}
+
+/* Quiet on purpose. It names the card; the button inside it is the thing that
+   should catch the eye, and an eyebrow competing with a 56px primary button
+   would be two shouts where one is wanted. */
+.act__eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  /* `--c-accent-strong`, not `--c-accent-ink`: "ink" here means the text that
+     sits ON an accent fill, which is white in light mode and would have been
+     invisible on this card. */
+  color: var(--c-accent-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.act--settled .act__eyebrow { color: var(--c-ink-faint); }
+
+.act__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: var(--c-ink);
+}
+
+.act__why {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--c-ink-faint);
+}
+
+.act__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  /* Comfortably above the 44px floor the rest of the interface uses. This is
+     the control somebody presses half awake. */
+  min-height: 56px;
+  padding: var(--sp-3) var(--sp-4);
+  font-family: inherit;
+  font-size: 1.15rem;
+  font-weight: 750;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: var(--r-sm);
+}
+
+.act__button--primary {
+  color: var(--c-accent-ink);
+  background: var(--c-accent);
+  border-color: var(--c-accent-strong);
+}
+
+.act__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.act__button:focus-visible,
+.act__choice:focus-visible {
+  outline: var(--focus);
+  outline-offset: var(--focus-offset);
+}
+
+.act__choices {
+  display: grid;
+  gap: var(--sp-2);
+  /* One per row on a phone: three side-by-side answer buttons at 390px are
+     three small targets with wrapped labels, which is what this replaced. */
+  grid-template-columns: 1fr;
+}
+
+.act__choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: var(--sp-3);
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  background: var(--c-surface);
+  border: 2px solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+}
+
+.act__choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* The three answers, told apart by colour AND by position AND by their words.
+   Never by colour alone. */
+.act__choice--yes {
+  color: var(--c-ink-inverse);
+  background: var(--c-yes);
+  border-color: var(--c-yes);
+}
+
+.act__choice--later {
+  color: var(--c-ink);
+  background: var(--c-later-soft);
+  border-color: var(--c-later);
+}
+
+.act__choice--no {
+  color: var(--c-ink);
+  background: var(--c-no-soft);
+  border-color: var(--c-no);
+}
+
+.act__choice--on {
+  color: var(--c-accent-ink);
+  background: var(--c-accent);
+  border-color: var(--c-accent-strong);
+}
+
+.act__eta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--c-line);
+}
+
+/* The minute bands and the movement steps are short words, so two across a
+   phone keeps them large without wasting a whole row each. */
+.act__choices--eta,
+.act__choices--journey {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.act__choices--eta .act__choice,
+.act__choices--journey .act__choice {
+  font-size: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   What they have already told the commander.
+   
+   Four facts, each still named, each still separate - reduced from four full
+   panels to four lines, because that is the size the job needs.
+   --------------------------------------------------------------------------- */
+
+.my-status {
+  padding: var(--sp-4);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+}
+
+.my-status__title {
+  margin: 0 0 var(--sp-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--c-ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.my-status__list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.my-status__item {
+  display: grid;
+  gap: var(--sp-2);
+  align-items: baseline;
+  padding: var(--sp-2) 0;
+  /* min-width:0 on the value or a long timestamp pushes the row wider than the
+     phone. The label column is fixed so the four rows line up as a column. */
+  grid-template-columns: 1.25rem minmax(0, 7rem) minmax(0, 1fr);
+  border-bottom: 1px solid var(--c-line);
+}
+
+.my-status__item:last-child {
+  border-bottom: 0;
+}
+
+/* A mark as well as a colour: a sunlit station wall and colour vision
+   deficiency both defeat colour on its own. */
+.my-status__mark {
+  font-weight: 800;
+  color: var(--c-ink-faint);
+  text-align: center;
+}
+
+.my-status__item--yes .my-status__mark {
+  color: var(--c-yes);
+}
+
+/* Recorded, not yet counted. `--c-later` rather than `--c-yes`, and the `~`
+   rather than a `+`, so the difference survives both a sunlit station wall and
+   colour vision deficiency - and the value column says it in words as well. */
+.my-status__item--partial .my-status__mark {
+  color: var(--c-later);
+}
+
+.my-status__label {
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--c-ink-soft);
+}
+
+.my-status__value {
+  min-width: 0;
+  font-size: 0.92rem;
+  color: var(--c-ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.my-status__item--yes .my-status__value,
+.my-status__item--partial .my-status__value {
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+@media (max-width: 380px) {
+  /* Below this the three columns stop fitting. Two rows per fact beats a value
+     squeezed into forty pixels. */
+  .my-status__item {
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+  }
+
+  .my-status__value {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .act,
+  .act__button,
+  .act__choice {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The commander's first question, answered without a tap.
+
+   Six counts on the tab they land on. Each is its own fact: who was called out
+   is not who answered, who answered is not who arrived, and being on scene is a
+   statement about position rather than about attendance - which is confirmed
+   time, on its own tab.
+   --------------------------------------------------------------------------- */
+
+/* ------------------------------------------------ writing a call-out, in steps */
+
+.wizard {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+/*
+ * Where you are in the sequence, and how much is left.
+ *
+ * An `ol` because the steps really are ordered, and numbered because "step two
+ * of four" is a thing somebody can hold in their head while a fire burns. The
+ * current step carries `aria-current="step"` as well as the border, so it is
+ * announced and not only drawn.
+ */
+.wizard__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.wizard__step {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--c-ink-faint);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  border-radius: 999px;
+}
+
+.wizard__step--on {
+  color: var(--c-ink);
+  background: var(--c-accent-soft);
+  border-color: var(--c-accent);
+}
+
+.wizard__num {
+  display: grid;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  font-weight: 800;
+  color: var(--c-ink-soft);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 50%;
+}
+
+.wizard__step--on .wizard__num {
+  color: var(--c-accent-ink);
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+
+.review__what {
+  margin: var(--sp-2) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.review__count {
+  margin: var(--sp-3) 0 var(--sp-1);
+  font-size: 1.05rem;
+}
+
+.review__names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  padding: 0;
+  margin: 0 0 var(--sp-3);
+  font-weight: 650;
+  list-style: none;
+}
+
+/* Its own card, directly under the incident. It answers a different question
+   from the one above it - not "what is happening" but "who is coming" - and a
+   commander scanning for the second must not have to find it inside the first. */
+.response-bar {
+  padding: var(--sp-4);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+
+.response-bar__title {
+  margin: 0 0 var(--sp-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--c-ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.response-bar__list {
+  display: grid;
+  gap: var(--sp-2);
+  /* Three across a phone, six across anything wider. `auto-fit` with a floor
+     rather than a fixed count, so nothing is ever squeezed below legibility. */
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.response-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  padding: var(--sp-2);
+  text-align: center;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+}
+
+.response-cell__num {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--c-ink);
+}
+
+.response-cell__label {
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--c-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* Tone is carried by a top edge rather than a fill, so the number stays at full
+   contrast on every cell - and the label is always there to say which is which. */
+.response-cell--yes { border-top: 3px solid var(--c-yes); }
+.response-cell--later { border-top: 3px solid var(--c-later); }
+.response-cell--no { border-top: 3px solid var(--c-no); }
+.response-cell--unknown { border-top: 3px solid var(--c-unknown); }
+.response-cell--accent { border-top: 3px solid var(--c-accent); }

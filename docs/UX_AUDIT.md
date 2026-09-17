@@ -203,3 +203,136 @@ is still Montenegrin-only.
 audit detail. Translating a commander's note would be rewriting evidence.
 Settings says this in words so a Montenegrin title on an English screen reads as
 the record speaking rather than as a half-finished translation.
+
+---
+
+# Part two: the clarity redesign
+
+A second pass, after the first one shipped and the screens were still crowded.
+The first pass fixed the NAVIGATION - fewer destinations, no duplicate headings,
+simulation moved out of the way. It did not touch what a firefighter sees once
+they arrive, and that was the part still failing.
+
+## 6. What the screens actually looked like, measured
+
+Captured from the fixture build in a real browser at 390x844, the size this
+application is designed around. Numbers, not impressions.
+
+### The firefighter's screen, before
+
+| Measurement | Value |
+|---|---|
+| Full page height | 2096px |
+| Viewport height | 844px |
+| Blocks of chrome above the incident | 5 |
+| Incident title position | 26% down the page |
+| Cards of equal visual weight | 4 |
+| Of those four, already complete | 3 |
+| The one action left to do | fourth card, below the fold |
+
+The five blocks were: the society masthead, a page title, a description of the
+page, the notification panel (five lines), and the live-connection line. All of
+it above "what happened and where".
+
+The four cards were the four facts the schema keeps apart - opened, answered,
+movement, attendance - each in its own panel with its own explanatory
+paragraph, all the same size. For this member, three were finished. The one
+thing being asked of them looked exactly like the three that were not.
+
+That is the defect. Not colour, not spacing: rank. Nothing on the screen said
+which of the four things mattered now.
+
+### The commander's console, before
+
+| Measurement | Value |
+|---|---|
+| Tab rows at 390px | 2 (`Vozila` alone on the second) |
+| Intervention picker label | `Intervencija (nije obavezno)` |
+| Incident facts | a `<dl>` with a label column beside every value |
+| Value column width at 390px | ~172px, so a location wrapped over 3 lines |
+| Answer to "who is coming" | on a different tab |
+
+## 7. What was done
+
+### The firefighter's screen
+
+1. **One dominant action.** `src/ui/views/callOutStep.ts` is a pure function
+   answering one question: given what this member has and has not recorded,
+   what is left? Its answer is rendered large, with an eyebrow reading
+   `SLJEDECE`, and nothing else on the screen competes with it. Thirteen unit
+   tests cover every position a member can be in, including the one that used
+   to be wrong.
+2. **The four facts stay four facts, as a strip.** `Sta ste javili` lists all
+   four with a mark and a word each. Visibility was the reason the four cards
+   existed and it is the part worth keeping; a full panel each was not.
+3. **One tap is the answer.** `Dolazim` and `Ne mogu` commit directly.
+   Previously it took two taps - choose a chip, then press a separate send
+   button that sat disabled until you had - and the failure that invites,
+   believing you answered when you only highlighted, is the one a commander
+   cannot see.
+4. **Everything else, one disclosure away.** Changing an answer, correcting a
+   movement already reported and reading one's own attendance records all still
+   exist, closed, under `Ostale radnje`. Nothing was removed.
+5. **Chrome moved below the incident.** The notification panel collapses to one
+   line while a call-out is running, and the live-connection line moved to the
+   bottom of both screens.
+6. **Two columns wherever there is width.** Stacked, the incident card alone
+   filled a phone held sideways and the action fell off the bottom. Landscape is
+   short, not narrow.
+
+### The commander's console
+
+1. **The incident first, in the same card the firefighters see.**
+   `IncidentCard` is now one component used by both screens, so a commander and
+   a firefighter standing at the same incident read the same description of it.
+   The `<dl>` is gone; every fact it held is still there.
+2. **`ODZIV` second.** Six counts - invited, coming, later, declined, no answer,
+   on scene - each its own fact and none inferred from another. `Na terenu` is a
+   count of reported positions and never implies attendance.
+3. **Four tabs, one row** at 390px in both languages.
+4. **The picker is a switcher, not a field.** It only appears when there is more
+   than one intervention, and it no longer claims to be optional.
+5. **A call-out is written in a sequence.** Four steps - what happened, where and
+   what to do, who, and a last look - across the two server operations that
+   already existed. The review step shows the incident card and the names before
+   anything reaches a telephone.
+6. **A half-typed call-out survives a reload.** Between opening the form and
+   pressing `Sacuvaj nacrt` there was no record anywhere. See
+   `src/ui/views/callOutDraft.ts`; it is cleared the moment the draft reaches
+   the server.
+
+## 8. Two defects found while redesigning
+
+Both were real, both predate this pass, and both are now covered by tests.
+
+### 8a. The status strip denied an evening's work
+
+A member who checked in, worked ninety minutes and checked out again had no OPEN
+attendance interval. The strip read that boolean and printed `Prisustvo: ne` -
+telling somebody who had been at the incident all evening that their attendance
+was nothing.
+
+Attendance is not a boolean. It has four positions - none, on the task, recorded
+and awaiting confirmation, confirmed - and the difference between the last two
+is the whole product. `AttendanceStanding` in `callOutStep.ts` carries all four,
+and the strip shows `+`, `~` or `-` with a word beside it, never colour alone.
+
+### 8b. The movement warning vanished exactly when it had been needed
+
+`Ne prijavljuje prisustvo - ni "Na licu mjesta"` appeared only while reporting
+movement was the current step. Once a member reported being on scene it
+disappeared - and the movement buttons, `Na licu mjesta` among them, stayed
+reachable under `Ostale radnje` with nothing saying that pressing one is not
+reporting attendance. The warning now travels with the buttons it warns about.
+
+## 9. What was deliberately not changed
+
+- **No schema, RLS, authorization, role meaning, audit or server workflow
+  change.** Every command called is one that already existed.
+- **No Web Push change.** Not its delivery logic, payload, opt-in behaviour,
+  repeat policy or configuration. The panel's SHAPE changed - collapsed during a
+  call-out - and nothing about what it does. Permission is still never requested
+  without a press.
+- **No capability removed.** Where something moved, this document says where.
+- **The seven simulation screens** keep their own layout and their
+  Montenegrin-only copy. They are reached from a closed disclosure in Settings.

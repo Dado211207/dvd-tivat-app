@@ -460,11 +460,18 @@ export const me = {
     saveDraft: 'Sacuvaj nacrt',
     draftSaved: 'Priprema poziva je sacuvana kao nacrt. Jos nije objavljena.',
 
-    factKind: 'Vrsta',
-    factLocation: 'Lokacija',
-    factAssembly: 'Mjesto okupljanja',
-    factInstructions: 'Uputstvo',
-    notStated: 'Nije navedeno',
+    /** The four steps of writing a call-out, in the order they are asked. */
+    stepDetails: 'Sta se desilo',
+    stepWhere: 'Gdje i sta raditi',
+    stepWho: 'Kome',
+    stepReview: 'Provjera',
+    wizardNext: 'Dalje',
+    wizardBack: 'Nazad',
+    wizardToReview: 'Dalje na provjeru',
+    reviewTitle: 'Provjerite prije slanja',
+    reviewRecipients: 'clanova dobija ovaj poziv',
+    draftIsNotSent: 'Cuvanje nacrta nikoga ne zove. Poziv se salje tek na koraku Provjera.',
+    draftRestored: 'Vraceno je sto ste ranije zapoceli na ovom uredjaju. Nije poslato nikome.',
 
     recipientsTitle: 'Kome se salje',
     recipientsNote:
@@ -601,6 +608,65 @@ export const me = {
     recordReturn: 'Zabiljezi povratak',
     departureRecorded: 'izlazak je zabiljezen.',
     returnRecorded: 'povratak je zabiljezen.',
+  },
+
+  callout: {
+    /**
+     * The eyebrow over the action card, in every state.
+     *
+     * Three of the six steps are a single button and carried no heading at all,
+     * so the card read as a loose paragraph with a button under it - the same
+     * weight as the cards below. This one word says what the card is: the next
+     * thing, and the only thing being asked for right now.
+     */
+    nextLabel: 'Sljedece',
+    /** Replaces it once nothing is being asked. */
+    nothingLabel: 'Nista dalje',
+
+    /** The one dominant action, named for the state it belongs to. */
+    doAcknowledge: 'Vidio sam poziv',
+    doAcknowledgeWhy: 'Javite komandiru da je poziv stigao do vas.',
+    doAnswer: 'Dolazite li?',
+    doAnswerWhy: 'Komandir ceka vas odgovor.',
+    doMove: 'Javite gdje ste',
+    doMoveWhy: 'Ne prijavljuje prisustvo - ni "Na licu mjesta".',
+    doCheckIn: 'Prijavi prisustvo',
+    doCheckInWhy: 'Komandir potvrdjuje prijavu; do tada se ne racuna kao ucesce.',
+    doCheckOut: 'Odjavi se',
+    doCheckOutWhy: 'Prijavljeni ste na zadatku od ranije.',
+    doneTitle: 'Nema vise koraka za vas',
+    doneClosed: 'Intervencija je zatvorena. Zapis ostaje vidljiv.',
+    doneDeclined: 'Javili ste da ne mozete doci.',
+    doneTurnedBack: 'Javili ste da odustajete.',
+
+    /** The compact strip: four facts, each said in one or two words. */
+    factAcknowledged: 'Vidjeli',
+    factAnswered: 'Odgovorili',
+    factMoving: 'Krenuli',
+    factAttending: 'Prisustvo',
+    factDone: 'da',
+    factPending: 'ne',
+    /** A closed record nobody has confirmed. Not "ne" and not "da". */
+    attendancePending: 'Ceka potvrdu',
+    attendanceConfirmed: 'Potvrdjeno',
+    myStatus: 'Sta ste javili',
+
+    etaQuestion: 'Za koliko stizete?',
+    changeAnswer: 'Promijeni odgovor',
+    moreActions: 'Ostale radnje',
+    attendanceRecord: 'Moje prijave prisustva',
+    closedNotice: 'Ova intervencija je zatvorena i vise se ne mijenja.',
+  },
+
+  responseBar: {
+    title: 'Odziv',
+    invited: 'Pozvano',
+    coming: 'Dolaze',
+    later: 'Kasne',
+    declined: 'Ne mogu',
+    noAnswer: 'Bez odgovora',
+    onScene: 'Na terenu',
+    seeAll: 'Ko je gdje',
   },
 
   common: {
