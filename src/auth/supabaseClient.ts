@@ -103,15 +103,45 @@ export const NETWORK_BLOCKED_HINT =
  * would turn the sign-in form into the membership oracle this whole design
  * avoids, so the test is deliberately narrow.
  */
+/**
+ * The message off anything that was thrown, whatever shape it came in.
+ *
+ * `instanceof Error` is not enough and the reason is specific: a PostgREST
+ * failure arrives as a PLAIN OBJECT - `{ message, details, hint, code }` - not
+ * an `Error`. Code that tested `error instanceof Error` before reading the
+ * message silently skipped every server-side error, which is how the
+ * commander's console came to report a policy refusal as an outage: the branch
+ * that says "the server refused your read" could not be reached at all.
+ */
+export function errorMessageOf(error: unknown): string {
+  return error instanceof Error
+    ? `${error.name}: ${error.message}`
+    : typeof error === 'string'
+      ? error
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : '';
+}
+
+/**
+ * Is this a refusal by a row-level policy, rather than a server that is down?
+ *
+ * The two ask different things of the person reading them. An outage is waited
+ * out; a refusal means somebody changed what this account may see, and waiting
+ * will not fix it. `42501` is PostgreSQL's `insufficient_privilege`, which is
+ * what PostgREST returns for an RLS denial; the message test catches the same
+ * thing when the code is not carried.
+ */
+export function isPermissionDenied(error: unknown): boolean {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : '';
+  return code === '42501' || /permission denied|insufficient privilege/i.test(errorMessageOf(error));
+}
+
 export function isUnreachable(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? `${error.name}: ${error.message}`
-      : typeof error === 'string'
-        ? error
-        : typeof error === 'object' && error !== null && 'message' in error
-          ? String((error as { message: unknown }).message)
-          : '';
+  const message = errorMessageOf(error);
 
   return (
     /failed to fetch/i.test(message) ||

@@ -174,6 +174,27 @@ export const me = {
     noMemberUntilThen: 'Do tada ovaj ekran nema sta da prikaze za vas.',
   },
 
+  /**
+   * The two things a person needs to know about the APPLICATION rather than
+   * about the intervention: this device has no connection, and a new version is
+   * waiting.
+   *
+   * These were written straight into `ConnectionBar` and never left it, so they
+   * stayed Montenegrin on an English screen - on every operational screen, and
+   * on the one state where being understood matters most. "Offline" on its own
+   * is a status; "what you enter now will not be saved" is the fact somebody at
+   * an incident actually needs.
+   */
+  connection: {
+    offlineTitle: 'Uredjaj nije na mrezi.',
+    offlineText:
+      'Operativni ekrani ne mogu da procitaju stanje sa servera, a sve sto sada unesete nece biti sacuvano. Cim se veza vrati, pokusajte ponovo.',
+    updateTitle: 'Nova verzija je spremna.',
+    updateText:
+      'Primjenjuje se tek kada vi to zatrazite, da se aplikacija ne bi promijenila usred rada.',
+    updateAction: 'Osvjezi aplikaciju',
+  },
+
   push: {
     eyebrow: 'OPERATIVNA UZBUNA',
     title: 'Notifikacije za novi poziv',

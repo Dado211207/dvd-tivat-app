@@ -1,3 +1,64 @@
+## 2026-09-17 - The states nobody looks at, and a branch that could not be reached
+
+A follow-up to the clarity redesign, closing the one thing its brief asked for
+that the redesign had not reached: the loading, offline, permission-denied and
+server-error states, in both languages. The redesign covered the empty and
+refused-account states; these four it did not.
+
+**The offline bar was never translated.** It was written straight into
+`ConnectionBar` and never left it, so on an English screen - on every
+operational screen - the one notice that matters most when the connection dies
+was in a language the reader had explicitly not chosen. Both notices are in the
+bundles now. The wording is worth keeping as it is: "offline" on its own is a
+status, and "anything you enter now will not be saved" is the fact somebody at
+an incident actually needs.
+
+**And a branch that could not run.** Writing the test for the permission-denied
+state is what found it. The commander's console distinguishes two failures -
+`REFUSED_READ` ("the server refused your read; check whether your account still
+has a role") from `UNAVAILABLE` ("the server is down") - and the distinction is
+the point: an outage is waited out, a refusal means somebody changed what this
+account may see and waiting will not fix it.
+
+The guard read:
+
+    error instanceof Error && /permission/i.test(error.message)
+
+A PostgREST failure is a PLAIN OBJECT - `{ message, details, hint, code }` - and
+not an `Error`. So the first half of that conjunction was false for every error
+the server has ever sent, and `REFUSED_READ` was dead code. A commander whose
+role had been revoked was told the server was unavailable and to try again.
+
+`supabaseClient.ts` already knew better: `isUnreachable` reads the message off
+Errors, strings and plain objects alike. That logic is `errorMessageOf` now, and
+`isPermissionDenied` sits beside it reading PostgreSQL's `42501`
+(`insufficient_privilege`) as well as the wording. The console calls it.
+
+Two things I did NOT do, and the reasons.
+
+`fetchInterventions` swallows its error and returns `[]`, so a refused read of
+that table alone renders as "there are no interventions" rather than as a
+refusal. That is the same class of fault and it is real. It is also a change to
+the data layer's error contract across many functions, and this branch is about
+screen states - widening it here would have buried the fix above in a refactor.
+It is written down rather than quietly left.
+
+And the fixture's `READS` failure mode deliberately leaves `profiles` readable.
+Refusing every table broke the ACCESS CHECK, so the gate - correctly - reported
+an unreachable server and the console was never reached at all. The realistic
+shape is the one now modelled: a member who loses their role keeps the own-row
+policy on their own profile and loses the operational tables.
+
+**Making the loading state observable at all.** It had never been checked in a
+browser because the fixture answered instantly and "Ucitavanje..." existed for a
+frame. A `slowMs` option holds the data answers - not the authentication ones,
+so the session is real and only the reads are slow, which is the shape of a bad
+connection rather than a broken one. It matters more than it sounds: a blank
+operational screen and one that is still loading look identical, and only one of
+them is a reason to reach for the telephone instead.
+
+---
+
 ## 2026-09-16 - Rank, not colour: making one thing on the screen obviously the thing to do
 
 The last pass fixed the navigation and the screens were still crowded. That is

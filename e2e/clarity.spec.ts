@@ -387,6 +387,98 @@ test.describe('the refusals are as readable as the screens', () => {
     await expect(page.getByTestId('callout-title')).toHaveCount(0);
   });
 
+  test('a server it cannot reach is said plainly, and nothing is guessed', async ({ page }) => {
+    /*
+     * The access check itself fails, so the gate does not know who this is.
+     *
+     * It must show NOTHING operational rather than a best guess: stale data on
+     * an intervention is worse than a blank screen, and a screen that renders
+     * a call-out it could not verify is a screen that will one day show the
+     * wrong one to the wrong person.
+     */
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openOperational(page, 'mobilizacija', {
+      role: 'FIREFIGHTER',
+      serverFails: 'ACCESS',
+    });
+    await page.waitForSelector('main');
+
+    await expect(page.getByText(/server nije dostupan/i).first()).toBeVisible();
+    await expect(page.getByTestId('callout-title')).toHaveCount(0);
+    await expect(page.getByTestId('next-action')).toHaveCount(0);
+    // And a way to try again, because the condition is temporary.
+    await expect(page.getByRole('button', { name: /pokusaj ponovo/i })).toBeVisible();
+    expect(await scrollsSideways(page)).toBe(false);
+  });
+
+  test('a refused read is not reported as an outage', async ({ page }) => {
+    /*
+     * The gate succeeds and the TABLE READS are refused by policy. Those are
+     * different facts and they ask different things of the person: an outage is
+     * waited out, a refusal means somebody changed what this account may see.
+     * Flattening them into one message would send a commander to wait for a
+     * server that is working perfectly.
+     */
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openOperational(page, 'poziv', { role: 'COMMANDER', serverFails: 'READS' });
+    await page.waitForSelector('main');
+
+    await expect(page.getByText(/odbio/i).first()).toBeVisible();
+    await expect(page.getByTestId('selected-title')).toHaveCount(0);
+    expect(await scrollsSideways(page)).toBe(false);
+  });
+
+  test('says it is still checking rather than showing an empty screen', async ({ page }) => {
+    /*
+     * The loading state had never been looked at in a browser, because the
+     * fixture answered instantly and it existed for a frame. Holding the reads
+     * makes it observable - and it matters: a blank operational screen and a
+     * screen that is still loading look identical, and only one of them is a
+     * reason to reach for the telephone instead.
+     */
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openOperational(page, 'mobilizacija', { role: 'FIREFIGHTER', slowMs: 1500 });
+
+    const status = page.getByRole('status').filter({ hasText: /ucitavanje|provjera/i }).first();
+    await expect(status).toBeVisible();
+
+    // And it resolves into the real screen rather than staying there.
+    await expect(page.getByTestId('callout-title')).toBeVisible({ timeout: 15_000 });
+    await expect(status).toHaveCount(0);
+  });
+
+  test('says the device is offline, in the language being read', async ({ page }) => {
+    /*
+     * This bar was hardcoded Montenegrin and appears on EVERY operational
+     * screen - so on an English screen, in the one state where being understood
+     * matters most, it was the only thing not in the reader's language.
+     */
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openOperational(page, 'mobilizacija', { role: 'FIREFIGHTER', language: 'en' });
+    await expect(page.getByTestId('callout-title')).toBeVisible();
+
+    await page.context().setOffline(true);
+    // `useOnline` listens for the event; the context switch fires it.
+    await expect(page.getByTestId('offline-bar')).toBeVisible();
+    await expect(page.getByTestId('offline-bar')).toContainText('This device is offline');
+    // Says what it MEANS for the work in hand, not merely that a flag flipped.
+    await expect(page.getByTestId('offline-bar')).toContainText(/will not be saved/i);
+
+    await page.context().setOffline(false);
+  });
+
+  test('says the device is offline in Crnogorski too', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
+    await expect(page.getByTestId('callout-title')).toBeVisible();
+
+    await page.context().setOffline(true);
+    await expect(page.getByTestId('offline-bar')).toContainText(/nije na mrezi/i);
+    await expect(page.getByTestId('offline-bar')).toContainText(/nece biti sacuvano/i);
+
+    await page.context().setOffline(false);
+  });
+
   test('settings stay reachable to somebody the gate refuses', async ({ page }) => {
     // The one person most in need of a refusal message they can read is the one
     // who cannot change its language, if language sits behind the gate.

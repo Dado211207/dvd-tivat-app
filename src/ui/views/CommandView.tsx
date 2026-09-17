@@ -56,6 +56,7 @@ import {
   type VehicleMovement,
 } from '@/auth/operations';
 import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
+import { isPermissionDenied } from '@/auth/supabaseClient';
 import { requestPushDelivery } from '@/notifications/push';
 import { formatDurationMs } from '@/auth/duration';
 import { recipientTimings, summarise } from '@/auth/metrics';
@@ -243,11 +244,17 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         setSelectedId(focusId);
       } catch (error) {
         if (!mounted.current || ticket !== generation.current) return;
-        setLoadError(
-          error instanceof Error && /permission/i.test(error.message)
-            ? 'REFUSED_READ'
-            : 'UNAVAILABLE',
-        );
+        /*
+         * A PostgREST failure is a PLAIN OBJECT, not an `Error`.
+         *
+         * This read `error instanceof Error && /permission/i.test(...)`, and a
+         * policy refusal is exactly the case that fails the first half - so the
+         * branch saying "the server refused your read; check whether your
+         * account still has a role" could never run, and a commander whose role
+         * had been taken away was told to wait for a server that was working.
+         * See `isPermissionDenied`.
+         */
+        setLoadError(isPermissionDenied(error) ? 'REFUSED_READ' : 'UNAVAILABLE');
       } finally {
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
