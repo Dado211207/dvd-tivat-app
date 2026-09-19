@@ -6,9 +6,27 @@ describes.**
 
 Last updated: 2026-09-19
 
-## Current local delivery: Boka Operativa UX and language pass
+## Current follow-up: operational read failures
 
-The current working branch is `codex/boka-operativa-ux-brand`, based on the
+Current local branch: `codex/operational-read-errors`, following the verified
+PR #30 snapshot (remote head `3ed334f`, local snapshot `e81ce5e`). PR #30 is
+ready for review: CI #96 passed 631 unit tests, 367 database tests (12 hosted
+checks skipped), 276 browser/accessibility cases and six screenshot scenarios.
+
+The follow-up fixes the intervention-list error contract documented in
+`docs/UX_AUDIT.md` §10c. Failed reads now reach the command, member and archive
+error handlers. Initial command/member loading and failure no longer imply an
+empty intervention list; member and archive screens distinguish denied reads
+from unavailable data. This is a separate change after the UX/language pass.
+
+Local validation: production build including TypeScript, ESLint and
+`git diff --check`. No functional tests were added or run for this follow-up;
+PR #30's results do not validate these later changes. No production database or
+hosted application change has been made.
+
+## Previous delivery: Boka Operativa UX and language pass
+
+The UX working branch is `codex/boka-operativa-ux-brand`, based on the
 locally recorded `origin/main` checkpoint `5179472` (PR #29). This is a local
 implementation checkpoint, not a claim about the current hosted version.
 
@@ -54,7 +72,7 @@ release or changed the production database. The remaining release work is
 functional/device validation and publication. Multi-service implementation
 requires the service-owner decisions listed in `docs/PRODUCT_DIRECTION.md`.
 The operational read-error contract issue recorded in `docs/UX_AUDIT.md` §10c
-also remains outside this UX/language delivery.
+is addressed in the separate follow-up above.
 
 ---
 

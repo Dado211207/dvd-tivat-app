@@ -59,6 +59,7 @@ import {
 } from '@/i18n/labels';
 import type { Strings } from '@/i18n/strings.me';
 import { useText } from '@/i18n/useText';
+import { isPermissionDenied } from '@/auth/supabaseClient';
 
 export function ArchiveView() {
   return (
@@ -96,7 +97,7 @@ function Archive() {
   const [detail, setDetail] = useState<Detail>(NO_DETAIL);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [loadError, setLoadError] = useState<'REFUSED_READ' | 'UNAVAILABLE' | null>(null);
 
   const generation = useRef(0);
   const mounted = useRef(true);
@@ -110,7 +111,7 @@ function Archive() {
   const load = useCallback(async () => {
     const ticket = ++generation.current;
     setLoading(true);
-    setFailed(false);
+    setLoadError(null);
     try {
       const [list, moves, sums, roster] = await Promise.all([
         fetchInterventions(),
@@ -127,8 +128,10 @@ function Archive() {
         if (current !== null && list.some((i) => i.id === current)) return current;
         return list.find((i) => i.status !== 'DRAFT')?.id ?? null;
       });
-    } catch {
-      if (mounted.current && ticket === generation.current) setFailed(true);
+    } catch (error) {
+      if (mounted.current && ticket === generation.current) {
+        setLoadError(isPermissionDenied(error) ? 'REFUSED_READ' : 'UNAVAILABLE');
+      }
     } finally {
       if (mounted.current && ticket === generation.current) setLoading(false);
     }
@@ -184,10 +187,11 @@ function Archive() {
 
   if (loading) return <p role="status">{t.archive.loading}</p>;
 
-  if (failed) {
+  if (loadError) {
     return (
       <Notice tone="error">
-        <strong>{t.archive.failedTitle}</strong> {t.archive.failedText}{' '}
+        <strong>{t.archive.failedTitle}</strong>{' '}
+        {loadError === 'REFUSED_READ' ? t.archive.refusedRead : t.archive.failedText}{' '}
         <button type="button" className="btn btn--ghost" onClick={() => void load()}>
           {t.gate.retry}
         </button>

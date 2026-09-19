@@ -437,6 +437,7 @@ export async function fetchOwnMemberId(): Promise<string | null> {
   return (data as string | null) ?? null;
 }
 
+/** Only a successful empty read means there are no visible interventions. */
 export async function fetchInterventions(): Promise<readonly Intervention[]> {
   const { data, error } = await accountBackend()
     .from('interventions')
@@ -446,7 +447,8 @@ export async function fetchInterventions(): Promise<readonly Intervention[]> {
     )
     .order('created_at', { ascending: false })
     .limit(100);
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error('INTERVENTIONS_READ_INVALID');
   return (data as unknown as InterventionRow[]).map((row) => ({
     id: row.id,
     kind: row.kind as InterventionKind,

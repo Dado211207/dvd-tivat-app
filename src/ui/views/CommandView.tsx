@@ -176,6 +176,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
   const [data, setData] = useState<ConsoleData>(EMPTY);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
 
@@ -242,6 +243,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           attendance, audit,
         });
         setSelectedId(focusId);
+        setHasLoaded(true);
       } catch (error) {
         if (!mounted.current || ticket !== generation.current) return;
         /*
@@ -354,7 +356,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           aria-labelledby={`tab-${id}`}
           tabIndex={0}
           className="tabpanel"
-          hidden={tab !== id}
+          hidden={tab !== id || !hasLoaded}
         >
           {id === 'poziv' ? (
             <CallOutTab
