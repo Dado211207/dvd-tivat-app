@@ -16,6 +16,7 @@
  * against a real PostgreSQL rather than a mock that would agree with anything.
  */
 
+import { activeText } from '@/i18n/useText';
 import { accountBackend } from './supabaseClient';
 
 export interface RosterMember {
@@ -92,49 +93,11 @@ export function sortRoster(members: readonly RosterMember[]): RosterMember[] {
  * give, and an unrecognised code says only that the change was not saved.
  */
 export function explainRosterError(raw: string): string {
-  if (raw.includes('ADMIN_REQUIRED')) {
-    return 'Server je odbio zahtjev: samo administrator ili vlasnik moze mijenjati evidenciju.';
+  const messages = activeText().serverErrors;
+  for (const [code, message] of Object.entries(messages.roster)) {
+    if (raw.includes(code)) return message;
   }
-  if (raw.includes('COMMAND_REQUIRED')) {
-    return 'Server je odbio zahtjev: potrebna su komandna prava.';
-  }
-  if (raw.includes('MEMBER_ALREADY_LINKED')) {
-    return 'Taj clan vec ima povezan nalog. Prvo razvezite postojeci.';
-  }
-  if (raw.includes('ACCOUNT_ALREADY_LINKED')) {
-    return 'Taj nalog je vec povezan sa drugim clanom.';
-  }
-  if (raw.includes('MEMBER_NOT_FOUND')) {
-    return 'Clan vise ne postoji. Osvjezite spisak.';
-  }
-  if (raw.includes('GROUP_NOT_FOUND')) {
-    return 'Grupa vise ne postoji. Osvjezite spisak.';
-  }
-  if (raw.includes('VEHICLE_NOT_FOUND')) {
-    return 'Vozilo vise ne postoji. Osvjezite spisak.';
-  }
-  if (raw.includes('ACCOUNT_NOT_FOUND')) {
-    return 'Nalog vise ne postoji. Osvjezite spisak.';
-  }
-  if (raw.includes('GROUP_NAME_TAKEN')) {
-    return 'Grupa sa tim imenom vec postoji.';
-  }
-  if (raw.includes('CALLSIGN_TAKEN')) {
-    return 'Vozilo sa tom oznakom vec postoji.';
-  }
-  if (raw.includes('CALLSIGN_REQUIRED')) {
-    return 'Oznaka vozila je obavezna.';
-  }
-  if (raw.includes('FULL_NAME_REQUIRED')) {
-    return 'Ime i prezime moraju imati najmanje dva znaka.';
-  }
-  if (raw.includes('NAME_REQUIRED')) {
-    return 'Naziv je obavezan i mora imati najmanje dva znaka.';
-  }
-  if (raw.includes('REASON_REQUIRED')) {
-    return 'Razlog je obavezan i mora imati najmanje dva znaka.';
-  }
-  return 'Server je odbio zahtjev. Promjena nije sacuvana.';
+  return messages.generic;
 }
 
 /** Runs a command and translates any refusal. Never throws. */

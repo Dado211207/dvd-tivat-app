@@ -23,8 +23,8 @@ test('the account directory cannot be reached through the simulation selector', 
     await switchActor(page, actor);
     await goTo(page, 'nalozi');
 
-    await expect(page.getByText('Server nije podesen u ovoj verziji')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Svi registrovani nalozi' })).toHaveCount(0);
+    await expect(page.getByText('Server nije podesen.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Registrovani nalozi' })).toHaveCount(0);
     // No role selector, no suspend button, no account rows - nothing that would
     // suggest this actor holds owner rights.
     await expect(page.getByRole('button', { name: 'Ukini pristup' })).toHaveCount(0);

@@ -1,7 +1,7 @@
 {
-  "name": "DVD Tivat - operativni prototip",
-  "short_name": "DVD Tivat",
-  "description": "Prototip za mobilizaciju, koordinaciju i evidenciju ucesca. Izmisljeni podaci. Ne salje obavjestenja.",
+  "name": "Boka Operativa",
+  "short_name": "Boka Operativa",
+  "description": "Operativna aplikacija za pozive, odzive i evidenciju DVD Tivat.",
   "lang": "sr-Latn",
   "dir": "ltr",
   "start_url": "./",

@@ -4,7 +4,57 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-16
+Last updated: 2026-09-19
+
+## Current local delivery: Boka Operativa UX and language pass
+
+The current working branch is `codex/boka-operativa-ux-brand`, based on the
+locally recorded `origin/main` checkpoint `5179472` (PR #29). This is a local
+implementation checkpoint, not a claim about the current hosted version.
+
+Completed in this branch:
+
+- Boka Operativa identity across the shell, manifest, icons and push title.
+- Quieter screen headings and collapsible field help with a 44px touch target.
+- Account and organisation forms, account roles, readiness, and live status
+  labels in both supported languages. Account audit and onboarding explanations
+  start collapsed.
+- Translated owner refusals, 41 operational refusal codes, 14 roster refusal
+  codes, profile-save failures and required/optional field labels. User-entered
+  notes and server records are never translated.
+- Explicit loading and failed-read states for the account directory, its audit
+  history, and organisation records, with retry controls. A failed request no
+  longer reports an empty roster or a count of zero accounts.
+- A documented multi-service design in `docs/PRODUCT_DIRECTION.md`; the runtime
+  remains scoped to the existing DVD Tivat organisation.
+
+Validation for this delivery: TypeScript, ESLint, production build and
+`git diff --check`. No unit, database, browser or physical-device tests were
+run for this branch. Passing the build is not evidence of hosted notification
+delivery or device layout acceptance.
+
+Review is open as draft PR #30. Opening the PR automatically ran GitHub CI:
+the first run passed lint and TypeScript but reported three sign-in message
+regressions (628 unit tests passed). The follow-up restores distinct network
+failure wording, repeated-failure content-blocker guidance and the generic
+credential refusal in both languages. Check the latest PR run for its result;
+the failed initial run skipped database and browser checks. Local functional
+and device tests were not run.
+
+The second automatic CI run passed all 631 unit tests, 367 database tests
+(12 hosted checks skipped), build and bundle checks. Its browser stage passed
+262 cases and failed 14: seven outdated UI assumptions repeated at desktop and
+mobile sizes. Existing scenarios now target the renamed account labels and
+direct disclosure summaries, and the keyboard scenario tabs through the new
+field-help control before entering the location. No scenario was removed or
+disabled. The current result is reported on PR #30.
+
+The code is prepared for review. This pass has not published a hosted
+release or changed the production database. The remaining release work is
+functional/device validation and publication. Multi-service implementation
+requires the service-owner decisions listed in `docs/PRODUCT_DIRECTION.md`.
+The operational read-error contract issue recorded in `docs/UX_AUDIT.md` §10c
+also remains outside this UX/language delivery.
 
 ---
 
@@ -43,7 +93,7 @@ explicit owner decision.
   (PR #16, slice 3a) and `7d00d9bb` (PR #17, documentation only).
   **Check GitHub for the moving live `main` rather than trusting any SHA here
   as current** (see the note under the PR table).
-- Active implementation branch: `codex/web-push-notifications`, started from
+- Earlier implementation branch: `codex/web-push-notifications`, started from
   historical checkpoint `7fa8ec3`. It contains Web Push source work only; no
   hosted migration, function deployment or physical-device success is claimed.
 - No `LICENSE` file. The owner has not chosen a licence; do not add one.

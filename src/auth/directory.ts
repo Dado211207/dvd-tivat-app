@@ -14,6 +14,7 @@
  */
 
 import type { AccountRole, AccountStatus } from '@/access/policy';
+import { activeText } from '@/i18n/useText';
 import { accountBackend } from './supabaseClient';
 
 export interface DirectoryAccount {
@@ -149,25 +150,26 @@ export async function loadStatusAudit(limit = 25): Promise<StatusAuditEntry[]> {
  * the interface never invents a reason the server did not give.
  */
 export function explainCommandError(raw: string): string {
+  const messages = activeText().accounts.commandErrors;
   if (raw.includes('OWNER_REQUIRED')) {
-    return 'Server je odbio zahtjev: samo vlasnik sistema moze mijenjati pristup.';
+    return messages.ownerRequired;
   }
   if (raw.includes('CANNOT_CHANGE_OWN_ROLE') || raw.includes('CANNOT_CHANGE_OWN_ACCESS')) {
-    return 'Vlasnik ne moze mijenjati sopstveni nalog. Time bi mogao sam sebe zakljucati.';
+    return messages.ownAccount;
   }
   if (raw.includes('OWNER_ACCOUNT_PROTECTED') || raw.includes('ACCOUNT_NOT_ASSIGNABLE')) {
-    return 'Vlasnicki nalog je zasticen i ne moze se mijenjati iz aplikacije.';
+    return messages.protectedAccount;
   }
   if (raw.includes('ROLE_NOT_ASSIGNABLE')) {
-    return 'Ta uloga se ne moze dodijeliti.';
+    return messages.roleNotAssignable;
   }
   if (raw.includes('REASON_REQUIRED')) {
-    return 'Razlog je obavezan i mora imati najmanje dva znaka.';
+    return messages.reasonRequired;
   }
   if (raw.includes('ACCOUNT_NOT_FOUND')) {
-    return 'Nalog vise ne postoji. Osvjezite spisak.';
+    return messages.accountNotFound;
   }
-  return 'Server je odbio zahtjev. Promjena nije sacuvana.';
+  return messages.generic;
 }
 
 export async function setAccountRole(

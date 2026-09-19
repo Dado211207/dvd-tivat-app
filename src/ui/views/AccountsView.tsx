@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ASSIGNABLE_ROLES, type AccountRole, type AccountStatus } from '@/access/policy';
+import { ASSIGNABLE_ROLES, type AccountRole } from '@/access/policy';
 import { useAccess } from '@/auth/AccessProvider';
 import {
   loadDirectory,
@@ -30,36 +30,16 @@ import { useApp } from '@/state/AppStateContext';
 import { Chip, EmptyState, Notice } from '../components/primitives';
 import { AccountAccessSetup } from '../components/AccountAccessSetup';
 import { RequireRole } from '../components/RequireRole';
-
-const ROLE_LABEL: Record<AccountRole, string> = {
-  OWNER: 'Vlasnik sistema',
-  ADMIN: 'Administrator',
-  COMMANDER: 'Komandir',
-  FIREFIGHTER: 'Vatrogasac',
-  PENDING: 'Ceka odobrenje',
-  CITIZEN: 'Gradjanin (stara oznaka)',
-};
-
-const STATUS_LABEL: Record<AccountStatus, string> = {
-  UNKNOWN: 'Nepoznato',
-  PROFILE_REQUIRED: 'Profil nije zavrsen',
-  ACTIVE: 'Aktivan',
-  SUSPENDED: 'Pristup ukinut',
-};
-
-function formatMoment(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? value
-    : parsed.toLocaleString('sr-Latn-ME', { timeZone: 'Europe/Podgorica' });
-}
+import { formatTime } from '@/i18n/time';
+import { useText } from '@/i18n/useText';
 
 export function AccountsView() {
+  const t = useText();
   const { access } = useAccess();
 
   return (
     <>
-      <h1 className="sr-only">Nalozi i pristup</h1>
+      <h1 className="sr-only">{t.accounts.pageTitle}</h1>
       <AccountAccessSetup />
       {/*
         Nothing at all for anybody but the owner.
@@ -82,17 +62,21 @@ export function AccountsView() {
 }
 
 function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
+  const t = useText();
   const { announce } = useApp();
   const [accounts, setAccounts] = useState<DirectoryAccount[] | null>(null);
   const [roleAudit, setRoleAudit] = useState<RoleAuditEntry[]>([]);
   const [statusAudit, setStatusAudit] = useState<StatusAuditEntry[]>([]);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [reasonDraft, setReasonDraft] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setError('');
+    setLoading(true);
     try {
       const [directory, roles, statuses] = await Promise.all([
         loadDirectory(),
@@ -102,27 +86,31 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
       setAccounts(directory);
       setRoleAudit(roles);
       setStatusAudit(statuses);
+      setLoadFailed(false);
     } catch {
       setAccounts([]);
-      setError('Spisak naloga nije mogao biti ucitan sa servera.');
+      setLoadFailed(true);
+      setError(t.accounts.loadFailed);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [t.accounts.loadFailed]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase('sr');
+    const needle = query.trim().toLocaleLowerCase();
     if (!needle || accounts === null) return accounts ?? [];
     return accounts.filter((account) =>
-      `${account.fullName ?? ''} ${account.email} ${ROLE_LABEL[account.role]} ${
-        STATUS_LABEL[statusOf(account)]
+      `${account.fullName ?? ''} ${account.email} ${t.accounts.roleLabel[account.role]} ${
+        t.accounts.statusLabel[statusOf(account)]
       }`
-        .toLocaleLowerCase('sr')
+        .toLocaleLowerCase()
         .includes(needle),
     );
-  }, [accounts, query]);
+  }, [accounts, query, t.accounts.roleLabel, t.accounts.statusLabel]);
 
   async function changeRole(account: DirectoryAccount, nextRole: AccountRole) {
     setBusyUserId(account.userId);
@@ -130,11 +118,12 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     try {
       const outcome = await setAccountRole(account.userId, nextRole);
       if (!outcome.ok) {
-        setError(outcome.message ?? '');
-        announce(outcome.message ?? 'Promjena nije sacuvana.', 'error');
+        const message = outcome.message ?? t.accounts.changeFailed;
+        setError(message);
+        announce(message, 'error');
         return;
       }
-      announce(`Uloga je promijenjena u: ${ROLE_LABEL[nextRole]}.`);
+      announce(t.accounts.changedRole.replace('{role}', t.accounts.roleLabel[nextRole]));
       await refresh();
     } finally {
       setBusyUserId(null);
@@ -146,8 +135,8 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     // Checked here only so the person is told before a round trip. The server
     // refuses REASON_REQUIRED regardless, and that refusal is the real rule.
     if (reason.length < 2) {
-      setError('Razlog je obavezan: upisite zasto se pristup mijenja.');
-      announce('Razlog je obavezan.', 'error');
+      setError(t.accounts.reasonMissing);
+      announce(t.accounts.reasonNeeded, 'error');
       return;
     }
     setBusyUserId(account.userId);
@@ -155,12 +144,13 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     try {
       const outcome = await setAccountActive(account.userId, active, reason);
       if (!outcome.ok) {
-        setError(outcome.message ?? '');
-        announce(outcome.message ?? 'Promjena nije sacuvana.', 'error');
+        const message = outcome.message ?? t.accounts.changeFailed;
+        setError(message);
+        announce(message, 'error');
         return;
       }
       setReasonDraft((current) => ({ ...current, [account.userId]: '' }));
-      announce(active ? 'Pristup je vracen.' : 'Pristup je ukinut.');
+      announce(active ? t.accounts.accessRestored : t.accounts.accessRevoked);
       await refresh();
     } finally {
       setBusyUserId(null);
@@ -177,48 +167,55 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
       <section className="card account-directory" aria-labelledby="account-directory-h">
         <div className="card__head">
           <div>
-            <p className="card__kicker">Samo vlasnik sistema</p>
-            <h2 id="account-directory-h">Svi registrovani nalozi</h2>
+            <p className="card__kicker">{t.accounts.ownerOnly}</p>
+            <h2 id="account-directory-h">{t.accounts.allAccounts}</h2>
           </div>
           <Chip tone="neutral" symbol="#">
-            {accounts?.length ?? 0} naloga
+            {t.accounts.accountCount.replace(
+              '{count}',
+              loading || accounts === null || loadFailed ? '—' : String(accounts.length),
+            )}
           </Chip>
         </div>
 
         {error ? <Notice tone="error">{error}</Notice> : null}
+        {loadFailed ? (
+          <button className="btn" type="button" disabled={loading} onClick={() => void refresh()}>
+            {t.gate.retry}
+          </button>
+        ) : null}
 
         <Notice tone="warn">
-          Ovo su stvarni nalozi na serveru. Svaka izmjena odmah mijenja necije pravo pristupa i
-          zapisuje se u trajnu evidenciju ispod.
+          {t.accounts.risk}
         </Notice>
 
         <label className="account-search">
-          <span>Pretrazi po imenu, emailu, ulozi ili statusu</span>
+          <span>{t.accounts.search}</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             type="search"
-            disabled={accounts === null}
+            disabled={loading || accounts === null || loadFailed}
           />
         </label>
 
-        {accounts === null ? (
-          <p role="status">Ucitavam naloge sa servera...</p>
-        ) : filtered.length === 0 ? (
-          <EmptyState title="Nema rezultata">
+        {loading ? (
+          <p role="status">{t.accounts.loading}</p>
+        ) : loadFailed || accounts === null ? null : filtered.length === 0 ? (
+          <EmptyState title={t.accounts.noResults}>
             {accounts.length === 0
-              ? 'Server nije vratio nijedan nalog.'
-              : 'Promijenite pojam za pretragu.'}
+              ? t.accounts.noAccounts
+              : t.accounts.changeSearch}
           </EmptyState>
         ) : (
           <div className="account-table-wrap">
             <table className="account-table">
               <thead>
                 <tr>
-                  <th scope="col">Nalog</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Uloga</th>
-                  <th scope="col">Pristup</th>
+                  <th scope="col">{t.accounts.account}</th>
+                  <th scope="col">{t.accounts.status}</th>
+                  <th scope="col">{t.accounts.role}</th>
+                  <th scope="col">{t.accounts.access}</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,7 +228,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                   return (
                     <tr key={account.userId}>
                       <th scope="row">
-                        <strong>{account.fullName ?? 'Ime nije uneseno'}</strong>
+                        <strong>{account.fullName ?? t.accounts.noName}</strong>
                         <small>{account.email}</small>
                       </th>
                       <td>
@@ -239,22 +236,22 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                           tone={status === 'ACTIVE' ? 'yes' : status === 'SUSPENDED' ? 'no' : 'later'}
                           symbol={status === 'ACTIVE' ? '+' : status === 'SUSPENDED' ? '-' : '!'}
                         >
-                          {STATUS_LABEL[status]}
+                          {t.accounts.statusLabel[status]}
                         </Chip>
                       </td>
                       <td>
                         {locked ? (
                           <>
-                            <strong>{ROLE_LABEL[account.role]}</strong>
+                            <strong>{t.accounts.roleLabel[account.role]}</strong>
                             <small>
                               {isSelf
-                                ? 'Sopstveni nalog se ne mijenja odavde.'
-                                : 'Vlasnicki nalog je zasticen.'}
+                                ? t.accounts.ownAccountLocked
+                                : t.accounts.ownerLocked}
                             </small>
                           </>
                         ) : (
                           <select
-                            aria-label={`Uloga za ${account.fullName ?? account.email}`}
+                            aria-label={`${t.accounts.role} - ${account.fullName ?? account.email}`}
                             value={ASSIGNABLE_ROLES.includes(
                               account.role as (typeof ASSIGNABLE_ROLES)[number],
                             )
@@ -266,11 +263,11 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                             }
                           >
                             {account.role === 'CITIZEN' ? (
-                              <option value="CITIZEN">{ROLE_LABEL.CITIZEN}</option>
+                              <option value="CITIZEN">{t.accounts.roleLabel.CITIZEN}</option>
                             ) : null}
                             {ASSIGNABLE_ROLES.map((role) => (
                               <option key={role} value={role}>
-                                {ROLE_LABEL[role]}
+                                {t.accounts.roleLabel[role]}
                               </option>
                             ))}
                           </select>
@@ -283,11 +280,11 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                           <div className="account-access-cell">
                             <label>
                               <span className="sr-only">
-                                Razlog za promjenu pristupa: {account.fullName ?? account.email}
+                                {t.accounts.reasonForAccess}: {account.fullName ?? account.email}
                               </span>
                               <input
                                 type="text"
-                                placeholder="Razlog (obavezno)"
+                                placeholder={t.accounts.reasonRequired}
                                 value={reasonDraft[account.userId] ?? ''}
                                 disabled={busy}
                                 onChange={(event) =>
@@ -304,7 +301,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                               disabled={busy}
                               onClick={() => void changeActive(account, !account.active)}
                             >
-                              {account.active ? 'Ukini pristup' : 'Vrati pristup'}
+                              {account.active ? t.accounts.revokeAccess : t.accounts.restoreAccess}
                             </button>
                           </div>
                         )}
@@ -318,76 +315,87 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
         )}
       </section>
 
-      <section className="card" aria-labelledby="account-audit-h">
-        <div className="card__head">
-          <div>
-            <p className="card__kicker">Trajna evidencija</p>
-            <h2 id="account-audit-h">Promjene uloga i pristupa</h2>
+      <section className="card">
+        <details className="disclosure">
+          <summary className="disclosure__summary">{t.accounts.auditTitle}</summary>
+          <div className="disclosure__body">
+            {loading ? (
+              <p role="status">{t.accounts.loading}</p>
+            ) : loadFailed ? (
+              <Notice tone="error">{t.accounts.loadFailed}</Notice>
+            ) : roleAudit.length === 0 && statusAudit.length === 0 ? (
+              <EmptyState title={t.accounts.noAudit}>{t.accounts.auditHint}</EmptyState>
+            ) : (
+              <ul className="audit-list">
+                {roleAudit.map((entry) => (
+                  <li key={`role-${entry.id}`}>
+                    <strong>{nameOf(entry.targetUserId)}</strong>:{' '}
+                    {t.accounts.roleChanged
+                      .replace(
+                        '{from}',
+                        t.accounts.roleLabel[entry.previousRole as keyof typeof t.accounts.roleLabel] ??
+                          entry.previousRole,
+                      )
+                      .replace(
+                        '{to}',
+                        t.accounts.roleLabel[entry.nextRole as keyof typeof t.accounts.roleLabel] ??
+                          entry.nextRole,
+                      )}
+                    <small>{formatTime(entry.changedAt)}</small>
+                  </li>
+                ))}
+                {statusAudit.map((entry) => (
+                  <li key={`status-${entry.id}`}>
+                    <strong>{nameOf(entry.targetUserId)}</strong>:{' '}
+                    {entry.nextActive ? t.accounts.accessChange : t.accounts.accessRemoval} - {entry.reason}
+                    <small>{formatTime(entry.changedAt)}</small>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        </div>
-        {roleAudit.length === 0 && statusAudit.length === 0 ? (
-          <EmptyState title="Jos nema zapisa">
-            Evidencija se popunjava sama kad se uloga ili pristup promijene.
-          </EmptyState>
-        ) : (
-          <ul className="audit-list">
-            {roleAudit.map((entry) => (
-              <li key={`role-${entry.id}`}>
-                <strong>{nameOf(entry.targetUserId)}</strong>: uloga {entry.previousRole} -&gt;{' '}
-                {entry.nextRole}
-                <small>{formatMoment(entry.changedAt)}</small>
-              </li>
-            ))}
-            {statusAudit.map((entry) => (
-              <li key={`status-${entry.id}`}>
-                <strong>{nameOf(entry.targetUserId)}</strong>:{' '}
-                {entry.nextActive ? 'pristup vracen' : 'pristup ukinut'} - {entry.reason}
-                <small>{formatMoment(entry.changedAt)}</small>
-              </li>
-            ))}
-          </ul>
-        )}
+        </details>
       </section>
     </>
   );
 }
 
 function RegistrationExplainer() {
+  const t = useText();
   return (
-    <section className="account-flow" aria-labelledby="account-flow-h">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Registracija</p>
-          <h2 id="account-flow-h">Kako novi nalog dobija pristup</h2>
-        </div>
-      </div>
-      <ol className="account-steps">
+    <section className="panel account-flow">
+      <details className="disclosure">
+        <summary className="disclosure__summary">{t.accounts.registrationTitle}</summary>
+        <div className="disclosure__body">
+          <ol className="account-steps">
         <li>
           <span>1</span>
-          <strong>Email i lozinka</strong>
-          <small>Korisnik sam kreira nalog.</small>
+          <strong>{t.accounts.emailPassword}</strong>
+          <small>{t.accounts.accountCreatedByUser}</small>
         </li>
         <li>
           <span>2</span>
-          <strong>Ime i prezime</strong>
-          <small>Prikazni podatak, ne dokaz identiteta.</small>
+          <strong>{t.accounts.nameAndSurname}</strong>
+          <small>{t.accounts.displayNotProof}</small>
         </li>
         <li>
           <span>3</span>
-          <strong>Ceka odobrenje</strong>
-          <small>Novi nalog nema nijedno pravo u sistemu.</small>
+          <strong>{t.accounts.awaitingApproval}</strong>
+          <small>{t.accounts.noRights}</small>
         </li>
         <li>
           <span>4</span>
-          <strong>Odluka vlasnika</strong>
-          <small>Samo vlasnik moze dodijeliti ulogu.</small>
+          <strong>{t.accounts.ownerDecision}</strong>
+          <small>{t.accounts.ownerAssigns}</small>
         </li>
         <li>
           <span>5</span>
-          <strong>Provjera pri svakom zahtjevu</strong>
-          <small>Server provjerava ulogu, ne aplikacija.</small>
+          <strong>{t.accounts.serverCheck}</strong>
+          <small>{t.accounts.serverChecksRole}</small>
         </li>
-      </ol>
+          </ol>
+        </div>
+      </details>
     </section>
   );
 }

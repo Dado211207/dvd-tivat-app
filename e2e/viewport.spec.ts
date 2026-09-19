@@ -303,7 +303,7 @@ test.describe('a form field is usable on a narrow screen', () => {
     // deliberately, so a blank form for a different fire does not dominate the
     // console during this one. Open it the way a commander would.
     const disclosure = page.getByTestId('new-call-out-disclosure');
-    if (await disclosure.count()) await disclosure.locator('summary').click();
+    if (await disclosure.count()) await disclosure.locator(':scope > summary').click();
 
     // The two fields now sit on the two steps of the compose sequence, so each
     // is measured on the step it belongs to. A hidden step has no box at all,

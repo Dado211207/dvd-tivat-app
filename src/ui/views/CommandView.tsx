@@ -55,7 +55,7 @@ import {
   type RecipientFacts,
   type VehicleMovement,
 } from '@/auth/operations';
-import { LIVE_STATUS_LABEL, useLiveOperations } from '@/auth/live';
+import { useLiveOperations } from '@/auth/live';
 import { isPermissionDenied } from '@/auth/supabaseClient';
 import { requestPushDelivery } from '@/notifications/push';
 import { formatDurationMs } from '@/auth/duration';
@@ -384,7 +384,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       */}
       <p className="muted small live-state" data-testid="live-state" data-live={liveStatus}>
         <span className={`live-dot live-dot--${liveStatus.toLowerCase()}`} aria-hidden="true" />
-        {LIVE_STATUS_LABEL[liveStatus]}
+        {t.live[liveStatus]}
       </p>
     </div>
   );

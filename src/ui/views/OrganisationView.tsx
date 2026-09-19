@@ -30,7 +30,6 @@ import {
   loadRoster,
   loadVehicles,
   memberReadiness,
-  READINESS_LABEL,
   setGroupMembers,
   setMemberActive,
   setVehicleActive,
@@ -42,37 +41,31 @@ import {
 import { useApp } from '@/state/AppStateContext';
 import { EmptyState, Field, Notice, ScrollRegion } from '../components/primitives';
 import { RequireRole } from '../components/RequireRole';
+import { useText } from '@/i18n/useText';
 
 type Tab = 'clanovi' | 'grupe' | 'vozila';
 
-const TAB_LABEL: Record<Tab, string> = {
-  clanovi: 'Clanovi',
-  grupe: 'Grupe',
-  vozila: 'Vozila',
-};
-
 export function OrganisationView() {
+  const t = useText();
   const { access } = useAccess();
 
   return (
     <>
-      <h1 className="sr-only">Evidencija drustva</h1>
+      <h1 className="sr-only">{t.organisation.pageTitle}</h1>
       <RequireRole
         allow={['OWNER', 'ADMIN']}
         refused={
           <section className="card" aria-labelledby="organisation-refused-h">
             <div className="card__head">
               <div>
-                <p className="card__kicker">Samo administrator ili vlasnik</p>
-                <h2 id="organisation-refused-h">Evidencija drustva</h2>
+                <p className="card__kicker">{t.organisation.adminOnly}</p>
+                <h2 id="organisation-refused-h">{t.organisation.pageTitle}</h2>
               </div>
             </div>
             <Notice tone="info">
               {accessObstacle(access) === 'SIGN_IN_REQUIRED'
-                ? 'Evidencija se ne prikazuje dok se ne prijavite.'
-                : 'Ovu evidenciju odrzava administrator ili vlasnik. Komandir vodi ' +
-                  'intervencije, ali ne mijenja sastav drustva - server odbija te ' +
-                  'komande i kada je dugme vidljivo.'}
+                ? t.organisation.signInFirst
+                : t.organisation.denied}
             </Notice>
           </section>
         }
@@ -84,6 +77,7 @@ export function OrganisationView() {
 }
 
 function OrganisationPanel() {
+  const t = useText();
   const { announce } = useApp();
   const [tab, setTab] = useState<Tab>('clanovi');
   const [members, setMembers] = useState<RosterMember[] | null>(null);
@@ -91,10 +85,11 @@ function OrganisationPanel() {
   const [vehicles, setVehicles] = useState<RosterVehicle[]>([]);
   const [accounts, setAccounts] = useState<DirectoryAccount[]>([]);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
-    setError('');
+    setLoading(true);
     try {
       const [roster, groupRows, vehicleRows] = await Promise.all([
         loadRoster(),
@@ -104,18 +99,20 @@ function OrganisationPanel() {
       setMembers(roster);
       setGroups(groupRows);
       setVehicles(vehicleRows);
+      setError('');
+      // The account list is owner-only; an ADMIN receives no rows. A failure
+      // here must not turn successfully loaded organisation records into an error.
+      try {
+        setAccounts(await loadDirectory());
+      } catch {
+        setAccounts([]);
+      }
     } catch {
-      setMembers([]);
-      setError('Evidencija nije mogla biti ucitana sa servera.');
+      setError(t.organisation.loadFailed);
+    } finally {
+      setLoading(false);
     }
-    // The account list is owner-only, so an ADMIN gets zero rows rather than an
-    // error. Failing to read it must not empty the roster that did load.
-    try {
-      setAccounts(await loadDirectory());
-    } catch {
-      setAccounts([]);
-    }
-  }, []);
+  }, [t.organisation.loadFailed]);
 
   useEffect(() => {
     void refresh();
@@ -131,19 +128,32 @@ function OrganisationPanel() {
           await refresh();
           announce(success);
         } else {
-          announce(outcome.message ?? 'Promjena nije sacuvana.', 'error');
+          announce(outcome.message ?? t.organisation.changeFailed, 'error');
         }
       } finally {
         setBusy(false);
       }
     },
-    [announce, refresh],
+    [announce, refresh, t.organisation.changeFailed],
   );
+
+  if (error) {
+    return (
+      <section className="card" aria-labelledby="organisation-error-h">
+        <h2 id="organisation-error-h">{t.organisation.pageTitle}</h2>
+        <Notice tone="error">{error}</Notice>
+        {loading ? <p role="status">{t.organisation.loading}</p> : null}
+        <button className="btn" type="button" disabled={loading} onClick={() => void refresh()}>
+          {t.gate.retry}
+        </button>
+      </section>
+    );
+  }
 
   if (members === null) {
     return (
       <section className="card">
-        <p className="muted">Ucitavanje evidencije...</p>
+        <p className="muted" role="status">{t.organisation.loading}</p>
       </section>
     );
   }
@@ -152,15 +162,13 @@ function OrganisationPanel() {
     <section className="card organisation" aria-labelledby="organisation-h">
       <div className="card__head">
         <div>
-          <p className="card__kicker">Stvarni podaci sa servera</p>
-          <h2 id="organisation-h">Evidencija drustva</h2>
+          <p className="card__kicker">{t.organisation.serverData}</p>
+          <h2 id="organisation-h">{t.organisation.pageTitle}</h2>
         </div>
       </div>
 
-      {error ? <Notice tone="error">{error}</Notice> : null}
-
-      <div className="tabs" role="tablist" aria-label="Dio evidencije">
-        {(Object.keys(TAB_LABEL) as Tab[]).map((name) => (
+      <div className="tabs" role="tablist" aria-label={t.organisation.tabs}>
+        {(['clanovi', 'grupe', 'vozila'] as Tab[]).map((name) => (
           <button
             key={name}
             type="button"
@@ -171,18 +179,20 @@ function OrganisationPanel() {
             className={`tabs__tab ${tab === name ? 'tabs__tab--on' : ''}`}
             onClick={() => setTab(name)}
           >
-            {TAB_LABEL[name]}
+            {name === 'clanovi'
+              ? t.organisation.members
+              : name === 'grupe' ? t.organisation.groups : t.organisation.vehicles}
           </button>
         ))}
       </div>
 
       {tab === 'clanovi' ? (
-        <MembersPanel members={members} accounts={accounts} busy={busy} run={run} />
+        <MembersPanel members={members} accounts={accounts} busy={busy || loading} run={run} />
       ) : null}
       {tab === 'grupe' ? (
-        <GroupsPanel groups={groups} members={members} busy={busy} run={run} />
+        <GroupsPanel groups={groups} members={members} busy={busy || loading} run={run} />
       ) : null}
-      {tab === 'vozila' ? <VehiclesPanel vehicles={vehicles} busy={busy} run={run} /> : null}
+      {tab === 'vozila' ? <VehiclesPanel vehicles={vehicles} busy={busy || loading} run={run} /> : null}
     </section>
   );
 }
@@ -203,6 +213,7 @@ function MembersPanel({
   readonly busy: boolean;
   readonly run: Run;
 }) {
+  const t = useText();
   const [name, setName] = useState('');
   const [reason, setReason] = useState<Record<string, string>>({});
   const linked = new Set(members.map((member) => member.userId).filter(Boolean));
@@ -214,9 +225,9 @@ function MembersPanel({
       {unready > 0 ? (
         <Notice tone="warn">
           {unready === 1
-            ? 'Jedan clan ne moze primiti poziv.'
-            : `${unready} clanova ne moze primiti poziv.`}{' '}
-          Clan bez povezanog naloga dobija poziv, ali server odbija njegov odgovor.
+            ? t.organisation.unreadyOne
+            : t.organisation.unreadyMany.replace('{count}', String(unready))}{' '}
+          {t.organisation.unreadyExplain}
         </Notice>
       ) : null}
 
@@ -225,10 +236,10 @@ function MembersPanel({
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim().length < 2) return;
-          void run(() => createMember(name.trim(), []), 'Clan je dodat.').then(() => setName(''));
+          void run(() => createMember(name.trim(), []), t.organisation.memberAdded).then(() => setName(''));
         }}
       >
-        <Field label="Ime i prezime novog clana" required>
+        <Field label={t.organisation.newMember} required>
           {(props) => (
             <input
               {...props}
@@ -240,24 +251,24 @@ function MembersPanel({
           )}
         </Field>
         <button type="submit" className="btn btn--primary" disabled={busy || name.trim().length < 2}>
-          Dodaj clana
+          {t.organisation.addMember}
         </button>
       </form>
 
       {members.length === 0 ? (
-        <EmptyState title="Nema unesenih clanova">
-          Dodajte prvog clana da bi intervencija imala kome da se uputi.
+        <EmptyState title={t.organisation.noMembers}>
+          {t.organisation.addFirstMember}
         </EmptyState>
       ) : (
-        <ScrollRegion label="Spisak clanova">
+        <ScrollRegion label={t.organisation.memberList}>
           <table className="table">
-            <caption className="sr-only">Clanovi drustva i stanje njihovih naloga</caption>
+            <caption className="sr-only">{t.organisation.tableMembers}</caption>
             <thead>
               <tr>
-                <th scope="col">Ime i prezime</th>
-                <th scope="col">Nalog</th>
-                <th scope="col">Stanje</th>
-                <th scope="col">Radnja</th>
+                <th scope="col">{t.organisation.newMember}</th>
+                <th scope="col">{t.organisation.account}</th>
+                <th scope="col">{t.organisation.state}</th>
+                <th scope="col">{t.organisation.action}</th>
               </tr>
             </thead>
             <tbody>
@@ -267,16 +278,16 @@ function MembersPanel({
                 return (
                   <tr key={member.id}>
                     <th scope="row">{member.fullName}</th>
-                    <td>{account ? account.email : member.userId ? 'Povezan' : 'Nije povezan'}</td>
+                    <td>{account ? account.email : member.userId ? t.organisation.linked : t.organisation.notLinked}</td>
                     <td>
                       <span className={`chip chip--${readiness === 'READY' ? 'yes' : 'later'}`}>
-                        {READINESS_LABEL[readiness]}
+                        {t.organisation.readiness[readiness]}
                       </span>
                     </td>
                     <td className="organisation__actions">
                       {member.userId === null && withoutMember.length > 0 ? (
                         <label className="sr-only" htmlFor={`link-${member.id}`}>
-                          Povezi nalog sa clanom {member.fullName}
+                          {t.organisation.linkAccount} {member.fullName}
                         </label>
                       ) : null}
                       {member.userId === null && withoutMember.length > 0 ? (
@@ -290,11 +301,11 @@ function MembersPanel({
                             if (!userId) return;
                             void run(
                               () => linkMemberAccount(member.id, userId),
-                              'Nalog je povezan sa clanom.',
+                              t.organisation.accountLinked,
                             );
                           }}
                         >
-                          <option value="">Povezi nalog...</option>
+                          <option value="">{t.organisation.linkAccountOption}</option>
                           {withoutMember.map((candidate) => (
                             <option key={candidate.userId} value={candidate.userId}>
                               {candidate.fullName ?? candidate.email}
@@ -306,8 +317,8 @@ function MembersPanel({
                       {member.userId !== null ? (
                         <ReasonAction
                           id={`unlink-${member.id}`}
-                          label={`Razlog razvezivanja naloga clana ${member.fullName}`}
-                          action="Razvezi nalog"
+                          label={`${t.organisation.unlinkReason} ${member.fullName}`}
+                          action={t.organisation.unlinkAccount}
                           busy={busy}
                           value={reason[`u-${member.id}`] ?? ''}
                           onChange={(next) =>
@@ -316,7 +327,7 @@ function MembersPanel({
                           onRun={(text) =>
                             run(
                               () => unlinkMemberAccount(member.id, text),
-                              'Nalog je razvezan od clana.',
+                              t.organisation.accountUnlinked,
                             )
                           }
                         />
@@ -324,8 +335,8 @@ function MembersPanel({
 
                       <ReasonAction
                         id={`active-${member.id}`}
-                        label={`Razlog promjene sastava za ${member.fullName}`}
-                        action={member.active ? 'Van sastava' : 'Vrati u sastav'}
+                        label={`${t.organisation.compositionReason} ${member.fullName}`}
+                        action={member.active ? t.organisation.removeFromRoster : t.organisation.restoreToRoster}
                         busy={busy}
                         value={reason[`a-${member.id}`] ?? ''}
                         onChange={(next) =>
@@ -334,7 +345,7 @@ function MembersPanel({
                         onRun={(text) =>
                           run(
                             () => setMemberActive(member.id, !member.active, text),
-                            member.active ? 'Clan je van sastava.' : 'Clan je vracen u sastav.',
+                            member.active ? t.organisation.removedFromRoster : t.organisation.restoredToRoster,
                           )
                         }
                       />
@@ -375,6 +386,7 @@ function ReasonAction({
   readonly onChange: (next: string) => void;
   readonly onRun: (reason: string) => Promise<void>;
 }) {
+  const t = useText();
   return (
     <span className="organisation__reason">
       <label className="sr-only" htmlFor={id}>
@@ -383,7 +395,7 @@ function ReasonAction({
       <input
         id={id}
         className="input"
-        placeholder="Razlog"
+        placeholder={t.organisation.reason}
         value={value}
         disabled={busy}
         onChange={(event) => onChange(event.target.value)}
@@ -411,6 +423,7 @@ function GroupsPanel({
   readonly busy: boolean;
   readonly run: Run;
 }) {
+  const t = useText();
   const [name, setName] = useState('');
 
   return (
@@ -420,10 +433,10 @@ function GroupsPanel({
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim().length < 2) return;
-          void run(() => createGroup(name.trim()), 'Grupa je dodata.').then(() => setName(''));
+          void run(() => createGroup(name.trim()), t.organisation.groupAdded).then(() => setName(''));
         }}
       >
-        <Field label="Naziv nove grupe" required>
+        <Field label={t.organisation.newGroup} required>
           {(props) => (
             <input
               {...props}
@@ -435,13 +448,13 @@ function GroupsPanel({
           )}
         </Field>
         <button type="submit" className="btn btn--primary" disabled={busy || name.trim().length < 2}>
-          Dodaj grupu
+          {t.organisation.addGroup}
         </button>
       </form>
 
       {groups.length === 0 ? (
-        <EmptyState title="Nema unesenih grupa">
-          Grupe sluze da se poziv uputi smjeni ili ekipi umjesto da se biraju pojedinacno.
+        <EmptyState title={t.organisation.noGroups}>
+          {t.organisation.groupsHint}
         </EmptyState>
       ) : (
         groups.map((group) => (
@@ -450,7 +463,7 @@ function GroupsPanel({
               {group.name} <span className="muted small">({group.memberIds.length})</span>
             </legend>
             {members.length === 0 ? (
-              <p className="muted small">Dodajte clanove prije rasporedjivanja u grupe.</p>
+              <p className="muted small">{t.organisation.addMembersFirst}</p>
             ) : (
               members.map((member) => {
                 const checked = group.memberIds.includes(member.id);
@@ -466,7 +479,7 @@ function GroupsPanel({
                           : [...group.memberIds, member.id];
                         void run(
                           () => setGroupMembers(group.id, next),
-                          checked ? 'Clan je uklonjen iz grupe.' : 'Clan je dodat u grupu.',
+                          checked ? t.organisation.removedFromGroup : t.organisation.addedToGroup,
                         );
                       }}
                     />
@@ -491,6 +504,7 @@ function VehiclesPanel({
   readonly busy: boolean;
   readonly run: Run;
 }) {
+  const t = useText();
   const [callsign, setCallsign] = useState('');
   const [name, setName] = useState('');
   const [kind, setKind] = useState('');
@@ -500,8 +514,7 @@ function VehiclesPanel({
   return (
     <div role="tabpanel" id="panel-vozila" aria-labelledby="tab-vozila">
       <Notice tone="info">
-        Unesite oznaku, naziv i vrstu vozila. Registarske oznake i drugi osjetljivi
-        podaci o vozilima nijesu dio ove evidencije.
+        {t.organisation.vehiclePrivacy}
       </Notice>
 
       <form
@@ -511,7 +524,7 @@ function VehiclesPanel({
           if (!ready) return;
           void run(
             () => createVehicle(callsign.trim(), name.trim(), kind.trim()),
-            'Vozilo je dodato.',
+            t.organisation.vehicleAdded,
           ).then(() => {
             setCallsign('');
             setName('');
@@ -519,7 +532,7 @@ function VehiclesPanel({
           });
         }}
       >
-        <Field label="Oznaka" required>
+        <Field label={t.organisation.callsign} required>
           {(props) => (
             <input
               {...props}
@@ -530,7 +543,7 @@ function VehiclesPanel({
             />
           )}
         </Field>
-        <Field label="Naziv vozila" required>
+        <Field label={t.organisation.vehicleName} required>
           {(props) => (
             <input
               {...props}
@@ -541,7 +554,7 @@ function VehiclesPanel({
             />
           )}
         </Field>
-        <Field label="Vrsta" required hint="Na primjer: navalno, cisterna, tehnicko.">
+        <Field label={t.organisation.kind} required hint={t.organisation.vehicleKindHint}>
           {(props) => (
             <input
               {...props}
@@ -553,23 +566,23 @@ function VehiclesPanel({
           )}
         </Field>
         <button type="submit" className="btn btn--primary" disabled={busy || !ready}>
-          Dodaj vozilo
+          {t.organisation.addVehicle}
         </button>
       </form>
 
       {vehicles.length === 0 ? (
-        <EmptyState title="Nema unesenih vozila" />
+        <EmptyState title={t.organisation.noVehicles} />
       ) : (
-        <ScrollRegion label="Spisak vozila">
+        <ScrollRegion label={t.organisation.vehicleList}>
           <table className="table">
-            <caption className="sr-only">Vozila drustva</caption>
+            <caption className="sr-only">{t.organisation.tableVehicles}</caption>
             <thead>
               <tr>
-                <th scope="col">Oznaka</th>
-                <th scope="col">Naziv</th>
-                <th scope="col">Vrsta</th>
-                <th scope="col">Stanje</th>
-                <th scope="col">Radnja</th>
+                <th scope="col">{t.organisation.callsign}</th>
+                <th scope="col">{t.organisation.vehicleName}</th>
+                <th scope="col">{t.organisation.kind}</th>
+                <th scope="col">{t.organisation.state}</th>
+                <th scope="col">{t.organisation.action}</th>
               </tr>
             </thead>
             <tbody>
@@ -580,14 +593,14 @@ function VehiclesPanel({
                   <td>{vehicle.kind}</td>
                   <td>
                     <span className={`chip chip--${vehicle.active ? 'yes' : 'later'}`}>
-                      {vehicle.active ? 'U upotrebi' : 'Van upotrebe'}
+                      {vehicle.active ? t.organisation.inService : t.organisation.outOfService}
                     </span>
                   </td>
                   <td>
                     <ReasonAction
                       id={`vehicle-${vehicle.id}`}
-                      label={`Razlog promjene stanja za vozilo ${vehicle.callsign}`}
-                      action={vehicle.active ? 'Van upotrebe' : 'Vrati u upotrebu'}
+                      label={`${t.organisation.vehicleReason} ${vehicle.callsign}`}
+                      action={vehicle.active ? t.organisation.outOfService : t.organisation.inService}
                       busy={busy}
                       value={reason[vehicle.id] ?? ''}
                       onChange={(next) =>
@@ -596,7 +609,7 @@ function VehiclesPanel({
                       onRun={(text) =>
                         run(
                           () => setVehicleActive(vehicle.id, !vehicle.active, text),
-                          vehicle.active ? 'Vozilo je van upotrebe.' : 'Vozilo je u upotrebi.',
+                          vehicle.active ? t.organisation.vehicleTakenOut : t.organisation.vehicleRestored,
                         )
                       }
                     />

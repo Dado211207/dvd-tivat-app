@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sea" x1="74" y1="48" x2="430" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#123949"/>
+      <stop offset="1" stop-color="#071e2a"/>
+    </linearGradient>
+    <linearGradient id="aqua" x1="164" y1="94" x2="358" y2="405" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9ae7de"/>
+      <stop offset="1" stop-color="#37b8bd"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#sea)"/>
+  <path d="M256 73 394 126v105c0 94-55 167-138 209-83-42-138-115-138-209V126l138-53Z" fill="#0a2935" stroke="url(#aqua)" stroke-width="15" stroke-linejoin="round"/>
+  <path d="M256 133v109m-54-54h108" fill="none" stroke="#f1fbf8" stroke-width="20" stroke-linecap="round"/>
+  <path d="M174 301c25-19 51-19 76 0s51 19 76 0 51-19 76 0" fill="none" stroke="url(#aqua)" stroke-width="19" stroke-linecap="round"/>
+  <path d="M178 347c25-19 49-19 74 0s50 19 75 0 49-19 74 0" fill="none" stroke="#e7f7f2" stroke-opacity=".92" stroke-width="16" stroke-linecap="round"/>
+</svg>

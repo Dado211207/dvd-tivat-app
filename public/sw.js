@@ -1,5 +1,5 @@
 /*
- * Service worker for the DVD Tivat prototype.
+ * Service worker for Boka Operativa.
  *
  * ONE RULE ABOVE ALL: this never caches an answer from the server.
  *
@@ -22,7 +22,7 @@
  */
 
 // Bump on any change to this file or to what it caches.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = `dvd-tivat-shell-${VERSION}`;
 
 self.addEventListener('install', (event) => {
@@ -76,7 +76,7 @@ self.addEventListener('push', (event) => {
     : './#/mobilizacija';
 
   event.waitUntil(
-    self.registration.showNotification('OPERATIVNI POZIV - DVD Tivat', {
+    self.registration.showNotification('OPERATIVNI POZIV - Boka Operativa', {
       body: 'Nova intervencija. Potvrdite prijem odmah.',
       icon: './icons/icon-192.png',
       badge: './icons/icon-192.png',
@@ -123,7 +123,7 @@ self.addEventListener('notificationclick', (event) => {
 const OFFLINE_PAGE = `<!doctype html>
 <html lang="sr-Latn"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DVD Tivat - nema veze</title>
+<title>Boka Operativa - nema veze</title>
 <style>
   body { margin:0; padding:2rem 1.25rem; font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
          color:#12202d; background:#edf3f6; }

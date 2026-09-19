@@ -103,8 +103,8 @@ test.describe('the account screen shows a member their own account and nobody el
 
     // Not "hidden behind an explanation" - not present. An empty section headed
     // with somebody else's job reads as a screen that failed to load.
-    await expect(page.getByRole('heading', { name: 'Svi registrovani nalozi' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Promjene uloga i pristupa' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Registrovani nalozi' })).toHaveCount(0);
+    await expect(page.getByText('Promjene uloga i pristupa', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Samo vlasnik sistema')).toHaveCount(0);
 
     // Their own account information is still there, which is the point of the
@@ -115,7 +115,7 @@ test.describe('the account screen shows a member their own account and nobody el
 
   test('the owner still gets the directory', async ({ page }) => {
     await openOperational(page, 'nalozi', 'OWNER');
-    await expect(page.getByRole('heading', { name: 'Svi registrovani nalozi' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Registrovani nalozi' })).toBeVisible();
   });
 });
 

@@ -25,6 +25,7 @@
  * suite against real policies, and by the browser suite against a real build.
  */
 
+import { activeText } from '@/i18n/useText';
 import { between } from './duration';
 import { accountBackend } from './supabaseClient';
 
@@ -273,62 +274,19 @@ export function isOpenStatus(status: InterventionStatus): boolean {
 // raw: it would leak internals and mean nothing to a firefighter at 03:00.
 // ---------------------------------------------------------------------------
 
-const REFUSALS: Record<string, string> = {
-  COMMAND_REQUIRED: 'Nemate ovlascenje komandira za ovu radnju.',
-  ADMIN_REQUIRED: 'Nemate administratorsko ovlascenje za ovu radnju.',
-  OWNER_REQUIRED: 'Samo vlasnik moze ovo uraditi.',
-  STAFF_REQUIRED: 'Vas nalog nema operativni pristup.',
-  MEMBER_RECORD_REQUIRED: 'Vas nalog nije povezan sa clanom drustva.',
-  NOT_A_RECIPIENT: 'Niste na spisku pozvanih za ovu intervenciju.',
-  INTERVENTION_NOT_FOUND: 'Intervencija vise ne postoji.',
-  INTERVENTION_NOT_OPEN: 'Intervencija je zatvorena ili otkazana.',
-  INTERVENTION_NOT_PUBLISHED: 'Intervencija jos nije objavljena.',
-  INTERVENTION_NOT_DRAFT: 'Intervencija vise nije u pripremi.',
-  VERSION_CONFLICT: 'Neko je u medjuvremenu izmijenio ovu intervenciju. Osvjezite prikaz.',
-  ALREADY_CHECKED_IN: 'Vec ste prijavljeni na ovu intervenciju.',
-  NOT_CHECKED_IN: 'Niste prijavljeni, pa nema sta da se odjavi.',
-  INTERVAL_NOT_FOUND: 'Taj zapis prisustva vise ne postoji.',
-  INTERVAL_REJECTED: 'Taj zapis je odbijen. Prvo ga vratite u cekanje.',
-  INTERVAL_CONFIRMED: 'Taj zapis je vec potvrdjen. Prvo povucite potvrdu.',
-  REASON_REQUIRED: 'Razlog je obavezan i mora imati najmanje dva znaka.',
-  VEHICLE_NOT_FOUND: 'Vozilo vise ne postoji.',
-  VEHICLE_NOT_IN_SERVICE: 'Vozilo nije u upotrebi.',
-  VEHICLE_ALREADY_OUT: 'To vozilo je vec na terenu.',
-  VEHICLE_ALREADY_RETURNED: 'Povratak tog vozila je vec zabiljezen.',
-  MOVEMENT_NOT_FOUND: 'Taj izlazak vozila vise ne postoji.',
-  INVALID_PROGRESS: 'Nepoznat status kretanja.',
-  INVALID_ANSWER: 'Nepoznat odgovor.',
-  INVALID_KIND: 'Nepoznata vrsta intervencije.',
-  INVALID_COORDINATES: 'Koordinate nisu ispravne.',
-  INVALID_INTERVAL: 'Kraj mora biti poslije pocetka.',
-  ETA_REQUIRED: 'Izaberite za koliko stizete.',
-  TITLE_REQUIRED: 'Naslov mora imati najmanje tri znaka.',
-  INSTRUCTIONS_REQUIRED: 'Uputstvo mora imati najmanje tri znaka.',
-  LOCATION_REQUIRED: 'Lokacija je obavezna.',
-  KIND_NOTE_REQUIRED: 'Za vrstu "Drugo" upisite kratak opis.',
-  IDEMPOTENCY_KEY_REQUIRED: 'Nedostaje kljuc zahtjeva. Pokusajte ponovo.',
-  NO_RECIPIENTS: 'Izaberite bar jednog clana.',
-  NO_ACTIVE_RECIPIENTS: 'Nijedan izabrani clan nije aktivan.',
-  NO_INTERVALS: 'Nema izabranih zapisa.',
-  TOO_MANY_INTERVALS: 'Previse zapisa odjednom. Podijelite na manje grupe.',
-  AVAILABILITY_REQUIRED: 'Izaberite dostupnost.',
-  NOTE_TOO_LONG: 'Napomena je preduga.',
-  CORRECTION_WOULD_OVERLAP: 'Ispravka bi se preklopila sa drugim zapisom istog clana.',
-  OPEN_ATTENDANCE_INTERVALS: 'Neki clanovi su jos prijavljeni. Potvrdite da ih ostavljate otvorene.',
-};
-
 export function explainRefusal(raw: string | null | undefined): string {
+  const messages = activeText().serverErrors;
   const text = String(raw ?? '');
-  for (const [code, message] of Object.entries(REFUSALS)) {
+  for (const [code, message] of Object.entries(messages.operations)) {
     if (text.includes(code)) return message;
   }
   if (/permission denied/i.test(text)) {
-    return 'Server je odbio zahtjev: nemate pravo pristupa.';
+    return messages.permissionDenied;
   }
   if (/fetch|network|failed to/i.test(text)) {
-    return 'Server trenutno nije dostupan. Provjerite vezu i pokusajte ponovo.';
+    return messages.unavailable;
   }
-  return 'Server je odbio zahtjev. Promjena nije sacuvana.';
+  return messages.generic;
 }
 
 // ---------------------------------------------------------------------------

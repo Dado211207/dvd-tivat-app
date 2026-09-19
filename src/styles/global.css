@@ -393,6 +393,74 @@ img {
   font-weight: 650;
 }
 
+.field__heading {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  min-height: var(--tap-min);
+}
+
+.field__heading .field__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.field-help {
+  position: relative;
+  flex: 0 0 auto;
+  margin: -2px 0 4px;
+}
+
+.field-help > summary {
+  display: grid;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  place-items: center;
+  color: var(--c-accent-strong);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.field-help > summary span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  background: var(--c-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--c-accent) 28%, var(--c-line));
+  border-radius: 50%;
+}
+
+.field-help > summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-help > summary:focus-visible {
+  outline: var(--focus);
+  outline-offset: var(--focus-offset);
+}
+
+.field-help__content {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 7px);
+  right: 0;
+  width: min(19rem, calc(100vw - 48px));
+  padding: 11px 13px;
+  color: var(--c-ink);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-2);
+  font-size: 0.8rem;
+  font-weight: 450;
+  line-height: 1.45;
+}
+
 .field__req {
   font-weight: 500;
   color: var(--c-ink-faint);

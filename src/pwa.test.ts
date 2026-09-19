@@ -163,7 +163,7 @@ describe('the service worker never caches what the server said', () => {
 
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
     const [title, options] = worker.showNotification.mock.calls[0]!;
-    expect(title).toBe('OPERATIVNI POZIV - DVD Tivat');
+    expect(title).toBe('OPERATIVNI POZIV - Boka Operativa');
     expect(options.body).toBe('Nova intervencija. Potvrdite prijem odmah.');
     expect(JSON.stringify(options)).not.toMatch(/must not appear/);
     expect(options.data.route).toContain('11111111-1111-4111-8111-111111111111');

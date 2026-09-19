@@ -1748,6 +1748,131 @@ dialog {
   }
 }
 
+/* --------------------------------------------------------------- polish */
+
+/* The page itself supplies the screen heading; this label exists for the
+   compact mobile brand line and does not compete with each view's content. */
+.workspace-heading {
+  display: none;
+}
+
+.masthead__mark {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 13px;
+  box-shadow: none;
+}
+
+.masthead__mark::after {
+  display: none;
+}
+
+.masthead__mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
+.masthead {
+  min-height: 72px;
+  padding-top: calc(14px + var(--safe-top));
+  padding-bottom: 14px;
+  background: color-mix(in srgb, var(--c-surface) 94%, var(--c-accent-soft));
+}
+
+.main {
+  padding-top: 24px;
+}
+
+.card {
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgb(12 34 48 / 4%), 0 8px 24px rgb(12 34 48 / 4%);
+}
+
+.card__head {
+  margin-bottom: 16px;
+}
+
+.panel__title {
+  letter-spacing: -0.018em;
+}
+
+.disclosure__summary {
+  min-height: var(--tap-min);
+}
+
+.identity-pill {
+  max-width: min(440px, 50vw);
+}
+
+@media (max-width: 899px) {
+  .workspace-heading {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+  }
+
+  .workspace-heading img {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .workspace-heading__title {
+    margin: 0;
+    font-size: 1.08rem;
+    font-weight: 760;
+    letter-spacing: -0.02em;
+  }
+
+  .masthead {
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    padding-top: calc(12px + var(--safe-top));
+    padding-bottom: 12px;
+  }
+
+  .main {
+    padding-top: 16px;
+  }
+
+  .identity-pill {
+    max-width: 58vw;
+  }
+}
+
+@media (max-width: 620px) {
+  .masthead {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .masthead__tools {
+    width: auto;
+    flex: 0 1 auto;
+  }
+
+  .identity-pill {
+    max-width: 56vw;
+  }
+
+  .card {
+    padding: 16px;
+    margin-bottom: 14px;
+    border-radius: 15px;
+  }
+
+  .station-overview {
+    margin-bottom: 14px;
+    border-radius: 16px;
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Evidencija drustva - the administrator's real roster, groups and vehicles.
 
