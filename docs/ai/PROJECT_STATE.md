@@ -33,6 +33,14 @@ Validation for this delivery: TypeScript, ESLint, production build and
 run for this branch. Passing the build is not evidence of hosted notification
 delivery or device layout acceptance.
 
+Review is open as draft PR #30. Opening the PR automatically ran GitHub CI:
+the first run passed lint and TypeScript but reported three sign-in message
+regressions (628 unit tests passed). The follow-up restores distinct network
+failure wording, repeated-failure content-blocker guidance and the generic
+credential refusal in both languages. Check the latest PR run for its result;
+the failed initial run skipped database and browser checks. Local functional
+and device tests were not run.
+
 The code is prepared for review. This pass has not published a hosted
 release or changed the production database. The remaining release work is
 functional/device validation and publication. Multi-service implementation
