@@ -146,10 +146,10 @@ about transport. The test that pinned the old phrase now asserts the property.
 - **No drawer on phones.** Below 900px the rail already becomes a horizontal
   strip of large targets. A drawer would put a tap in front of every navigation
   to save space the strip does not cost.
-- **The visual identity is unchanged.** Same tokens, same institutional accent,
-  same status symbols paired with every colour. The new components — the
-  disclosure, the language chooser, the compact notification line — use existing
-  tokens and existing sizes.
+- **The visual identity was unchanged in this audit's first pass.** A later
+  product pass introduces the Boka Operativa name and shield-and-wave app icon;
+  see `docs/PRODUCT_DIRECTION.md`. The institutional accent and status symbols
+  paired with every colour remain in use.
 
 ---
 
@@ -189,8 +189,10 @@ Stated plainly rather than left to be discovered.
 Settings, the operational gate and every refusal it can show, the notification
 panel, the commander's console (all four tabs), the firefighter's screen, the
 archive including its chronology sentences, the shared timings panels, and the
-whole server-side vocabulary — intervention kinds, statuses, answers, movement
-steps, attendance states and sources, roles, and every audit event sentence.
+account and organisation management screens, including account-role and
+readiness states, the whole server-side vocabulary — intervention kinds,
+statuses, answers, movement steps, attendance states and sources, roles, and
+every audit event sentence.
 
 **Not translated:** the seven simulation screens' own body copy (`prikaz`,
 `dezurni`, `clan`, `vozila`, `clanovi`, `istorija`, `dojava`). They are the
@@ -383,3 +385,35 @@ that one table renders as "there are no interventions" rather than as a refusal.
 Same class of fault, and real. Fixing it means changing the data layer's error
 contract across many functions, which does not belong in a change about screen
 states — recorded rather than quietly left.
+
+## 11. Recovering administrative reads
+
+The account directory and organisation records now offer **Try again** after a
+failed read. Retrying shows a loading status and disables the retry button until
+the request settles. The selected organisation tab is retained.
+
+Failed organisation reads previously replaced the member list with an empty
+array, so a server failure also displayed the invitation to add the first member.
+The failure now has its own view; member, group and vehicle forms return after a
+successful read. A failure of the separate owner-only account lookup still does
+not block otherwise available organisation records.
+
+The account directory shows an unknown count during loading or failure. Its
+audit disclosure also distinguishes loading and failure from a genuinely empty
+history, so a failed request cannot claim that no changes have been recorded.
+
+This follow-up was checked with TypeScript, ESLint and `git diff --check`.
+Browser and functional tests have not been run for these changes.
+
+## 12. Language coverage at the command boundary
+
+The owner, roster and operational command error translators now read the
+selected language when an outcome is received. Both bundles contain the same
+typed keys for 41 operational and 14 roster refusal codes, alongside owner
+refusals and fixed fallback messages. Unknown server errors still produce a
+fixed message; raw server text is never rendered by these translators.
+
+The shared field component also uses the language bundle for required/optional
+labels. Previously those suffixes came from the simulation vocabulary even on
+the English operational forms. Recorded names, reasons and instructions remain
+unaltered.

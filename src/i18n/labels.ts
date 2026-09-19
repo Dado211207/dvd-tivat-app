@@ -15,9 +15,8 @@ import type {
   VehicleState,
 } from '@/domain/types';
 
-export const APP_NAME = 'DVD Tivat';
-/** Provisional text identity only. No official logo is used. */
-export const APP_SUBTITLE = 'Prototip za vjezbe';
+export const APP_NAME = 'Boka Operativa';
+export const APP_SUBTITLE = 'Mobilizacija i evidencija';
 
 export const SIM_BANNER_TITLE = 'SIMULACIJA';
 export const SIM_BANNER_TEXT =

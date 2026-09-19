@@ -14,20 +14,19 @@ import { useState, type FormEvent } from 'react';
 import { useAccess } from '@/auth/AccessProvider';
 import { accessObstacle } from '@/auth/access';
 import {
-  GENERIC_CREDENTIAL_ERROR,
-  NETWORK_BLOCKED_HINT,
-  NETWORK_UNREACHABLE_ERROR,
   PASSWORD_RESET_AVAILABLE,
   completeOwnProfile,
   registerWithEmail,
   signInWithEmail,
 } from '@/auth/supabaseClient';
 import { isPlausibleFullName } from '@/access/policy';
+import { useText } from '@/i18n/useText';
 import { Field, Notice } from './primitives';
 
 type Mode = 'SIGN_IN' | 'REGISTER';
 
 export function AccountAccessSetup() {
+  const t = useText();
   const { access, reload, signOut } = useAccess();
   const [mode, setMode] = useState<Mode>('SIGN_IN');
   const [email, setEmail] = useState('');
@@ -71,11 +70,11 @@ export function AccountAccessSetup() {
   function explain(outcome: { readonly unreachable?: boolean }): string {
     if (outcome.unreachable !== true) {
       setUnreachableRuns(0);
-      return GENERIC_CREDENTIAL_ERROR;
+      return t.accountAccess.credentialError;
     }
     const runs = unreachableRuns + 1;
     setUnreachableRuns(runs);
-    return runs >= 2 ? NETWORK_BLOCKED_HINT : NETWORK_UNREACHABLE_ERROR;
+    return runs >= 2 ? t.accountAccess.networkBlocked : t.accountAccess.networkError;
   }
 
   async function submitCredentials(event: FormEvent) {
@@ -83,11 +82,11 @@ export function AccountAccessSetup() {
     setError('');
     setMessage('');
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError('Unesite ispravnu email adresu.');
+      setError(t.accountAccess.invalidEmail);
       return;
     }
     if (mode === 'REGISTER' && password.length < 12) {
-      setError('Lozinka mora imati najmanje 12 znakova.');
+      setError(t.accountAccess.shortPassword);
       return;
     }
     setBusy(true);
@@ -121,8 +120,7 @@ export function AccountAccessSetup() {
       // whether an address belongs to a member of the society.
       setMode('SIGN_IN');
       setMessage(
-        'Zahtjev je primljen. Ako je ovo nova adresa, provjerite email za potvrdu. ' +
-          'Ako nalog vec postoji, prijavite se postojecom lozinkom.',
+        t.accountAccess.requestReceived,
       );
     } finally {
       setBusy(false);
@@ -133,14 +131,14 @@ export function AccountAccessSetup() {
     event.preventDefault();
     setError('');
     if (!isPlausibleFullName(fullName)) {
-      setError('Unesite ime i prezime.');
+      setError(t.accountAccess.invalidFullName);
       return;
     }
     setBusy(true);
     try {
       const outcome = await completeOwnProfile(fullName);
       if (!outcome.ok) {
-        setError(outcome.message ?? '');
+        setError(t.accountAccess.profileSaveFailed);
         return;
       }
       await reload();
@@ -164,8 +162,8 @@ export function AccountAccessSetup() {
     <section className="card account-connect" aria-labelledby="account-connect-h">
       <div className="card__head">
         <div>
-          <p className="card__kicker">Nalog na serveru</p>
-          <h2 id="account-connect-h">Prijava i pristup</h2>
+          <p className="card__kicker">{t.accountAccess.kicker}</p>
+          <h2 id="account-connect-h">{t.accountAccess.title}</h2>
         </div>
       </div>
 
@@ -174,22 +172,19 @@ export function AccountAccessSetup() {
 
       {obstacle === 'NOT_CONFIGURED' ? (
         <Notice tone="info">
-          Server nije podesen u ovoj verziji. Potrebno je popuniti adresu projekta i javni kljuc
-          prema uputstvu u datoteci <code>.env.example</code>. Ovaj prototip ne trazi stvarne podatke
-          dok server nije povezan.
+          {t.accountAccess.notConfigured}
         </Notice>
       ) : null}
 
-      {obstacle === 'LOADING' ? <p role="status">Provjeravam pristup na serveru...</p> : null}
+      {obstacle === 'LOADING' ? <p role="status">{t.accountAccess.checking}</p> : null}
 
       {obstacle === 'SERVER_UNREACHABLE' ? (
         <>
           <Notice tone="error">
-            Server trenutno nije dostupan, pa se prava pristupa ne mogu provjeriti. Dok provjera ne
-            uspije, aplikacija ne dodjeljuje nikakav pristup.
+            {t.accountAccess.serverUnavailable}
           </Notice>
           <button className="btn" type="button" onClick={() => void reload()} disabled={busy}>
-            Pokusaj ponovo
+            {t.accountAccess.retry}
           </button>
         </>
       ) : null}
@@ -197,11 +192,10 @@ export function AccountAccessSetup() {
       {obstacle === 'ACCOUNT_BROKEN' ? (
         <>
           <Notice tone="error">
-            Nalog postoji, ali njegov profil nije pronaden na serveru. Javite se vlasniku sistema;
-            ovo se ne moze popraviti iz aplikacije.
+            {t.accountAccess.accountBroken}
           </Notice>
           <button className="btn" type="button" onClick={() => void leave()} disabled={busy}>
-            Odjavi se
+            {t.accountAccess.signOut}
           </button>
         </>
       ) : null}
@@ -209,7 +203,7 @@ export function AccountAccessSetup() {
       {obstacle === 'SIGN_IN_REQUIRED' ? (
         <>
           <form className="account-auth-form" onSubmit={submitCredentials}>
-            <Field controlId="accountEmail" label="Email" required>
+            <Field controlId="accountEmail" label={t.accountAccess.email} required>
               {(props) => (
                 <input
                   {...props}
@@ -222,8 +216,8 @@ export function AccountAccessSetup() {
             </Field>
             <Field
               controlId="accountPassword"
-              label="Lozinka"
-              hint={mode === 'REGISTER' ? 'Najmanje 12 znakova.' : undefined}
+              label={t.accountAccess.password}
+              hint={mode === 'REGISTER' ? t.accountAccess.passwordHint : undefined}
               required
             >
               {(props) => (
@@ -239,10 +233,10 @@ export function AccountAccessSetup() {
             <div className="account-auth-actions">
               <button className="btn btn--primary" type="submit" disabled={busy}>
                 {busy
-                  ? 'Molimo sacekajte...'
+                  ? t.accountAccess.wait
                   : mode === 'SIGN_IN'
-                    ? 'Prijavi se'
-                    : 'Napravi nalog'}
+                    ? t.accountAccess.signIn
+                    : t.accountAccess.register}
               </button>
               <button
                 className="btn"
@@ -250,16 +244,14 @@ export function AccountAccessSetup() {
                 onClick={() => switchMode(mode === 'SIGN_IN' ? 'REGISTER' : 'SIGN_IN')}
                 disabled={busy}
               >
-                {mode === 'SIGN_IN' ? 'Nemam nalog' : 'Vec imam nalog'}
+                {mode === 'SIGN_IN' ? t.accountAccess.noAccount : t.accountAccess.haveAccount}
               </button>
             </div>
           </form>
 
           {!PASSWORD_RESET_AVAILABLE ? (
             <Notice tone="info">
-              Promjena zaboravljene lozinke jos nije dostupna: slanje emaila nije podeseno, pa bi
-              takva forma samo izgledala kao da je nesto poslala. Do tada lozinku mijenja vlasnik
-              sistema.
+              {t.accountAccess.resetUnavailable}
             </Notice>
           ) : null}
         </>
@@ -268,12 +260,12 @@ export function AccountAccessSetup() {
       {obstacle === 'PROFILE_REQUIRED' ? (
         <form className="account-auth-form" onSubmit={submitProfile}>
           <Notice tone="info">
-            Nalog je napravljen. Unesite ime i prezime da bi vlasnik znao ko trazi pristup.
+            {t.accountAccess.profileRequired}
           </Notice>
           <Field
             controlId="accountFullName"
-            label="Ime i prezime"
-            hint="Prikazni podatak. Ne daje nikakva vatrogasna prava."
+            label={t.accountAccess.fullName}
+            hint={t.accountAccess.displayOnly}
             required
           >
             {(props) => (
@@ -287,10 +279,10 @@ export function AccountAccessSetup() {
           </Field>
           <div className="account-auth-actions">
             <button className="btn btn--primary" type="submit" disabled={busy}>
-              {busy ? 'Cuvam...' : 'Sacuvaj profil'}
+              {busy ? t.accountAccess.saving : t.accountAccess.saveProfile}
             </button>
             <button className="btn" type="button" onClick={() => void leave()} disabled={busy}>
-              Odjavi se
+              {t.accountAccess.signOut}
             </button>
           </div>
         </form>
@@ -299,11 +291,10 @@ export function AccountAccessSetup() {
       {obstacle === 'SUSPENDED' ? (
         <>
           <Notice tone="error">
-            Pristup ovom nalogu je privremeno ukinut. Razlog je zapisan na serveru; obratite se
-            vlasniku sistema.
+            {t.accountAccess.suspended}
           </Notice>
           <button className="btn" type="button" onClick={() => void leave()} disabled={busy}>
-            Odjavi se
+            {t.accountAccess.signOut}
           </button>
         </>
       ) : null}
@@ -311,11 +302,10 @@ export function AccountAccessSetup() {
       {obstacle === 'AWAITING_APPROVAL' ? (
         <>
           <Notice tone="warn">
-            Nalog je aktivan, ali jos nema nijedno pravo u sistemu. Samo vlasnik sistema moze
-            dodijeliti ulogu. Do tada ne vidite nijedan operativni ekran.
+            {t.accountAccess.awaitingApproval}
           </Notice>
           <button className="btn" type="button" onClick={() => void leave()} disabled={busy}>
-            Odjavi se
+            {t.accountAccess.signOut}
           </button>
         </>
       ) : null}
@@ -324,29 +314,29 @@ export function AccountAccessSetup() {
         <>
           <dl className="account-identity">
             <div>
-              <dt>Prijavljeni nalog</dt>
+              <dt>{t.accountAccess.signedInAs}</dt>
               <dd>{access.email}</dd>
             </div>
             <div>
-              <dt>Ime i prezime</dt>
+              <dt>{t.accountAccess.fullName}</dt>
               <dd>{access.fullName ?? '-'}</dd>
             </div>
             <div>
-              <dt>Uloga sa servera</dt>
+              <dt>{t.accountAccess.serverRole}</dt>
               <dd>
-                <strong>{access.role}</strong>
+                <strong>{access.role ? t.vocabulary.role[access.role] ?? access.role : t.accountAccess.unknownRole}</strong>
               </dd>
             </div>
           </dl>
           <p className="account-identity__note">
-            Ulogu je dao server pri posljednjoj provjeri. Aplikacija je ne pamti i ne pretpostavlja.
+            {t.accountAccess.roleFromServer}
           </p>
           <div className="account-auth-actions">
             <button className="btn" type="button" onClick={() => void reload()} disabled={busy}>
-              Provjeri pristup ponovo
+              {t.accountAccess.checkAgain}
             </button>
             <button className="btn" type="button" onClick={() => void leave()} disabled={busy}>
-              Odjavi se
+              {t.accountAccess.signOut}
             </button>
           </div>
         </>

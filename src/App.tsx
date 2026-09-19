@@ -253,8 +253,9 @@ export function App() {
 
       <aside className="station-rail" aria-label={t.nav.workspace}>
         <div className="masthead__identity">
-          {/* Provisional text identity. No official logo is used. */}
-          <div className="masthead__mark" aria-hidden="true">{t.app.mark}</div>
+          <div className="masthead__mark" aria-hidden="true">
+            <img src="./icons/boka-operativa.svg" alt="" />
+          </div>
           <div>
             <div className="masthead__name">{t.app.name}</div>
             <div className="masthead__sub">{t.app.subtitle}</div>
@@ -279,17 +280,10 @@ export function App() {
       </aside>
 
       <header className="masthead">
-        {/*
-          NO PAGE TITLE HERE.
-          
-          The rail already says where you are, with an active marker. Repeating
-          it as a heading and then explaining it in a sentence underneath meant
-          a firefighter read the words "Moj poziv" three times before reaching
-          the fire, and lost about a fifth of a phone screen to doing so. Each
-          view now carries its own single `<h1>`, which is also what a screen
-          reader needs - one heading per page, naming the content rather than
-          the menu entry that led to it.
-        */}
+        <div className="workspace-heading">
+          <img src="./icons/boka-operativa.svg" alt="" />
+          <p className="workspace-heading__title">{t.app.name}</p>
+        </div>
         <div className="masthead__tools">
           <SignedInIdentity />
           {/* Strict isolation, not a disabled control: on a server-backed route

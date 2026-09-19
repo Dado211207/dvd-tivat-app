@@ -7,6 +7,7 @@
  */
 
 import { useId, type ReactNode } from 'react';
+import { useText } from '@/i18n/useText';
 import type { ExerciseStatus, MemberResponse, VehicleState } from '@/domain/types';
 import {
   ANSWER_LABEL,
@@ -15,7 +16,6 @@ import {
   NO_ANSWER_SYMBOL,
   STATUS_LABEL,
   STATUS_SYMBOL,
-  T,
   VEHICLE_STATE_LABEL,
   VEHICLE_STATE_SYMBOL,
 } from '@/i18n/labels';
@@ -196,6 +196,7 @@ export function Field({
   controlId?: string;
   children: (props: FieldControlProps) => ReactNode;
 }) {
+  const t = useText();
   const generatedId = useId();
   const id = controlId ?? generatedId;
   const hintId = `${id}-hint`;
@@ -205,14 +206,24 @@ export function Field({
 
   return (
     <div className={`field ${error ? 'field--invalid' : ''}`}>
-      <label className="field__label" htmlFor={id}>
-        {label}{' '}
-        <span className="field__req">({required ? T.required : T.optional})</span>
-      </label>
+      <div className="field__heading">
+        <label className="field__label" htmlFor={id}>
+          {label}{' '}
+          <span className="field__req">({required ? t.common.required : t.common.optional})</span>
+        </label>
+        {hint ? (
+          <details className="field-help">
+            <summary aria-label={`${t.common.moreInfo}: ${label}`} title={t.common.moreInfo}>
+              <span aria-hidden="true">i</span>
+            </summary>
+            <div className="field-help__content">
+              <p>{hint}</p>
+            </div>
+          </details>
+        ) : null}
+      </div>
       {hint ? (
-        <p className="field__hint" id={hintId}>
-          {hint}
-        </p>
+        <span className="sr-only" id={hintId}>{hint}</span>
       ) : null}
       {children({
         id,
