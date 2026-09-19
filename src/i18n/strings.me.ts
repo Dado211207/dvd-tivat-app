@@ -469,6 +469,7 @@ export const me = {
     noMemberText: 'Bez toga vas server ne moze staviti na spisak pozvanih.',
 
     offlineTitle: 'Nema veze sa serverom.',
+    refusedRead: 'Server je odbio citanje poziva. Provjerite da li vas nalog jos ima operativni pristup.',
     offlineText: 'Prikazano stanje moze biti zastarjelo, a radnje nece biti sacuvane dok se veza ne vrati.',
     notSaved: 'Nije sacuvano.',
 
@@ -528,6 +529,7 @@ export const me = {
   archive: {
     loading: 'Ucitavanje arhive...',
     failedTitle: 'Arhiva nije ucitana.',
+    refusedRead: 'Server je odbio citanje arhive. Provjerite da li vas nalog jos ima operativni pristup.',
     failedText:
       'Server nije odgovorio, pa ovaj ekran ne prikazuje nikakav zapis - prazna tabela bi ovdje izgledala kao da se nista nije dogodilo.',
 

@@ -435,6 +435,7 @@ export const en: Strings = {
     noMemberText: 'Without that the server cannot put you on a call-out list.',
 
     offlineTitle: 'No connection to the server.',
+    refusedRead: 'The server refused to load call-outs. Check whether your account still has operational access.',
     offlineText: 'What is shown may be out of date, and actions will not be saved until the connection returns.',
     notSaved: 'Not saved.',
 
@@ -494,6 +495,7 @@ export const en: Strings = {
   archive: {
     loading: 'Loading the archive...',
     failedTitle: 'The archive was not loaded.',
+    refusedRead: 'The server refused to load the archive. Check whether your account still has operational access.',
     failedText:
       'The server did not answer, so this screen shows no record at all - an empty table here would look as though nothing had happened.',
 
