@@ -332,7 +332,7 @@ test.describe('a commander', () => {
     // Type into the composer, cross to another tab and come back. Losing this
     // is the fault `live-updates.spec.ts` exists for; it is re-checked here
     // because the panels around it moved.
-    await page.getByTestId('new-call-out-disclosure').locator('summary').click();
+    await page.getByTestId('new-call-out-disclosure').locator(':scope > summary').click();
     await page.getByTestId('new-title').fill('Izmisljeni nacrt za test');
     await page.getByTestId('cmd-tab-pregled').click();
     await page.getByTestId('cmd-tab-poziv').click();

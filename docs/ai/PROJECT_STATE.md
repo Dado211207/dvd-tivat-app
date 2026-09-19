@@ -41,6 +41,14 @@ credential refusal in both languages. Check the latest PR run for its result;
 the failed initial run skipped database and browser checks. Local functional
 and device tests were not run.
 
+The second automatic CI run passed all 631 unit tests, 367 database tests
+(12 hosted checks skipped), build and bundle checks. Its browser stage passed
+262 cases and failed 14: seven outdated UI assumptions repeated at desktop and
+mobile sizes. Existing scenarios now target the renamed account labels and
+direct disclosure summaries, and the keyboard scenario tabs through the new
+field-help control before entering the location. No scenario was removed or
+disabled. The current result is reported on PR #30.
+
 The code is prepared for review. This pass has not published a hosted
 release or changed the production database. The remaining release work is
 functional/device validation and publication. Multi-service implementation

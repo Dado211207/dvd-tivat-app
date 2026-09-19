@@ -391,6 +391,11 @@ test('keyboard only: reach the composer, open the preview and escape it', async 
   await page.keyboard.press('Tab');
   await page.keyboard.type('Uputstvo');
   await page.keyboard.press('Tab');
+  // Field help is keyboard-accessible and precedes the location input.
+  await expect(page.getByLabel('Dodatne informacije: Lokacija dogadjaja', { exact: true }))
+    .toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel(/^Lokacija dogadjaja/)).toBeFocused();
   await page.keyboard.type('Lokacija');
 
   // Tab to the group checkbox and select it with Space.

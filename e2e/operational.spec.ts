@@ -142,7 +142,7 @@ test.describe('the firefighter screen', () => {
     const disclosure = page.getByTestId('availability-disclosure');
     await expect(page.getByTestId('available-yes')).toBeHidden();
 
-    await disclosure.locator('summary').click();
+    await disclosure.locator(':scope > summary').click();
     for (const id of ['available-yes', 'available-no', 'availability-note']) {
       await expect(page.getByTestId(id), id).toBeVisible();
     }
@@ -161,7 +161,7 @@ test.describe('the firefighter screen', () => {
      */
     await openOperational(page, 'mobilizacija', 'FIREFIGHTER');
     const more = page.getByTestId('more-actions');
-    await more.locator('summary').click();
+    await more.locator(':scope > summary').click();
     await expect(more.getByText(/ne prijavljuje prisustvo/i)).toBeVisible();
     await expect(more.getByTestId('journey-NA_LICU_MJESTA')).toBeVisible();
   });

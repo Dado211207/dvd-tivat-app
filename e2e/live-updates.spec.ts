@@ -58,7 +58,7 @@ test.describe('an automatic re-read does not disturb the person using the screen
     // form for a different one. Opening it is the extra step a second call-out
     // now costs, and the point of this test is that everything after it
     // survives: the `<details>` stays open and the draft stays typed.
-    await page.getByTestId('new-call-out-disclosure').locator('summary').click();
+    await page.getByTestId('new-call-out-disclosure').locator(':scope > summary').click();
     await page.getByTestId('new-title').fill('Pozar u Donjoj Lastvi (izmisljeno)');
     await page.getByRole('tab', { name: 'Pregled' }).click();
     await expect(page.getByTestId('overview-table')).toBeVisible();
