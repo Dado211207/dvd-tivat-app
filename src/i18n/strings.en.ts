@@ -123,6 +123,26 @@ export const en: Strings = {
     networkBlocked: 'The server is still unavailable. If you otherwise have internet access, a content blocker, browser privacy protection or your network may be blocking the request. Try another browser or network, or contact the system owner.',
   },
 
+  recovery: {
+    forgot: 'Forgot password',
+    title: 'Reset forgotten password',
+    intro: 'Enter the account email. If the account exists, a one-time code will be sent to that address.',
+    send: 'Send code',
+    received: 'The request was received. If the account exists, check your email and enter the code. Every address receives the same on-screen response.',
+    code: 'Code from email',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm new password',
+    save: 'Change password',
+    resend: 'Send a new code',
+    changeEmail: 'Change email',
+    cooldown: 'You can request a new code in {seconds} s.',
+    invalidCode: 'The code is invalid or has expired. Check it or request a new code.',
+    mismatch: 'The passwords do not match.',
+    updateFailed: 'The password may not have changed. Try signing in with the new password or request a new code.',
+    done: 'The password was changed. You can now sign in with the new password.',
+    back: 'Back to sign-in',
+  },
+
   accounts: {
     pageTitle: 'Accounts and access', ownerOnly: 'System owner only', allAccounts: 'Registered accounts',
     accountCount: 'Accounts: {count}', risk: 'These are server accounts. Access changes take effect immediately and are recorded below.',

@@ -55,6 +55,7 @@ In **Settings -> Secrets and variables -> Actions -> Variables**, add:
 | `VITE_SUPABASE_URL` | the project URL, `https://<ref>.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | the **publishable** key (`sb_publishable_...`) |
 | `VITE_WEB_PUSH_PUBLIC_KEY` | the public VAPID key matching the server-side private key |
+| `VITE_PASSWORD_RESET_ENABLED` | `true` only after `ACCOUNT_RECOVERY.md` passes; otherwise `false` |
 
 Both are public by design: every Supabase browser application ships them, and
 the publishable key grants nothing on its own - in this schema the `anon` role
@@ -71,6 +72,10 @@ Web Push additionally needs migration `202609150012`, the deployed
 secret. Configure the one-minute scheduler for the bounded unacknowledged
 repeat. Follow `supabase/functions/send-web-push/README.md`; never copy a private
 key or worker secret into GitHub Pages variables or a tracked file.
+
+Password recovery additionally needs configured SMTP and a recovery email
+template that displays `{{ .Token }}`. Follow `docs/ACCOUNT_RECOVERY.md`; keeping
+the build variable false leaves owner-assisted recovery in place.
 
 ### 3.2 Check the project is in its demonstration state
 

@@ -130,6 +130,26 @@ export const me = {
     networkBlocked: 'Server i dalje nije dostupan. Ako ste inace na internetu, zahtjev mozda blokira dodatak za blokiranje sadrzaja, zastita privatnosti u pregledacu ili mreza na kojoj ste. Mozete pokusati sa drugog pregledaca ili druge mreze, ili pitati vlasnika sistema.',
   },
 
+  recovery: {
+    forgot: 'Zaboravljena lozinka',
+    title: 'Promjena zaboravljene lozinke',
+    intro: 'Unesite email naloga. Ako nalog postoji, na tu adresu stize jednokratni kod.',
+    send: 'Posalji kod',
+    received: 'Zahtjev je primljen. Ako nalog postoji, provjerite email i unesite kod. Isti odgovor se prikazuje za svaku adresu.',
+    code: 'Kod iz emaila',
+    newPassword: 'Nova lozinka',
+    confirmPassword: 'Ponovite novu lozinku',
+    save: 'Promijeni lozinku',
+    resend: 'Posalji novi kod',
+    changeEmail: 'Promijeni email',
+    cooldown: 'Novi kod mozete traziti za {seconds} s.',
+    invalidCode: 'Kod nije ispravan ili je istekao. Provjerite kod ili zatrazite novi.',
+    mismatch: 'Lozinke nijesu iste.',
+    updateFailed: 'Lozinka mozda nije promijenjena. Pokusajte se prijaviti novom lozinkom ili zatrazite novi kod.',
+    done: 'Lozinka je promijenjena. Mozete se prijaviti novom lozinkom.',
+    back: 'Nazad na prijavu',
+  },
+
   accounts: {
     pageTitle: 'Nalozi i pristup', ownerOnly: 'Samo vlasnik sistema', allAccounts: 'Registrovani nalozi',
     accountCount: 'Broj naloga: {count}', risk: 'Ovo su nalozi na serveru. Promjene pristupa odmah stupaju na snagu i ostaju u evidenciji.',

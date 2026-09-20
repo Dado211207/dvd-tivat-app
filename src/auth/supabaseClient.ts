@@ -153,15 +153,23 @@ export function isUnreachable(error: unknown): boolean {
   );
 }
 
-/**
- * Password reset is not offered, and the reason is stated rather than hidden.
- *
- * Supabase's default mail sender only delivers to addresses on the project team
- * and is heavily rate limited, so a reset form here would send nothing to an
- * ordinary member while looking as though it had. Until an SMTP provider is
- * configured (blocker B2), the owner resets a password from the dashboard.
- */
-export const PASSWORD_RESET_AVAILABLE = false;
+/** Enabled only after SMTP and the recovery-code email template are verified. */
+export const PASSWORD_RESET_AVAILABLE = import.meta.env.VITE_PASSWORD_RESET_ENABLED === 'true';
+
+/** Recovery never imports a session into the operational account client. */
+export function createRecoveryBackend(): SupabaseClient {
+  if (!isAccountBackendConfigured() || !PASSWORD_RESET_AVAILABLE) {
+    throw new Error('Recovery is not configured.');
+  }
+  return createClient(url, publishableKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: `boka-recovery-${crypto.randomUUID()}`,
+    },
+  });
+}
 
 export interface AuthOutcome {
   readonly ok: boolean;
