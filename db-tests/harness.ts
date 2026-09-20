@@ -35,6 +35,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609150010_intervention_audit_read.sql',
   'supabase/migrations/202609150011_revoke_event_trigger_execute.sql',
   'supabase/migrations/202609150012_web_push_subscriptions.sql',
+  'supabase/migrations/202609200013_multi_service_account_admin.sql',
 ];
 
 export const DATABASE_URL =

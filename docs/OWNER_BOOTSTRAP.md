@@ -118,9 +118,15 @@ Back in the application, on **Nalozi i pristup**, press **Provjeri pristup
 ponovo** (or sign out and in again). The account directory should appear, listing
 every registered account, with a role selector and an access control for each.
 
-You can now approve people: set a registered account to `Vatrogasac`, `Komandir`
-or `Administrator`, or take access away with a reason. Every change is recorded
-permanently and shown underneath the list.
+You can now approve people. The panel has separate DVD Tivat and SZS selectors,
+each offering `Vatrogasac`, `Komandir`, `Administrator` or no membership. You
+may also take the whole account's access away with a reason. Every change is
+recorded permanently and shown underneath the list.
+
+The SZS selector remains read-only until migration `202609200013` is applied and
+the deployment variable `VITE_MULTI_SERVICE_ADMIN_ENABLED=true` is set. This is
+intentional: deploying the screen before its database policy would turn a
+missing security boundary into a production surprise.
 
 ---
 

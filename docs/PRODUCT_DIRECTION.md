@@ -43,6 +43,20 @@ separate from the old simulation until the simulation is removed or rebuilt.
 
 ## Multi-service model
 
+### Implemented account-administration foundation
+
+Migration `202609200013` implements only the first safe, additive piece of this
+model: stable DVD and SZS organization rows, per-user membership roles and a
+permanent owner-only membership audit. The owner panel can assign one account a
+different role in each service. Existing approved accounts are backfilled only
+to DVD; SZS starts empty.
+
+This does **not** make interventions, rosters, groups, vehicles or attendance
+multi-service. Those records remain DVD-scoped, and an SZS membership grants no
+access to them. The deployment flag stays off until the hosted migration is
+verified. This boundary lets account onboarding start without pretending the
+larger cross-service operating model has been approved or implemented.
+
 ### Recommended shape
 
 Use one shared product and one Supabase project with **organization-scoped

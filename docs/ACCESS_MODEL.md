@@ -107,6 +107,25 @@ caller cannot execute it at all.
 | **PENDING** *(default)* | Nothing operational at all |
 | **CITIZEN** *(legacy)* | Nothing operational at all. Retained only so rows written by the first migration stay valid |
 
+### Organization memberships in the owner panel
+
+Migration `202609200013` adds separate DVD Tivat and SZS memberships. A user may
+be a firefighter in one service and a commander or non-member in the other.
+Only the single system `OWNER` may change these memberships, and every change is
+written to `organization_membership_audit`.
+
+The existing `access_grants` row remains the compatibility authority for the
+DVD operational workspace. Changing a DVD membership updates that grant in the
+same transaction. Changing an SZS membership does not touch it and therefore
+cannot reveal DVD interventions, roster, vehicles, attendance or history. SZS
+operational records require a later organization-scoped schema and are not
+invented by this admin-panel delivery.
+
+An administrator cannot read or set a password. When hosted email recovery is
+enabled, the owner may initiate a one-time code to the account's registered
+email. The user still proves control of that mailbox and chooses their own new
+password.
+
 > ### ADMIN holds command authority — an explicit owner decision, not an accident
 >
 > **Decided by the owner on 12 September 2026.** `ADMIN` retains full command

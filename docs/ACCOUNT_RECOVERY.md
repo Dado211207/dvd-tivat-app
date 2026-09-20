@@ -59,3 +59,10 @@ will show the owner-assisted recovery notice.
   asks the member to try the new password or request another code rather than
   claiming success.
 
+## Owner-initiated recovery
+
+When the same feature gate is enabled, the owner account directory offers
+`Send reset code` for a registered account. It only requests the ordinary
+recovery email to that account's stored address. The owner never receives the
+code, never sees the old password and cannot choose the new one. The button is
+disabled while this document's SMTP acceptance gate is closed.

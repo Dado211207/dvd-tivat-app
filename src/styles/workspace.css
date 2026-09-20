@@ -1072,8 +1072,16 @@ fieldset {
 
 .account-table {
   width: 100%;
-  min-width: 650px;
+  min-width: 920px;
   border-collapse: collapse;
+}
+
+.account-service-cell {
+  min-width: 155px;
+}
+
+.account-service-cell select {
+  width: 100%;
 }
 
 .account-table th,

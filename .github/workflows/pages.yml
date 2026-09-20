@@ -74,6 +74,7 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_WEB_PUSH_PUBLIC_KEY: ${{ vars.VITE_WEB_PUSH_PUBLIC_KEY }}
           VITE_PASSWORD_RESET_ENABLED: ${{ vars.VITE_PASSWORD_RESET_ENABLED }}
+          VITE_MULTI_SERVICE_ADMIN_ENABLED: ${{ vars.VITE_MULTI_SERVICE_ADMIN_ENABLED }}
         run: |
           # Without these the deployed copy would look like the application but
           # refuse every operational screen, which is worse than not deploying:
@@ -122,6 +123,12 @@ jobs:
               echo "::error::VITE_PASSWORD_RESET_ENABLED must be true, false or unset."
               exit 1 ;;
           esac
+          case "$VITE_MULTI_SERVICE_ADMIN_ENABLED" in
+            ''|false|true) ;;
+            *)
+              echo "::error::VITE_MULTI_SERVICE_ADMIN_ENABLED must be true, false or unset."
+              exit 1 ;;
+          esac
 
       - name: Point the build at the configured project
         env:
@@ -129,6 +136,7 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_WEB_PUSH_PUBLIC_KEY: ${{ vars.VITE_WEB_PUSH_PUBLIC_KEY }}
           VITE_PASSWORD_RESET_ENABLED: ${{ vars.VITE_PASSWORD_RESET_ENABLED }}
+          VITE_MULTI_SERVICE_ADMIN_ENABLED: ${{ vars.VITE_MULTI_SERVICE_ADMIN_ENABLED }}
         run: |
           # Written to a .env file rather than passed as environment variables:
           # an empty environment variable silently overrides everything else,
@@ -138,6 +146,7 @@ jobs:
             printf 'VITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$VITE_SUPABASE_PUBLISHABLE_KEY"
             printf 'VITE_WEB_PUSH_PUBLIC_KEY=%s\n' "$VITE_WEB_PUSH_PUBLIC_KEY"
             printf 'VITE_PASSWORD_RESET_ENABLED=%s\n' "${VITE_PASSWORD_RESET_ENABLED:-false}"
+            printf 'VITE_MULTI_SERVICE_ADMIN_ENABLED=%s\n' "${VITE_MULTI_SERVICE_ADMIN_ENABLED:-false}"
           } > .env.production.local
 
       - uses: actions/configure-pages@v5

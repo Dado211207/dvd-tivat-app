@@ -36,7 +36,14 @@ Each run applies, from an empty database:
 4. `supabase/migrations/202609110003_client_role_privileges.sql`;
 5. `supabase/migrations/202609110004_function_execute_privileges.sql`;
 6. `supabase/migrations/202609120005_organisational_writes.sql`;
-7. `supabase/migrations/202609130006_attendance_truth.sql`.
+7. `supabase/migrations/202609130006_attendance_truth.sql`;
+8. `supabase/migrations/202609140007_availability_and_journey.sql`;
+9. `supabase/migrations/202609150008_recipient_eligibility_and_history.sql`;
+10. `supabase/migrations/202609150009_realtime_publication.sql`;
+11. `supabase/migrations/202609150010_intervention_audit_read.sql`;
+12. `supabase/migrations/202609150011_revoke_event_trigger_execute.sql`;
+13. `supabase/migrations/202609150012_web_push_subscriptions.sql`;
+14. `supabase/migrations/202609200013_multi_service_account_admin.sql`.
 
 The list lives in `db-tests/harness.ts`; keep the two in step, because a
 migration missing from that array is a migration nothing ever runs.
