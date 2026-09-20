@@ -10,8 +10,15 @@ something is *not* enforced yet, it says so.
 
 ## 1. Identity
 
-Identity is the immutable authenticated user id (`auth.users.id`). A name or an
-email address is display and contact data and never carries authority.
+Identity is the immutable authenticated user id (`auth.users.id`). A name,
+email address, telephone number or date of birth is display/contact data and
+never carries authority.
+
+Migration `202609200014` makes the minimum applicant profile explicit: full
+name, telephone normalized to E.164 and a non-future date of birth. Email stays
+in Supabase Auth. A direct sign-up with missing or invalid metadata still
+creates only an incomplete `PENDING` account; it cannot manufacture operational
+access. Address, JMBG, blood group and health data are not collected.
 
 Two separate records exist on purpose:
 
@@ -32,7 +39,8 @@ account, never from the member row.
 
 1. the caller is authenticated;
 2. the account's grant is `active`;
-3. the profile is `profile_complete`;
+3. the profile is `profile_complete`, which now requires full name, valid
+   telephone and valid date of birth;
 4. the granted role is one of `OWNER`, `ADMIN`, `COMMANDER`, `FIREFIGHTER`.
 
 Anything else returns `NULL`. `PENDING` and `CITIZEN` deliberately resolve to

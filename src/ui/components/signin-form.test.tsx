@@ -22,12 +22,17 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const signIn = vi.fn();
+const register = vi.fn();
 
 vi.mock('@/auth/supabaseClient', async (importOriginal) => {
   // The messages themselves are the real ones, so this cannot pass against a
   // sentence that no longer exists.
   const real = await importOriginal<typeof import('@/auth/supabaseClient')>();
-  return { ...real, signInWithEmail: (...args: unknown[]) => signIn(...args) };
+  return {
+    ...real,
+    signInWithEmail: (...args: unknown[]) => signIn(...args),
+    registerWithEmail: (...args: unknown[]) => register(...args),
+  };
 });
 
 /** Signed out, with a project configured: the state that shows the form. */
@@ -43,6 +48,7 @@ let root: Root;
 
 beforeEach(() => {
   signIn.mockReset();
+  register.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -165,5 +171,49 @@ describe('when the request never reaches the server', () => {
 
     const text = container.textContent ?? '';
     expect(text).not.toMatch(/TypeError|Failed to fetch|supabase\.co|sb_publishable|eyJ/i);
+  });
+});
+
+describe('account registration', () => {
+  it('submits all required profile fields with a normalized telephone', async () => {
+    register.mockResolvedValue({ ok: true, sessionStarted: false });
+    await openForm();
+    const switchButton = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => /Nemam nalog/i.test(button.textContent ?? ''));
+    expect(switchButton).not.toBeUndefined();
+    act(() => switchButton?.click());
+
+    typeInto('#accountRegisterFullName', 'Probni Vatrogasac');
+    typeInto('#accountRegisterPhone', '067 123-456');
+    typeInto('#accountEmail', 'probni@example.invalid');
+    typeInto('#accountBirthDate', '1995-04-23');
+    typeInto('#accountPassword', 'sigurna-lozinka-123');
+    typeInto('#accountConfirmPassword', 'sigurna-lozinka-123');
+
+    await attemptSignIn();
+
+    expect(register).toHaveBeenCalledWith('probni@example.invalid', 'sigurna-lozinka-123', {
+      fullName: 'Probni Vatrogasac',
+      phone: '+38267123456',
+      dateOfBirth: '1995-04-23',
+    });
+  });
+
+  it('does not submit when password confirmation differs', async () => {
+    await openForm();
+    const switchButton = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => /Nemam nalog/i.test(button.textContent ?? ''));
+    act(() => switchButton?.click());
+    typeInto('#accountRegisterFullName', 'Probni Vatrogasac');
+    typeInto('#accountRegisterPhone', '067123456');
+    typeInto('#accountEmail', 'probni@example.invalid');
+    typeInto('#accountBirthDate', '1995-04-23');
+    typeInto('#accountPassword', 'sigurna-lozinka-123');
+    typeInto('#accountConfirmPassword', 'druga-lozinka-123');
+
+    await attemptSignIn();
+
+    expect(register).not.toHaveBeenCalled();
+    expect(container.textContent ?? '').toMatch(/Lozinke nijesu iste/i);
   });
 });

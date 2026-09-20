@@ -48,6 +48,7 @@ alter default privileges in schema public grant execute on functions to anon, au
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,
+  raw_user_meta_data jsonb not null default '{}'::jsonb,
   email_confirmed_at timestamptz,
   created_at timestamptz not null default now()
 );

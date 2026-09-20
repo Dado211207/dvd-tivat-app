@@ -2301,3 +2301,30 @@ Run the complete local non-browser gate, finish browser-test coverage and push t
 for a Draft stacked review. Do not merge or deploy it.
 
 ---
+
+## 2026-09-20 — Required registration profile
+
+**Done**
+
+- Confirmed on the real current `main` that PR #27 and PRs #28-#35 were already
+  merged; the remaining registration request had not landed.
+- Added migration `202609200014`: full name, E.164 telephone and date of birth
+  are all required before `profile_complete` can become true. Missing or
+  malformed sign-up metadata fails closed to an incomplete `PENDING` account.
+- Replaced the name-only completion RPC with the three-field server-validated
+  command and removed the old callable signature.
+- Updated registration and existing-profile completion UI in both languages,
+  including password confirmation and HTML required controls.
+- Added owner-only contact display and member-link readiness with a direct path
+  to `Evidencija`.
+- Added pure client validation, database regression coverage and registration
+  form coverage.
+
+**Rollout boundary**
+
+- Migration 014 and the matching client must be released together. Existing
+  profiles become incomplete until the new required fields are supplied.
+- No hosted migration, feature enablement or real-member-data acceptance is
+  claimed by this local change.
+
+---

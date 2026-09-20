@@ -131,7 +131,9 @@ describe('the owner bootstrap, run from the runbook', () => {
 
   it('completes the profile through the real command, not a shortcut', async () => {
     await asUserCommitted(db, ownerId, (client) =>
-      client.query('select public.complete_own_profile($1)', ['Prvi Vlasnik']),
+      client.query('select public.complete_own_profile($1, $2, $3::date)', [
+        'Prvi Vlasnik', '067123456', '1990-01-01',
+      ]),
     );
     const { rows } = await db.query(
       `select full_name, profile_complete from public.profiles where user_id = $1`,
@@ -169,7 +171,9 @@ describe('the owner bootstrap, run from the runbook', () => {
   it('refuses a second bootstrap, which is the whole point of the index', async () => {
     secondId = await register(secondEmail);
     await asUserCommitted(db, secondId, (client) =>
-      client.query('select public.complete_own_profile($1)', ['Drugi Kandidat']),
+      client.query('select public.complete_own_profile($1, $2, $3::date)', [
+        'Drugi Kandidat', '067123457', '1991-02-02',
+      ]),
     );
 
     const promoteSecond = forEmail(PROMOTION_BLOCK, secondEmail);
@@ -223,7 +227,9 @@ describe('a role change changes what the server actually allows', () => {
                     on conflict do nothing`);
     memberId = await register(`napredovanje-${Date.now()}@example.invalid`);
     await asUserCommitted(db, memberId, (client) =>
-      client.query('select public.complete_own_profile($1)', ['Ime Za Napredovanje']),
+      client.query('select public.complete_own_profile($1, $2, $3::date)', [
+        'Ime Za Napredovanje', '067123458', '1992-03-03',
+      ]),
     );
     await asUserCommitted(db, ownerId, (client) =>
       client.query('select public.owner_set_role($1, $2)', [memberId, 'FIREFIGHTER']),
@@ -289,7 +295,9 @@ describe('a suspension takes effect on the very next request', () => {
                     on conflict do nothing`);
     memberId = await register(`suspenzija-${Date.now()}@example.invalid`);
     await asUserCommitted(db, memberId, (client) =>
-      client.query('select public.complete_own_profile($1)', ['Ime Za Suspenziju']),
+      client.query('select public.complete_own_profile($1, $2, $3::date)', [
+        'Ime Za Suspenziju', '067123459', '1993-04-04',
+      ]),
     );
     await asUserCommitted(db, ownerId, (client) =>
       client.query('select public.owner_set_role($1, $2)', [memberId, 'COMMANDER']),

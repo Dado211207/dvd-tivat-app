@@ -36,6 +36,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609150011_revoke_event_trigger_execute.sql',
   'supabase/migrations/202609150012_web_push_subscriptions.sql',
   'supabase/migrations/202609200013_multi_service_account_admin.sql',
+  'supabase/migrations/202609200014_required_registration_profile.sql',
 ];
 
 export const DATABASE_URL =
@@ -95,7 +96,12 @@ export async function completeProfile(
   fullName: string,
 ): Promise<void> {
   await client.query(
-    `update public.profiles set full_name = $2, profile_complete = true where user_id = $1`,
+    `update public.profiles
+        set full_name = $2,
+            phone_e164 = '+38267123456',
+            date_of_birth = date '1990-01-01',
+            profile_complete = true
+      where user_id = $1`,
     [userId, fullName],
   );
 }
