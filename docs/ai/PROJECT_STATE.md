@@ -41,8 +41,10 @@ found the same six DVD memberships, still zero SZS memberships, one limited
 `CITIZEN`, no `PENDING`, the official SZS name and the self-only RPC with
 `authenticated` execute and no `anon` execute. The Pages repository variable
 `VITE_MULTI_SERVICE_ADMIN_ENABLED` was already `true`; nobody was added to DVD
-or SZS. PR merge, main CI, Pages deployment and the public smoke test are the
-only remaining rollout steps.
+or SZS. PR #38 was squash-merged as `d8e4b84`; main CI #117 and Pages deploy
+#24 passed. The public `Nalozi` smoke test loaded the six-field registration
+form and the citizen-first explanation (DVD, SZS or both by owner decision)
+without creating an account or exposing a visible application error.
 
 ## Previous delivery: required registration profile and member-link readiness
 
