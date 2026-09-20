@@ -8,9 +8,11 @@ Last updated: 2026-09-20
 
 ## Current delivery: account recovery and release acceptance
 
-Current local branch: `codex/account-recovery-release`, following the
-operational read-error change in PR #31. PR #30 is merged on `main`; PR #31 is
-retargeted to `main` and awaiting its own CI result before merge.
+PRs #30, #31 and #32 are merged on `main` at `ae19928`. PR #32 CI #100 and the
+post-merge main CI #101 both passed. The deployment workflow #17 completed and
+the published copy at `https://dado211207.github.io/dvd-tivat-app/` returns the
+current Boka Operativa shell. The recovery build gate is disabled there as
+intended until hosted email acceptance passes.
 
 This delivery implements forgotten-password recovery with an emailed one-time
 code, matching password confirmation and a temporary non-persistent recovery
@@ -21,19 +23,20 @@ which members have accounts.
 
 `docs/ACCOUNT_RECOVERY.md` contains the exact enablement gate.
 `docs/RELEASE_ACCEPTANCE.md` records the real-device, locked-phone, complete
-fictional intervention, backup/restore and three-exercise pilot checks. Local
-TypeScript, production build, ESLint and `git diff --check` pass. No functional
-or physical-device tests were run locally, and no hosted configuration was
-changed.
+fictional intervention, backup/restore and three-exercise pilot checks. CI #100
+passed 631 unit tests, 367 database tests (12 hosted checks skipped), 276
+browser/accessibility cases, six screenshot scenarios, build and bundle-secret
+checks. Local recovery-disabled and recovery-enabled builds, TypeScript, ESLint,
+workflow YAML parsing and `git diff --check` also passed. Physical-device,
+SMTP/mail delivery, backup restore and supervised pilot acceptance remain open.
 
 ## Previous follow-up: operational read failures
 
-PR #31 fixes the intervention-list error contract documented in
+Merged PR #31 fixes the intervention-list error contract documented in
 `docs/UX_AUDIT.md` §10c. Failed reads now reach the command, member and archive
 error handlers. Initial command/member loading and failure no longer imply an
 empty intervention list; member and archive screens distinguish denied reads
-from unavailable data. PR #30's test result does not validate this later change;
-PR #31 has its own CI gate before merge.
+from unavailable data. Its own CI #98 passed before merge.
 
 ## Previous delivery: Boka Operativa UX and language pass
 
@@ -62,8 +65,8 @@ Validation for this delivery: TypeScript, ESLint, production build and
 run for this branch. Passing the build is not evidence of hosted notification
 delivery or device layout acceptance.
 
-Review is open as draft PR #30. Opening the PR automatically ran GitHub CI:
-the first run passed lint and TypeScript but reported three sign-in message
+PR #30 was merged after GitHub CI completed. Its first run passed lint and
+TypeScript but reported three sign-in message
 regressions (628 unit tests passed). The follow-up restores distinct network
 failure wording, repeated-failure content-blocker guidance and the generic
 credential refusal in both languages. Check the latest PR run for its result;
@@ -76,11 +79,10 @@ The second automatic CI run passed all 631 unit tests, 367 database tests
 mobile sizes. Existing scenarios now target the renamed account labels and
 direct disclosure summaries, and the keyboard scenario tabs through the new
 field-help control before entering the location. No scenario was removed or
-disabled. The current result is reported on PR #30.
+disabled. The corrected PR result passed before merge.
 
-The code is prepared for review. This pass has not published a hosted
-release or changed the production database. The remaining release work is
-functional/device validation and publication. Multi-service implementation
+At that checkpoint the pass had not published a hosted release or changed the
+production database. Multi-service implementation
 requires the service-owner decisions listed in `docs/PRODUCT_DIRECTION.md`.
 The operational read-error contract issue recorded in `docs/UX_AUDIT.md` §10c
 is addressed in the separate follow-up above.
