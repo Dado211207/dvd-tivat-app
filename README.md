@@ -114,7 +114,7 @@ recreates schemas, so point it only at a scratch database.
 | **Moj poziv** | Any member with an account | State general availability, open the call-out, answer with an ETA, report movement, record arrival and departure |
 | **Arhiva** | Any member with an account | The chronology of a finished intervention and confirmed participation per member |
 | **Evidencija** | Owner and administrator | Members, groups, vehicles and the account-to-member link |
-| **Nalozi** | **Real accounts** | Sign in and register against the real project; the owner sees every registered account and can assign a role or withdraw access with a mandatory reason, with a permanent audit beneath |
+| **Nalozi** | **Real accounts** | Sign in and register against the real project; the protected owner sees every account and manages DVD access. Migration-gated controls add separate DVD/SZS memberships, guarded email recovery and a permanent audit without exposing passwords |
 | **Podesavanja** | Anyone, including signed out | Language, this device's notifications, and the way through to the prototype screens. Deliberately outside the access gate: the person most in need of a refusal message they can read is the one who has been refused |
 
 ### The earlier prototype, on device-local fictional state

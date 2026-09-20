@@ -13,19 +13,30 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ASSIGNABLE_ROLES, type AccountRole } from '@/access/policy';
+import type { AccountRole } from '@/access/policy';
 import { useAccess } from '@/auth/AccessProvider';
 import {
+  MEMBERSHIP_ROLES,
   loadDirectory,
+  loadOrganizationMembershipAudit,
   loadRoleAudit,
   loadStatusAudit,
   setAccountActive,
   setAccountRole,
+  setOrganizationMembership,
   statusOf,
   type DirectoryAccount,
+  type MembershipRole,
+  type OrganizationCode,
+  type OrganizationMembershipAuditEntry,
   type RoleAuditEntry,
   type StatusAuditEntry,
 } from '@/auth/directory';
+import { requestRecoveryCode } from '@/auth/passwordRecovery';
+import {
+  MULTI_SERVICE_ADMIN_AVAILABLE,
+  PASSWORD_RESET_AVAILABLE,
+} from '@/auth/supabaseClient';
 import { useApp } from '@/state/AppStateContext';
 import { Chip, EmptyState, Notice } from '../components/primitives';
 import { AccountAccessSetup } from '../components/AccountAccessSetup';
@@ -67,25 +78,30 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
   const [accounts, setAccounts] = useState<DirectoryAccount[] | null>(null);
   const [roleAudit, setRoleAudit] = useState<RoleAuditEntry[]>([]);
   const [statusAudit, setStatusAudit] = useState<StatusAuditEntry[]>([]);
+  const [membershipAudit, setMembershipAudit] = useState<OrganizationMembershipAuditEntry[]>([]);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [resetBusyUserId, setResetBusyUserId] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState<ReadonlySet<string>>(new Set());
   const [reasonDraft, setReasonDraft] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setError('');
     setLoading(true);
     try {
-      const [directory, roles, statuses] = await Promise.all([
+      const [directory, roles, statuses, memberships] = await Promise.all([
         loadDirectory(),
         loadRoleAudit(),
         loadStatusAudit(),
+        loadOrganizationMembershipAudit(),
       ]);
       setAccounts(directory);
       setRoleAudit(roles);
       setStatusAudit(statuses);
+      setMembershipAudit(memberships);
       setLoadFailed(false);
     } catch {
       setAccounts([]);
@@ -105,28 +121,61 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     if (!needle || accounts === null) return accounts ?? [];
     return accounts.filter((account) =>
       `${account.fullName ?? ''} ${account.email} ${t.accounts.roleLabel[account.role]} ${
+        account.memberships.DVD ? t.accounts.roleLabel[account.memberships.DVD] : ''
+      } ${account.memberships.SZS ? t.accounts.roleLabel[account.memberships.SZS] : ''} ${
         t.accounts.statusLabel[statusOf(account)]
-      }`
+      } DVD SZS`
         .toLocaleLowerCase()
         .includes(needle),
     );
   }, [accounts, query, t.accounts.roleLabel, t.accounts.statusLabel]);
 
-  async function changeRole(account: DirectoryAccount, nextRole: AccountRole) {
+  async function changeMembership(
+    account: DirectoryAccount,
+    organization: OrganizationCode,
+    nextRole: MembershipRole | null,
+  ) {
     setBusyUserId(account.userId);
     setError('');
     try {
-      const outcome = await setAccountRole(account.userId, nextRole);
+      const outcome = MULTI_SERVICE_ADMIN_AVAILABLE
+        ? await setOrganizationMembership(account.userId, organization, nextRole)
+        : organization === 'DVD'
+          ? await setAccountRole(account.userId, (nextRole ?? 'PENDING') as AccountRole)
+          : { ok: false, message: t.accounts.multiServicePending };
       if (!outcome.ok) {
         const message = outcome.message ?? t.accounts.changeFailed;
         setError(message);
         announce(message, 'error');
         return;
       }
-      announce(t.accounts.changedRole.replace('{role}', t.accounts.roleLabel[nextRole]));
+      const roleLabel = nextRole ? t.accounts.roleLabel[nextRole] : t.accounts.noMembership;
+      announce(
+        t.accounts.changedMembership
+          .replace('{organization}', t.accounts.organizationLabel[organization])
+          .replace('{role}', roleLabel),
+      );
       await refresh();
     } finally {
       setBusyUserId(null);
+    }
+  }
+
+  async function sendPasswordReset(account: DirectoryAccount) {
+    if (!PASSWORD_RESET_AVAILABLE || resetSent.has(account.userId)) return;
+    setResetBusyUserId(account.userId);
+    setError('');
+    try {
+      const result = await requestRecoveryCode(account.email);
+      if (result === 'unreachable') {
+        setError(t.accounts.resetFailed);
+        announce(t.accounts.resetFailed, 'error');
+        return;
+      }
+      setResetSent((current) => new Set(current).add(account.userId));
+      announce(t.accounts.resetSent);
+    } finally {
+      setResetBusyUserId(null);
     }
   }
 
@@ -188,6 +237,12 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
         <Notice tone="warn">
           {t.accounts.risk}
         </Notice>
+        <Notice tone={PASSWORD_RESET_AVAILABLE ? 'info' : 'warn'}>
+          {PASSWORD_RESET_AVAILABLE ? t.accounts.resetReady : t.accounts.resetUnavailable}
+        </Notice>
+        {!MULTI_SERVICE_ADMIN_AVAILABLE ? (
+          <Notice tone="info">{t.accounts.multiServicePending}</Notice>
+        ) : null}
 
         <label className="account-search">
           <span>{t.accounts.search}</span>
@@ -214,7 +269,8 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                 <tr>
                   <th scope="col">{t.accounts.account}</th>
                   <th scope="col">{t.accounts.status}</th>
-                  <th scope="col">{t.accounts.role}</th>
+                  <th scope="col">{t.accounts.organizationLabel.DVD}</th>
+                  <th scope="col">{t.accounts.organizationLabel.SZS}</th>
                   <th scope="col">{t.accounts.access}</th>
                 </tr>
               </thead>
@@ -239,40 +295,44 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                           {t.accounts.statusLabel[status]}
                         </Chip>
                       </td>
-                      <td>
-                        {locked ? (
-                          <>
-                            <strong>{t.accounts.roleLabel[account.role]}</strong>
-                            <small>
-                              {isSelf
-                                ? t.accounts.ownAccountLocked
-                                : t.accounts.ownerLocked}
-                            </small>
-                          </>
-                        ) : (
-                          <select
-                            aria-label={`${t.accounts.role} - ${account.fullName ?? account.email}`}
-                            value={ASSIGNABLE_ROLES.includes(
-                              account.role as (typeof ASSIGNABLE_ROLES)[number],
-                            )
-                              ? account.role
-                              : 'PENDING'}
-                            disabled={busy}
-                            onChange={(event) =>
-                              void changeRole(account, event.target.value as AccountRole)
-                            }
-                          >
-                            {account.role === 'CITIZEN' ? (
-                              <option value="CITIZEN">{t.accounts.roleLabel.CITIZEN}</option>
-                            ) : null}
-                            {ASSIGNABLE_ROLES.map((role) => (
-                              <option key={role} value={role}>
-                                {t.accounts.roleLabel[role]}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
+                      {(['DVD', 'SZS'] as const).map((organization) => (
+                        <td key={organization} className="account-service-cell">
+                          {locked ? (
+                            <>
+                              <strong>{t.accounts.roleLabel[account.role]}</strong>
+                              <small>
+                                {isSelf
+                                  ? t.accounts.ownAccountLocked
+                                  : t.accounts.ownerLocked}
+                              </small>
+                            </>
+                          ) : (
+                            <select
+                              aria-label={`${t.accounts.organizationLabel[organization]} - ${account.fullName ?? account.email}`}
+                              value={account.memberships[organization] ?? 'NONE'}
+                              disabled={
+                                busy || (!MULTI_SERVICE_ADMIN_AVAILABLE && organization === 'SZS')
+                              }
+                              onChange={(event) =>
+                                void changeMembership(
+                                  account,
+                                  organization,
+                                  event.target.value === 'NONE'
+                                    ? null
+                                    : (event.target.value as MembershipRole),
+                                )
+                              }
+                            >
+                              <option value="NONE">{t.accounts.noMembership}</option>
+                              {MEMBERSHIP_ROLES.map((role) => (
+                                <option key={role} value={role}>
+                                  {t.accounts.roleLabel[role]}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
+                      ))}
                       <td>
                         {locked ? (
                           <small>-</small>
@@ -303,6 +363,20 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                             >
                               {account.active ? t.accounts.revokeAccess : t.accounts.restoreAccess}
                             </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              disabled={
+                                !PASSWORD_RESET_AVAILABLE ||
+                                resetBusyUserId === account.userId ||
+                                resetSent.has(account.userId)
+                              }
+                              onClick={() => void sendPasswordReset(account)}
+                            >
+                              {resetSent.has(account.userId)
+                                ? t.accounts.resetSentShort
+                                : t.accounts.sendReset}
+                            </button>
                           </div>
                         )}
                       </td>
@@ -323,7 +397,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
               <p role="status">{t.accounts.loading}</p>
             ) : loadFailed ? (
               <Notice tone="error">{t.accounts.loadFailed}</Notice>
-            ) : roleAudit.length === 0 && statusAudit.length === 0 ? (
+            ) : roleAudit.length === 0 && statusAudit.length === 0 && membershipAudit.length === 0 ? (
               <EmptyState title={t.accounts.noAudit}>{t.accounts.auditHint}</EmptyState>
             ) : (
               <ul className="audit-list">
@@ -348,6 +422,20 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                   <li key={`status-${entry.id}`}>
                     <strong>{nameOf(entry.targetUserId)}</strong>:{' '}
                     {entry.nextActive ? t.accounts.accessChange : t.accounts.accessRemoval} - {entry.reason}
+                    <small>{formatTime(entry.changedAt)}</small>
+                  </li>
+                ))}
+                {membershipAudit.map((entry) => (
+                  <li key={`membership-${entry.id}`}>
+                    <strong>{nameOf(entry.targetUserId)}</strong>:{' '}
+                    {t.accounts.membershipChanged
+                      .replace('{organization}', t.accounts.organizationLabel[entry.organization])
+                      .replace(
+                        '{role}',
+                        entry.nextActive && entry.nextRole
+                          ? t.accounts.roleLabel[entry.nextRole]
+                          : t.accounts.noMembership,
+                      )}
                     <small>{formatTime(entry.changedAt)}</small>
                   </li>
                 ))}

@@ -155,6 +155,8 @@ export function isUnreachable(error: unknown): boolean {
 
 /** Enabled only after SMTP and the recovery-code email template are verified. */
 export const PASSWORD_RESET_AVAILABLE = import.meta.env.VITE_PASSWORD_RESET_ENABLED === 'true';
+export const MULTI_SERVICE_ADMIN_AVAILABLE =
+  import.meta.env.VITE_MULTI_SERVICE_ADMIN_ENABLED === 'true';
 
 /** Recovery never imports a session into the operational account client. */
 export function createRecoveryBackend(): SupabaseClient {

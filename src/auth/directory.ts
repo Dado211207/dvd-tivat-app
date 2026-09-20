@@ -15,7 +15,7 @@
 
 import type { AccountRole, AccountStatus } from '@/access/policy';
 import { activeText } from '@/i18n/useText';
-import { accountBackend } from './supabaseClient';
+import { accountBackend, MULTI_SERVICE_ADMIN_AVAILABLE } from './supabaseClient';
 
 export interface DirectoryAccount {
   readonly userId: string;
@@ -25,7 +25,17 @@ export interface DirectoryAccount {
   readonly role: AccountRole;
   readonly active: boolean;
   readonly grantedAt: string;
+  readonly memberships: Readonly<Partial<Record<OrganizationCode, MembershipRole>>>;
 }
+
+export const ORGANIZATION_CODES = ['DVD', 'SZS'] as const;
+export type OrganizationCode = (typeof ORGANIZATION_CODES)[number];
+export type MembershipRole = 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
+export const MEMBERSHIP_ROLES: readonly MembershipRole[] = [
+  'FIREFIGHTER',
+  'COMMANDER',
+  'ADMIN',
+];
 
 export interface RoleAuditEntry {
   readonly id: string;
@@ -41,6 +51,16 @@ export interface StatusAuditEntry {
   readonly previousActive: boolean;
   readonly nextActive: boolean;
   readonly reason: string;
+  readonly changedAt: string;
+}
+
+export interface OrganizationMembershipAuditEntry {
+  readonly id: string;
+  readonly organization: OrganizationCode;
+  readonly targetUserId: string;
+  readonly previousRole: MembershipRole | null;
+  readonly nextRole: MembershipRole | null;
+  readonly nextActive: boolean;
   readonly changedAt: string;
 }
 
@@ -70,6 +90,24 @@ interface GrantRow {
   granted_at: string;
 }
 
+interface OrganizationRow {
+  id: string;
+  code: string;
+}
+
+interface MembershipRow {
+  organization_id: string;
+  user_id: string;
+  role: MembershipRole;
+  active: boolean;
+}
+
+function asOrganizationCode(value: string): OrganizationCode | null {
+  return ORGANIZATION_CODES.includes(value as OrganizationCode)
+    ? (value as OrganizationCode)
+    : null;
+}
+
 /**
  * Read every account.
  *
@@ -89,6 +127,44 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
   const grantByUser = new Map<string, GrantRow>();
   for (const grant of (grants.data ?? []) as GrantRow[]) grantByUser.set(grant.user_id, grant);
 
+  const membershipsByUser = new Map<
+    string,
+    Partial<Record<OrganizationCode, MembershipRole>>
+  >();
+  if (MULTI_SERVICE_ADMIN_AVAILABLE) {
+    const [organizations, memberships] = await Promise.all([
+      backend.from('organizations').select('id, code'),
+      backend
+        .from('organization_memberships')
+        .select('organization_id, user_id, role, active'),
+    ]);
+    if (organizations.error) throw organizations.error;
+    if (memberships.error) throw memberships.error;
+
+    const organizationById = new Map<string, OrganizationCode>();
+    for (const organization of (organizations.data ?? []) as OrganizationRow[]) {
+      const code = asOrganizationCode(organization.code);
+      if (code) organizationById.set(organization.id, code);
+    }
+    for (const membership of (memberships.data ?? []) as MembershipRow[]) {
+      if (!membership.active) continue;
+      const code = organizationById.get(membership.organization_id);
+      if (!code) continue;
+      const current = membershipsByUser.get(membership.user_id) ?? {};
+      current[code] = membership.role;
+      membershipsByUser.set(membership.user_id, current);
+    }
+  } else {
+    // Safe rollout fallback: before migration 013 is enabled, preserve the
+    // existing DVD controls and derive their display from the compatibility
+    // grant without touching a table that does not exist yet.
+    for (const grant of (grants.data ?? []) as GrantRow[]) {
+      if (MEMBERSHIP_ROLES.includes(grant.role as MembershipRole)) {
+        membershipsByUser.set(grant.user_id, { DVD: grant.role as MembershipRole });
+      }
+    }
+  }
+
   return ((profiles.data ?? []) as ProfileRow[])
     .map((profile): DirectoryAccount | null => {
       const grant = grantByUser.get(profile.user_id);
@@ -103,10 +179,52 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
         role: grant.role as AccountRole,
         active: grant.active,
         grantedAt: grant.granted_at,
+        memberships: membershipsByUser.get(profile.user_id) ?? {},
       };
     })
     .filter((account): account is DirectoryAccount => account !== null)
     .sort((a, b) => (a.fullName ?? a.email).localeCompare(b.fullName ?? b.email, 'sr'));
+}
+
+export async function loadOrganizationMembershipAudit(
+  limit = 40,
+): Promise<OrganizationMembershipAuditEntry[]> {
+  if (!MULTI_SERVICE_ADMIN_AVAILABLE) return [];
+  const backend = accountBackend();
+  const [audit, organizations] = await Promise.all([
+    backend
+      .from('organization_membership_audit')
+      .select(
+        'id, organization_id, target_user_id, previous_role, next_role, next_active, changed_at',
+      )
+      .order('changed_at', { ascending: false })
+      .limit(limit),
+    backend.from('organizations').select('id, code'),
+  ]);
+  if (audit.error) throw audit.error;
+  if (organizations.error) throw organizations.error;
+
+  const codes = new Map<string, OrganizationCode>();
+  for (const organization of (organizations.data ?? []) as OrganizationRow[]) {
+    const code = asOrganizationCode(organization.code);
+    if (code) codes.set(organization.id, code);
+  }
+
+  return ((audit.data ?? []) as Record<string, unknown>[])
+    .map((row): OrganizationMembershipAuditEntry | null => {
+      const organization = codes.get(row.organization_id as string);
+      if (!organization) return null;
+      return {
+        id: row.id as string,
+        organization,
+        targetUserId: row.target_user_id as string,
+        previousRole: (row.previous_role as MembershipRole | null) ?? null,
+        nextRole: (row.next_role as MembershipRole | null) ?? null,
+        nextActive: row.next_active as boolean,
+        changedAt: row.changed_at as string,
+      };
+    })
+    .filter((entry): entry is OrganizationMembershipAuditEntry => entry !== null);
 }
 
 export async function loadRoleAudit(limit = 25): Promise<RoleAuditEntry[]> {
@@ -169,7 +287,27 @@ export function explainCommandError(raw: string): string {
   if (raw.includes('ACCOUNT_NOT_FOUND')) {
     return messages.accountNotFound;
   }
+  if (raw.includes('ORGANIZATION_NOT_FOUND')) {
+    return messages.organizationNotFound;
+  }
   return messages.generic;
+}
+
+export async function setOrganizationMembership(
+  targetUserId: string,
+  organization: OrganizationCode,
+  role: MembershipRole | null,
+): Promise<CommandOutcome> {
+  try {
+    const { error } = await accountBackend().rpc('owner_set_organization_membership', {
+      target_user: targetUserId,
+      organization_code: organization,
+      requested_role: role ?? 'NONE',
+    });
+    return error ? { ok: false, message: explainCommandError(error.message) } : { ok: true };
+  } catch (error) {
+    return { ok: false, message: explainCommandError(String(error)) };
+  }
 }
 
 export async function setAccountRole(

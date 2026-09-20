@@ -6,7 +6,33 @@ describes.**
 
 Last updated: 2026-09-20
 
-## Current delivery: video-guided security hardening
+## Current delivery: owner multi-service account administration
+
+The owner requested one protected personal account with a complete account
+directory: every registered user, separate DVD Tivat and SZS membership roles,
+global suspension/restoration, password-recovery initiation and permanent
+audit. Migration `202609200013` adds `organizations`, organization-scoped
+memberships and their audit plus one owner-only command. Existing DVD roles are
+backfilled into the DVD organization; no SZS membership is inferred.
+
+The account screen now has separate DVD and SZS selectors. A person may hold a
+different role in each service. Assigning SZS never widens DVD authority. The
+existing global grant remains the DVD compatibility authority until every
+operational table and policy is explicitly organization-scoped. Passwords are
+never displayed or set by an administrator; the owner can only send the same
+one-time recovery code used by the guarded recovery flow.
+
+Rollout fails closed behind `VITE_MULTI_SERVICE_ADMIN_ENABLED`. With the flag
+off, the deployed DVD controls keep working and SZS is read-only. Turn it on
+only after migration 013 passes hosted postflight checks. Password email remains
+separately gated by `VITE_PASSWORD_RESET_ENABLED` and the SMTP acceptance in
+`docs/ACCOUNT_RECOVERY.md`.
+
+Local PostgreSQL was unavailable in this workspace, so the migration and its
+cross-service RLS tests require pull-request CI before merge. No hosted migration
+or feature enablement is claimed by this delivery yet.
+
+## Previous delivery: video-guided security hardening
 
 Four supplied videos were reviewed: three security checklists and one design /
 Playwright workflow recommendation. The security lists were checked against the
