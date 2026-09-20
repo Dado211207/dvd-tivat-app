@@ -49,6 +49,8 @@ facts that no single action is allowed to fake**.
 > rendered at all on a server-backed screen, so it cannot be tabbed to,
 > announced or scripted there.
 
+Published prototype: **https://dado211207.github.io/dvd-tivat-app/**
+
 Status: **a working prototype of the whole journey, on real data behind real
 access control.** Nothing is agreed with DVD Tivat yet, no real member exists in
 it, and nothing here is ready to be relied on in an emergency — Web Push still
