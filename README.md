@@ -114,7 +114,7 @@ recreates schemas, so point it only at a scratch database.
 | **Moj poziv** | Any member with an account | State general availability, open the call-out, answer with an ETA, report movement, record arrival and departure |
 | **Arhiva** | Any member with an account | The chronology of a finished intervention and confirmed participation per member |
 | **Evidencija** | Owner and administrator | Members, groups, vehicles and the account-to-member link |
-| **Nalozi** | **Real accounts** | Sign in and register with full name, telephone, email, date of birth and password; the protected owner sees every account, its member-record link and manages DVD/SZS access. Guarded email recovery and a permanent audit never expose passwords |
+| **Nalozi** | **Real accounts** | Sign in and register with full name, telephone, email, date of birth and password. Every new account starts as a limited citizen; the protected owner sees every account, its member-record link and assigns DVD, SZS or both. Guarded email recovery and a permanent audit never expose passwords |
 | **Podesavanja** | Anyone, including signed out | Language, this device's notifications, and the way through to the prototype screens. Deliberately outside the access gate: the person most in need of a refusal message they can read is the one who has been refused |
 
 ### The earlier prototype, on device-local fictional state
@@ -137,6 +137,8 @@ The application opens on **Poziv i intervencija**, the real commander's console.
 Somebody who is not signed in lands on a screen that says so and offers the way
 in — which is the correct first screen for a real tool, and keeps a fictional
 actor selector from being the first thing anybody sees.
+A signed-in citizen lands on **Nalozi** and is offered only that screen and
+**Podesavanja** until the owner assigns a service role.
 
 ## What it deliberately does not do
 

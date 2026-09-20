@@ -2342,3 +2342,41 @@ in. No fictional value was written for them, and no new account was created by
 the production smoke test.
 
 ---
+
+## 2026-09-20 — Citizen-first SZS account activation
+
+**Implemented on the rollout branch**
+
+- Kept both services empty of invented people. A person registers their own
+  account and now starts as a limited `CITIZEN` rather than a pending pseudo-role.
+- Added migration `202609200015`: official SZS display name, citizen registration
+  default and conversion, self-only active-membership RPC, and DVD removal that
+  preserves independent SZS membership.
+- Kept the existing security boundary: SZS assignment never changes
+  `current_dvd_role()` and never reveals DVD interventions, roster, vehicles,
+  attendance or history.
+- Changed signed-in citizen navigation to only **Nalozi** and **Podesavanja**,
+  with the account screen as the landing route.
+- Added personal service-role display and an explicit active-state notice in
+  the owner directory. The owner can choose DVD, SZS, both or neither for every
+  non-owner account.
+- Added database coverage for direct CITIZEN-to-SZS assignment, dual
+  membership, independent removal, self-only reads, official naming, audit and
+  function privileges. Added component and navigation coverage for citizen and
+  SZS-only presentation.
+
+**Verification before publishing**
+
+- `npm run verify`: passed (32 files, 647 tests).
+- Multi-service production fixture build and bundle-secret scan: passed.
+- Production dependency audit: zero vulnerabilities.
+- Local database suite unavailable because PostgreSQL 16 is not installed.
+- Local Playwright execution unavailable because its Chromium binary is not
+  installed; every scenario stopped at browser launch before application code.
+
+**Not yet claimed**
+
+GitHub CI, hosted migration 015, the deployment-variable change, merge, Pages
+deployment and production postflight remain pending.
+
+---

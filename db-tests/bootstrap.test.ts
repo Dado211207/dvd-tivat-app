@@ -110,14 +110,14 @@ describe('the owner bootstrap, run from the runbook', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('gives a freshly registered account nothing (runbook steps 1 and 2)', async () => {
+  it('gives a freshly registered account limited citizen access (runbook steps 1 and 2)', async () => {
     ownerId = await register(ownerEmail);
 
     const { rows } = await db.query(
       `select role, active from public.access_grants where user_id = $1`,
       [ownerId],
     );
-    expect(rows[0]).toMatchObject({ role: 'PENDING', active: true });
+    expect(rows[0]).toMatchObject({ role: 'CITIZEN', active: true });
 
     // Zero access, asserted rather than assumed.
     expect(await roleOf(ownerId)).toBeNull();

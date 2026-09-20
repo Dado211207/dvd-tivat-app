@@ -59,6 +59,17 @@ test.describe('the navigation offers only what the role can use', () => {
     await expect(page.getByTestId('nav-podesavanja')).toBeVisible();
   });
 
+  test('a citizen is offered only their account and device settings', async ({ page }) => {
+    await openOperational(page, 'nalozi', { role: null, accountStatus: 'ACTIVE' });
+
+    for (const route of ['poziv', 'mobilizacija', 'arhiva', 'evidencija']) {
+      await expect(page.getByTestId(`nav-${route}`), route).toHaveCount(0);
+    }
+    await expect(page.getByTestId('nav-nalozi')).toBeVisible();
+    await expect(page.getByTestId('nav-podesavanja')).toBeVisible();
+    await expect(page.getByText(/aktivan kao gradjanski nalog/i)).toBeVisible();
+  });
+
   /**
    * What the hosted review actually looked at: the deployed sidebar.
    *

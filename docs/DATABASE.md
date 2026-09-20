@@ -43,8 +43,9 @@ Each run applies, from an empty database:
 11. `supabase/migrations/202609150010_intervention_audit_read.sql`;
 12. `supabase/migrations/202609150011_revoke_event_trigger_execute.sql`;
 13. `supabase/migrations/202609150012_web_push_subscriptions.sql`;
-14. `supabase/migrations/202609200013_multi_service_account_admin.sql`.
-15. `supabase/migrations/202609200014_required_registration_profile.sql`.
+14. `supabase/migrations/202609200013_multi_service_account_admin.sql`;
+15. `supabase/migrations/202609200014_required_registration_profile.sql`;
+16. `supabase/migrations/202609200015_activate_szs_account_service.sql`.
 
 The list lives in `db-tests/harness.ts`; keep the two in step, because a
 migration missing from that array is a migration nothing ever runs.
@@ -88,6 +89,9 @@ migration, never by editing an old one.
 | `202609110004_function_execute_privileges.sql` | Removes the PUBLIC `EXECUTE` grant that left eight `security definer` helpers callable without signing in |
 | `202609120005_organisational_writes.sql` | The missing write paths: creating, editing and discarding an intervention draft, and CRUD for members, groups and vehicles. Adds `is_dvd_admin()` and the `organisation_audit` trail |
 | `202609130006_attendance_truth.sql` | Stops a self-declared claim counting as participation: adds `source`, a rejection state, `attendance_confirm`/`_reject`/`_unconfirm`, and **replaces** `attendance_totals()` with a version that separates confirmed from unverified time. Adds the two remaining write paths — `acknowledge_intervention` and vehicle departure/return. Also repairs `current_member_id()`, which resolved a member identity for accounts that had lost their role — see [ACCESS_MODEL.md §2](./ACCESS_MODEL.md#identity-is-not-separable-from-authority) |
+| `202609200013_multi_service_account_admin.sql` | Adds independent DVD/SZS account memberships, owner-only assignment and permanent audit without widening DVD operational access |
+| `202609200014_required_registration_profile.sql` | Requires server-validated full name, telephone and date of birth before operational access can become effective |
+| `202609200015_activate_szs_account_service.sql` | Makes new and unassigned accounts limited citizens, gives SZS its official display name, adds a self-only membership read and returns removed DVD members to citizen without touching SZS membership |
 
 `202609110003` and `202609110004` exist because of a defect only a real project
 could reveal; both are explained in

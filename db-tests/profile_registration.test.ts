@@ -23,7 +23,7 @@ async function register(email: string, metadata: Record<string, string> = {}) {
 }
 
 describe('required registration profile', () => {
-  it('creates a complete pending profile from valid sign-up metadata', async () => {
+  it('creates a complete citizen profile from valid sign-up metadata', async () => {
     const userId = await register('complete@example.invalid', {
       full_name: 'Probni Vatrogasac',
       phone: '067 123-456',
@@ -40,6 +40,11 @@ describe('required registration profile', () => {
       date_of_birth: '1995-04-23',
       profile_complete: true,
     });
+    const grant = await db.query<{ role: string }>(
+      'select role from public.access_grants where user_id = $1',
+      [userId],
+    );
+    expect(grant.rows[0]!.role).toBe('CITIZEN');
     const role = await asUser(db, userId, async (client) =>
       (await client.query<{ role: string | null }>('select public.current_dvd_role() as role')).rows[0]!.role,
     );

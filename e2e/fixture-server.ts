@@ -32,7 +32,7 @@ export type FixtureRole = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
  * published call-out - so every browser test was a test of the busiest screen
  * this application ever shows. The states nobody had looked at in a browser are
  * the ones a firefighter is most likely to meet: no call-out running, an
- * account still awaiting approval, a suspended account, a draft half-written.
+ * a limited citizen account, a suspended account, a draft half-written.
  * An empty state that is wrong is as bad as a full one that is wrong, and it is
  * far easier to ship without noticing.
  */
@@ -41,7 +41,7 @@ export interface FixtureOptions {
    * What `current_dvd_role()` answers.
    *
    * `null` is a real answer, not an absence: an account that exists, is signed
-   * in and has no operational grant yet. That is what "awaiting approval" is -
+   * in and has no DVD operational grant yet. That is the citizen state -
    * the gate derives it from a null role, there is no account status spelling
    * it - and a fixture that could not express it could not test it.
    */

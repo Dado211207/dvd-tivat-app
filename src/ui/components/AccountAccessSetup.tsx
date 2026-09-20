@@ -10,10 +10,15 @@
  * reload it.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAccess } from '@/auth/AccessProvider';
 import { accessObstacle } from '@/auth/access';
 import {
+  loadOwnOrganizationMemberships,
+  type OwnOrganizationMembership,
+} from '@/auth/directory';
+import {
+  MULTI_SERVICE_ADMIN_AVAILABLE,
   PASSWORD_RESET_AVAILABLE,
   completeOwnProfile,
   registerWithEmail,
@@ -45,6 +50,9 @@ export function AccountAccessSetup() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [ownMemberships, setOwnMemberships] = useState<
+    readonly OwnOrganizationMembership[] | null | undefined
+  >(MULTI_SERVICE_ADMIN_AVAILABLE ? null : []);
   /**
    * How many times in a row the server could not be reached.
    *
@@ -56,6 +64,47 @@ export function AccountAccessSetup() {
   const [unreachableRuns, setUnreachableRuns] = useState(0);
 
   const obstacle = accessObstacle(access);
+  const signedInUserId = access.kind === 'SIGNED_IN' ? access.userId : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!MULTI_SERVICE_ADMIN_AVAILABLE || signedInUserId === null) {
+      setOwnMemberships([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setOwnMemberships(null);
+    void loadOwnOrganizationMemberships()
+      .then((memberships) => {
+        if (!cancelled) setOwnMemberships(memberships);
+      })
+      .catch(() => {
+        // Membership display grants nothing. Keep failure distinct from an
+        // empty citizen membership so an SZS user is never mislabeled merely
+        // because this secondary read failed.
+        if (!cancelled) setOwnMemberships(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedInUserId]);
+
+  const szsMembership = ownMemberships?.find(
+    (membership) => membership.organization === 'SZS',
+  );
+  const membershipSummary = (() => {
+    if (ownMemberships === null) return t.accountAccess.checkingServices;
+    if (ownMemberships === undefined) return t.accountAccess.servicesUnavailable;
+    if (ownMemberships.length === 0) return t.accountAccess.noServiceMembership;
+    return ownMemberships
+      .map(
+        (membership) =>
+          `${t.accounts.organizationLabel[membership.organization]} — ${t.accounts.roleLabel[membership.role]}`,
+      )
+      .join(' · ');
+  })();
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -450,11 +499,21 @@ export function AccountAccessSetup() {
         </>
       ) : null}
 
-      {obstacle === 'AWAITING_APPROVAL' ? (
+      {obstacle === 'NO_DVD_ROLE' ? (
         <>
-          <Notice tone="warn">
-            {t.accountAccess.awaitingApproval}
-          </Notice>
+          {ownMemberships === null ? (
+            <p role="status">{t.accountAccess.checkingServices}</p>
+          ) : ownMemberships === undefined ? (
+            <Notice tone="warn">{t.accountAccess.servicesUnavailable}</Notice>
+          ) : (
+            <Notice tone={szsMembership ? 'info' : 'warn'}>
+              {szsMembership
+                ? t.accountAccess.szsMembershipActive
+                  .replace('{organization}', t.accounts.organizationLabel.SZS)
+                  .replace('{role}', t.accounts.roleLabel[szsMembership.role])
+                : t.accountAccess.citizenAccess}
+            </Notice>
+          )}
           <button className="btn" type="button" onClick={() => void leave()} disabled={busy}>
             {t.accountAccess.signOut}
           </button>
@@ -477,6 +536,10 @@ export function AccountAccessSetup() {
               <dd>
                 <strong>{access.role ? t.vocabulary.role[access.role] ?? access.role : t.accountAccess.unknownRole}</strong>
               </dd>
+            </div>
+            <div>
+              <dt>{t.accountAccess.servicesAndRoles}</dt>
+              <dd>{membershipSummary}</dd>
             </div>
           </dl>
           <p className="account-identity__note">

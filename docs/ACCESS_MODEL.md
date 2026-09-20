@@ -17,8 +17,10 @@ never carries authority.
 Migration `202609200014` makes the minimum applicant profile explicit: full
 name, telephone normalized to E.164 and a non-future date of birth. Email stays
 in Supabase Auth. A direct sign-up with missing or invalid metadata still
-creates only an incomplete `PENDING` account; it cannot manufacture operational
-access. Address, JMBG, blood group and health data are not collected.
+creates only an incomplete `CITIZEN` account; it cannot manufacture operational
+access. Migration `202609200015` also converts earlier unassigned `PENDING`
+rows to `CITIZEN`; the two values grant the same zero operational authority.
+Address, JMBG, blood group and health data are not collected.
 
 Two separate records exist on purpose:
 
@@ -108,16 +110,19 @@ caller cannot execute it at all.
 
 | Role | May |
 |---|---|
-| **OWNER** | Everything below, plus: read every account, assign `ADMIN`/`COMMANDER`/`FIREFIGHTER`/`PENDING`, suspend and restore access, read the role and status audit |
+| **OWNER** | Everything below, plus: read every account, assign independent `ADMIN`/`COMMANDER`/`FIREFIGHTER` membership in DVD, SZS or both, return DVD users to `CITIZEN`, suspend and restore access, read the role, status and membership audit |
 | **ADMIN** | Manage organisational records — members, groups, vehicles and the account-to-member link (`is_dvd_admin()`). **Also holds full command authority, by explicit owner decision** — see the note below. **Cannot** assign roles, suspend or restore access, or create an owner |
 | **COMMANDER** | Create, publish, update, change status of, close and cancel interventions; see responses and attendance; check members in and out; correct attendance with a reason; confirm, reject and withdraw confirmation of attendance |
 | **FIREFIGHTER** | See interventions addressed to them; respond; check themselves in and out; request a correction of their own record; record a vehicle departure and return |
-| **PENDING** *(default)* | Nothing operational at all |
-| **CITIZEN** *(legacy)* | Nothing operational at all. Retained only so rows written by the first migration stay valid |
+| **CITIZEN** *(default)* | Personal account and device settings only. No DVD or SZS operational data |
+| **PENDING** *(legacy)* | Nothing operational. Retained only for compatibility with rows and audit entries created before migration 015 |
 
 ### Organization memberships in the owner panel
 
-Migration `202609200013` adds separate DVD Tivat and SZS memberships. A user may
+Migration `202609200013` adds separate DVD Tivat and SZS memberships. Migration
+`202609200015` names the second organization `Sluzba zastite i spasavanja
+Tivat`, makes citizen the registration default and adds a self-only membership
+read command. A user may
 be a firefighter in one service and a commander or non-member in the other.
 Only the single system `OWNER` may change these memberships, and every change is
 written to `organization_membership_audit`.
@@ -128,6 +133,11 @@ same transaction. Changing an SZS membership does not touch it and therefore
 cannot reveal DVD interventions, roster, vehicles, attendance or history. SZS
 operational records require a later organization-scoped schema and are not
 invented by this admin-panel delivery.
+
+No person is pre-created in either service. People register their own citizen
+accounts; the owner then uses the two independent selectors to assign DVD, SZS
+or both. Removing the DVD membership returns the compatibility grant to
+`CITIZEN` and does not erase an active SZS membership.
 
 An administrator cannot read or set a password. When hosted email recovery is
 enabled, the owner may initiate a one-time code to the account's registered

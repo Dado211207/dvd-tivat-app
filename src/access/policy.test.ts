@@ -17,11 +17,8 @@ const account = (
 ): AccountSummary => ({ id, role, status, fullName: `Probni Korisnik ${id}` });
 
 describe('account access policy', () => {
-  it('gives every new registration no access at all', () => {
-    // PENDING is what the database trigger writes. The client saying CITIZEN
-    // here would have contradicted the server, which is the one mistake this
-    // display-only module must never make.
-    expect(defaultRegistrationRole()).toBe('PENDING');
+  it('starts every new registration as a limited citizen', () => {
+    expect(defaultRegistrationRole()).toBe('CITIZEN');
   });
 
   it('gives neither no-access role a single operational permission', () => {
