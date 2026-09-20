@@ -43,6 +43,7 @@ import { AccountAccessSetup } from '../components/AccountAccessSetup';
 import { RequireRole } from '../components/RequireRole';
 import { formatTime } from '@/i18n/time';
 import { useText } from '@/i18n/useText';
+import { hrefFor } from '@/ui/router';
 
 export function AccountsView() {
   const t = useText();
@@ -120,7 +121,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle || accounts === null) return accounts ?? [];
     return accounts.filter((account) =>
-      `${account.fullName ?? ''} ${account.email} ${t.accounts.roleLabel[account.role]} ${
+      `${account.fullName ?? ''} ${account.email} ${account.phone ?? ''} ${account.dateOfBirth ?? ''} ${t.accounts.roleLabel[account.role]} ${
         account.memberships.DVD ? t.accounts.roleLabel[account.memberships.DVD] : ''
       } ${account.memberships.SZS ? t.accounts.roleLabel[account.memberships.SZS] : ''} ${
         t.accounts.statusLabel[statusOf(account)]
@@ -286,6 +287,19 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                       <th scope="row">
                         <strong>{account.fullName ?? t.accounts.noName}</strong>
                         <small>{account.email}</small>
+                        {account.phone || account.dateOfBirth ? (
+                          <small>
+                            {[account.phone, account.dateOfBirth].filter(Boolean).join(' · ')}
+                          </small>
+                        ) : null}
+                        {account.memberId ? (
+                          <small>{t.accounts.linkedMember}</small>
+                        ) : (
+                          <small>
+                            {t.accounts.notLinkedMember} ·{' '}
+                            <a href={hrefFor('evidencija')}>{t.accounts.openRoster}</a>
+                          </small>
+                        )}
                       </th>
                       <td>
                         <Chip

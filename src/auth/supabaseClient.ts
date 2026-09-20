@@ -17,6 +17,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { AccessGateway } from './access';
+import type { RequiredProfile } from './profile';
 
 const url = import.meta.env.VITE_SUPABASE_URL?.trim() ?? '';
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? '';
@@ -236,11 +237,19 @@ function unreachable(error: unknown): boolean {
 export async function registerWithEmail(
   email: string,
   password: string,
+  profile: RequiredProfile,
 ): Promise<RegistrationOutcome> {
   try {
     const { data, error } = await accountBackend().auth.signUp({
       email: email.trim().toLowerCase(),
       password,
+      options: {
+        data: {
+          full_name: profile.fullName.trim(),
+          phone: profile.phone,
+          date_of_birth: profile.dateOfBirth,
+        },
+      },
     });
     if (error) {
       return { ok: false, sessionStarted: false, unreachable: unreachable(error) };
@@ -251,10 +260,12 @@ export async function registerWithEmail(
   }
 }
 
-export async function completeOwnProfile(fullName: string): Promise<AuthOutcome> {
+export async function completeOwnProfile(profile: RequiredProfile): Promise<AuthOutcome> {
   try {
     const { error } = await accountBackend().rpc('complete_own_profile', {
-      requested_full_name: fullName.trim(),
+      requested_full_name: profile.fullName.trim(),
+      requested_phone: profile.phone,
+      requested_date_of_birth: profile.dateOfBirth,
     });
     return error
       ? { ok: false, message: 'Ime i prezime nijesu sacuvani. Pokusajte ponovo.' }

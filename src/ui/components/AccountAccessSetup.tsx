@@ -20,6 +20,11 @@ import {
   signInWithEmail,
 } from '@/auth/supabaseClient';
 import { isPlausibleFullName } from '@/access/policy';
+import {
+  isValidProfileBirthDate,
+  localTodayIso,
+  normalizeProfilePhone,
+} from '@/auth/profile';
 import { useText } from '@/i18n/useText';
 import { Field, Notice } from './primitives';
 import { PasswordRecovery } from './PasswordRecovery';
@@ -33,7 +38,10 @@ export function AccountAccessSetup() {
   const [mode, setMode] = useState<Mode>('SIGN_IN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -54,6 +62,7 @@ export function AccountAccessSetup() {
     setError('');
     setMessage('');
     setPassword('');
+    setConfirmPassword('');
     setUnreachableRuns(0);
   }
 
@@ -87,9 +96,29 @@ export function AccountAccessSetup() {
       setError(t.accountAccess.invalidEmail);
       return;
     }
-    if (mode === 'REGISTER' && password.length < 12) {
-      setError(t.accountAccess.shortPassword);
-      return;
+    let normalizedPhone: string | null = null;
+    if (mode === 'REGISTER') {
+      if (!isPlausibleFullName(fullName)) {
+        setError(t.accountAccess.invalidFullName);
+        return;
+      }
+      normalizedPhone = normalizeProfilePhone(phone);
+      if (normalizedPhone === null) {
+        setError(t.accountAccess.invalidPhone);
+        return;
+      }
+      if (!isValidProfileBirthDate(dateOfBirth)) {
+        setError(t.accountAccess.invalidBirthDate);
+        return;
+      }
+      if (password.length < 12) {
+        setError(t.accountAccess.shortPassword);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError(t.accountAccess.passwordMismatch);
+        return;
+      }
     }
     setBusy(true);
     try {
@@ -106,8 +135,13 @@ export function AccountAccessSetup() {
         return;
       }
 
-      const outcome = await registerWithEmail(email, password);
+      const outcome = await registerWithEmail(email, password, {
+        fullName,
+        phone: normalizedPhone!,
+        dateOfBirth,
+      });
       setPassword('');
+      setConfirmPassword('');
       if (!outcome.ok) {
         setError(explain(outcome));
         return;
@@ -136,9 +170,22 @@ export function AccountAccessSetup() {
       setError(t.accountAccess.invalidFullName);
       return;
     }
+    const normalizedPhone = normalizeProfilePhone(phone);
+    if (normalizedPhone === null) {
+      setError(t.accountAccess.invalidPhone);
+      return;
+    }
+    if (!isValidProfileBirthDate(dateOfBirth)) {
+      setError(t.accountAccess.invalidBirthDate);
+      return;
+    }
     setBusy(true);
     try {
-      const outcome = await completeOwnProfile(fullName);
+      const outcome = await completeOwnProfile({
+        fullName,
+        phone: normalizedPhone,
+        dateOfBirth,
+      });
       if (!outcome.ok) {
         setError(t.accountAccess.profileSaveFailed);
         return;
@@ -209,6 +256,37 @@ export function AccountAccessSetup() {
       {obstacle === 'SIGN_IN_REQUIRED' ? (
         <>
           <form className="account-auth-form" onSubmit={submitCredentials}>
+            {mode === 'REGISTER' ? (
+              <>
+                <Field controlId="accountRegisterFullName" label={t.accountAccess.fullName} required>
+                  {(props) => (
+                    <input
+                      {...props}
+                      autoComplete="name"
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
+                    />
+                  )}
+                </Field>
+                <Field
+                  controlId="accountRegisterPhone"
+                  label={t.accountAccess.phone}
+                  hint={t.accountAccess.phoneHint}
+                  required
+                >
+                  {(props) => (
+                    <input
+                      {...props}
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                    />
+                  )}
+                </Field>
+              </>
+            ) : null}
             <Field controlId="accountEmail" label={t.accountAccess.email} required>
               {(props) => (
                 <input
@@ -220,6 +298,21 @@ export function AccountAccessSetup() {
                 />
               )}
             </Field>
+            {mode === 'REGISTER' ? (
+              <Field controlId="accountBirthDate" label={t.accountAccess.birthDate} required>
+                {(props) => (
+                  <input
+                    {...props}
+                    type="date"
+                    autoComplete="bday"
+                    min="1900-01-01"
+                    max={localTodayIso()}
+                    value={dateOfBirth}
+                    onChange={(event) => setDateOfBirth(event.target.value)}
+                  />
+                )}
+              </Field>
+            ) : null}
             <Field
               controlId="accountPassword"
               label={t.accountAccess.password}
@@ -236,6 +329,19 @@ export function AccountAccessSetup() {
                 />
               )}
             </Field>
+            {mode === 'REGISTER' ? (
+              <Field controlId="accountConfirmPassword" label={t.accountAccess.confirmPassword} required>
+                {(props) => (
+                  <input
+                    {...props}
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                  />
+                )}
+              </Field>
+            ) : null}
             <div className="account-auth-actions">
               <button className="btn btn--primary" type="submit" disabled={busy}>
                 {busy
@@ -289,6 +395,36 @@ export function AccountAccessSetup() {
                 autoComplete="name"
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
+              />
+            )}
+          </Field>
+          <Field
+            controlId="accountPhone"
+            label={t.accountAccess.phone}
+            hint={t.accountAccess.phoneHint}
+            required
+          >
+            {(props) => (
+              <input
+                {...props}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+            )}
+          </Field>
+          <Field controlId="accountProfileBirthDate" label={t.accountAccess.birthDate} required>
+            {(props) => (
+              <input
+                {...props}
+                type="date"
+                autoComplete="bday"
+                min="1900-01-01"
+                max={localTodayIso()}
+                value={dateOfBirth}
+                onChange={(event) => setDateOfBirth(event.target.value)}
               />
             )}
           </Field>

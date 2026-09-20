@@ -44,6 +44,7 @@ Each run applies, from an empty database:
 12. `supabase/migrations/202609150011_revoke_event_trigger_execute.sql`;
 13. `supabase/migrations/202609150012_web_push_subscriptions.sql`;
 14. `supabase/migrations/202609200013_multi_service_account_admin.sql`.
+15. `supabase/migrations/202609200014_required_registration_profile.sql`.
 
 The list lives in `db-tests/harness.ts`; keep the two in step, because a
 migration missing from that array is a migration nothing ever runs.

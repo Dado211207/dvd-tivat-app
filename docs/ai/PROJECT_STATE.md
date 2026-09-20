@@ -6,7 +6,33 @@ describes.**
 
 Last updated: 2026-09-20
 
-## Current delivery: owner multi-service account administration
+## Current delivery: required registration profile and member-link readiness
+
+The current `main` checkpoint was inspected before editing. Registration still
+accepted only email/password and asked for a name after sign-in; telephone and
+date of birth did not exist in the database, and the owner account directory
+did not show whether an approved firefighter was linked to a member record.
+
+Migration `202609200014` adds telephone and date of birth to `profiles`,
+normalizes Montenegro/local and explicit international telephone input to
+E.164, rejects future dates, and replaces the one-argument profile command so
+an older or direct client cannot mark a name-only profile complete. New sign-up
+metadata is treated as untrusted: invalid or missing fields create an
+incomplete `PENDING` account with no operational role. Existing accounts are
+marked incomplete until they provide the new fields.
+
+The registration screen now collects full name, telephone, email, date of
+birth, password and matching password confirmation in one flow. The same three
+profile fields are available to existing incomplete accounts. The owner-only
+directory shows telephone, date of birth and whether the account is linked to a
+member record, with a direct route to `Evidencija` when it is not.
+
+This delivery is not hosted until migration 014 is applied and the matching
+client is published. Apply those together: the migration deliberately removes
+the old name-only completion command and fails closed during a mixed-version
+window.
+
+## Previous delivery: owner multi-service account administration
 
 The owner requested one protected personal account with a complete account
 directory: every registered user, separate DVD Tivat and SZS membership roles,

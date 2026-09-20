@@ -21,7 +21,10 @@ export interface DirectoryAccount {
   readonly userId: string;
   readonly email: string;
   readonly fullName: string | null;
+  readonly phone: string | null;
+  readonly dateOfBirth: string | null;
   readonly profileComplete: boolean;
+  readonly memberId: string | null;
   readonly role: AccountRole;
   readonly active: boolean;
   readonly grantedAt: string;
@@ -80,7 +83,14 @@ interface ProfileRow {
   user_id: string;
   email: string;
   full_name: string | null;
+  phone_e164: string | null;
+  date_of_birth: string | null;
   profile_complete: boolean;
+}
+
+interface MemberLinkRow {
+  id: string;
+  user_id: string | null;
 }
 
 interface GrantRow {
@@ -117,15 +127,23 @@ function asOrganizationCode(value: string): OrganizationCode | null {
  */
 export async function loadDirectory(): Promise<DirectoryAccount[]> {
   const backend = accountBackend();
-  const [profiles, grants] = await Promise.all([
-    backend.from('profiles').select('user_id, email, full_name, profile_complete'),
+  const [profiles, grants, memberLinks] = await Promise.all([
+    backend
+      .from('profiles')
+      .select('user_id, email, full_name, phone_e164, date_of_birth, profile_complete'),
     backend.from('access_grants').select('user_id, role, active, granted_at'),
+    backend.from('members').select('id, user_id'),
   ]);
   if (profiles.error) throw profiles.error;
   if (grants.error) throw grants.error;
+  if (memberLinks.error) throw memberLinks.error;
 
   const grantByUser = new Map<string, GrantRow>();
   for (const grant of (grants.data ?? []) as GrantRow[]) grantByUser.set(grant.user_id, grant);
+  const memberByUser = new Map<string, string>();
+  for (const member of (memberLinks.data ?? []) as MemberLinkRow[]) {
+    if (member.user_id) memberByUser.set(member.user_id, member.id);
+  }
 
   const membershipsByUser = new Map<
     string,
@@ -175,7 +193,10 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
         userId: profile.user_id,
         email: profile.email,
         fullName: profile.full_name,
+        phone: profile.phone_e164,
+        dateOfBirth: profile.date_of_birth,
         profileComplete: profile.profile_complete,
+        memberId: memberByUser.get(profile.user_id) ?? null,
         role: grant.role as AccountRole,
         active: grant.active,
         grantedAt: grant.granted_at,
