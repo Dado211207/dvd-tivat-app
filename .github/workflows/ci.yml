@@ -59,6 +59,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # The shipped dependency graph is small and separately checked for known
+      # high/critical advisories. Development-only tooling cannot reach the
+      # browser bundle and is intentionally outside this release gate.
+      - name: Audit production dependencies
+        run: npm run audit:production
+
       - name: Unit tests
         run: npm run test
 
