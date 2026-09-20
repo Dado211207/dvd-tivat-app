@@ -125,6 +125,7 @@ declare
   old_membership_role text;
   old_membership_active boolean;
   new_membership_active boolean;
+  next_membership_role text;
   next_global_role text;
 begin
   if not public.is_dvd_owner() then raise exception 'OWNER_REQUIRED'; end if;
@@ -151,6 +152,10 @@ begin
   for update;
 
   new_membership_active := normalized_role <> 'NONE';
+  next_membership_role := case
+    when new_membership_active then normalized_role
+    else null
+  end;
 
   if new_membership_active then
     insert into public.organization_memberships(
@@ -168,14 +173,14 @@ begin
      where organization_id = target_organization and user_id = target_user;
   end if;
 
-  if old_membership_role is distinct from case when new_membership_active then normalized_role else old_membership_role end
-     or coalesce(old_membership_active, false) is distinct from new_membership_active then
+  if coalesce(old_membership_active, false) is distinct from new_membership_active
+     or (new_membership_active and old_membership_role is distinct from next_membership_role) then
     insert into public.organization_membership_audit(
       organization_id, target_user_id, previous_role, next_role,
       previous_active, next_active, changed_by)
     values (
       target_organization, target_user, old_membership_role,
-      case when new_membership_active then normalized_role else null end,
+      next_membership_role,
       old_membership_active, new_membership_active, auth.uid());
   end if;
 
