@@ -378,13 +378,25 @@ was told to wait for a server that was working perfectly.
 and the message off whatever shape was thrown, through `errorMessageOf` -
 extracted from `isUnreachable`, which had this right all along.
 
-### 10c. Known and deliberately not fixed here
+### 10c. Intervention read failures — resolved in the follow-up
 
-`fetchInterventions` swallows its error and returns `[]`, so a refused read of
-that one table renders as "there are no interventions" rather than as a refusal.
-Same class of fault, and real. Fixing it means changing the data layer's error
-contract across many functions, which does not belong in a change about screen
-states — recorded rather than quietly left.
+The original screen-state pass recorded that `fetchInterventions` swallowed its
+error and returned `[]`. A refused read could therefore be presented as an empty
+intervention list. The operational-read follow-up now propagates errors and
+rejects missing or malformed list data; a successful `[]` still means an empty
+visible list.
+
+All three callers already catch read failures. The command console now waits
+for its first successful read before exposing data panels, while keeping those
+panels mounted to preserve drafts. The member screen suppresses its empty-call
+message during loading or failure. Member and archive screens distinguish a
+permission refusal from other failures, with translated explanations and their
+existing retry controls. Later failed refreshes do not overwrite the last
+successful command/member snapshot with fabricated empty data.
+
+This change is limited to the intervention-list read; other operational reads
+retain their existing contracts. It does not treat a successful empty response
+from row-level security as an explicit permission error.
 
 ## 11. Recovering administrative reads
 

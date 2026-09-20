@@ -60,6 +60,7 @@ import { PushNotificationPanel } from '../components/PushNotificationPanel';
 import { Chip, EmptyState, Field, Notice } from '../components/primitives';
 import { formatTime } from '@/i18n/labels';
 import { useText } from '@/i18n/useText';
+import { isPermissionDenied } from '@/auth/supabaseClient';
 
 export function MobilisationView() {
   const t = useText();
@@ -127,7 +128,7 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
   const [data, setData] = useState<MyData>(EMPTY);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [offline, setOffline] = useState(false);
+  const [loadError, setLoadError] = useState<'REFUSED_READ' | 'UNAVAILABLE' | null>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -182,10 +183,10 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
           availabilityChangedAt: mine?.changedAt ?? null,
         });
         setActiveId(focusId);
-        setOffline(false);
-      } catch {
+        setLoadError(null);
+      } catch (error) {
         if (!mounted.current || ticket !== generation.current) return;
-        setOffline(true);
+        setLoadError(isPermissionDenied(error) ? 'REFUSED_READ' : 'UNAVAILABLE');
       } finally {
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
@@ -276,9 +277,11 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
 
   return (
     <div className="stack">
-      {offline ? (
+      {loadError ? (
         <Notice tone="error">
-          <strong>{t.mobilisation.offlineTitle}</strong> {t.mobilisation.offlineText}{' '}
+          {loadError === 'REFUSED_READ' ? t.mobilisation.refusedRead : (
+            <><strong>{t.mobilisation.offlineTitle}</strong> {t.mobilisation.offlineText}</>
+          )}{' '}
           <button type="button" className="btn btn--ghost" onClick={() => void refresh(activeId)}>
             {t.gate.retry}
           </button>
@@ -317,9 +320,9 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
       ) : null}
 
       {active === null ? (
-        <EmptyState title={t.mobilisation.noCallOutTitle}>
+        !loading && loadError === null ? <EmptyState title={t.mobilisation.noCallOutTitle}>
           {t.mobilisation.noCallOutText}
-        </EmptyState>
+        </EmptyState> : null
       ) : (
         <CallOutCard
           intervention={active}
