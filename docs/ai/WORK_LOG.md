@@ -2385,10 +2385,15 @@ the production smoke test.
   repository variables, so no configuration write was necessary.
 - No account was created and nobody was assigned to DVD or SZS.
 
-**Remaining before the rollout is called complete**
+**Rollout completed**
 
-Squash-merge PR #38, wait for main CI and Pages, then smoke-test the public
-citizen entry point. Do not claim a full SZS operational workspace: rosters,
-interventions, vehicles and attendance remain intentionally DVD-scoped.
+- PR #38 was squash-merged as `d8e4b84`; main CI #117 passed and Pages deploy
+  #24 published the configured bundle successfully.
+- The public `Nalozi` screen loaded the required six-field registration form
+  and the citizen-first explanation naming DVD, SZS or both, with no test
+  account creation and no visible application error.
+- This is the completed **account/service-membership** rollout, not a full SZS
+  operational workspace. Rosters, interventions, vehicles and attendance
+  remain intentionally DVD-scoped.
 
 ---
