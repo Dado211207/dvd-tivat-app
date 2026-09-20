@@ -113,7 +113,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   if (!hasOperationalAccess(access)) {
     // Unreachable while accessObstacle covers every roleless case; kept as a
     // fail-closed default rather than a cast that assumes it.
-    return <Blocked obstacle="AWAITING_APPROVAL" onRetry={retry} t={t} />;
+    return <Blocked obstacle="NO_DVD_ROLE" onRetry={retry} t={t} />;
   }
 
   // `hasOperationalAccess` narrows the snapshot to SIGNED_IN but its `role` is
@@ -121,7 +121,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   // account with no operational grant. Check it rather than cast it: a cast
   // here would be asserting the exact thing this screen must not assume.
   const role = access.role;
-  if (role === null) return <Blocked obstacle="AWAITING_APPROVAL" onRetry={retry} t={t} />;
+  if (role === null) return <Blocked obstacle="NO_DVD_ROLE" onRetry={retry} t={t} />;
 
   if (!allow.includes(role)) {
     // Named with the server's own meaning in both languages. "Komandir" is the
@@ -242,11 +242,11 @@ function Blocked({
           <strong>{t.gate.suspendedTitle}</strong> {t.gate.suspendedText}
         </Notice>
       );
-    case 'AWAITING_APPROVAL':
+    case 'NO_DVD_ROLE':
     default:
       return (
         <Notice tone="info">
-          <strong>{t.gate.awaitingApprovalTitle}</strong> {t.gate.awaitingApprovalText}{' '}
+          <strong>{t.gate.noDvdRoleTitle}</strong> {t.gate.noDvdRoleText}{' '}
           <button type="button" className="btn btn--ghost" onClick={onRetry}>
             {t.gate.recheckAccess}
           </button>

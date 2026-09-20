@@ -68,7 +68,7 @@ test('the accounts screen never claims a role it has not been given', async ({ p
 
   // Nothing on the screen reads as a signed-in person: no server-confirmed
   // identity, no role, and none of the owner-only controls.
-  await expect(page.getByText('Uloga sa servera')).toHaveCount(0);
+  await expect(page.getByText('DVD operativna uloga')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Odjavi se' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Ukini pristup' })).toHaveCount(0);
   await expect(page.getByLabel('Email')).toHaveCount(0);

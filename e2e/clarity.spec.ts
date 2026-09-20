@@ -28,7 +28,7 @@
  * one published call-out - so every browser test looked at the busiest screen
  * this application ever shows. The quiet states are the ones a firefighter
  * actually meets most often and the easiest to ship broken: no call-out
- * running, an account awaiting approval, a suspended account, a draft. They are
+ * running, a limited citizen account, a suspended account, a draft. They are
  * all here.
  *
  * Every name, place and record below is invented. There are no real members,
@@ -357,21 +357,19 @@ test.describe('the refusals are as readable as the screens', () => {
     expect(await scrollsSideways(page)).toBe(false);
   });
 
-  test('an account awaiting approval is told what happens next', async ({ page }) => {
+  test('a citizen account is told what its limited access means', async ({ page }) => {
     /*
-     * A signed-in account with NO operational role. That is what awaiting
-     * approval is on the wire - there is no account status spelling it out, the
-     * gate derives it from a null role - and it is the state every new member
-     * of the society passes through, so it must read as a wait rather than a
-     * failure.
+     * A signed-in account with NO DVD operational role. New registrations are
+     * citizens, and an SZS-only account has the same null DVD role, so the gate
+     * must describe the DVD boundary rather than claim the account failed.
      */
     await page.setViewportSize(PHONE);
     await openOperational(page, 'mobilizacija', { role: null, accountStatus: 'ACTIVE' });
     await page.waitForSelector('main');
 
-    await expect(page.getByText(/ceka odobrenje/i).first()).toBeVisible();
+    await expect(page.getByText(/nema DVD operativnu ulogu/i).first()).toBeVisible();
     await expect(page.getByTestId('callout-title')).toHaveCount(0);
-    // Not an error: nothing is broken, somebody simply has to act.
+    // Not an error: the limited citizen/service state is intentional.
     await expect(page.locator('.notice--error')).toHaveCount(0);
   });
 

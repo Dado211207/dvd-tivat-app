@@ -183,15 +183,15 @@ export type AccessObstacle =
   | 'ACCOUNT_BROKEN'
   | 'PROFILE_REQUIRED'
   | 'SUSPENDED'
-  | 'AWAITING_APPROVAL'
+  | 'NO_DVD_ROLE'
   | null;
 
 /**
  * The single place that decides why somebody is being kept out.
  *
- * Order matters: a suspended account is told it is suspended rather than that it
- * is awaiting approval, because both have no role and only one of them is a
- * state the owner put them in.
+ * Order matters: a suspended account is told it is suspended rather than shown
+ * the ordinary no-DVD-role state, because both have no role and only one of
+ * them is a restriction the owner put in place.
  */
 export function accessObstacle(access: Access): AccessObstacle {
   switch (access.kind) {
@@ -208,7 +208,7 @@ export function accessObstacle(access: Access): AccessObstacle {
       if (access.accountStatus === 'PROFILE_REQUIRED' || !access.profileComplete) {
         return 'PROFILE_REQUIRED';
       }
-      if (access.role === null) return 'AWAITING_APPROVAL';
+      if (access.role === null) return 'NO_DVD_ROLE';
       return null;
   }
 }

@@ -67,6 +67,12 @@ export interface OrganizationMembershipAuditEntry {
   readonly changedAt: string;
 }
 
+export interface OwnOrganizationMembership {
+  readonly organization: OrganizationCode;
+  readonly displayName: string;
+  readonly role: MembershipRole;
+}
+
 export interface CommandOutcome {
   readonly ok: boolean;
   readonly message?: string;
@@ -246,6 +252,33 @@ export async function loadOrganizationMembershipAudit(
       };
     })
     .filter((entry): entry is OrganizationMembershipAuditEntry => entry !== null);
+}
+
+/**
+ * Read the signed-in person's active service memberships.
+ *
+ * The server function includes an explicit `user_id = auth.uid()` predicate.
+ * That matters for the owner account, whose table policy can otherwise read the
+ * whole directory. This call can therefore be reused by every account without
+ * turning the personal account card into an owner-only data endpoint.
+ */
+export async function loadOwnOrganizationMemberships(): Promise<OwnOrganizationMembership[]> {
+  if (!MULTI_SERVICE_ADMIN_AVAILABLE) return [];
+  const { data, error } = await accountBackend().rpc('current_organization_memberships');
+  if (error) throw error;
+
+  return ((data ?? []) as Record<string, unknown>[])
+    .map((row): OwnOrganizationMembership | null => {
+      const organization = asOrganizationCode(String(row.organization_code ?? ''));
+      const role = row.membership_role as MembershipRole;
+      if (!organization || !MEMBERSHIP_ROLES.includes(role)) return null;
+      return {
+        organization,
+        displayName: String(row.organization_name ?? organization),
+        role,
+      };
+    })
+    .filter((membership): membership is OwnOrganizationMembership => membership !== null);
 }
 
 export async function loadRoleAudit(limit = 25): Promise<RoleAuditEntry[]> {

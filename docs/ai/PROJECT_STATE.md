@@ -6,7 +6,45 @@ describes.**
 
 Last updated: 2026-09-20
 
-## Current delivery: required registration profile and member-link readiness
+## Current delivery: citizen-first SZS account activation
+
+The owner clarified the intended onboarding contract: nobody is pre-created in
+DVD or SZS. Every person registers their own account, starts as a limited
+`CITIZEN`, and can see only their personal account and device settings. The
+single system owner then uses two independent selectors to assign DVD, SZS or
+both services.
+
+Migration `202609200015` makes that contract authoritative. It changes the
+registration default and existing unassigned `PENDING` rows to `CITIZEN`, gives
+SZS the full display name `Sluzba zastite i spasavanja Tivat`, adds a self-only
+active-membership RPC, and changes DVD removal to return the compatibility
+grant to `CITIZEN` without erasing SZS membership. `current_dvd_role()` still
+returns NULL for citizens and SZS-only users, so neither can read DVD
+operational data.
+
+The application gives a signed-in citizen only **Nalozi** and **Podesavanja** in
+the primary navigation and lands them on their account instead of an
+operational refusal. The personal account card shows active service roles. The
+owner directory names both services, states that service assignment is active,
+and supports DVD-only, SZS-only, both or neither. No member, vehicle, group or
+intervention is invented for either service.
+
+Local lint, TypeScript, 647 unit/component tests, both production builds,
+bundle-secret scanning and the production dependency audit pass. PR #38 CI
+#115 then passed the missing PostgreSQL 16/RLS and Playwright/accessibility
+gates on head `8d9572a`.
+
+The hosted preflight found six active DVD memberships, zero SZS memberships,
+one legacy unassigned `PENDING` grant and no migration 015. Migration 015 was
+applied transactionally with exactly one migration-history row. Postflight
+found the same six DVD memberships, still zero SZS memberships, one limited
+`CITIZEN`, no `PENDING`, the official SZS name and the self-only RPC with
+`authenticated` execute and no `anon` execute. The Pages repository variable
+`VITE_MULTI_SERVICE_ADMIN_ENABLED` was already `true`; nobody was added to DVD
+or SZS. PR merge, main CI, Pages deployment and the public smoke test are the
+only remaining rollout steps.
+
+## Previous delivery: required registration profile and member-link readiness
 
 The current `main` checkpoint was inspected before editing. Registration still
 accepted only email/password and asked for a name after sign-in; telephone and

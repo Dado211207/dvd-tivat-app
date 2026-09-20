@@ -118,15 +118,18 @@ Back in the application, on **Nalozi i pristup**, press **Provjeri pristup
 ponovo** (or sign out and in again). The account directory should appear, listing
 every registered account, with a role selector and an access control for each.
 
-You can now approve people. The panel has separate DVD Tivat and SZS selectors,
+New accounts start as limited citizens: they can see their own account and
+device settings, but no operational data. You can then classify them. The panel
+has separate DVD Tivat and SZS selectors,
 each offering `Vatrogasac`, `Komandir`, `Administrator` or no membership. You
 may also take the whole account's access away with a reason. Every change is
 recorded permanently and shown underneath the list.
 
-The SZS selector remains read-only until migration `202609200013` is applied and
-the deployment variable `VITE_MULTI_SERVICE_ADMIN_ENABLED=true` is set. This is
-intentional: deploying the screen before its database policy would turn a
-missing security boundary into a production surprise.
+The SZS selector is active only when migrations `202609200013` and
+`202609200015` are applied and the deployment variable
+`VITE_MULTI_SERVICE_ADMIN_ENABLED=true` is set. Production satisfies both
+conditions as of 2026-09-20. This gate remains intentional: a future
+deployment must not expose the selector before its database policy exists.
 
 ---
 
@@ -167,7 +170,7 @@ Change the email on the marked line and run the whole block at once:
 begin;
 
 -- The current owner keeps administrative access but is no longer the owner.
--- Change 'ADMIN' to 'PENDING' instead if they should keep nothing.
+-- Change 'ADMIN' to 'CITIZEN' instead if they should keep no operational role.
 update public.access_grants set role = 'ADMIN' where role = 'OWNER';
 
 update public.access_grants

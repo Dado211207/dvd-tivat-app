@@ -125,11 +125,18 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
         account.memberships.DVD ? t.accounts.roleLabel[account.memberships.DVD] : ''
       } ${account.memberships.SZS ? t.accounts.roleLabel[account.memberships.SZS] : ''} ${
         t.accounts.statusLabel[statusOf(account)]
-      } DVD SZS`
+      } ${t.accounts.organizationLabel.DVD} ${t.accounts.organizationLabel.SZS} DVD SZS`
         .toLocaleLowerCase()
         .includes(needle),
     );
-  }, [accounts, query, t.accounts.roleLabel, t.accounts.statusLabel]);
+  }, [
+    accounts,
+    query,
+    t.accounts.organizationLabel.DVD,
+    t.accounts.organizationLabel.SZS,
+    t.accounts.roleLabel,
+    t.accounts.statusLabel,
+  ]);
 
   async function changeMembership(
     account: DirectoryAccount,
@@ -142,7 +149,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
       const outcome = MULTI_SERVICE_ADMIN_AVAILABLE
         ? await setOrganizationMembership(account.userId, organization, nextRole)
         : organization === 'DVD'
-          ? await setAccountRole(account.userId, (nextRole ?? 'PENDING') as AccountRole)
+          ? await setAccountRole(account.userId, (nextRole ?? 'CITIZEN') as AccountRole)
           : { ok: false, message: t.accounts.multiServicePending };
       if (!outcome.ok) {
         const message = outcome.message ?? t.accounts.changeFailed;
@@ -241,9 +248,11 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
         <Notice tone={PASSWORD_RESET_AVAILABLE ? 'info' : 'warn'}>
           {PASSWORD_RESET_AVAILABLE ? t.accounts.resetReady : t.accounts.resetUnavailable}
         </Notice>
-        {!MULTI_SERVICE_ADMIN_AVAILABLE ? (
-          <Notice tone="info">{t.accounts.multiServicePending}</Notice>
-        ) : null}
+        <Notice tone="info">
+          {MULTI_SERVICE_ADMIN_AVAILABLE
+            ? t.accounts.multiServiceReady
+            : t.accounts.multiServicePending}
+        </Notice>
 
         <label className="account-search">
           <span>{t.accounts.search}</span>
@@ -482,7 +491,7 @@ function RegistrationExplainer() {
         </li>
         <li>
           <span>3</span>
-          <strong>{t.accounts.awaitingApproval}</strong>
+          <strong>{t.accounts.citizenAccessLabel}</strong>
           <small>{t.accounts.noRights}</small>
         </li>
         <li>

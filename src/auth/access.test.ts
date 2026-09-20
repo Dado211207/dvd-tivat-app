@@ -73,17 +73,17 @@ describe('loading the access snapshot', () => {
   });
 });
 
-describe('an account the server gives no role', () => {
-  it('signs a PENDING account in with no role and says it is awaiting approval', async () => {
+describe('an account the server gives no DVD role', () => {
+  it('signs a citizen account in without operational authority', async () => {
     const access = await load({ fetchRole: async () => null });
     expect(hasOperationalAccess(access)).toBe(false);
-    expect(accessObstacle(access)).toBe('AWAITING_APPROVAL');
+    expect(accessObstacle(access)).toBe('NO_DVD_ROLE');
   });
 
-  it('tells a SUSPENDED account it is suspended, not that it is awaiting approval', async () => {
+  it('tells a SUSPENDED account it is suspended, not merely without a DVD role', async () => {
     // Both have no role. Only one of them is a state the owner put them in, and
-    // telling somebody "awaiting approval" when they have been suspended is a
-    // lie the interface would be telling on the server's behalf.
+    // showing the ordinary citizen state after suspension would be a lie the
+    // interface tells on the server's behalf.
     const access = await load({
       fetchRole: async () => null,
       fetchAccountStatus: async () => 'SUSPENDED',
@@ -105,7 +105,7 @@ describe('an account the server gives no role', () => {
     // treated as authority. Failing towards "no access" is the safe direction.
     const access = await load({ fetchRole: async () => 'SUPERUSER' });
     expect(hasOperationalAccess(access)).toBe(false);
-    expect(accessObstacle(access)).toBe('AWAITING_APPROVAL');
+    expect(accessObstacle(access)).toBe('NO_DVD_ROLE');
   });
 
   it('still refuses a stale role when the account has since been suspended', async () => {

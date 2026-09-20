@@ -75,6 +75,19 @@ describe('when the server has not said who you are', () => {
   });
 });
 
+describe('what a signed-in citizen is offered', () => {
+  it('shows only the account and device settings from the deployed navigation', () => {
+    const offered = NAV_GROUPS
+      .flatMap((group) => group.routes)
+      .filter((route) => isOfferedTo(route, 'CITIZEN'));
+    expect(offered).toEqual(['nalozi', 'podesavanja']);
+  });
+
+  it('opens the personal account instead of an operational refusal', () => {
+    expect(landingRouteFor('CITIZEN')).toBe('nalozi');
+  });
+});
+
 describe('the table stays in step with the gates', () => {
   it('has an entry for every route', () => {
     // A route added without a decision here would default to invisible or

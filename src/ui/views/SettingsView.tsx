@@ -8,7 +8,7 @@
  * kinds of thing that look alike in a menu and behave nothing alike.
  *
  * So this screen sits outside the operational gate deliberately. Somebody who is
- * signed out, awaiting approval or suspended still needs to be able to read the
+ * signed out, a limited citizen or suspended still needs to be able to read the
  * application in their own language, and putting the language behind a role
  * check would mean the one person most in need of a comprehensible refusal
  * message is the one who cannot change its language.

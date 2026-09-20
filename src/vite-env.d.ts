@@ -10,7 +10,7 @@
 interface ImportMetaEnv {
   /** Enable after SMTP and the recovery OTP template pass hosted acceptance. */
   readonly VITE_PASSWORD_RESET_ENABLED?: string;
-  /** Enable only after migration 013 passes on the hosted project. */
+  /** Enable only after migrations 013 and 015 pass on the hosted project. */
   readonly VITE_MULTI_SERVICE_ADMIN_ENABLED?: string;
   readonly VITE_SUPABASE_URL?: string;
   /** The publishable key. Public by design; grants nothing without a session. */

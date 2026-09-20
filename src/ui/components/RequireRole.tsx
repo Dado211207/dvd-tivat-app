@@ -63,7 +63,7 @@ export function RequireRole({ allow, children, refused }: RequireRoleProps) {
       return <Notice tone="error">Pristup ovom nalogu je ukinut.</Notice>;
     case 'PROFILE_REQUIRED':
       return <Notice tone="warn">Zavrsite profil da biste nastavili.</Notice>;
-    case 'AWAITING_APPROVAL':
+    case 'NO_DVD_ROLE':
     case null:
       return (
         <Notice tone="info">

@@ -2342,3 +2342,53 @@ in. No fictional value was written for them, and no new account was created by
 the production smoke test.
 
 ---
+
+## 2026-09-20 — Citizen-first SZS account activation
+
+**Implemented on the rollout branch**
+
+- Kept both services empty of invented people. A person registers their own
+  account and now starts as a limited `CITIZEN` rather than a pending pseudo-role.
+- Added migration `202609200015`: official SZS display name, citizen registration
+  default and conversion, self-only active-membership RPC, and DVD removal that
+  preserves independent SZS membership.
+- Kept the existing security boundary: SZS assignment never changes
+  `current_dvd_role()` and never reveals DVD interventions, roster, vehicles,
+  attendance or history.
+- Changed signed-in citizen navigation to only **Nalozi** and **Podesavanja**,
+  with the account screen as the landing route.
+- Added personal service-role display and an explicit active-state notice in
+  the owner directory. The owner can choose DVD, SZS, both or neither for every
+  non-owner account.
+- Added database coverage for direct CITIZEN-to-SZS assignment, dual
+  membership, independent removal, self-only reads, official naming, audit and
+  function privileges. Added component and navigation coverage for citizen and
+  SZS-only presentation.
+
+**Verification and hosted rollout before merge**
+
+- `npm run verify`: passed (32 files, 647 tests).
+- Multi-service production fixture build and bundle-secret scan: passed.
+- Production dependency audit: zero vulnerabilities.
+- Local database suite unavailable because PostgreSQL 16 is not installed.
+- Local Playwright execution unavailable because its Chromium binary is not
+  installed; every scenario stopped at browser launch before application code.
+- PR #38 CI #115 passed on head `8d9572a`, including PostgreSQL 16/RLS, browser
+  and accessibility tests, the build, dependency audit and bundle-secret scan.
+- Hosted preflight found six active DVD memberships, zero SZS memberships, one
+  unassigned `PENDING`, no self-membership RPC and no migration 015.
+- Migration 015 and its history row were applied in one transaction. Postflight
+  found the same six DVD memberships, zero SZS memberships, one limited
+  `CITIZEN`, no `PENDING`, the official SZS name, exactly one migration row and
+  the intended RPC privileges (`authenticated` yes, `anon` no).
+- `VITE_MULTI_SERVICE_ADMIN_ENABLED` was already set to `true` in the Pages
+  repository variables, so no configuration write was necessary.
+- No account was created and nobody was assigned to DVD or SZS.
+
+**Remaining before the rollout is called complete**
+
+Squash-merge PR #38, wait for main CI and Pages, then smoke-test the public
+citizen entry point. Do not claim a full SZS operational workspace: rosters,
+interventions, vehicles and attendance remain intentionally DVD-scoped.
+
+---

@@ -15,6 +15,7 @@ let db: Client;
 let owner: string;
 let target: string;
 let firefighter: string;
+let citizen: string;
 
 beforeAll(async () => {
   db = await connect();
@@ -28,8 +29,9 @@ beforeAll(async () => {
   };
 
   owner = await make('owner-services@example.invalid', 'Vlasnik Sistema', 'OWNER');
-  target = await make('target-services@example.invalid', 'Clan Za Sluzbe', 'PENDING');
+  target = await make('target-services@example.invalid', 'Clan Za Sluzbe', 'CITIZEN');
   firefighter = await make('ordinary-services@example.invalid', 'Obicni Vatrogasac', 'FIREFIGHTER');
+  citizen = await make('citizen-services@example.invalid', 'Probni Gradjanin', 'CITIZEN');
 }, 60_000);
 
 afterAll(async () => {
@@ -74,6 +76,25 @@ describe('owner multi-service account administration', () => {
     expect(rows[0]!.role).toBe('FIREFIGHTER');
   });
 
+  it('moves a citizen directly into SZS without creating DVD authority', async () => {
+    await asUserCommitted(db, owner, (client) =>
+      client.query(`select public.owner_set_organization_membership($1, 'SZS', 'FIREFIGHTER')`, [citizen]),
+    );
+
+    expect(await memberships(citizen)).toEqual([
+      { code: 'SZS', role: 'FIREFIGHTER', active: true },
+    ]);
+    const { rows } = await db.query<{ role: string }>(
+      'select role from public.access_grants where user_id = $1',
+      [citizen],
+    );
+    expect(rows[0]!.role).toBe('CITIZEN');
+    const dvdRole = await asUser(db, citizen, async (client) =>
+      (await client.query<{ role: string | null }>('select public.current_dvd_role() as role')).rows[0]!.role,
+    );
+    expect(dvdRole).toBeNull();
+  });
+
   it('removes DVD access while preserving the SZS membership', async () => {
     await asUserCommitted(db, owner, (client) =>
       client.query(`select public.owner_set_organization_membership($1, 'DVD', 'NONE')`, [target]),
@@ -88,6 +109,11 @@ describe('owner multi-service account administration', () => {
       return rows[0]!.role;
     });
     expect(role).toBeNull();
+    const { rows } = await db.query<{ role: string }>(
+      'select role from public.access_grants where user_id = $1',
+      [target],
+    );
+    expect(rows[0]!.role).toBe('CITIZEN');
   });
 
   it('refuses every non-owner and protects the owner account', async () => {
@@ -123,7 +149,40 @@ describe('owner multi-service account administration', () => {
       );
       return Number(rows[0]!.count);
     });
-    expect(ownerCount).toBe(4);
+    expect(ownerCount).toBe(5);
+  });
+
+  it('returns only the caller active memberships with the official service name', async () => {
+    const targetMemberships = await asUser(db, target, async (client) => {
+      const { rows } = await client.query(
+        'select * from public.current_organization_memberships()',
+      );
+      return rows;
+    });
+    expect(targetMemberships).toEqual([
+      {
+        organization_code: 'SZS',
+        organization_name: 'Sluzba zastite i spasavanja Tivat',
+        membership_role: 'COMMANDER',
+      },
+    ]);
+
+    const ownerMemberships = await asUser(db, owner, async (client) => {
+      const { rows } = await client.query(
+        'select * from public.current_organization_memberships()',
+      );
+      return rows;
+    });
+    expect(ownerMemberships).toEqual([]);
+  });
+
+  it('exposes the personal membership command only to authenticated accounts', async () => {
+    const { rows } = await db.query<{ anon: boolean; authenticated: boolean }>(
+      `select
+         has_function_privilege('anon', 'public.current_organization_memberships()', 'EXECUTE') as anon,
+         has_function_privilege('authenticated', 'public.current_organization_memberships()', 'EXECUTE') as authenticated`,
+    );
+    expect(rows[0]).toEqual({ anon: false, authenticated: true });
   });
 
   it('records organization, role and actor in the audit', async () => {

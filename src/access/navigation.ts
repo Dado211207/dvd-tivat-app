@@ -21,6 +21,9 @@
 import type { OperationalRole } from '@/auth/access';
 import { ROUTES, type Route } from '@/ui/router';
 
+/** A signed-in account with no DVD role is a limited citizen in navigation. */
+export type NavigationRole = OperationalRole | 'CITIZEN' | null;
+
 /**
  * Roles a route is FOR, or 'ANY' for a route that has no role requirement.
  *
@@ -45,7 +48,7 @@ export const ROUTE_AUDIENCE: Record<Route, readonly OperationalRole[] | 'ANY'> =
    * one. It changes only this device: the language somebody reads and whether
    * this phone makes a noise. Putting the language behind a role check would
    * mean the person most in need of a refusal message they can read - somebody
-   * suspended, or awaiting approval - is the one who cannot change its language.
+   * suspended, or without a DVD role - is the one who cannot change its language.
    */
   podesavanja: 'ANY',
 
@@ -68,10 +71,10 @@ export const ROUTE_AUDIENCE: Record<Route, readonly OperationalRole[] | 'ANY'> =
  * explains itself, and somebody who is not signed in needs to be able to see
  * that these screens exist before they can decide to ask for access.
  */
-export function isOfferedTo(route: Route, role: OperationalRole | null): boolean {
+export function isOfferedTo(route: Route, role: NavigationRole): boolean {
   if (role === null) return true;
   const audience = ROUTE_AUDIENCE[route];
-  return audience === 'ANY' || audience.includes(role);
+  return audience === 'ANY' || (role !== 'CITIZEN' && audience.includes(role));
 }
 
 /**
@@ -82,7 +85,8 @@ export function isOfferedTo(route: Route, role: OperationalRole | null): boolean
  * own call-out screen instead. Command roles keep the console, which is what
  * they open the application to do.
  */
-export function landingRouteFor(role: OperationalRole | null): Route {
+export function landingRouteFor(role: NavigationRole): Route {
+  if (role === 'CITIZEN') return 'nalozi';
   return role === 'FIREFIGHTER' ? 'mobilizacija' : 'poziv';
 }
 

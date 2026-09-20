@@ -196,13 +196,14 @@ export function App() {
   const simulated = backing === 'SIMULATED';
 
   /**
-   * The role the server has confirmed, or null while it has not said.
+   * The navigation identity, kept distinct from server authority.
    *
-   * Null is never treated as "no access": it covers signed out, still loading
-   * and server unreachable, and a navigation that shrinks while a session is
-   * being checked is worse than one that explains itself at the gate.
+   * A loaded signed-in account with no DVD role is a limited citizen. Null is
+   * reserved for signed out, loading or unreachable states, where shrinking
+   * the menu before the server answers would make the interface flicker.
    */
-  const role = access.kind === 'SIGNED_IN' ? access.role : null;
+  const navigationRole =
+    access.kind === 'SIGNED_IN' ? (access.role ?? 'CITIZEN') : null;
 
   /**
    * Open into a screen the person can actually use.
@@ -214,18 +215,18 @@ export function App() {
    */
   const landed = useRef(false);
   useEffect(() => {
-    if (landed.current || role === null) return;
+    if (landed.current || navigationRole === null) return;
     landed.current = true;
     const asked = window.location.hash.replace(/^#\/?/, '').split('?')[0] ?? '';
     if (asked !== '') return;
-    const landing = landingRouteFor(role);
+    const landing = landingRouteFor(navigationRole);
     if (landing !== DEFAULT_ROUTE) window.location.replace(hrefFor(landing));
-  }, [role]);
+  }, [navigationRole]);
 
   const groupLabel = { work: t.nav.groupWork, society: t.nav.groupSociety };
   const navGroups = NAV_GROUPS.map((group) => ({
     label: groupLabel[group.key],
-    routes: group.routes.filter((r) => isOfferedTo(r, role)),
+    routes: group.routes.filter((r) => isOfferedTo(r, navigationRole)),
   })).filter((group) => group.routes.length > 0);
 
   function switchActor(memberId: string) {

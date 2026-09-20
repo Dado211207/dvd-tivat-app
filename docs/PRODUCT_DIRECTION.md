@@ -45,17 +45,24 @@ separate from the old simulation until the simulation is removed or rebuilt.
 
 ### Implemented account-administration foundation
 
-Migration `202609200013` implements only the first safe, additive piece of this
+Migration `202609200013` implements the first safe, additive piece of this
 model: stable DVD and SZS organization rows, per-user membership roles and a
-permanent owner-only membership audit. The owner panel can assign one account a
-different role in each service. Existing approved accounts are backfilled only
-to DVD; SZS starts empty.
+permanent owner-only membership audit. Migration `202609200015` activates the
+citizen-first account flow: every registration starts as a limited citizen, and
+the owner can then assign a different role in DVD, SZS or both. Existing
+approved accounts are backfilled only to DVD; SZS starts empty and receives no
+invented members.
 
 This does **not** make interventions, rosters, groups, vehicles or attendance
 multi-service. Those records remain DVD-scoped, and an SZS membership grants no
-access to them. The deployment flag stays off until the hosted migration is
-verified. This boundary lets account onboarding start without pretending the
-larger cross-service operating model has been approved or implemented.
+access to them. The deployment flag may be enabled only after migrations 013
+and 015 pass on the hosted project. This boundary lets real users create their
+own accounts and lets the owner classify them without pretending the larger
+cross-service operating model has been approved or implemented.
+
+That account-administration gate passed on the hosted project on 2026-09-20:
+migration 015 is recorded, SZS still has zero memberships, and the deployment
+variable is `true`. No operational SZS roster or intervention data was created.
 
 ### Recommended shape
 
@@ -155,7 +162,8 @@ ambiguous.
 
 ## Decisions needed from service owners before production implementation
 
-- The second service's official display name and who can approve its accounts.
+- Who besides the single system owner, if anybody, may approve SZS accounts in
+  a later delegated-administration phase.
 - Which roles may create, accept, cancel and close a joint operation.
 - Which incident fields and member identity fields can cross service lines.
 - Whether each service sees the other's roster, and exactly which fields.
@@ -163,6 +171,6 @@ ambiguous.
 - Whether a joint call-out can notify both services, and the human fallback if
   push is delayed or unavailable.
 
-Until those decisions are approved, keep the second service as a design and
-fictional-test target. Do not add a broad organization switch or production
-database migration that could broaden access accidentally.
+Until those decisions are approved, keep SZS production scope to account
+membership and audit. Do not add a broad organization switch or expose DVD
+operational records through an SZS role.

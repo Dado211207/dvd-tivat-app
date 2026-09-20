@@ -20,9 +20,10 @@
 /**
  * Every role the `access_grants` table can hold.
  *
- * `PENDING` is the default for a new account and `CITIZEN` is retained only so
- * rows written by the first migration stay valid. Both mean "no internal
- * operational access", and `current_dvd_role()` returns NULL for both.
+ * `CITIZEN` is the default for a new account. `PENDING` is retained only for
+ * compatibility with rows written before the citizen-first activation. Both
+ * mean "no internal operational access", and `current_dvd_role()` returns NULL
+ * for both.
  */
 export type AccountRole =
   | 'OWNER'
@@ -108,13 +109,13 @@ const ROLE_PERMISSIONS: Record<AccountRole, ReadonlySet<Permission>> = {
 /**
  * What the owner may set an account to, in the order the interface offers them.
  *
- * `owner_set_role` also accepts `CITIZEN`, but nothing should newly assign a
- * legacy value, so it is not offered. `OWNER` is never assignable by anybody:
+ * `PENDING` remains accepted by the legacy command, but nothing should newly
+ * assign it. `OWNER` is never assignable by anybody:
  * the server refuses it, and a partial unique index refuses a second owner even
  * if the server were bypassed.
  */
-export const ASSIGNABLE_ROLES: readonly Exclude<AccountRole, 'OWNER' | 'CITIZEN'>[] = [
-  'PENDING',
+export const ASSIGNABLE_ROLES: readonly Exclude<AccountRole, 'OWNER' | 'PENDING'>[] = [
+  'CITIZEN',
   'FIREFIGHTER',
   'COMMANDER',
   'ADMIN',
@@ -128,14 +129,13 @@ export function hasPermission(
 }
 
 /**
- * Every new registration starts with no access at all.
+ * Every new registration starts as a citizen with no operational access.
  *
- * `PENDING` is what the database trigger writes, and it is the honest name for
- * it: an account that has been created but that the owner has not yet approved
- * for anything. The owner alone moves it off this value.
+ * `CITIZEN` is what the database trigger writes. It can use only the limited,
+ * non-operational account surface until the owner assigns DVD, SZS or both.
  */
 export function defaultRegistrationRole(): AccountRole {
-  return 'PENDING';
+  return 'CITIZEN';
 }
 
 /** Only the immutable owner account can change roles; OWNER is never delegated. */

@@ -37,6 +37,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609150012_web_push_subscriptions.sql',
   'supabase/migrations/202609200013_multi_service_account_admin.sql',
   'supabase/migrations/202609200014_required_registration_profile.sql',
+  'supabase/migrations/202609200015_activate_szs_account_service.sql',
 ];
 
 export const DATABASE_URL =
@@ -80,7 +81,7 @@ export interface TestAccount {
   memberId?: string;
 }
 
-/** Creates an auth user; the migration's trigger gives it a PENDING grant. */
+/** Creates an auth user; the current trigger gives it a CITIZEN grant. */
 export async function createAccount(client: Client, email: string): Promise<TestAccount> {
   const { rows } = await client.query<{ id: string }>(
     `insert into auth.users(email, email_confirmed_at) values ($1, now()) returning id`,

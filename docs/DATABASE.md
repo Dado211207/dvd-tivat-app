@@ -43,8 +43,9 @@ Each run applies, from an empty database:
 11. `supabase/migrations/202609150010_intervention_audit_read.sql`;
 12. `supabase/migrations/202609150011_revoke_event_trigger_execute.sql`;
 13. `supabase/migrations/202609150012_web_push_subscriptions.sql`;
-14. `supabase/migrations/202609200013_multi_service_account_admin.sql`.
-15. `supabase/migrations/202609200014_required_registration_profile.sql`.
+14. `supabase/migrations/202609200013_multi_service_account_admin.sql`;
+15. `supabase/migrations/202609200014_required_registration_profile.sql`;
+16. `supabase/migrations/202609200015_activate_szs_account_service.sql`.
 
 The list lives in `db-tests/harness.ts`; keep the two in step, because a
 migration missing from that array is a migration nothing ever runs.
@@ -88,6 +89,9 @@ migration, never by editing an old one.
 | `202609110004_function_execute_privileges.sql` | Removes the PUBLIC `EXECUTE` grant that left eight `security definer` helpers callable without signing in |
 | `202609120005_organisational_writes.sql` | The missing write paths: creating, editing and discarding an intervention draft, and CRUD for members, groups and vehicles. Adds `is_dvd_admin()` and the `organisation_audit` trail |
 | `202609130006_attendance_truth.sql` | Stops a self-declared claim counting as participation: adds `source`, a rejection state, `attendance_confirm`/`_reject`/`_unconfirm`, and **replaces** `attendance_totals()` with a version that separates confirmed from unverified time. Adds the two remaining write paths — `acknowledge_intervention` and vehicle departure/return. Also repairs `current_member_id()`, which resolved a member identity for accounts that had lost their role — see [ACCESS_MODEL.md §2](./ACCESS_MODEL.md#identity-is-not-separable-from-authority) |
+| `202609200013_multi_service_account_admin.sql` | Adds independent DVD/SZS account memberships, owner-only assignment and permanent audit without widening DVD operational access |
+| `202609200014_required_registration_profile.sql` | Requires server-validated full name, telephone and date of birth before operational access can become effective |
+| `202609200015_activate_szs_account_service.sql` | Makes new and unassigned accounts limited citizens, gives SZS its official display name, adds a self-only membership read and returns removed DVD members to citizen without touching SZS membership |
 
 `202609110003` and `202609110004` exist because of a defect only a real project
 could reveal; both are explained in
@@ -105,7 +109,8 @@ order, and what to do if it fails halfway. Read it before applying either file.
 
 ## 3. The real Supabase project
 
-**Fully applied and fingerprint-verified.**
+**All checked-in migrations are applied.** Historical fingerprints and the
+latest targeted postflight are recorded below.
 
 | Migration | On the hosted project |
 |---|---|
@@ -113,6 +118,10 @@ order, and what to do if it fails halfway. Read it before applying either file.
 | `202609120005_organisational_writes.sql` | **Applied** 2026-09-12 |
 | `202609130006_attendance_truth.sql` | **Applied** 2026-09-12 |
 | `202609140007_availability_and_journey.sql` | **Applied** 2026-09-13 |
+| `202609140008` through `202609150012` | **Applied** before the 2026-09-20 account rollout |
+| `202609200013_multi_service_account_admin.sql` | **Applied** before the 2026-09-20 preflight |
+| `202609200014_required_registration_profile.sql` | **Applied** 2026-09-20 |
+| `202609200015_activate_szs_account_service.sql` | **Applied** transactionally 2026-09-20; targeted postflight passed |
 
 The project is `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, region `eu-west-1`,
 PostgreSQL 17. Its `public` schema was empty before the first four.
@@ -140,6 +149,11 @@ after `202609130006`, and `ee2886b99683c44f00216a7e84e7b0dd` across 46 after
 `202609140007` is **purely additive** in the strict sense this file uses: four
 new tables, three new functions, new policies and grants. It alters no existing
 function's signature and drops nothing, so §3.1's warning does not apply to it.
+
+The migration-015 postflight verified exactly one history row, the `CITIZEN`
+default, no remaining `PENDING` grants, six unchanged active DVD memberships,
+zero SZS memberships, the official SZS display name and the self-membership
+RPC privileges (`authenticated` execute; no `anon` execute).
 
 **The measured-record slice of 2026-09-13 added no migration at all.** Every
 fact it puts on screen was already stored: `attendance_totals()` already
