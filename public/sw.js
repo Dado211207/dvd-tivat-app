@@ -22,7 +22,7 @@
  */
 
 // Bump on any change to this file or to what it caches.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL = `dvd-tivat-shell-${VERSION}`;
 
 self.addEventListener('install', (event) => {
@@ -123,6 +123,8 @@ self.addEventListener('notificationclick', (event) => {
 const OFFLINE_PAGE = `<!doctype html>
 <html lang="sr-Latn"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; object-src 'none'; style-src 'unsafe-inline'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
 <title>Boka Operativa - nema veze</title>
 <style>
   body { margin:0; padding:2rem 1.25rem; font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -139,7 +141,7 @@ const OFFLINE_PAGE = `<!doctype html>
   <p>Aplikacija nije mogla da se ucita jer uredjaj trenutno nema internet.</p>
   <p><strong>Ovo nije kanal za hitne slucajeve.</strong> Kod pozara ili nesrece
      odmah pozovite zvanicnu vatrogasnu sluzbu telefonom.</p>
-  <button type="button" onclick="location.reload()">Pokusaj ponovo</button>
+  <form method="get"><button type="submit">Pokusaj ponovo</button></form>
 </main></body></html>`;
 
 self.addEventListener('fetch', (event) => {

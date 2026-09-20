@@ -6,13 +6,39 @@ describes.**
 
 Last updated: 2026-09-20
 
-## Current delivery: account recovery and release acceptance
+## Current delivery: video-guided security hardening
 
-PRs #30, #31 and #32 are merged on `main` at `ae19928`. PR #32 CI #100 and the
-post-merge main CI #101 both passed. The deployment workflow #17 completed and
-the published copy at `https://dado211207.github.io/dvd-tivat-app/` returns the
-current Boka Operativa shell. The recovery build gate is disabled there as
-intended until hosted email acceptance passes.
+Four supplied videos were reviewed: three security checklists and one design /
+Playwright workflow recommendation. The security lists were checked against the
+real repository rather than copied as generic tasks. The existing row-level
+security, RPC role checks, bundle-secret scan, restricted push origin,
+privacy-safe push payload, Playwright/axe suite and design direction already
+cover most of the useful advice.
+
+This delivery closes the concrete browser gap found by the review: a restrictive
+Content Security Policy and no-referrer policy now ship in the main document,
+and the service-worker offline document no longer needs inline JavaScript. CI
+also audits production dependencies for high/critical advisories. The reviewed
+evidence and the remaining hosted/device checks are in
+`docs/SECURITY_REVIEW.md`.
+
+No source review or browser policy proves physical notification delivery,
+hosted rate limits, email recovery, restore readiness or operational approval.
+Those remain the explicit acceptance tasks below.
+
+Local validation passed for ESLint, TypeScript, the production build, the built
+bundle secret scan, the production dependency audit and whitespace checks. The
+full unit, database, browser, accessibility and screenshot suites are left to
+the pull-request CI so their result is tied to the published commit.
+
+## Previous delivery: account recovery and release acceptance
+
+PRs #30, #31, #32 and #33 are merged on `main`; the release-state checkpoint is
+`2198d3c`. PR #32 CI #100 and post-merge main CI #101 both passed. The deployment
+workflow #17 completed and the published copy at
+`https://dado211207.github.io/dvd-tivat-app/` returns the current Boka Operativa
+shell. The recovery build gate is disabled there as intended until hosted email
+acceptance passes.
 
 This delivery implements forgotten-password recovery with an emailed one-time
 code, matching password confirmation and a temporary non-persistent recovery

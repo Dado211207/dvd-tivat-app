@@ -91,6 +91,7 @@ npm run typecheck    # tsc --noEmit, strict
 npm run test         # Vitest - domain rules and storage failure handling
 npm run test:db      # PostgreSQL - migrations, role matrix, RLS, attendance
 npm run e2e          # Playwright - full flow, keyboard, axe accessibility
+npm run audit:production # known high/critical advisories in shipped packages
 npm run verify:bundle # reads the built output: no secret may reach the browser
 npm run screenshots  # regenerates docs/screenshots/ (writes into the repo)
 ```
@@ -164,6 +165,7 @@ cannot promise a custom siren or override the phone's silent and focus settings.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack choice and rejected alternatives, layering, the pure domain reducer, persistence limits, path to mobile |
 | [docs/PRODUCTION_ARCHITECTURE.md](docs/PRODUCTION_ARCHITECTURE.md) | Gated server, identity, notification and mobile architecture if DVD Tivat accepts the workflow |
 | [docs/ACCESS_MODEL.md](docs/ACCESS_MODEL.md) | **The account, role and row-level-security contract, and exactly what is not enforced yet** |
+| [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) | Security controls checked against the shipped repository, browser policy and hosted/device checks that remain open |
 | [docs/OWNER_BOOTSTRAP.md](docs/OWNER_BOOTSTRAP.md) | **How the one owner account is created, step by step, by somebody who is not a developer** |
 | [docs/DATABASE.md](docs/DATABASE.md) | **Schema semantics, the attendance rules, and how to run the database tests** |
 | [docs/ACCOUNTS_REPORTS_MAP_PLAN.md](docs/ACCOUNTS_REPORTS_MAP_PLAN.md) | Earlier account, email-code, owner access, incident map and photo plan. Superseded on citizen reporting by the internal-operations decision |
