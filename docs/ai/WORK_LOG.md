@@ -2320,11 +2320,25 @@ for a Draft stacked review. Do not merge or deploy it.
 - Added pure client validation, database regression coverage and registration
   form coverage.
 
-**Rollout boundary**
+**Rollout completed**
 
-- Migration 014 and the matching client must be released together. Existing
-  profiles become incomplete until the new required fields are supplied.
-- No hosted migration, feature enablement or real-member-data acceptance is
-  claimed by this local change.
+- PR #36 CI #109 passed on exact head `02e99f1`, including PostgreSQL/RLS,
+  Playwright, accessibility, build, dependency audit and the bundle-secret
+  check.
+- Hosted preflight confirmed migrations 012 and 013 present, eight complete
+  profiles, neither new profile column and only the legacy one-argument RPC.
+- Migration 014 was applied in one transaction with its migration-history row.
+  Postflight returned eight profiles, zero still complete, eight missing the
+  newly required values, no legacy RPC, the new three-argument RPC and exactly
+  one migration row.
+- PR #36 was squash-merged as `8b78716`; main CI #110 passed and Pages deploy
+  #22 succeeded.
+- The public `Nalozi` screen was smoke-tested after deployment. It serves the
+  six-field registration form (name, telephone, email, birth date, password and
+  confirmation) with no application console errors.
+
+Existing users must now provide telephone and date of birth at their next sign
+in. No fictional value was written for them, and no new account was created by
+the production smoke test.
 
 ---
