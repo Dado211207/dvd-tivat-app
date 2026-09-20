@@ -27,10 +27,14 @@ profile fields are available to existing incomplete accounts. The owner-only
 directory shows telephone, date of birth and whether the account is linked to a
 member record, with a direct route to `Evidencija` when it is not.
 
-This delivery is not hosted until migration 014 is applied and the matching
-client is published. Apply those together: the migration deliberately removes
-the old name-only completion command and fails closed during a mixed-version
-window.
+This delivery is hosted. Migration 014 was applied transactionally to the
+production project immediately before PR #36 was squash-merged as `8b78716`.
+The postflight confirmed one migration record, the new three-argument command,
+no legacy name-only command, and all eight existing profiles incomplete until
+they provide telephone and date of birth. PR CI #109 and main CI #110 passed;
+Pages deployment #22 then published the matching client. The public account
+screen was checked at the deployed URL and shows all six required registration
+fields without application console errors.
 
 ## Previous delivery: owner multi-service account administration
 
@@ -48,15 +52,11 @@ operational table and policy is explicitly organization-scoped. Passwords are
 never displayed or set by an administrator; the owner can only send the same
 one-time recovery code used by the guarded recovery flow.
 
-Rollout fails closed behind `VITE_MULTI_SERVICE_ADMIN_ENABLED`. With the flag
-off, the deployed DVD controls keep working and SZS is read-only. Turn it on
-only after migration 013 passes hosted postflight checks. Password email remains
-separately gated by `VITE_PASSWORD_RESET_ENABLED` and the SMTP acceptance in
+Migration 013 is present on the hosted project. The SZS controls still fail
+closed behind `VITE_MULTI_SERVICE_ADMIN_ENABLED`; enablement remains a separate
+product decision. Password email remains separately gated by
+`VITE_PASSWORD_RESET_ENABLED` and the SMTP acceptance in
 `docs/ACCOUNT_RECOVERY.md`.
-
-Local PostgreSQL was unavailable in this workspace, so the migration and its
-cross-service RLS tests require pull-request CI before merge. No hosted migration
-or feature enablement is claimed by this delivery yet.
 
 ## Previous delivery: video-guided security hardening
 

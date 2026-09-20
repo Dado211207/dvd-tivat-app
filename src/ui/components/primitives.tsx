@@ -171,6 +171,7 @@ export function ScrollRegion({
 
 interface FieldControlProps {
   id: string;
+  required: boolean | undefined;
   'aria-invalid': boolean | undefined;
   'aria-describedby': string | undefined;
 }
@@ -227,6 +228,7 @@ export function Field({
       ) : null}
       {children({
         id,
+        required: required || undefined,
         'aria-invalid': error ? true : undefined,
         'aria-describedby': describedBy === '' ? undefined : describedBy,
       })}
