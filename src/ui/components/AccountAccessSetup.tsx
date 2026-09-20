@@ -22,12 +22,14 @@ import {
 import { isPlausibleFullName } from '@/access/policy';
 import { useText } from '@/i18n/useText';
 import { Field, Notice } from './primitives';
+import { PasswordRecovery } from './PasswordRecovery';
 
 type Mode = 'SIGN_IN' | 'REGISTER';
 
 export function AccountAccessSetup() {
   const t = useText();
   const { access, reload, signOut } = useAccess();
+  const [recovering, setRecovering] = useState(false);
   const [mode, setMode] = useState<Mode>('SIGN_IN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -158,6 +160,10 @@ export function AccountAccessSetup() {
     }
   }
 
+  if (recovering && obstacle === 'SIGN_IN_REQUIRED') {
+    return <PasswordRecovery initialEmail={email} onBack={() => setRecovering(false)} />;
+  }
+
   return (
     <section className="card account-connect" aria-labelledby="account-connect-h">
       <div className="card__head">
@@ -249,11 +255,20 @@ export function AccountAccessSetup() {
             </div>
           </form>
 
-          {!PASSWORD_RESET_AVAILABLE ? (
+          {PASSWORD_RESET_AVAILABLE ? (
+            <button className="btn" type="button" disabled={busy} onClick={() => {
+              setPassword('');
+              setError('');
+              setMessage('');
+              setRecovering(true);
+            }}>
+              {t.recovery.forgot}
+            </button>
+          ) : (
             <Notice tone="info">
               {t.accountAccess.resetUnavailable}
             </Notice>
-          ) : null}
+          )}
         </>
       ) : null}
 

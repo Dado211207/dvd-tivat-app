@@ -145,7 +145,7 @@ actor selector from being the first thing anybody sees.
 | Real member data | The repository is public. Everything is invented |
 | Public citizen emergency reporting | Removed from the product by the owner's decision of 9 September 2026. Never a substitute for calling the official fire service |
 | Radius dispatch, door control, official integrations, continuous member tracking | Out of scope. The application contacts nobody and tracks nobody |
-| Password reset | No mail provider is configured, so a reset form would send nothing while looking as though it had. The screen says that instead of offering one |
+| Password reset | The code-entry flow is implemented behind `VITE_PASSWORD_RESET_ENABLED`; it remains hidden until SMTP, the OTP mail template and hosted acceptance in `docs/ACCOUNT_RECOVERY.md` are complete |
 | Email, SMS, Viber or telephone transport | Only optional Web Push is implemented. It is intentionally not described as proof that a member was alerted. See [docs/ACCESS_MODEL.md §8](docs/ACCESS_MODEL.md#8-not-enforced-yet) |
 | A native application | The shell is an installable PWA: manifest, icons, standalone display, and a service worker that caches only the shell and never a server answer. No app store packaging |
 
