@@ -30,11 +30,19 @@ and supports DVD-only, SZS-only, both or neither. No member, vehicle, group or
 intervention is invented for either service.
 
 Local lint, TypeScript, 647 unit/component tests, both production builds,
-bundle-secret scanning and the production dependency audit pass. The local
-workspace has neither PostgreSQL 16 nor the Playwright Chromium binary, so the
-database/RLS and browser suites are reserved for GitHub CI before any hosted
-migration or deployment. Migration 015, the deployment flag, merge and hosted
-postflight are not claimed until that CI passes.
+bundle-secret scanning and the production dependency audit pass. PR #38 CI
+#115 then passed the missing PostgreSQL 16/RLS and Playwright/accessibility
+gates on head `8d9572a`.
+
+The hosted preflight found six active DVD memberships, zero SZS memberships,
+one legacy unassigned `PENDING` grant and no migration 015. Migration 015 was
+applied transactionally with exactly one migration-history row. Postflight
+found the same six DVD memberships, still zero SZS memberships, one limited
+`CITIZEN`, no `PENDING`, the official SZS name and the self-only RPC with
+`authenticated` execute and no `anon` execute. The Pages repository variable
+`VITE_MULTI_SERVICE_ADMIN_ENABLED` was already `true`; nobody was added to DVD
+or SZS. PR merge, main CI, Pages deployment and the public smoke test are the
+only remaining rollout steps.
 
 ## Previous delivery: required registration profile and member-link readiness
 

@@ -109,7 +109,8 @@ order, and what to do if it fails halfway. Read it before applying either file.
 
 ## 3. The real Supabase project
 
-**Fully applied and fingerprint-verified.**
+**All checked-in migrations are applied.** Historical fingerprints and the
+latest targeted postflight are recorded below.
 
 | Migration | On the hosted project |
 |---|---|
@@ -117,6 +118,10 @@ order, and what to do if it fails halfway. Read it before applying either file.
 | `202609120005_organisational_writes.sql` | **Applied** 2026-09-12 |
 | `202609130006_attendance_truth.sql` | **Applied** 2026-09-12 |
 | `202609140007_availability_and_journey.sql` | **Applied** 2026-09-13 |
+| `202609140008` through `202609150012` | **Applied** before the 2026-09-20 account rollout |
+| `202609200013_multi_service_account_admin.sql` | **Applied** before the 2026-09-20 preflight |
+| `202609200014_required_registration_profile.sql` | **Applied** 2026-09-20 |
+| `202609200015_activate_szs_account_service.sql` | **Applied** transactionally 2026-09-20; targeted postflight passed |
 
 The project is `dvd-tivat-app`, ref `yskhdzrdbywrpfowckpn`, region `eu-west-1`,
 PostgreSQL 17. Its `public` schema was empty before the first four.
@@ -144,6 +149,11 @@ after `202609130006`, and `ee2886b99683c44f00216a7e84e7b0dd` across 46 after
 `202609140007` is **purely additive** in the strict sense this file uses: four
 new tables, three new functions, new policies and grants. It alters no existing
 function's signature and drops nothing, so §3.1's warning does not apply to it.
+
+The migration-015 postflight verified exactly one history row, the `CITIZEN`
+default, no remaining `PENDING` grants, six unchanged active DVD memberships,
+zero SZS memberships, the official SZS display name and the self-membership
+RPC privileges (`authenticated` execute; no `anon` execute).
 
 **The measured-record slice of 2026-09-13 added no migration at all.** Every
 fact it puts on screen was already stored: `attendance_totals()` already

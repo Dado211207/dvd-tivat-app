@@ -60,6 +60,10 @@ and 015 pass on the hosted project. This boundary lets real users create their
 own accounts and lets the owner classify them without pretending the larger
 cross-service operating model has been approved or implemented.
 
+That account-administration gate passed on the hosted project on 2026-09-20:
+migration 015 is recorded, SZS still has zero memberships, and the deployment
+variable is `true`. No operational SZS roster or intervention data was created.
+
 ### Recommended shape
 
 Use one shared product and one Supabase project with **organization-scoped

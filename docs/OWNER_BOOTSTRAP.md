@@ -125,11 +125,11 @@ each offering `Vatrogasac`, `Komandir`, `Administrator` or no membership. You
 may also take the whole account's access away with a reason. Every change is
 recorded permanently and shown underneath the list.
 
-The SZS selector remains read-only until migrations `202609200013` and
-`202609200015` are applied and
-the deployment variable `VITE_MULTI_SERVICE_ADMIN_ENABLED=true` is set. This is
-intentional: deploying the screen before its database policy would turn a
-missing security boundary into a production surprise.
+The SZS selector is active only when migrations `202609200013` and
+`202609200015` are applied and the deployment variable
+`VITE_MULTI_SERVICE_ADMIN_ENABLED=true` is set. Production satisfies both
+conditions as of 2026-09-20. This gate remains intentional: a future
+deployment must not expose the selector before its database policy exists.
 
 ---
 
