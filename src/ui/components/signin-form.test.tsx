@@ -190,6 +190,17 @@ describe('account registration', () => {
     typeInto('#accountPassword', 'sigurna-lozinka-123');
     typeInto('#accountConfirmPassword', 'sigurna-lozinka-123');
 
+    for (const fieldId of [
+      'accountRegisterFullName',
+      'accountRegisterPhone',
+      'accountEmail',
+      'accountBirthDate',
+      'accountPassword',
+      'accountConfirmPassword',
+    ]) {
+      expect(container.querySelector<HTMLInputElement>(`#${fieldId}`)?.required).toBe(true);
+    }
+
     await attemptSignIn();
 
     expect(register).toHaveBeenCalledWith('probni@example.invalid', 'sigurna-lozinka-123', {
