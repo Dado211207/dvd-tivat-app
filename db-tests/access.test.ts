@@ -215,7 +215,7 @@ describe('role elevation is refused', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      previous_role: 'PENDING',
+      previous_role: 'CITIZEN',
       next_role: 'FIREFIGHTER',
       changed_by: cast.owner!.userId,
     });
