@@ -1,3 +1,63 @@
+## 2026-09-21 - One missing row, two symptoms, and a trigger that would have undone the fix
+
+The owner tested the application on his own iPhone and reported two problems
+that looked unrelated: his account said it was not linked to a member of the
+society, and enabling notifications failed with "the notification was not set
+up, check the connection and try again".
+
+They are one defect, and neither message was true.
+
+**The account has no `members` row.** That is the whole of it. `current_member_id()`
+returns null, so the call-out screen correctly says the account is not linked.
+And `register_web_push_subscription` refuses an account with no member record -
+`ELIGIBLE_MEMBER_REQUIRED` - which `saveSubscription` collapsed into
+`PUSH_REGISTRATION_FAILED` along with every other refusal it did not recognise.
+The panel renders that as a connection problem. His connection was fine. There
+was no way to find the real reason from inside the application at all.
+
+The VAPID key was the obvious suspect and it is innocent: it is in the deployed
+bundle, 87 characters, well formed, and `pushCapability()` already reports the
+iOS "add to home screen" case separately as `INSTALL_ON_IOS`. Production also
+holds two push subscriptions from an iPhone on a demo account that *does* have
+a member link, one still active - so registration demonstrably works from that
+phone, on that build, for a linked account.
+
+Each reason now reaches the screen as itself. The distinction that took the
+most thought is between a refusal and an outage: PostgREST always sets a code,
+so an error carrying a code means the server answered, even when the reason is
+one this build has never heard of. Calling that a connection problem would
+send somebody to their router over a server-side rule. Only an error with no
+code at all is reported as unreachable.
+
+**The owner needs no code change to fix his own account.** `admin_create_member`
+and `admin_link_member_account` both gate on `is_dvd_admin()`, which is
+`current_dvd_role() in ('OWNER','ADMIN')`, and neither has a self-targeting
+guard. `loadDirectory()` does not filter out the signed-in user, so his own
+account appears in the link picker. `is_eligible_recipient` accepts `OWNER`.
+The path was open the whole time; the application simply never said so.
+
+**Assigning himself a DVD service was genuinely blocked**, by two rules in
+`owner_set_organization_membership`: it refused a self-target, and it refused an
+OWNER target. The first is vacuous in practice - only an owner may call it and
+there is exactly one owner - and the second was protecting the right thing the
+wrong way. The mirror to the compatibility grant is what must never touch an
+OWNER row, so that is what is guarded now.
+
+**And a third rule that would have quietly undone the other two.**
+`sync_dvd_membership_from_grant` deactivates DVD membership for any role it does
+not consider operational. OWNER is not on that list, and the trigger fires on
+`update of role` whether or not the value changes. So the owner could have
+assigned himself a service, seen it work, and found it switched off later with
+nothing in any audit table to explain it. That is the failure mode worth having
+tests for, and it is the one the obvious fix misses.
+
+Two things found on the way, both recorded rather than papered over. The
+`repair` block in `push.test.ts` had no setup of its own and was passing on
+whatever the block above it happened to leave behind. And `MIGRATIONS` in the
+harness is a hand-maintained list, so a new migration is silently untested until
+somebody remembers to add it - which is exactly what happened here, and cost a
+confused half-hour of a passing suite testing the old schema.
+
 ## 2026-09-17 - The states nobody looks at, and a branch that could not be reached
 
 A follow-up to the clarity redesign, closing the one thing its brief asked for
