@@ -4,9 +4,47 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-20
+Last updated: 2026-09-21
 
-## Current delivery: citizen-first SZS account activation
+## Current delivery: the owner's own iPhone testing
+
+Five faults reported by the owner from his own phone. Two of them, A and B,
+turned out to be one defect: **his account has no `members` row.** That makes
+`current_member_id()` null, which is why the call-out screen says his account is
+not linked, and it makes `register_web_push_subscription` raise
+`ELIGIBLE_MEMBER_REQUIRED`, which the client reported as a connection failure.
+The VAPID key is present and valid in the deployed bundle; it was never the
+cause.
+
+- **A - owner as firefighter.** No code change is needed for the member link:
+  `admin_create_member` and `admin_link_member_account` gate on `is_dvd_admin()`
+  (`OWNER` or `ADMIN`) and have no self-targeting guard, the directory does not
+  filter out the signed-in user, and `is_eligible_recipient` accepts `OWNER`.
+  Assigning himself a DVD *service* was genuinely blocked, and migration
+  `202609210016` lifts it while keeping the owner's grant untouchable.
+- **B - push messages.** Each server refusal now reaches the screen as itself.
+  A refusal carrying a PostgREST code is never reported as a connection problem.
+- **C - mobile layout.** The accounts table adopts the existing `table--cards`
+  pattern and releases its 920px minimum width; a fixed strip paints the
+  `--safe-top` inset so nothing scrolls out from under the iOS status bar.
+- **D - reload on tab switch.** Already fixed on 2026-09-13 in `323b633` and
+  present in the deployed build. Browser-level tests now cover it; they pass
+  unchanged, so they are a guard and not evidence of a repair.
+- **E - demo data.** Inventory only, in `docs/DEMO_DATA_INVENTORY.md`. Nothing
+  deleted. Awaiting the owner's decision.
+
+**Open decision:** the data-layer read contract. `ead7820` made
+`fetchInterventions` throw; the remaining five reads still return `[]` or `null`
+on failure. Whether to finish that as `ReadResult<T>` (compile-time enforced) or
+as more throws is not settled. Work in progress is saved outside the repository.
+
+**Verification boundary:** the SQL behaviour is proved against a local
+PostgreSQL running the real migrations. Migration `202609210016` is **not
+applied to production** - production is at `202609200015`, matching `main`.
+`db-tests/hosted_operations.test.ts` (12 tests) needs hosted credentials and is
+skipped, not passed.
+
+## Previous delivery: citizen-first SZS account activation
 
 The owner clarified the intended onboarding contract: nobody is pre-created in
 DVD or SZS. Every person registers their own account, starts as a limited

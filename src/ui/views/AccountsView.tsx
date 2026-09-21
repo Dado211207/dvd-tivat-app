@@ -273,8 +273,8 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
               : t.accounts.changeSearch}
           </EmptyState>
         ) : (
-          <div className="account-table-wrap">
-            <table className="account-table">
+          <div className="account-table-wrap table-wrap--cards">
+            <table className="account-table table--cards">
               <thead>
                 <tr>
                   <th scope="col">{t.accounts.account}</th>
@@ -310,7 +310,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                           </small>
                         )}
                       </th>
-                      <td>
+                      <td data-label={t.accounts.status}>
                         <Chip
                           tone={status === 'ACTIVE' ? 'yes' : status === 'SUSPENDED' ? 'no' : 'later'}
                           symbol={status === 'ACTIVE' ? '+' : status === 'SUSPENDED' ? '-' : '!'}
@@ -319,7 +319,11 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                         </Chip>
                       </td>
                       {(['DVD', 'SZS'] as const).map((organization) => (
-                        <td key={organization} className="account-service-cell">
+                        <td
+                          key={organization}
+                          className="account-service-cell"
+                          data-label={t.accounts.organizationLabel[organization]}
+                        >
                           {locked ? (
                             <>
                               <strong>{t.accounts.roleLabel[account.role]}</strong>
@@ -356,7 +360,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                           )}
                         </td>
                       ))}
-                      <td>
+                      <td data-label={t.accounts.access}>
                         {locked ? (
                           <small>-</small>
                         ) : (

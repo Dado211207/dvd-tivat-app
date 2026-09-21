@@ -24,7 +24,7 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "db:start": "bash scripts/local-postgres.sh start",
     "db:stop": "bash scripts/local-postgres.sh stop",
-    "build:fixture": "VITE_SUPABASE_URL=https://fixture-not-a-real-project.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_fixture_only_never_a_real_key vite build --outDir dist-fixture",
+    "build:fixture": "VITE_MULTI_SERVICE_ADMIN_ENABLED=true VITE_SUPABASE_URL=https://fixture-not-a-real-project.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_fixture_only_never_a_real_key vite build --outDir dist-fixture",
     "preview:fixture": "vite preview --outDir dist-fixture --host 127.0.0.1 --port 4174 --strictPort"
   },
   "dependencies": {

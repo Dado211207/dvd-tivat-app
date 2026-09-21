@@ -1,3 +1,58 @@
+## 2026-09-21 - Two screens nobody had measured, and a test that proved nothing
+
+The mobile faults the owner reported were on `podesavanja` and `nalozi`. The
+viewport suite measures `poziv`, `mobilizacija` and `arhiva`. That is the whole
+explanation for how both survived: they were never looked at, at any width.
+
+**The accounts table carried `min-width: 920px`.** At 390px it measured 1041px
+wide, the page scrolled sideways, and the status and role columns sat off the
+right edge where nothing suggested they existed. The repository already had a
+`table--cards` pattern built for exactly this, used by the archive; the accounts
+table simply never adopted it. It does now, and the two minimum widths - 920px on
+the table, 155px on each service cell - are released at that breakpoint, because
+once the rows are cards a minimum width is only a promise to overflow.
+
+**The status bar overlapped Settings because the masthead scrolls away.** It is
+`position: static` on a telephone. In a browser tab that costs nothing, since the
+status bar there is the browser's own chrome. Installed on the home screen -
+which is also what iOS requires before it will do Web Push at all - the web view
+extends under the status bar, and whatever has scrolled to the top of the page is
+what sits under the clock. A fixed strip now paints that area. Its height is
+`var(--safe-top)`, which is zero everywhere without an inset, so it draws nothing
+on any desktop browser or ordinary tab.
+
+**Four tests passed against an error screen.** Worth writing down plainly. The
+first version of the accounts assertions - no clipped columns, no sideways
+scroll, content uses the width - all passed, and I nearly took that as the fault
+not reproducing. The screen was showing "server unavailable" and contained no
+table at all. Layout assertions are vacuously true on an empty page, and a
+measurement test needs to prove there was something to measure before it can
+mean anything.
+
+Two fixture defects were behind it. The build had `VITE_MULTI_SERVICE_ADMIN_ENABLED`
+off while production has it on, so the fixture's accounts screen was a different
+screen from the owner's; turning it on then exposed a missing
+`current_organization_memberships` RPC. And the fixture ignored `?column=eq.value`
+filters entirely, returning every row. That looked harmless while every table held
+one row. The moment `profiles` held two, `fetchProfile`'s `.maybeSingle()` got
+both, refused to pick, and the gate reported an unreachable server - a failure
+invented entirely by the test double. It honours equality filters now.
+
+**The occlusion test was asserting the wrong property.** The first version checked
+that no element's box intersected the inset strip, which a painted cover can never
+satisfy: a backdrop does not move elements, it hides them. Content scrolling
+behind a solid status bar is how every application on the phone behaves; content
+scrolling behind a transparent one is what made the setting unreadable. So the
+question is what paints on top at those points, and that is what it asks now.
+
+**The reload on tab switch was already fixed** - on 13 September, in `323b633`,
+and the deployed build contains it. The root cause then was a remount rather than
+a reload, and `resume-stability.test.tsx` drives it. What was missing was any test
+of a real browser doing it: the nearest one types into the composer and crosses an
+IN-APP tab, which is a different thing. Three browser tests now drive
+`visibilitychange` against the built application. They pass unchanged, so they are
+a guard rather than evidence of a repair, and that is worth saying rather than
+dressing them up as a fix.
 ## 2026-09-21 - One missing row, two symptoms, and a trigger that would have undone the fix
 
 The owner tested the application on his own iPhone and reported two problems
