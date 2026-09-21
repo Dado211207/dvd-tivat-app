@@ -102,6 +102,22 @@ describe('device-bound Web Push client', () => {
     expect(backend.rpc).not.toHaveBeenCalled();
   });
 
+  it('preserves the server reason when the account is not linked to a member', async () => {
+    const browser = installPushBrowser({ permission: 'granted' });
+    backend.rpc.mockResolvedValueOnce({ error: new Error('ELIGIBLE_MEMBER_REQUIRED') });
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_MEMBER_REQUIRED');
+    expect(browser.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the server reason when DVD operational access is missing', async () => {
+    const browser = installPushBrowser({ permission: 'granted' });
+    backend.rpc.mockResolvedValueOnce({ error: new Error('OPERATIONAL_ACCESS_REQUIRED') });
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_ACCESS_REQUIRED');
+    expect(browser.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it('replaces a previous account subscription in a shared browser without reassigning it', async () => {
     const browser = installPushBrowser({ permission: 'granted', existingSubscription: true });
     backend.rpc
