@@ -412,6 +412,8 @@ export const me = {
     unsupported: 'Ovaj pregledac ne podrzava pouzdane Web Push notifikacije.',
     notConfigured: 'Push servis jos nije povezan sa ovom objavljenom verzijom.',
     denied: 'Notifikacije su odbijene u podesavanjima telefona. Dozvolite ih za Boka Operativa, pa otvorite aplikaciju ponovo.',
+    memberRequired: 'Ovaj nalog jos nije povezan sa aktivnim clanom DVD Tivat. Vlasnik mora povezati nalog u Evidenciji, pa zatim ponovo ukljuciti notifikacije.',
+    accessRequired: 'Ovaj nalog nema aktivan DVD pristup potreban za operativne notifikacije.',
     failed: 'Notifikacija nije podesena. Provjerite vezu i pokusajte ponovo.',
 
     /**
