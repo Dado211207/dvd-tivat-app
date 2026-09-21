@@ -62,6 +62,12 @@ async function saveSubscription(subscription: PushSubscription): Promise<void> {
     if (message.includes('PUSH_SUBSCRIPTION_OWNED_BY_ANOTHER_ACCOUNT')) {
       throw new Error('PUSH_SUBSCRIPTION_CONFLICT');
     }
+    if (message.includes('ELIGIBLE_MEMBER_REQUIRED')) {
+      throw new Error('PUSH_MEMBER_REQUIRED');
+    }
+    if (message.includes('OPERATIONAL_ACCESS_REQUIRED')) {
+      throw new Error('PUSH_ACCESS_REQUIRED');
+    }
     throw new Error('PUSH_REGISTRATION_FAILED');
   }
 }
