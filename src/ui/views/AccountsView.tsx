@@ -289,7 +289,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                   const status = statusOf(account);
                   const isSelf = account.userId === ownUserId;
                   const isOwnerRow = account.role === 'OWNER';
-                  const locked = isSelf || isOwnerRow;
+                  const accessLocked = isSelf || isOwnerRow;
                   const busy = busyUserId === account.userId;
                   return (
                     <tr key={account.userId}>
@@ -310,7 +310,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                           </small>
                         )}
                       </th>
-                      <td>
+                      <td data-label={t.accounts.status}>
                         <Chip
                           tone={status === 'ACTIVE' ? 'yes' : status === 'SUSPENDED' ? 'no' : 'later'}
                           symbol={status === 'ACTIVE' ? '+' : status === 'SUSPENDED' ? '-' : '!'}
@@ -319,45 +319,38 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                         </Chip>
                       </td>
                       {(['DVD', 'SZS'] as const).map((organization) => (
-                        <td key={organization} className="account-service-cell">
-                          {locked ? (
-                            <>
-                              <strong>{t.accounts.roleLabel[account.role]}</strong>
-                              <small>
-                                {isSelf
-                                  ? t.accounts.ownAccountLocked
-                                  : t.accounts.ownerLocked}
-                              </small>
-                            </>
-                          ) : (
-                            <select
-                              aria-label={`${t.accounts.organizationLabel[organization]} - ${account.fullName ?? account.email}`}
-                              value={account.memberships[organization] ?? 'NONE'}
-                              disabled={
-                                busy || (!MULTI_SERVICE_ADMIN_AVAILABLE && organization === 'SZS')
-                              }
-                              onChange={(event) =>
-                                void changeMembership(
-                                  account,
-                                  organization,
-                                  event.target.value === 'NONE'
-                                    ? null
-                                    : (event.target.value as MembershipRole),
-                                )
-                              }
-                            >
-                              <option value="NONE">{t.accounts.noMembership}</option>
-                              {MEMBERSHIP_ROLES.map((role) => (
-                                <option key={role} value={role}>
-                                  {t.accounts.roleLabel[role]}
-                                </option>
-                              ))}
-                            </select>
-                          )}
+                        <td
+                          key={organization}
+                          className="account-service-cell"
+                          data-label={t.accounts.organizationLabel[organization]}
+                        >
+                          <select
+                            aria-label={`${t.accounts.organizationLabel[organization]} - ${account.fullName ?? account.email}`}
+                            value={account.memberships[organization] ?? 'NONE'}
+                            disabled={
+                              busy || (!MULTI_SERVICE_ADMIN_AVAILABLE && organization === 'SZS')
+                            }
+                            onChange={(event) =>
+                              void changeMembership(
+                                account,
+                                organization,
+                                event.target.value === 'NONE'
+                                  ? null
+                                  : (event.target.value as MembershipRole),
+                              )
+                            }
+                          >
+                            <option value="NONE">{t.accounts.noMembership}</option>
+                            {MEMBERSHIP_ROLES.map((role) => (
+                              <option key={role} value={role}>
+                                {t.accounts.roleLabel[role]}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                       ))}
-                      <td>
-                        {locked ? (
+                      <td data-label={t.accounts.access}>
+                        {accessLocked ? (
                           <small>-</small>
                         ) : (
                           <div className="account-access-cell">
