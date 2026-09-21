@@ -49,6 +49,33 @@ const VIEWPORTS = [
 
 const ROUTES = ['poziv', 'mobilizacija', 'arhiva'] as const;
 
+test('the owner account directory becomes complete cards on an iPhone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openOperational(page, 'nalozi', 'OWNER');
+
+  const table = page.locator('.account-table');
+  const row = table.locator('tbody tr').first();
+  await expect(row).toBeVisible();
+  await expect(page.getByLabel('DVD Tivat - Ivo Vatrogasac')).toHaveValue('FIREFIGHTER');
+
+  const geometry = await page.evaluate(() => {
+    const accountTable = document.querySelector<HTMLElement>('.account-table');
+    const accountRow = document.querySelector<HTMLElement>('.account-table tbody tr');
+    if (!accountTable || !accountRow) return null;
+    return {
+      pageWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      tableWidth: accountTable.getBoundingClientRect().width,
+      rowWidth: accountRow.getBoundingClientRect().width,
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry!.pageWidth).toBeLessThanOrEqual(geometry!.viewportWidth);
+  expect(geometry!.tableWidth).toBeLessThanOrEqual(geometry!.viewportWidth);
+  expect(geometry!.rowWidth).toBeLessThanOrEqual(geometry!.tableWidth);
+});
+
 function roleFor(route: string) {
   return route === 'mobilizacija' ? ('FIREFIGHTER' as const) : ('COMMANDER' as const);
 }
