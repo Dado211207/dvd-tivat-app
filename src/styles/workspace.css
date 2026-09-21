@@ -1132,6 +1132,103 @@ fieldset {
   border-radius: 10px;
 }
 
+/* The account directory has five substantial columns. On a phone it becomes a
+   list of complete account cards instead of a 920px table hidden behind a
+   sideways scroll area. Every value keeps its column label through data-label. */
+@media (max-width: 720px) {
+  .account-table-wrap {
+    overflow-x: visible;
+  }
+
+  .account-table,
+  .account-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .account-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .account-table tbody tr {
+    display: block;
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 14px;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-line);
+    border-radius: 12px;
+  }
+
+  .account-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .account-table tbody th {
+    display: grid;
+    gap: 4px;
+    padding: 0 0 11px;
+    border-bottom: 1px solid var(--c-line);
+    overflow-wrap: anywhere;
+  }
+
+  .account-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 36%) minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--c-line);
+  }
+
+  .account-table tbody td:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .account-table tbody td::before {
+    content: attr(data-label);
+    min-width: 0;
+    font-size: 0.7rem;
+    font-weight: 750;
+    color: var(--c-ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    overflow-wrap: anywhere;
+  }
+
+  .account-service-cell,
+  .account-access-cell {
+    min-width: 0;
+  }
+
+  .account-service-cell select,
+  .account-access-cell,
+  .account-access-cell input,
+  .account-access-cell .btn {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .account-table tbody td {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    align-items: stretch;
+  }
+}
+
 .account-identity {
   display: grid;
   gap: var(--sp-2);
