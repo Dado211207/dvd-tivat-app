@@ -222,6 +222,25 @@ const TABLES: Record<string, unknown[]> = {
   // The signed-in account is linked to Ivo, so the identity pill must say
   // Ivo - not a second name that contradicts the roster on the same screen.
   profiles: [{ user_id: USER_ID, email: 'ivo@example.invalid', full_name: 'Ivo Vatrogasac', profile_complete: true }],
+  access_grants: [{
+    user_id: USER_ID,
+    role: 'OWNER',
+    active: true,
+    granted_at: '2026-09-13T07:00:00.000Z',
+  }],
+  organizations: [
+    { id: '00000000-0000-4000-8000-000000000001', code: 'DVD' },
+    { id: '00000000-0000-4000-8000-000000000002', code: 'SZS' },
+  ],
+  organization_memberships: [{
+    organization_id: '00000000-0000-4000-8000-000000000001',
+    user_id: USER_ID,
+    role: 'FIREFIGHTER',
+    active: true,
+  }],
+  role_audit: [],
+  account_status_audit: [],
+  organization_membership_audit: [],
 };
 
 const RPC: Record<string, unknown> = {
