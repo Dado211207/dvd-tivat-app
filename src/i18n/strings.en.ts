@@ -386,6 +386,8 @@ export const en: Strings = {
     unsupported: 'This browser does not support reliable Web Push notifications.',
     notConfigured: 'The push service is not yet connected to this published version.',
     denied: 'Notifications are refused in the phone’s settings. Allow them for Boka Operativa, then open the application again.',
+    memberRequired: 'This account is not yet linked to an active DVD Tivat member. The owner must link it in Records, then turn notifications on again.',
+    accessRequired: 'This account does not have the active DVD access required for operational notifications.',
     failed: 'The notification was not set up. Check the connection and try again.',
 
     enabledExplanation:
