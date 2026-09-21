@@ -116,17 +116,23 @@ describe('owner multi-service account administration', () => {
     expect(rows[0]!.role).toBe('CITIZEN');
   });
 
-  it('refuses every non-owner and protects the owner account', async () => {
+  it('refuses every non-owner and lets the owner hold a service role without losing ownership', async () => {
     expect(
       await expectRefused(db, firefighter, (client) =>
         client.query(`select public.owner_set_organization_membership($1, 'SZS', 'ADMIN')`, [target]),
       ),
     ).toContain('OWNER_REQUIRED');
-    expect(
-      await expectRefused(db, owner, (client) =>
-        client.query(`select public.owner_set_organization_membership($1, 'SZS', 'ADMIN')`, [owner]),
-      ),
-    ).toContain('CANNOT_CHANGE_OWN_ROLE');
+    await asUserCommitted(db, owner, (client) =>
+      client.query(`select public.owner_set_organization_membership($1, 'DVD', 'FIREFIGHTER')`, [owner]),
+    );
+    expect(await memberships(owner)).toContainEqual({
+      code: 'DVD', role: 'FIREFIGHTER', active: true,
+    });
+    const { rows } = await db.query<{ role: string }>(
+      'select role from public.access_grants where user_id = $1',
+      [owner],
+    );
+    expect(rows[0]!.role).toBe('OWNER');
   });
 
   it('lets users read only their memberships while the owner sees the directory', async () => {
@@ -149,7 +155,7 @@ describe('owner multi-service account administration', () => {
       );
       return Number(rows[0]!.count);
     });
-    expect(ownerCount).toBe(5);
+    expect(ownerCount).toBe(6);
   });
 
   it('returns only the caller active memberships with the official service name', async () => {
@@ -173,7 +179,13 @@ describe('owner multi-service account administration', () => {
       );
       return rows;
     });
-    expect(ownerMemberships).toEqual([]);
+    expect(ownerMemberships).toEqual([
+      {
+        organization_code: 'DVD',
+        organization_name: 'DVD Tivat',
+        membership_role: 'FIREFIGHTER',
+      },
+    ]);
   });
 
   it('exposes the personal membership command only to authenticated accounts', async () => {
