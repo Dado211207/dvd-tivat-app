@@ -414,6 +414,23 @@ export const me = {
     denied: 'Notifikacije su odbijene u podesavanjima telefona. Dozvolite ih za Boka Operativa, pa otvorite aplikaciju ponovo.',
     failed: 'Notifikacija nije podesena. Provjerite vezu i pokusajte ponovo.',
 
+    /*
+     * Svaki od ovih razloga se ranije prikazivao kao "provjerite vezu", pa je
+     * covjek trazio gresku tamo gdje je nije bilo. Server koji je objasnio
+     * zasto je odbio nikada nije problem sa vezom.
+     */
+    memberRequired:
+      'Vas nalog jos nije povezan sa clanom drustva, pa ne moze primati operativni poziv. Otvorite Evidencija - Clanovi, dodajte svoj clanski zapis i povezite ga sa ovim nalogom.',
+    accessRequired:
+      'Vas nalog nema operativnu ulogu, pa ne moze primati poziv. Obratite se vlasniku sistema.',
+    deviceRejected:
+      'Server je odbio podatke ovog uredjaja. To je greska u aplikaciji, ne u telefonu - prijavite je.',
+    serverRefused:
+      'Server je odbio prijavu ovog uredjaja i nije dao razlog koji ova verzija prepoznaje. Veza radi.',
+    subscriptionConflict:
+      'Ovaj uredjaj je vec prijavljen na drugi nalog. Odjavite taj nalog na ovom uredjaju, pa pokusajte ponovo.',
+    unreachable: 'Server nije dostupan. Provjerite vezu i pokusajte ponovo.',
+
     /**
      * Never a promise. A push service accepting a message is not a phone
      * ringing, and silent mode, Focus and Do Not Disturb all outrank this

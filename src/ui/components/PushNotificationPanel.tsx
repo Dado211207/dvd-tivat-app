@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import type { Strings } from '@/i18n/strings.me';
 import { useText } from '@/i18n/useText';
 import {
   currentPushSubscription,
@@ -21,11 +22,42 @@ import {
   pushCapability,
   repairWebPushRegistration,
   type PushCapability,
+  type PushFailure,
 } from '@/notifications/push';
 import { hrefFor } from '../router';
 import { Notice } from './primitives';
 
 type State = 'CHECKING' | 'OFF' | 'ON' | 'BUSY' | 'DENIED' | 'ERROR';
+
+/** Checked longest-first so PUSH_SERVER_REFUSED never shadows a real reason. */
+const PUSH_FAILURES: readonly PushFailure[] = [
+  'PUSH_MEMBER_REQUIRED',
+  'PUSH_ACCESS_REQUIRED',
+  'PUSH_SUBSCRIPTION_CONFLICT',
+  'PUSH_DEVICE_REJECTED',
+  'PUSH_SERVER_REFUSED',
+  'PUSH_UNREACHABLE',
+];
+
+/** One sentence per reason, so nobody is sent to check a working connection. */
+function failureText(t: Strings, failure: PushFailure | null): string {
+  switch (failure) {
+    case 'PUSH_MEMBER_REQUIRED':
+      return t.push.memberRequired;
+    case 'PUSH_ACCESS_REQUIRED':
+      return t.push.accessRequired;
+    case 'PUSH_SUBSCRIPTION_CONFLICT':
+      return t.push.subscriptionConflict;
+    case 'PUSH_DEVICE_REJECTED':
+      return t.push.deviceRejected;
+    case 'PUSH_SERVER_REFUSED':
+      return t.push.serverRefused;
+    case 'PUSH_UNREACHABLE':
+      return t.push.unreachable;
+    default:
+      return t.push.failed;
+  }
+}
 
 export interface PushNotificationPanelProps {
   readonly variant?: 'full' | 'compact';
@@ -35,6 +67,7 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
   const t = useText();
   const [capability, setCapability] = useState<PushCapability>('UNSUPPORTED');
   const [state, setState] = useState<State>('CHECKING');
+  const [failure, setFailure] = useState<PushFailure | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -66,11 +99,20 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
 
   const enable = async () => {
     setState('BUSY');
+    setFailure(null);
     try {
       await enableWebPush();
       setState('ON');
     } catch (error) {
-      setState(String(error).includes('PERMISSION_DENIED') ? 'DENIED' : 'ERROR');
+      const reason = String(error);
+      if (reason.includes('PERMISSION_DENIED')) {
+        setState('DENIED');
+        return;
+      }
+      // An unrecognised throw is not evidence of anything in particular, so it
+      // keeps the old wording rather than inventing a cause.
+      setFailure(PUSH_FAILURES.find((value) => reason.includes(value)) ?? null);
+      setState('ERROR');
     }
   };
 
@@ -144,7 +186,9 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
       ) : state === 'DENIED' ? (
         <Notice tone="warn">{t.push.denied}</Notice>
       ) : state === 'ERROR' ? (
-        <Notice tone="error">{t.push.failed}</Notice>
+        <Notice tone="error" testId="push-failure">
+          {failureText(t, failure)}
+        </Notice>
       ) : state === 'ON' ? (
         <Notice tone="info">{t.push.enabledExplanation}</Notice>
       ) : (
