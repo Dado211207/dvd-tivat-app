@@ -38,6 +38,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609200013_multi_service_account_admin.sql',
   'supabase/migrations/202609200014_required_registration_profile.sql',
   'supabase/migrations/202609200015_activate_szs_account_service.sql',
+  'supabase/migrations/202609210016_owner_service_membership.sql',
 ];
 
 export const DATABASE_URL =
