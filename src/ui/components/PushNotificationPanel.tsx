@@ -25,7 +25,15 @@ import {
 import { hrefFor } from '../router';
 import { Notice } from './primitives';
 
-type State = 'CHECKING' | 'OFF' | 'ON' | 'BUSY' | 'DENIED' | 'ERROR';
+type State =
+  | 'CHECKING'
+  | 'OFF'
+  | 'ON'
+  | 'BUSY'
+  | 'DENIED'
+  | 'MEMBER_REQUIRED'
+  | 'ACCESS_REQUIRED'
+  | 'ERROR';
 
 export interface PushNotificationPanelProps {
   readonly variant?: 'full' | 'compact';
@@ -70,7 +78,13 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
       await enableWebPush();
       setState('ON');
     } catch (error) {
-      setState(String(error).includes('PERMISSION_DENIED') ? 'DENIED' : 'ERROR');
+      const reason = String(error);
+      setState(
+        reason.includes('PERMISSION_DENIED') ? 'DENIED'
+          : reason.includes('PUSH_MEMBER_REQUIRED') ? 'MEMBER_REQUIRED'
+            : reason.includes('PUSH_ACCESS_REQUIRED') ? 'ACCESS_REQUIRED'
+              : 'ERROR',
+      );
     }
   };
 
@@ -143,6 +157,10 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
         <Notice tone="warn">{t.push.notConfigured}</Notice>
       ) : state === 'DENIED' ? (
         <Notice tone="warn">{t.push.denied}</Notice>
+      ) : state === 'MEMBER_REQUIRED' ? (
+        <Notice tone="warn">{t.push.memberRequired}</Notice>
+      ) : state === 'ACCESS_REQUIRED' ? (
+        <Notice tone="warn">{t.push.accessRequired}</Notice>
       ) : state === 'ERROR' ? (
         <Notice tone="error">{t.push.failed}</Notice>
       ) : state === 'ON' ? (
@@ -155,7 +173,10 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
         <button
           type="button"
           className={state === 'ON' ? 'btn btn--ghost' : 'btn btn--primary btn--big'}
-          disabled={state === 'BUSY' || state === 'CHECKING' || state === 'DENIED'}
+          disabled={
+            state === 'BUSY' || state === 'CHECKING' || state === 'DENIED'
+            || state === 'MEMBER_REQUIRED' || state === 'ACCESS_REQUIRED'
+          }
           onClick={() => void (state === 'ON' ? disable() : enable())}
         >
           {state === 'ON' ? t.push.disable : t.push.enable}
