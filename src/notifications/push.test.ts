@@ -166,6 +166,70 @@ describe('device-bound Web Push client', () => {
 });
 
 /**
+ * A refusal the server explained is never a connection problem.
+ *
+ * Every failure below used to become PUSH_REGISTRATION_FAILED, which the panel
+ * renders as "check the connection and try again". The owner of this system hit
+ * exactly this: his account had no member record, `register_web_push_subscription`
+ * raised ELIGIBLE_MEMBER_REQUIRED, and the app told him to check his wifi. He
+ * had no way to discover the real reason from the application at all.
+ *
+ * These pin each reason to its own outcome. Against the previous code every one
+ * of them fails, because there was only ever one outcome.
+ */
+describe('why enabling notifications failed', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    backend.rpc.mockReset();
+    backend.invoke.mockReset();
+    backend.invoke.mockResolvedValue({ error: null });
+    window.matchMedia = vi.fn(() => ({ matches: false })) as unknown as typeof window.matchMedia;
+  });
+
+  /** PostgREST answers a `raise exception` as a plain object, never an Error. */
+  const refusal = (message: string, code = 'P0001') => ({
+    error: { message, details: null, hint: null, code } as unknown as Error,
+  });
+
+  it('says the account has no member record, instead of blaming the connection', async () => {
+    installPushBrowser({ permission: 'granted' });
+    backend.rpc.mockResolvedValue(refusal('ELIGIBLE_MEMBER_REQUIRED'));
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_MEMBER_REQUIRED');
+  });
+
+  it('says the account has no operational role', async () => {
+    installPushBrowser({ permission: 'granted' });
+    backend.rpc.mockResolvedValue(refusal('OPERATIONAL_ACCESS_REQUIRED'));
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_ACCESS_REQUIRED');
+  });
+
+  it('separates a malformed device from anything the person can act on', async () => {
+    installPushBrowser({ permission: 'granted' });
+    backend.rpc.mockResolvedValue(refusal('PUSH_KEY_INVALID'));
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_DEVICE_REJECTED');
+  });
+
+  it('still calls a refusal a refusal when the reason is one this build does not know', async () => {
+    installPushBrowser({ permission: 'granted' });
+    backend.rpc.mockResolvedValue(refusal('SOMETHING_ADDED_AFTER_THIS_RELEASE'));
+
+    // The server answered. Sending somebody to their router would be a lie.
+    await expect(enableWebPush()).rejects.toThrow('PUSH_SERVER_REFUSED');
+  });
+
+  it('blames the connection only when the server never answered', async () => {
+    installPushBrowser({ permission: 'granted' });
+    backend.rpc.mockResolvedValue(refusal('TypeError: Failed to fetch', ''));
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_UNREACHABLE');
+  });
+});
+
+/**
  * Turning the alarm off has to stay off.
  *
  * The first version of `repairWebPushRegistration` created a subscription when
@@ -177,6 +241,19 @@ describe('device-bound Web Push client', () => {
  * Repair now means re-registering a subscription the browser ALREADY holds.
  */
 describe('repair never enables push for somebody who did not ask', () => {
+  // These used to inherit whatever the describe above them happened to leave
+  // behind, so inserting any block before this one broke them. Owning the
+  // setup is what makes the order irrelevant.
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    backend.rpc.mockReset();
+    backend.rpc.mockResolvedValue({ error: null });
+    backend.invoke.mockReset();
+    backend.invoke.mockResolvedValue({ error: null });
+    window.matchMedia = vi.fn(() => ({ matches: false })) as unknown as typeof window.matchMedia;
+  });
+
   it('does nothing at all when this browser holds no subscription', async () => {
     const browser = installPushBrowser({ permission: 'granted' });
 

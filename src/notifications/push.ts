@@ -41,6 +41,53 @@ function applicationServerKey(): Uint8Array<ArrayBuffer> {
   return key;
 }
 
+/**
+ * Why registering this device failed, in the words the person needs.
+ *
+ * Every one of these used to be reported as PUSH_REGISTRATION_FAILED, which the
+ * screen rendered as "check the connection". The owner of this system spent an
+ * evening checking his connection because his account had no member record.
+ * A refusal the server explained is never a connection problem, and saying so
+ * is the difference between a fixable message and a dead end.
+ */
+export type PushFailure =
+  | 'PUSH_MEMBER_REQUIRED'
+  | 'PUSH_ACCESS_REQUIRED'
+  | 'PUSH_SUBSCRIPTION_CONFLICT'
+  | 'PUSH_DEVICE_REJECTED'
+  | 'PUSH_SERVER_REFUSED'
+  | 'PUSH_UNREACHABLE';
+
+/** The reasons `register_web_push_subscription` raises, in wire form. */
+const SERVER_REASONS: readonly (readonly [string, PushFailure])[] = [
+  ['ELIGIBLE_MEMBER_REQUIRED', 'PUSH_MEMBER_REQUIRED'],
+  ['OPERATIONAL_ACCESS_REQUIRED', 'PUSH_ACCESS_REQUIRED'],
+  ['PUSH_SUBSCRIPTION_OWNED_BY_ANOTHER_ACCOUNT', 'PUSH_SUBSCRIPTION_CONFLICT'],
+  ['PUSH_ENDPOINT_INVALID', 'PUSH_DEVICE_REJECTED'],
+  ['PUSH_KEY_INVALID', 'PUSH_DEVICE_REJECTED'],
+  ['PUSH_AUTH_INVALID', 'PUSH_DEVICE_REJECTED'],
+  ['PUSH_USER_AGENT_INVALID', 'PUSH_DEVICE_REJECTED'],
+];
+
+export function classifyRegistrationFailure(error: unknown): PushFailure {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : '';
+  for (const [reason, failure] of SERVER_REASONS) {
+    if (message.includes(reason)) return failure;
+  }
+
+  // PostgREST always sets a code, so a code means the server answered and its
+  // answer was simply one this build does not know. That is still not a
+  // connection problem, and calling it one would send the person to their wifi.
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : '';
+  return code === '' ? 'PUSH_UNREACHABLE' : 'PUSH_SERVER_REFUSED';
+}
+
 async function saveSubscription(subscription: PushSubscription): Promise<void> {
   const json = subscription.toJSON();
   const p256dh = json.keys?.p256dh;
@@ -57,13 +104,7 @@ async function saveSubscription(subscription: PushSubscription): Promise<void> {
     requested_expiration_time: expiration,
     requested_user_agent: navigator.userAgent.slice(0, 300),
   });
-  if (error) {
-    const message = typeof error.message === 'string' ? error.message : '';
-    if (message.includes('PUSH_SUBSCRIPTION_OWNED_BY_ANOTHER_ACCOUNT')) {
-      throw new Error('PUSH_SUBSCRIPTION_CONFLICT');
-    }
-    throw new Error('PUSH_REGISTRATION_FAILED');
-  }
+  if (error) throw new Error(classifyRegistrationFailure(error));
 }
 
 export async function currentPushSubscription(): Promise<PushSubscription | null> {

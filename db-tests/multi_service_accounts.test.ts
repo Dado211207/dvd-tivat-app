@@ -122,11 +122,26 @@ describe('owner multi-service account administration', () => {
         client.query(`select public.owner_set_organization_membership($1, 'SZS', 'ADMIN')`, [target]),
       ),
     ).toContain('OWNER_REQUIRED');
-    expect(
-      await expectRefused(db, owner, (client) =>
-        client.query(`select public.owner_set_organization_membership($1, 'SZS', 'ADMIN')`, [owner]),
-      ),
-    ).toContain('CANNOT_CHANGE_OWN_ROLE');
+
+    // The owner may now record its own service membership: being the system
+    // owner and serving in a society are different facts, and the person who
+    // owns this installation is also an active firefighter. What is protected
+    // is the thing that always mattered - the owner's global authority, which
+    // no membership change may overwrite.
+    // Rolled back rather than committed: the tests after this one count the
+    // membership rows, and a leftover row here would break them from a
+    // distance.
+    const roleAfter = await asUser(db, owner, async (client) => {
+      await client.query(`select public.owner_set_organization_membership($1, 'SZS', 'ADMIN')`, [
+        owner,
+      ]);
+      const { rows } = await client.query<{ role: string }>(
+        'select role from public.access_grants where user_id = $1',
+        [owner],
+      );
+      return rows[0]!.role;
+    });
+    expect(roleAfter).toBe('OWNER');
   });
 
   it('lets users read only their memberships while the owner sees the directory', async () => {

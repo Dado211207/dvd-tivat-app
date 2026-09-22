@@ -188,6 +188,29 @@ body {
   outline-color: #9ce9ed;
 }
 
+/*
+ * The strip the status bar sits over, painted so nothing shows through it.
+ *
+ * `viewport-fit=cover` lets the layout use the whole screen, which is what the
+ * inset tokens are for. Installed on the home screen - which is also what iOS
+ * requires before it will do Web Push at all - the web view genuinely extends
+ * under the status bar. The masthead is `position: static` on a telephone, so
+ * it scrolls away, and from then on whatever has scrolled to the top of the
+ * page is what sits under the clock. The owner read his language setting
+ * through it.
+ *
+ * Height collapses to zero wherever there is no inset, which is every desktop
+ * browser and every ordinary browser tab, so this paints nothing at all there.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 40;
+  height: var(--safe-top);
+  background: var(--c-surface);
+}
+
 .masthead {
   position: relative;
   z-index: 10;
@@ -2428,6 +2451,45 @@ dialog {
   .table--cards td > * {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  /*
+   * The accounts table carries two minimum widths for its laptop layout: 920px
+   * on the table so five columns stay readable, and 155px on each service cell
+   * so a role dropdown is not squeezed. Both are right there and wrong here -
+   * once the rows ARE cards, a minimum width is just a promise to overflow. The
+   * owner's report was exactly this: at 390px the table was measured at 1041px,
+   * the page scrolled sideways, and the status and role columns sat off the
+   * right edge where nothing suggested they existed.
+   */
+  .account-table.table--cards {
+    min-width: 0;
+  }
+
+  .account-table.table--cards .account-service-cell {
+    min-width: 0;
+  }
+
+  /* A long address has no spaces to break at, and is the other half of the same
+     overflow: the name cell is a row header, not a `td`, so the rule above for
+     cell contents does not reach it. */
+  .account-table.table--cards th[scope='row'] > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /*
+   * Keep the name, the address and the member link on separate lines.
+   *
+   * The row header holds four stacked facts about one person, which the table
+   * layout separates with `display: grid`. The card rule above it sets
+   * `display: block`, and the result ran all four together into one paragraph:
+   * "Ivo Aleksandar Vatrogasac Njegusevicivo.vatrogasac@...Povezan sa
+   * evidencijom clana". Restoring the grid here keeps the card readable.
+   */
+  .account-table.table--cards th[scope='row'] {
+    display: grid;
+    gap: 4px;
   }
 
   /* The tall boards cap their own height on a large screen so the actions below

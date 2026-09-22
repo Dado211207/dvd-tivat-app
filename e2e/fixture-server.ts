@@ -22,6 +22,9 @@ export const OTHER_ID = '22222222-2222-4222-8222-222222222222';
 export const INTERVENTION_ID = '33333333-3333-4333-8333-333333333333';
 export const INTERVAL_ID = '44444444-4444-4444-8444-444444444444';
 const USER_ID = '99999999-9999-4999-8999-999999999999';
+const SECOND_USER_ID = '55555555-5555-4555-8555-555555555555';
+const DVD_ID = '00000000-0000-4000-8000-000000000001';
+const SZS_ID = '00000000-0000-4000-8000-000000000002';
 
 export type FixtureRole = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
 
@@ -91,6 +94,15 @@ export interface FixtureOptions {
    * browser at all.
    */
   readonly slowMs?: number;
+  /**
+   * Give the account directory the longest name and email a person might have.
+   *
+   * The Accounts table was built and looked at with "Ivo Vatrogasac" in it, and
+   * on a telephone it clipped its last two columns off the right edge - which
+   * is where a person's status and role live. Long text is what makes that
+   * visible at a width where short text still just fits.
+   */
+  readonly longText?: boolean;
 }
 
 const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
@@ -222,12 +234,53 @@ const TABLES: Record<string, unknown[]> = {
   // The signed-in account is linked to Ivo, so the identity pill must say
   // Ivo - not a second name that contradicts the roster on the same screen.
   profiles: [{ user_id: USER_ID, email: 'ivo@example.invalid', full_name: 'Ivo Vatrogasac', profile_complete: true }],
+  access_grants: [
+    { user_id: USER_ID, role: 'COMMANDER', active: true, granted_at: '2026-09-12T21:00:00.000Z' },
+    { user_id: SECOND_USER_ID, role: 'FIREFIGHTER', active: true, granted_at: '2026-09-12T21:00:00.000Z' },
+  ],
+  organizations: [
+    { id: DVD_ID, code: 'DVD' },
+    { id: SZS_ID, code: 'SZS' },
+  ],
+  organization_memberships: [
+    { organization_id: DVD_ID, user_id: USER_ID, role: 'COMMANDER', active: true },
+    { organization_id: DVD_ID, user_id: SECOND_USER_ID, role: 'FIREFIGHTER', active: true },
+  ],
 };
+
+/**
+ * The same directory, with the longest name and address a person might have.
+ *
+ * A layout that only ever meets "Ivo Vatrogasac" has not been tested. Real
+ * Montenegrin names run long, and an email can be longer still; a table that
+ * fits one and clips the other is the defect this exists to catch.
+ */
+const LONG_TEXT_PROFILES = [
+  {
+    user_id: USER_ID,
+    email: 'ivo.vatrogasac.komandir.smjene@vrlo-dugacak-naziv-domena.example.invalid',
+    full_name: 'Ivo Aleksandar Vatrogasac Njegusevic',
+    profile_complete: true,
+  },
+  {
+    user_id: SECOND_USER_ID,
+    email: 'pero@example.invalid',
+    full_name: 'Pero Vatrogasac',
+    profile_complete: true,
+  },
+];
 
 const RPC: Record<string, unknown> = {
   current_dvd_role: 'COMMANDER',
   current_account_status: 'ACTIVE',
   current_member_id: MEMBER_ID,
+  // Only reachable once the multi-service admin flag is on, which is why it
+  // was missing: the fixture build had the flag off, so nothing ever called
+  // this and the Accounts screen stopped at "server unavailable" the moment it
+  // was switched on. The server scopes this to the caller, so one row is right.
+  current_organization_memberships: [
+    { organization_code: 'DVD', organization_name: 'DVD Tivat', membership_role: 'COMMANDER' },
+  ],
   /*
    * Who may be called out. Answered by the server in the real thing, so it is
    * answered by the fixture here rather than derived from `members` - a fixture
@@ -417,7 +470,33 @@ export async function installFixtureProject(
 
       if (route.request().method() !== 'GET') return json(route, []);
 
-      const rows = table === 'interventions' ? interventions : (TABLES[table] ?? []);
+      const all =
+        table === 'interventions'
+          ? interventions
+          : table === 'profiles' && options.longText
+            ? LONG_TEXT_PROFILES
+            : (TABLES[table] ?? []);
+
+      /*
+       * Apply `?column=eq.value`, because the real server does.
+       *
+       * This fixture used to hand back every row and ignore the filter, which
+       * looked harmless only because most tables held a single row. The moment
+       * `profiles` held two, `fetchProfile`'s `.maybeSingle()` received both,
+       * refused to pick one, and the gate reported an unreachable server - a
+       * failure invented entirely by the fixture. Honouring equality filters
+       * is the smallest thing that makes a multi-row table behave like the
+       * server it stands in for.
+       */
+      const rows = all.filter((row) => {
+        for (const [column, value] of url.searchParams) {
+          if (!value.startsWith('eq.')) continue;
+          const record = row as Record<string, unknown>;
+          if (!(column in record)) continue;
+          if (String(record[column]) !== value.slice(3)) return false;
+        }
+        return true;
+      });
       // `.single()` and `.maybeSingle()` ask PostgREST for ONE OBJECT, not an
       // array, through this header. A fixture that always answers with an array
       // makes every such read look like a missing row - which is how this first

@@ -388,6 +388,18 @@ export const en: Strings = {
     denied: 'Notifications are refused in the phone’s settings. Allow them for Boka Operativa, then open the application again.',
     failed: 'The notification was not set up. Check the connection and try again.',
 
+    memberRequired:
+      'Your account is not linked to a member of the society, so it cannot receive a call-out. Open Records - Members, add your member record and link it to this account.',
+    accessRequired:
+      'Your account has no operational role, so it cannot receive a call-out. Ask the system owner.',
+    deviceRejected:
+      'The server refused this device’s details. That is a fault in the application, not in your phone - please report it.',
+    serverRefused:
+      'The server refused to register this device and gave no reason this version recognises. Your connection is working.',
+    subscriptionConflict:
+      'This device is already registered to another account. Sign that account out on this device, then try again.',
+    unreachable: 'The server could not be reached. Check the connection and try again.',
+
     enabledExplanation:
       'This device is registered for an operational call-out. The system will try to show an alert even when the application is not open. Sound and vibration depend on the phone’s settings and may not happen.',
     privacyExplanation:

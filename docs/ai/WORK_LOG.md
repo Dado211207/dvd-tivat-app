@@ -1,3 +1,118 @@
+## 2026-09-21 - Two screens nobody had measured, and a test that proved nothing
+
+The mobile faults the owner reported were on `podesavanja` and `nalozi`. The
+viewport suite measures `poziv`, `mobilizacija` and `arhiva`. That is the whole
+explanation for how both survived: they were never looked at, at any width.
+
+**The accounts table carried `min-width: 920px`.** At 390px it measured 1041px
+wide, the page scrolled sideways, and the status and role columns sat off the
+right edge where nothing suggested they existed. The repository already had a
+`table--cards` pattern built for exactly this, used by the archive; the accounts
+table simply never adopted it. It does now, and the two minimum widths - 920px on
+the table, 155px on each service cell - are released at that breakpoint, because
+once the rows are cards a minimum width is only a promise to overflow.
+
+**The status bar overlapped Settings because the masthead scrolls away.** It is
+`position: static` on a telephone. In a browser tab that costs nothing, since the
+status bar there is the browser's own chrome. Installed on the home screen -
+which is also what iOS requires before it will do Web Push at all - the web view
+extends under the status bar, and whatever has scrolled to the top of the page is
+what sits under the clock. A fixed strip now paints that area. Its height is
+`var(--safe-top)`, which is zero everywhere without an inset, so it draws nothing
+on any desktop browser or ordinary tab.
+
+**Four tests passed against an error screen.** Worth writing down plainly. The
+first version of the accounts assertions - no clipped columns, no sideways
+scroll, content uses the width - all passed, and I nearly took that as the fault
+not reproducing. The screen was showing "server unavailable" and contained no
+table at all. Layout assertions are vacuously true on an empty page, and a
+measurement test needs to prove there was something to measure before it can
+mean anything.
+
+Two fixture defects were behind it. The build had `VITE_MULTI_SERVICE_ADMIN_ENABLED`
+off while production has it on, so the fixture's accounts screen was a different
+screen from the owner's; turning it on then exposed a missing
+`current_organization_memberships` RPC. And the fixture ignored `?column=eq.value`
+filters entirely, returning every row. That looked harmless while every table held
+one row. The moment `profiles` held two, `fetchProfile`'s `.maybeSingle()` got
+both, refused to pick, and the gate reported an unreachable server - a failure
+invented entirely by the test double. It honours equality filters now.
+
+**The occlusion test was asserting the wrong property.** The first version checked
+that no element's box intersected the inset strip, which a painted cover can never
+satisfy: a backdrop does not move elements, it hides them. Content scrolling
+behind a solid status bar is how every application on the phone behaves; content
+scrolling behind a transparent one is what made the setting unreadable. So the
+question is what paints on top at those points, and that is what it asks now.
+
+**The reload on tab switch was already fixed** - on 13 September, in `323b633`,
+and the deployed build contains it. The root cause then was a remount rather than
+a reload, and `resume-stability.test.tsx` drives it. What was missing was any test
+of a real browser doing it: the nearest one types into the composer and crosses an
+IN-APP tab, which is a different thing. Three browser tests now drive
+`visibilitychange` against the built application. They pass unchanged, so they are
+a guard rather than evidence of a repair, and that is worth saying rather than
+dressing them up as a fix.
+## 2026-09-21 - One missing row, two symptoms, and a trigger that would have undone the fix
+
+The owner tested the application on his own iPhone and reported two problems
+that looked unrelated: his account said it was not linked to a member of the
+society, and enabling notifications failed with "the notification was not set
+up, check the connection and try again".
+
+They are one defect, and neither message was true.
+
+**The account has no `members` row.** That is the whole of it. `current_member_id()`
+returns null, so the call-out screen correctly says the account is not linked.
+And `register_web_push_subscription` refuses an account with no member record -
+`ELIGIBLE_MEMBER_REQUIRED` - which `saveSubscription` collapsed into
+`PUSH_REGISTRATION_FAILED` along with every other refusal it did not recognise.
+The panel renders that as a connection problem. His connection was fine. There
+was no way to find the real reason from inside the application at all.
+
+The VAPID key was the obvious suspect and it is innocent: it is in the deployed
+bundle, 87 characters, well formed, and `pushCapability()` already reports the
+iOS "add to home screen" case separately as `INSTALL_ON_IOS`. Production also
+holds two push subscriptions from an iPhone on a demo account that *does* have
+a member link, one still active - so registration demonstrably works from that
+phone, on that build, for a linked account.
+
+Each reason now reaches the screen as itself. The distinction that took the
+most thought is between a refusal and an outage: PostgREST always sets a code,
+so an error carrying a code means the server answered, even when the reason is
+one this build has never heard of. Calling that a connection problem would
+send somebody to their router over a server-side rule. Only an error with no
+code at all is reported as unreachable.
+
+**The owner needs no code change to fix his own account.** `admin_create_member`
+and `admin_link_member_account` both gate on `is_dvd_admin()`, which is
+`current_dvd_role() in ('OWNER','ADMIN')`, and neither has a self-targeting
+guard. `loadDirectory()` does not filter out the signed-in user, so his own
+account appears in the link picker. `is_eligible_recipient` accepts `OWNER`.
+The path was open the whole time; the application simply never said so.
+
+**Assigning himself a DVD service was genuinely blocked**, by two rules in
+`owner_set_organization_membership`: it refused a self-target, and it refused an
+OWNER target. The first is vacuous in practice - only an owner may call it and
+there is exactly one owner - and the second was protecting the right thing the
+wrong way. The mirror to the compatibility grant is what must never touch an
+OWNER row, so that is what is guarded now.
+
+**And a third rule that would have quietly undone the other two.**
+`sync_dvd_membership_from_grant` deactivates DVD membership for any role it does
+not consider operational. OWNER is not on that list, and the trigger fires on
+`update of role` whether or not the value changes. So the owner could have
+assigned himself a service, seen it work, and found it switched off later with
+nothing in any audit table to explain it. That is the failure mode worth having
+tests for, and it is the one the obvious fix misses.
+
+Two things found on the way, both recorded rather than papered over. The
+`repair` block in `push.test.ts` had no setup of its own and was passing on
+whatever the block above it happened to leave behind. And `MIGRATIONS` in the
+harness is a hand-maintained list, so a new migration is silently untested until
+somebody remembers to add it - which is exactly what happened here, and cost a
+confused half-hour of a passing suite testing the old schema.
+
 ## 2026-09-17 - The states nobody looks at, and a branch that could not be reached
 
 A follow-up to the clarity redesign, closing the one thing its brief asked for
