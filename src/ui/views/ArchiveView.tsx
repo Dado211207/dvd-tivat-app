@@ -113,16 +113,32 @@ function Archive() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [list, moves, sums, roster] = await Promise.all([
+      const [listRead, movesRead, sumsRead, roster] = await Promise.all([
         fetchInterventions(),
         fetchVehicleMovements(),
         fetchParticipationTotals(),
         loadRoster(),
       ]);
+      /*
+       * An archive that could not be read is not an empty archive.
+       *
+       * "Nothing in the archive" is a statement about the society's history.
+       * Making it from a refused read would tell a commander no intervention
+       * had ever been recorded.
+       */
+      const refused = [listRead, movesRead, sumsRead].find((r) => !r.ok);
+      if (refused && !refused.ok) {
+        if (mounted.current && ticket === generation.current) {
+          setLoadError(refused.reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
+        }
+        return;
+      }
+      if (!listRead.ok || !movesRead.ok || !sumsRead.ok) return;
+      const list = listRead.value;
       if (!mounted.current || ticket !== generation.current) return;
       setInterventions(list);
-      setMovements(moves);
-      setTotals(sums);
+      setMovements(movesRead.value);
+      setTotals(sumsRead.value);
       setNames(new Map(roster.map((member) => [member.id, member.fullName])));
       setSelectedId((current) => {
         if (current !== null && list.some((i) => i.id === current)) return current;
@@ -150,11 +166,20 @@ function Archive() {
     if (selectedId === null) return;
     let live = true;
     void (async () => {
-      const [recipients, attendance] = await Promise.all([
+      const [recipientsRead, attendanceRead] = await Promise.all([
         fetchRecipientFacts(selectedId),
         fetchAttendance(selectedId, names),
       ]);
-      if (live && mounted.current) setDetail((current) => ({ ...current, recipients, attendance }));
+      // A record whose participants could not be read stays empty rather than
+      // claiming nobody was called out and nobody attended.
+      if (!recipientsRead.ok || !attendanceRead.ok) return;
+      if (live && mounted.current) {
+        setDetail((current) => ({
+          ...current,
+          recipients: recipientsRead.value,
+          attendance: attendanceRead.value,
+        }));
+      }
     })();
 
     /*

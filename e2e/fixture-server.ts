@@ -103,6 +103,16 @@ export interface FixtureOptions {
    * visible at a width where short text still just fits.
    */
   readonly longText?: boolean;
+  /**
+   * Refuse these tables by name, leaving every other read working.
+   *
+   * A whole-server outage is the easy case - something fails and every screen
+   * says so. The dangerous case is ONE table a role no longer reaches while
+   * everything around it still answers: nothing throws, the read comes back
+   * empty, and the screen renders a confident empty result. This is how that
+   * case gets reproduced.
+   */
+  readonly refuseTables?: readonly string[];
 }
 
 const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
@@ -460,7 +470,10 @@ export async function installFixtureProject(
        * then - correctly - reported an unreachable server, so the console was
        * never reached and the branch under test never ran.
        */
-      if (options.serverFails === 'READS' && table !== 'profiles') {
+      if (
+        (options.serverFails === 'READS' && table !== 'profiles') ||
+        (options.refuseTables?.includes(table) ?? false)
+      ) {
         return json(
           route,
           { code: '42501', message: 'permission denied for table ' + table },
