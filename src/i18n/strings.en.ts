@@ -365,7 +365,7 @@ export const en: Strings = {
       'The server did not answer that check. This does not mean you are not a member of the society - it means we do not know.',
     memberCheckRefusedTitle: 'The server refused to check your member record.',
     memberCheckRefusedText:
-      'The server answered and refused the check, so trying again will not help. This says nothing about whether you are a member of the society. Contact the owner of the system - this is fixed with server access rights, not by waiting.',
+      'The server answered and refused the check. This says nothing about whether you are a member of the society. Waiting will not help - contact the owner of the system, because this is fixed with server access rights. Once that is done, press the button below.',
   },
 
   connection: {

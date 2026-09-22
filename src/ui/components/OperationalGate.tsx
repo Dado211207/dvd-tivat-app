@@ -170,10 +170,27 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     return <p role="status">{t.gate.loadingOperational}</p>;
   }
   if (member.kind === 'FAILED') {
-    // No retry button on a refusal. The server answered and said no, so the
-    // button would do nothing but invite the person to press it until they
-    // conclude the fault is theirs - which is how the original message cost an
-    // evening. Only the reason that can change on its own offers to try again.
+    /*
+     * Both reasons get a way out of this screen, and they say different things.
+     *
+     * The first draft removed the button on a refusal, reasoning that pressing
+     * it could not change a server's "no" and would only invite somebody to
+     * press it until they concluded the fault was theirs. That was wrong, and
+     * for a dispatch screen it was the worse mistake: it left a firefighter
+     * with NO action at all. The only way forward was to kill the application
+     * and reopen it - on a phone, during a call-out.
+     *
+     * What actually prevents the pressing-it-forever trap is the sentence, not
+     * the absence of a button. And the button is genuinely useful: `retry`
+     * re-reads the access snapshot as well, so the moment an administrator
+     * restores the grant, one press picks it up. Refusals are not permanent -
+     * somebody changed something, and somebody can change it back.
+     *
+     * So the wording carries the difference. A refusal says the server answered
+     * and refused, that waiting will not help, and who to ask; its button is
+     * labelled "check again" rather than "try again", because what changes is
+     * the access rights, not the attempt.
+     */
     const refused = member.reason === 'REFUSED';
     return (
       <Notice tone="error" testId="member-check-failed">
@@ -181,11 +198,9 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
           {refused ? t.gate.memberCheckRefusedTitle : t.gate.memberCheckFailedTitle}
         </strong>{' '}
         {refused ? t.gate.memberCheckRefusedText : t.gate.memberCheckFailedText}{' '}
-        {!refused && (
-          <button type="button" className="btn btn--ghost" onClick={retry}>
-            {t.gate.retry}
-          </button>
-        )}
+        <button type="button" className="btn btn--ghost" onClick={retry}>
+          {refused ? t.gate.recheck : t.gate.retry}
+        </button>
       </Notice>
     );
   }

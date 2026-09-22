@@ -295,12 +295,19 @@ test.describe('a refused member check is never shown as "you are not in the soci
     await expect(page.getByTestId('member-check-failed')).toBeVisible();
   });
 
-  test('a refusal offers no retry, because retrying it forever is the trap', async ({ page }) => {
+  test('a refusal still leaves a way out of the screen', async ({ page }) => {
     /*
-     * The server answered and said no. A "try again" button there does nothing
-     * except invite the person to press it until they decide the fault is
-     * theirs - which is how the original wording cost an evening. Only the
-     * reason that can resolve on its own is allowed to offer it.
+     * This test originally asserted the OPPOSITE - that a refusal offered no
+     * button at all, on the reasoning that pressing one cannot change a
+     * server's "no". That was wrong for a dispatch screen: it left a
+     * firefighter with no action except killing the application and reopening
+     * it, on a phone, during a call-out.
+     *
+     * The sentence is what stops somebody pressing forever, not the missing
+     * button. And the button does real work - `retry` re-reads the access
+     * snapshot too, so one press picks up an administrator's fix the moment it
+     * lands. What the wording must never do is blame the connection or the
+     * roster, and that is what is asserted here.
      */
     await openWithRefusal(
       page,
@@ -311,7 +318,13 @@ test.describe('a refused member check is never shown as "you are not in the soci
 
     const notice = page.getByTestId('member-check-failed');
     await expect(notice).toContainText(/odbio|refused/i);
-    await expect(notice.getByRole('button')).toHaveCount(0);
+    await expect(notice, 'waiting is named as useless, so nobody sits on it').toContainText(
+      /cekanje nece pomoci|waiting will not help/i,
+    );
+    await expect(
+      notice.getByRole('button'),
+      'and there is exactly one action, not a dead end',
+    ).toHaveCount(1);
   });
 
   test('an unreachable server does offer retry, and does not blame the roster', async ({

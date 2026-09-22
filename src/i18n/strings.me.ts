@@ -384,7 +384,7 @@ export const me = {
       'Server nije odgovorio na tu provjeru. Ovo ne znaci da niste clan drustva - znaci da ne znamo.',
     memberCheckRefusedTitle: 'Server je odbio provjeru vaseg clanskog zapisa.',
     memberCheckRefusedText:
-      'Server je odgovorio i odbio provjeru, pa ponovni pokusaj nece pomoci. Ovo nije podatak o tome da li ste clan drustva. Javite se vlasniku naloga - rjesava se pravima pristupa na serveru.',
+      'Server je odgovorio i odbio provjeru. Ovo nije podatak o tome da li ste clan drustva. Cekanje nece pomoci - javite se vlasniku naloga, jer se rjesava pravima pristupa na serveru. Kada to bude popravljeno, pritisnite dugme ispod.',
   },
 
   /**
