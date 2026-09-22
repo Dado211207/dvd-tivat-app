@@ -274,6 +274,125 @@ describe('Every role change writes its own audit row, including raw SQL', () => 
     );
   });
 
+  it('refuses a service assignment whose membership audit does not appear', async () => {
+    /*
+     * The same tripwire on the other function that gave up its own insert.
+     * Leaving `owner_set_organization_membership` without it would mean the two
+     * fail differently, and the weaker one is the one nobody remembers.
+     */
+    const subject = await createAccount(db, 'clan-svc-failclosed@example.invalid');
+    await completeProfile(db, subject.userId, 'Clan Servis');
+
+    await db.query(
+      `alter table public.organization_memberships disable trigger audit_organization_membership_change`,
+    );
+    let message = '';
+    try {
+      await asUserCommitted(db, member.userId, (client) =>
+        client.query(`select public.owner_set_organization_membership($1, $2, $3)`, [
+          subject.userId,
+          DVD,
+          'FIREFIGHTER',
+        ]),
+      );
+    } catch (error) {
+      message = (error as Error).message;
+    } finally {
+      await db.query(
+        `alter table public.organization_memberships enable trigger audit_organization_membership_change`,
+      );
+    }
+
+    expect(message).toMatch(/AUDIT_NOT_WRITTEN/);
+    const { rows } = await db.query(
+      `select 1 from public.organization_memberships om
+         join public.organizations o on o.id = om.organization_id
+        where om.user_id = $1 and o.code = $2`,
+      [subject.userId, DVD],
+    );
+    expect(rows, 'the membership was rolled back, not left behind').toHaveLength(0);
+  });
+
+  it('refuses when the MIRRORED grant change is the one that went unrecorded', async () => {
+    /*
+     * The service assignment audits two separate facts for an ordinary member:
+     * the membership, and the global role it mirrors into `access_grants`.
+     * Asserting only the first would let the more consequential half - who may
+     * open an operational screen - change with nothing recorded.
+     *
+     * So this disables the ACCESS_GRANTS trigger while leaving the membership
+     * trigger working: the first assertion passes, and the second must catch it.
+     */
+    const subject = await createAccount(db, 'clan-mirror-failclosed@example.invalid');
+    await completeProfile(db, subject.userId, 'Clan Mirror');
+
+    await db.query(
+      `alter table public.access_grants disable trigger audit_access_grant_role_change`,
+    );
+    let message = '';
+    try {
+      await asUserCommitted(db, member.userId, (client) =>
+        client.query(`select public.owner_set_organization_membership($1, $2, $3)`, [
+          subject.userId,
+          DVD,
+          'FIREFIGHTER',
+        ]),
+      );
+    } catch (error) {
+      message = (error as Error).message;
+    } finally {
+      await db.query(
+        `alter table public.access_grants enable trigger audit_access_grant_role_change`,
+      );
+    }
+
+    expect(message, 'the mirrored grant change is asserted on too').toMatch(/AUDIT_NOT_WRITTEN/);
+    const { rows } = await db.query<{ role: string }>(
+      `select role from public.access_grants where user_id = $1`,
+      [subject.userId],
+    );
+    expect(rows[0]!.role, 'and the whole call rolled back').toBe('CITIZEN');
+  });
+
+  it('lets a service no-op through, and a stand-down with nothing to stand down', async () => {
+    // Two shapes the assertion must NOT fire on, because the trigger correctly
+    // writes nothing for either: re-assigning the role already held, and
+    // standing down an account that has no membership at all.
+    const subject = await createAccount(db, 'clan-svc-noop@example.invalid');
+    await completeProfile(db, subject.userId, 'Clan Servis No Op');
+
+    await asUserCommitted(db, member.userId, (client) =>
+      client.query(`select public.owner_set_organization_membership($1, $2, $3)`, [
+        subject.userId,
+        DVD,
+        'FIREFIGHTER',
+      ]),
+    );
+    const settled = (await membershipAudit(subject)).length;
+
+    // Same role again - nothing changes, nothing audits, no complaint.
+    await asUserCommitted(db, member.userId, (client) =>
+      client.query(`select public.owner_set_organization_membership($1, $2, $3)`, [
+        subject.userId,
+        DVD,
+        'FIREFIGHTER',
+      ]),
+    );
+    expect(await membershipAudit(subject)).toHaveLength(settled);
+
+    // Standing down an account with no membership at all is also a no-op.
+    const bare = await createAccount(db, 'clan-svc-bare@example.invalid');
+    await completeProfile(db, bare.userId, 'Clan Bez Sluzbe');
+    await asUserCommitted(db, member.userId, (client) =>
+      client.query(`select public.owner_set_organization_membership($1, $2, $3)`, [
+        bare.userId,
+        DVD,
+        'NONE',
+      ]),
+    );
+    expect(await membershipAudit(bare)).toHaveLength(0);
+  });
+
   it('still allows a no-op write, which legitimately audits nothing', async () => {
     // The assertion must not fire when the trigger correctly stays silent. An
     // unchanged role is not an event, so asserting on it would turn a harmless

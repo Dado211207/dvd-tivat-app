@@ -242,8 +242,14 @@ declare
   target_organization uuid;
   target_global_role text;
   old_membership_role text;
+  old_membership_active boolean;
   new_membership_active boolean;
+  membership_changes boolean;
   next_global_role text;
+  membership_audit_before bigint;
+  membership_audit_after bigint;
+  role_audit_before bigint;
+  role_audit_after bigint;
 begin
   if not public.is_dvd_owner() then raise exception 'OWNER_REQUIRED'; end if;
   if normalized_role not in ('NONE', 'ADMIN', 'COMMANDER', 'FIREFIGHTER') then
@@ -259,13 +265,31 @@ begin
   where organization.code = normalized_code and organization.active = true;
   if target_organization is null then raise exception 'ORGANIZATION_NOT_FOUND'; end if;
 
-  select membership.role into old_membership_role
+  select membership.role, membership.active
+    into old_membership_role, old_membership_active
   from public.organization_memberships membership
   where membership.organization_id = target_organization
     and membership.user_id = target_user
   for update;
 
   new_membership_active := normalized_role <> 'NONE';
+
+  -- Whether the membership row is actually about to change. The trigger writes
+  -- nothing for a write that changes nothing, so asserting on a no-op would
+  -- turn a harmless call into an outage. Standing down an account that has no
+  -- membership, or re-assigning the role it already holds, are both no-ops.
+  membership_changes :=
+    (new_membership_active
+      and (old_membership_role is null
+           or old_membership_role is distinct from normalized_role
+           or coalesce(old_membership_active, false) = false))
+    or (not new_membership_active
+        and old_membership_role is not null
+        and coalesce(old_membership_active, false) = true);
+
+  select count(*) into membership_audit_before
+  from public.organization_membership_audit
+  where organization_id = target_organization and target_user_id = target_user;
 
   if new_membership_active then
     insert into public.organization_memberships(
@@ -282,14 +306,45 @@ begin
      where organization_id = target_organization and user_id = target_user;
   end if;
 
+  -- The same tripwire as `owner_set_role`, for the same reason: this function
+  -- also gave up its own audit insert, so without an assertion a disabled
+  -- trigger would let a service assignment change quietly. Both functions fail
+  -- closed or neither should, and leaving them inconsistent would mean the
+  -- weaker one is the one nobody remembers.
+  if membership_changes then
+    select count(*) into membership_audit_after
+    from public.organization_membership_audit
+    where organization_id = target_organization and target_user_id = target_user;
+
+    if membership_audit_after = membership_audit_before then
+      raise exception 'AUDIT_NOT_WRITTEN';
+    end if;
+  end if;
+
   -- Ordinary DVD membership is still mirrored to the compatibility grant. The
   -- owner is the one exception: mirroring there would write FIREFIGHTER - or
   -- CITIZEN on stand-down - over the only OWNER row.
   if normalized_code = 'DVD' and target_global_role <> 'OWNER' then
     next_global_role := case when new_membership_active then normalized_role else 'CITIZEN' end;
+
+    select count(*) into role_audit_before
+    from public.role_audit where target_user_id = target_user;
+
     update public.access_grants
        set role = next_global_role, granted_by = auth.uid(), granted_at = now()
      where user_id = target_user;
+
+    -- The mirror writes a SECOND audited fact - the global role - and it needs
+    -- its own assertion. Auditing the service change while the grant change
+    -- went unrecorded would be the more dangerous half going unnoticed.
+    if target_global_role is distinct from next_global_role then
+      select count(*) into role_audit_after
+      from public.role_audit where target_user_id = target_user;
+
+      if role_audit_after = role_audit_before then
+        raise exception 'AUDIT_NOT_WRITTEN';
+      end if;
+    end if;
   end if;
 end;
 $$;
