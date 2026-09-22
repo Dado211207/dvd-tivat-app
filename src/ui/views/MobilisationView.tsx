@@ -40,6 +40,7 @@ import {
   type AttendanceInterval,
   type Intervention,
   type JourneyStep,
+  type ReadFailure,
   type RecipientFacts,
 } from '@/auth/operations';
 import { useLiveOperations } from '@/auth/live';
@@ -153,12 +154,30 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
       const ticket = ++generation.current;
       const silent = options?.silent === true;
       if (!silent) setLoading(true);
+      /** Record why the screen has nothing to show, if this read is still current. */
+      const failed = (forTicket: number, reason: ReadFailure) => {
+        if (!mounted.current || forTicket !== generation.current) return;
+        setLoadError(reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
+      };
       try {
-        const [interventions, availability, members] = await Promise.all([
+        const [interventionsRead, availabilityRead, members] = await Promise.all([
           fetchInterventions(),
           fetchAvailability(),
           loadRoster(),
         ]);
+        /*
+         * Stop here rather than carrying on with nothing.
+         *
+         * This is the invariant the whole contract exists for: an empty state
+         * may only be rendered when the read SUCCEEDED and was empty. A refused
+         * `interventions` read used to arrive as `[]` and render as "no
+         * call-outs for you", which on this screen is indistinguishable from
+         * all-clear.
+         */
+        if (!interventionsRead.ok) return failed(ticket, interventionsRead.reason);
+        if (!availabilityRead.ok) return failed(ticket, availabilityRead.reason);
+        const interventions = interventionsRead.value;
+
         // Row level security already limits this to call-outs this member was
         // sent, so there is nothing to filter client-side - and filtering here
         // would imply the list could contain somebody else's.
@@ -166,13 +185,23 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         const requested = requestedInterventionId();
         const linked = requested && interventions.some((item) => item.id === requested) ? requested : null;
         const focusId = keepId ?? linked ?? open[0]?.id ?? interventions[0]?.id ?? null;
-        const [facts, attendance] = focusId
-          ? await Promise.all([
-              fetchRecipientFacts(focusId),
-              fetchAttendance(focusId, new Map(members.map((m) => [m.id, m.fullName] as const))),
-            ])
-          : [[], []];
-        const mine = availability.find((a) => a.memberId === memberId);
+
+        let facts: readonly RecipientFacts[] = [];
+        let attendance: readonly AttendanceInterval[] = [];
+        if (focusId) {
+          const [factsRead, attendanceRead] = await Promise.all([
+            fetchRecipientFacts(focusId),
+            fetchAttendance(focusId, new Map(members.map((m) => [m.id, m.fullName] as const))),
+          ]);
+          // "Nobody answered" and "nobody was present" are claims about a real
+          // call-out. Neither may be made from a read that did not happen.
+          if (!factsRead.ok) return failed(ticket, factsRead.reason);
+          if (!attendanceRead.ok) return failed(ticket, attendanceRead.reason);
+          facts = factsRead.value;
+          attendance = attendanceRead.value;
+        }
+
+        const mine = availabilityRead.value.find((a) => a.memberId === memberId);
         if (!mounted.current || ticket !== generation.current) return;
         setData({
           interventions,

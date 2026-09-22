@@ -52,6 +52,7 @@ import {
   type Intervention,
   type InterventionKind,
   type EligibleRecipient,
+  type ReadFailure,
   type RecipientFacts,
   type VehicleMovement,
 } from '@/auth/operations';
@@ -209,8 +210,13 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       const silent = options?.silent === true;
       if (!silent) setLoading(true);
       setLoadError(null);
+      /** Record why the console has nothing to show, if this read is still current. */
+      const failed = (forTicket: number, reason: ReadFailure) => {
+        if (!mounted.current || forTicket !== generation.current) return;
+        setLoadError(reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
+      };
       try {
-        const [interventions, members, eligible, vehicles, availability, movements] =
+        const [interventionsRead, members, eligible, vehicles, availabilityRead, movementsRead] =
           await Promise.all([
             fetchInterventions(),
             loadRoster(),
@@ -219,6 +225,18 @@ function CommandConsole({ context }: { context: OperationalContext }) {
             fetchAvailability(),
             fetchVehicleMovements(),
           ]);
+        /*
+         * The console says no if any of the three refused.
+         *
+         * A commander reads this screen to decide who to send. Showing it with
+         * a silently empty availability board, or an empty vehicle list, would
+         * invite a decision made on information the server declined to give.
+         */
+        const refused = [interventionsRead, availabilityRead, movementsRead].find((r) => !r.ok);
+        if (refused && !refused.ok) return failed(ticket, refused.reason);
+        if (!interventionsRead.ok || !availabilityRead.ok || !movementsRead.ok) return;
+        const interventions = interventionsRead.value;
+
         // The newest call-out that is still open is what a commander wants on
         // opening the screen; falling back to the newest of any kind means the
         // screen is never blank when history exists.
@@ -227,20 +245,35 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           interventions.find((i) => isOpenStatus(i.status))?.id ??
           interventions[0]?.id ??
           null;
-        const [recipients, attendance, audit] = focusId
-          ? await Promise.all([
-              fetchRecipientFacts(focusId),
-              fetchAttendance(
-                focusId,
-                new Map(members.map((m) => [m.id, m.fullName] as const)),
-              ),
-              fetchInterventionAudit(focusId),
-            ])
-          : [[], [], null];
+
+        let recipients: readonly RecipientFacts[] = [];
+        let attendance: readonly AttendanceInterval[] = [];
+        let audit: readonly AuditEvent[] | null = null;
+        if (focusId) {
+          const [recipientsRead, attendanceRead, auditRead] = await Promise.all([
+            fetchRecipientFacts(focusId),
+            fetchAttendance(
+              focusId,
+              new Map(members.map((m) => [m.id, m.fullName] as const)),
+            ),
+            fetchInterventionAudit(focusId),
+          ]);
+          if (!recipientsRead.ok) return failed(ticket, recipientsRead.reason);
+          if (!attendanceRead.ok) return failed(ticket, attendanceRead.reason);
+          recipients = recipientsRead.value;
+          attendance = attendanceRead.value;
+          // The chronology is deliberately exempt: it already answers null on
+          // failure and the screen says "chronology could not be read" rather
+          // than pretending the call-out had no events.
+          audit = auditRead;
+        }
+
         if (!mounted.current || ticket !== generation.current) return;
         setData({
-          interventions, members, eligible, vehicles, availability, movements, recipients,
-          attendance, audit,
+          interventions, members, eligible, vehicles,
+          availability: availabilityRead.value,
+          movements: movementsRead.value,
+          recipients, attendance, audit,
         });
         setSelectedId(focusId);
         setHasLoaded(true);

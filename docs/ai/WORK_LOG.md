@@ -1,3 +1,46 @@
+## 2026-09-22 - The contract, and a test that was lying in my favour
+
+`ead7820` had made `fetchInterventions` throw, which is a real improvement over
+returning `[]`: a throw is distinguishable, and it is why two of the nine
+refusal tests already passed against main. The owner chose `ReadResult` over
+extending that, and the reason is worth keeping: nothing in the type system
+makes a caller write the `catch`. Under strict null checks a caller cannot reach
+`.value` without narrowing on `ok`, so the compiler enforces the invariant the
+screens have to keep rather than leaving it to whoever remembers.
+
+Converting the six reads produced **48 compile errors across three views**. That
+is not friction; it is the census. Every one of those lines was a place that
+would have rendered a confident empty result built from a read that failed.
+
+The two multi-query reads needed more than a signature change.
+`fetchRecipientFacts` runs four queries and used `.data ?? []` on each, so a
+refused `intervention_recipients` read meant a member who WAS called out simply
+did not appear on the board - worse than a thinner list, because the board is
+what a commander counts. Both now check every query, not the first.
+
+`fetchInterventionAudit` is deliberately left answering null. It already
+distinguishes its own failure and the archive already says the chronology could
+not be read, rather than pretending the call-out had no events.
+
+**And a test that was lying in my favour.** The per-table refusal spec waited for
+the loading line to DISAPPEAR before reading the screen. That is a negative
+assertion, and it is satisfied during the gap between loading ending and the
+notice arriving in a later React commit. Run alone the tests passed; in the full
+parallel suite the machine was slower, the gap widened, and three of them read
+the screen mid-flight and failed.
+
+Fixing the wait changed the BASELINE, which is the part that matters. With the
+racy wait, main appeared to fail the firefighter interventions case as well -
+five failures. With a deterministic wait that measurement is 8 failed / 10
+passed across both projects, and all four unique failures are `fetchRecipientFacts`
+and `fetchAttendance`, the two reads `ead7820` never touched. The interventions
+cases pass on main, because the throw genuinely reaches all three screens.
+
+So the racy wait had been producing a false failure that flattered the change.
+A test that fails for the wrong reason is not a stricter test; it is a broken
+measurement that happens to point the way you were already arguing. The number
+in the report is the corrected one.
+
 ## 2026-09-21 - Two screens nobody had measured, and a test that proved nothing
 
 The mobile faults the owner reported were on `podesavanja` and `nalozi`. The

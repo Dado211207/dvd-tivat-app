@@ -4,9 +4,33 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
-## Current delivery: the owner's own iPhone testing
+## Current delivery: the data-layer read contract
+
+`ReadResult<T>` replaces every read that answered a refusal with `[]`. The
+owner chose a result over a throw for one reason: the compiler enforces it.
+Under strict null checks a caller cannot reach `.value` without narrowing on
+`ok`, so the invariant - **a view may not render an empty state unless the read
+succeeded** - is checked rather than remembered. Converting the six reads
+produced 48 compile errors across the three views, each one a place that would
+have shown a confident empty result built from a failed read.
+
+Converted: `fetchInterventions`, `fetchRecipientFacts`, `fetchAttendance`,
+`fetchVehicleMovements`, `fetchAvailability`, `fetchParticipationTotals`.
+`fetchInterventionAudit` deliberately still answers null - it already
+distinguishes its failure and the archive says so.
+
+Evidence: the per-table refusal spec measures **8 failed / 10 passed** against
+main and **18 passed** with the contract. All four unique failures on main are
+`fetchRecipientFacts` and `fetchAttendance`, the two reads `ead7820` never
+touched.
+
+**Still open:** `fetchOwnMemberId` returns null on failure. It changes
+`OperationalContext.memberId` and touches every `requiresMember` screen, so a
+mistake there could lock everyone out. It is deliberately its own change.
+
+## Previous delivery: the owner's own iPhone testing
 
 Five faults reported by the owner from his own phone. Two of them, A and B,
 turned out to be one defect: **his account has no `members` row.** That makes
@@ -33,14 +57,16 @@ cause.
 - **E - demo data.** Inventory only, in `docs/DEMO_DATA_INVENTORY.md`. Nothing
   deleted. Awaiting the owner's decision.
 
-**Open decision:** the data-layer read contract. `ead7820` made
-`fetchInterventions` throw; the remaining five reads still return `[]` or `null`
-on failure. Whether to finish that as `ReadResult<T>` (compile-time enforced) or
-as more throws is not settled. Work in progress is saved outside the repository.
+**Settled:** the read contract is `ReadResult<T>`, not a throw. See the current
+delivery above.
 
 **Verification boundary:** the SQL behaviour is proved against a local
-PostgreSQL running the real migrations. Migration `202609210016` is **not
-applied to production** - production is at `202609200015`, matching `main`.
+PostgreSQL running the real migrations. Migration `202609210016` **is applied to
+production** as of 2026-09-22. Prod and the repo file hash identically
+(`88500c36…`, `a7c594f9…`); tables, policies and triggers were byte-identical
+before and after, exactly two function bodies changed, and no data moved. The
+ledger recorded it as version `20260922023423` rather than `202609210016`,
+because `apply_migration` stamps its own timestamp - cosmetic only.
 `db-tests/hosted_operations.test.ts` (12 tests) needs hosted credentials and is
 skipped, not passed.
 

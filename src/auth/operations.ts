@@ -27,7 +27,7 @@
 
 import { activeText } from '@/i18n/useText';
 import { between } from './duration';
-import { accountBackend } from './supabaseClient';
+import { accountBackend, isPermissionDenied } from './supabaseClient';
 
 // ---------------------------------------------------------------------------
 // Vocabulary, matching the database check constraints exactly.
@@ -345,6 +345,47 @@ async function command(name: string, args: Record<string, unknown>): Promise<Com
   }
 }
 
+/**
+ * Why a read produced nothing.
+ *
+ * `REFUSED` means the server answered and said no - a policy stopped this
+ * account. Waiting will not fix it; somebody has changed what this account may
+ * see. `UNAVAILABLE` means the read never completed. One is a permissions
+ * problem and the other is an outage, and a firefighter can act on the
+ * difference.
+ */
+export type ReadFailure = 'REFUSED' | 'UNAVAILABLE';
+
+/**
+ * A read that cannot be mistaken for an empty result.
+ *
+ * This type exists because of one defect, worth stating plainly: every read in
+ * this module used to answer a refusal with `[]`, and `[]` is also what "there
+ * are no call-outs" looks like. A firefighter whose role had just been revoked
+ * was shown "no call-outs for you" on a screen that had failed to read the
+ * call-out table at all. On this application that is the worst possible failure
+ * mode - it is indistinguishable from all-clear.
+ *
+ * A throw would also be distinguishable, and `fetchInterventions` briefly used
+ * one. The reason this is a RESULT and not a throw: nothing in the type system
+ * makes a caller write the `catch`. Under `strictNullChecks` a caller cannot
+ * reach `.value` without narrowing on `ok`, so the compiler enforces the
+ * invariant the screens have to keep - **a view may not render an empty state
+ * unless `ok === true`** - instead of leaving it to whoever remembers.
+ */
+export type ReadResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly reason: ReadFailure };
+
+/** Anything thrown or returned as an error, narrowed to the two reasons. */
+export function readFailure(error: unknown): { readonly ok: false; readonly reason: ReadFailure } {
+  return { ok: false, reason: isPermissionDenied(error) ? 'REFUSED' : 'UNAVAILABLE' };
+}
+
+function ok<T>(value: T): { readonly ok: true; readonly value: T } {
+  return { ok: true, value };
+}
+
 async function commandReturning<T>(
   name: string,
   args: Record<string, unknown>,
@@ -438,7 +479,7 @@ export async function fetchOwnMemberId(): Promise<string | null> {
 }
 
 /** Only a successful empty read means there are no visible interventions. */
-export async function fetchInterventions(): Promise<readonly Intervention[]> {
+export async function fetchInterventions(): Promise<ReadResult<readonly Intervention[]>> {
   const { data, error } = await accountBackend()
     .from('interventions')
     .select(
@@ -447,9 +488,8 @@ export async function fetchInterventions(): Promise<readonly Intervention[]> {
     )
     .order('created_at', { ascending: false })
     .limit(100);
-  if (error) throw error;
-  if (!Array.isArray(data)) throw new Error('INTERVENTIONS_READ_INVALID');
-  return (data as unknown as InterventionRow[]).map((row) => ({
+  if (error || !Array.isArray(data)) return readFailure(error);
+  return ok((data as unknown as InterventionRow[]).map((row) => ({
     id: row.id,
     kind: row.kind as InterventionKind,
     otherKindNote: (row.other_kind_note as string | null) ?? null,
@@ -465,7 +505,7 @@ export async function fetchInterventions(): Promise<readonly Intervention[]> {
     closedAt: (row.closed_at as string | null) ?? null,
     closeReason: (row.close_reason as string | null) ?? null,
     createdAt: row.created_at as string,
-  }));
+  })));
 }
 
 /**
@@ -478,7 +518,7 @@ export async function fetchInterventions(): Promise<readonly Intervention[]> {
  */
 export async function fetchRecipientFacts(
   interventionId: string,
-): Promise<readonly RecipientFacts[]> {
+): Promise<ReadResult<readonly RecipientFacts[]>> {
   const backend = accountBackend();
   const [recipients, acknowledgements, responses, journeys] = await Promise.all([
     backend
@@ -498,6 +538,15 @@ export async function fetchRecipientFacts(
       .select('member_id, progress, updated_at')
       .eq('intervention_id', interventionId),
   ]);
+
+  /*
+   * Four reads, one answer. Any of them refused makes the whole picture wrong,
+   * not merely thinner: a missing `intervention_recipients` row means a member
+   * who WAS called out is absent from the board, and `.data ?? []` below would
+   * have quietly turned that into "nobody was sent it".
+   */
+  const failed = [recipients, acknowledgements, responses, journeys].find((r) => r.error);
+  if (failed) return readFailure(failed.error);
 
   const ackBy = new Map<string, string>();
   for (const row of (acknowledgements.data ?? []) as unknown as AcknowledgementRow[]) {
@@ -519,7 +568,7 @@ export async function fetchRecipientFacts(
     });
   }
 
-  return ((recipients.data ?? []) as unknown as RecipientRow[]).map((row) => {
+  return ok(((recipients.data ?? []) as unknown as RecipientRow[]).map((row) => {
     const memberId = row.member_id;
     const response = responseBy.get(memberId);
     const journey = journeyBy.get(memberId);
@@ -533,20 +582,20 @@ export async function fetchRecipientFacts(
       journey: journey?.step ?? null,
       journeyAt: journey?.at ?? null,
     };
-  });
+  }));
 }
 
 export async function fetchAttendance(
   interventionId: string,
   memberNames: ReadonlyMap<string, string>,
-): Promise<readonly AttendanceInterval[]> {
+): Promise<ReadResult<readonly AttendanceInterval[]>> {
   const { data, error } = await accountBackend()
     .from('attendance_intervals')
     .select('id, member_id, started_at, ended_at, source, verified, rejected_at, rejection_reason')
     .eq('intervention_id', interventionId)
     .order('started_at', { ascending: true });
-  if (error || !data) return [];
-  return (data as unknown as AttendanceRow[]).map((row) => ({
+  if (error || !data) return readFailure(error);
+  return ok((data as unknown as AttendanceRow[]).map((row) => ({
     id: row.id,
     memberId: row.member_id,
     memberName: memberNames.get(row.member_id) ?? 'Nepoznat clan',
@@ -556,10 +605,10 @@ export async function fetchAttendance(
     verified: row.verified,
     rejectedAt: row.rejected_at,
     rejectionReason: row.rejection_reason,
-  }));
+  })));
 }
 
-export async function fetchVehicleMovements(): Promise<readonly VehicleMovement[]> {
+export async function fetchVehicleMovements(): Promise<ReadResult<readonly VehicleMovement[]>> {
   const backend = accountBackend();
   const [movements, vehicles] = await Promise.all([
     backend
@@ -569,11 +618,13 @@ export async function fetchVehicleMovements(): Promise<readonly VehicleMovement[
       .limit(100),
     backend.from('vehicles').select('id, callsign, name'),
   ]);
+  const failed = [movements, vehicles].find((r) => r.error);
+  if (failed) return readFailure(failed.error);
   const byId = new Map<string, { callsign: string; name: string }>();
   for (const row of (vehicles.data ?? []) as unknown as VehicleRow[]) {
     byId.set(row.id, { callsign: row.callsign, name: row.name });
   }
-  return ((movements.data ?? []) as unknown as MovementRow[]).map((row) => {
+  return ok(((movements.data ?? []) as unknown as MovementRow[]).map((row) => {
     const vehicle = byId.get(row.vehicle_id);
     return {
       id: row.id,
@@ -585,20 +636,20 @@ export async function fetchVehicleMovements(): Promise<readonly VehicleMovement[
       departedAt: row.departed_at,
       returnedAt: row.returned_at,
     };
-  });
+  }));
 }
 
-export async function fetchAvailability(): Promise<readonly AvailabilityRow[]> {
+export async function fetchAvailability(): Promise<ReadResult<readonly AvailabilityRow[]>> {
   const { data, error } = await accountBackend()
     .from('member_availability')
     .select('member_id, available, note, changed_at');
-  if (error || !data) return [];
-  return (data as unknown as AvailabilityWireRow[]).map((row) => ({
+  if (error || !data) return readFailure(error);
+  return ok((data as unknown as AvailabilityWireRow[]).map((row) => ({
     memberId: row.member_id,
     available: row.available,
     note: row.note,
     changedAt: row.changed_at,
-  }));
+  })));
 }
 
 /**
@@ -646,10 +697,10 @@ const count = (value: number | string | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export async function fetchParticipationTotals(): Promise<readonly ParticipationTotal[]> {
+export async function fetchParticipationTotals(): Promise<ReadResult<readonly ParticipationTotal[]>> {
   const { data, error } = await accountBackend().rpc('attendance_totals', {});
-  if (error || !data) return [];
-  return (data as unknown as TotalsRow[]).map((row) => ({
+  if (error || !data) return readFailure(error);
+  return ok((data as unknown as TotalsRow[]).map((row) => ({
     memberId: row.member_id,
     memberName: row.full_name,
     confirmedIntervals: count(row.confirmed_intervals),
@@ -658,7 +709,7 @@ export async function fetchParticipationTotals(): Promise<readonly Participation
     unverifiedMs: count(row.unverified_seconds) * 1000,
     openIntervals: count(row.open_intervals),
     rejectedIntervals: count(row.rejected_intervals),
-  }));
+  })));
 }
 
 // --- Commands -------------------------------------------------------------

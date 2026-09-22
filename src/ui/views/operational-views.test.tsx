@@ -104,24 +104,24 @@ vi.mock('@/auth/operations', async (importOriginal) => {
   return {
     ...real,
     fetchOwnMemberId: vi.fn(async () => MEMBER_ID),
-    fetchInterventions: vi.fn(async () => [INTERVENTION]),
+    fetchInterventions: vi.fn(async () => ({ ok: true, value: [INTERVENTION] }) as const),
     // Who may be CALLED is the server's answer, not a filter over the roster.
     // Pero is on the roster below but is NOT here: he stands in for the
     // withdrawn member whose account can no longer sign in.
     fetchEligibleRecipients: vi.fn(async () => [
       { memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac', role: 'FIREFIGHTER' as const, specialties: [] },
     ]),
-    fetchRecipientFacts: vi.fn(async () => RECIPIENTS),
-    fetchAttendance: vi.fn(async () => [PENDING_INTERVAL]),
+    fetchRecipientFacts: vi.fn(async () => ({ ok: true, value: RECIPIENTS }) as const),
+    fetchAttendance: vi.fn(async () => ({ ok: true, value: [PENDING_INTERVAL] }) as const),
     // Null is "the chronology could not be read", which is what an older
     // project without the reading function answers. The screen must then fall
     // back to what it can reconstruct AND say that it has - asserted below.
     fetchInterventionAudit: vi.fn(async () => null),
-    fetchVehicleMovements: vi.fn(async () => []),
-    fetchAvailability: vi.fn(async () => [
+    fetchVehicleMovements: vi.fn(async () => ({ ok: true, value: [] }) as const),
+    fetchAvailability: vi.fn(async () => ({ ok: true, value: [
       { memberId: MEMBER_ID, available: true, note: 'U gradu sam.', changedAt: '2026-09-13T07:00:00.000Z' },
-    ]),
-    fetchParticipationTotals: vi.fn(async () => [
+    ] }) as const),
+    fetchParticipationTotals: vi.fn(async () => ({ ok: true, value: [
       {
         memberId: MEMBER_ID,
         memberName: 'Ivo Vatrogasac',
@@ -134,7 +134,7 @@ vi.mock('@/auth/operations', async (importOriginal) => {
         openIntervals: 0,
         rejectedIntervals: 0,
       },
-    ]),
+    ] }) as const),
   };
 });
 
@@ -220,7 +220,7 @@ describe('title, location and assembly point are not confused with each other', 
 
   async function withDistinctValues(view: React.ReactElement, role: OperationalRole) {
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([DISTINCT]);
+    vi.mocked(operations.fetchInterventions).mockResolvedValueOnce({ ok: true, value: [DISTINCT] });
     return show(view, role);
   }
 
@@ -342,7 +342,7 @@ describe('the commander console renders on real data', () => {
       eligible: readonly { memberId: string; fullName: string }[] | null,
     ): Promise<string> {
       const operations = await import('@/auth/operations');
-      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([DRAFT]);
+      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce({ ok: true, value: [DRAFT] });
       vi.mocked(operations.fetchEligibleRecipients).mockResolvedValueOnce(
         eligible === null
           ? null
@@ -454,10 +454,10 @@ describe('the firefighter screen renders on real data', () => {
   it('offers the opening button to somebody who has not opened it', async () => {
     // The step the demonstration starts on. It must exist before it is pressed.
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce([
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce({ ok: true, value: [
       { ...RECIPIENTS[0]!, acknowledgedAt: null, answer: null, answeredAt: null, journey: null, journeyAt: null },
       RECIPIENTS[1]!,
-    ]);
+    ] });
 
     await show(<MobilisationView />, 'FIREFIGHTER');
     expect(container.querySelector('[data-testid="acknowledge"]')).not.toBeNull();
@@ -471,10 +471,10 @@ describe('the firefighter screen renders on real data', () => {
      * shown it, which is when it can still change what they press.
      */
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce([
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce({ ok: true, value: [
       { ...RECIPIENTS[0]!, journey: null, journeyAt: null },
       RECIPIENTS[1]!,
-    ]);
+    ] });
 
     const text = await show(<MobilisationView />, 'FIREFIGHTER');
     expect(
@@ -501,9 +501,9 @@ describe('the firefighter screen renders on real data', () => {
 
   it('marks attendance YES only once a commander has confirmed it', async () => {
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchAttendance).mockResolvedValueOnce([
+    vi.mocked(operations.fetchAttendance).mockResolvedValueOnce({ ok: true, value: [
       { ...PENDING_INTERVAL, verified: true },
-    ]);
+    ] });
 
     await show(<MobilisationView />, 'FIREFIGHTER');
     expect(
@@ -513,7 +513,7 @@ describe('the firefighter screen renders on real data', () => {
 
   it('marks attendance NO only when there is no record at all', async () => {
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchAttendance).mockResolvedValueOnce([]);
+    vi.mocked(operations.fetchAttendance).mockResolvedValueOnce({ ok: true, value: [] });
 
     await show(<MobilisationView />, 'FIREFIGHTER');
     expect(
@@ -740,9 +740,9 @@ describe('the archive renders on real data', () => {
 
     async function rowText(status: 'PUBLISHED' | 'CLOSED' | 'CANCELLED'): Promise<string> {
       const operations = await import('@/auth/operations');
-      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce([
+      vi.mocked(operations.fetchInterventions).mockResolvedValueOnce({ ok: true, value: [
         { ...INTERVENTION, ...THREE_TIMES, status, closeReason: 'Vjezba zavrsena.' },
-      ]);
+      ] });
       await show(<ArchiveView />, 'COMMANDER');
       return container.querySelector(`[data-testid="archive-meta-${INTERVENTION_ID}"]`)?.textContent ?? '';
     }
@@ -911,10 +911,10 @@ describe('every recorded time and duration reaches the screen', () => {
 
   async function stub(): Promise<void> {
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchInterventions).mockResolvedValue([TIMED_INTERVENTION]);
-    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue(TIMED_RECIPIENTS);
-    vi.mocked(operations.fetchAttendance).mockResolvedValue(TIMED_ATTENDANCE);
-    vi.mocked(operations.fetchVehicleMovements).mockResolvedValue(TIMED_MOVEMENTS);
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [TIMED_INTERVENTION] });
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue({ ok: true, value: TIMED_RECIPIENTS });
+    vi.mocked(operations.fetchAttendance).mockResolvedValue({ ok: true, value: TIMED_ATTENDANCE });
+    vi.mocked(operations.fetchVehicleMovements).mockResolvedValue({ ok: true, value: TIMED_MOVEMENTS });
     vi.mocked(operations.fetchInterventionAudit).mockResolvedValue(TIMED_AUDIT);
   }
 
@@ -1136,9 +1136,9 @@ describe('every recorded time and duration reaches the screen', () => {
     async function closedWith(note: string, fromAudit: boolean): Promise<string> {
       const operations = await import('@/auth/operations');
       await stub();
-      vi.mocked(operations.fetchInterventions).mockResolvedValue([
+      vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [
         { ...TIMED_INTERVENTION, closeReason: note },
-      ]);
+      ] });
       vi.mocked(operations.fetchInterventionAudit).mockResolvedValue(
         fromAudit
           ? [
@@ -1208,13 +1208,13 @@ describe('every recorded time and duration reaches the screen', () => {
     async function openIntervention(): Promise<void> {
       const operations = await import('@/auth/operations');
       await stub();
-      vi.mocked(operations.fetchInterventions).mockResolvedValue([
+      vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [
         // Published, never closed, and moved into one further state.
         { ...TIMED_INTERVENTION, status: 'DEPLOYED' as const, closedAt: null, closeReason: null },
-      ]);
-      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue([
+      ] });
+      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue({ ok: true, value: [
         { ...TIMED_MOVEMENTS[0]!, returnedAt: null },
-      ]);
+      ] });
       await show(<ArchiveView />, 'COMMANDER');
     }
 
@@ -1252,7 +1252,7 @@ describe('every recorded time and duration reaches the screen', () => {
       const vehicle = container.querySelector('[data-testid="first-vehicle"]');
       expect(vehicle?.textContent).toContain('6 min');
       const operations = await import('@/auth/operations');
-      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue([]);
+      vi.mocked(operations.fetchVehicleMovements).mockResolvedValue({ ok: true, value: [] });
       act(() => root.unmount());
       container.remove();
       container = document.createElement('div');
@@ -1377,16 +1377,16 @@ describe('with nothing happening', () => {
   // and a leftover queued answer then leaks into the next test.
   afterEach(async () => {
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchInterventions).mockResolvedValue([INTERVENTION]);
-    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue(RECIPIENTS);
-    vi.mocked(operations.fetchAttendance).mockResolvedValue([PENDING_INTERVAL]);
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [INTERVENTION] });
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue({ ok: true, value: RECIPIENTS });
+    vi.mocked(operations.fetchAttendance).mockResolvedValue({ ok: true, value: [PENDING_INTERVAL] });
   });
 
   it('the firefighter screen still offers availability and says why it is quiet', async () => {
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchInterventions).mockResolvedValue([]);
-    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue([]);
-    vi.mocked(operations.fetchAttendance).mockResolvedValue([]);
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [] });
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValue({ ok: true, value: [] });
+    vi.mocked(operations.fetchAttendance).mockResolvedValue({ ok: true, value: [] });
 
     const text = await show(<MobilisationView />, 'FIREFIGHTER');
 
@@ -1399,7 +1399,7 @@ describe('with nothing happening', () => {
 
   it('the archive says it is empty rather than showing an empty table', async () => {
     const operations = await import('@/auth/operations');
-    vi.mocked(operations.fetchInterventions).mockResolvedValue([]);
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [] });
 
     const text = await show(<ArchiveView />, 'COMMANDER');
     expect(text).not.toMatch(/Arhiva nije ucitana/);
