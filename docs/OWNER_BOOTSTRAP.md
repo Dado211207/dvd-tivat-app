@@ -189,6 +189,69 @@ owner keeps the role.
 
 Then run the check in step 5.
 
+### This block leaves no audit row, and that is a real gap
+
+`owner_set_role` — the function the owner panel calls for every other role
+change — **cannot** perform this transfer, by three separate guards:
+
+1. `OWNER` is not in its list of assignable roles (`ROLE_NOT_ASSIGNABLE`).
+2. It refuses to change the caller's own role (`CANNOT_CHANGE_OWN_ROLE`).
+3. It refuses to change an account that currently holds `OWNER`
+   (`ACCOUNT_NOT_ASSIGNABLE`).
+
+That is deliberate: ownership is meant to be hard to move. The consequence is
+that the block above is the *only* path, and there is **no audit trigger on
+`access_grants`** — the two functions that write `role_audit` do so with
+explicit `insert` statements, not a trigger. So a plain `update` here changes
+who owns the system and records nothing.
+
+Whoever runs the block should add the matching audit rows in the same
+transaction:
+
+```sql
+insert into public.role_audit(target_user_id, previous_role, next_role, changed_by)
+values
+  ('<previous owner user_id>', 'OWNER', 'CITIZEN', '<who is running this>'),
+  ('<new owner user_id>', 'CITIZEN', 'OWNER', '<who is running this>');
+```
+
+Be clear about what this is worth: rows written by the same hand that made the
+change are a **statement of intent, not independent evidence**. Anyone with
+dashboard access could write the update without them, or write them without the
+update. They are better than silence and they are not proof.
+
+### How the current owner was set
+
+On **2026-09-21 06:52:42 UTC**, ownership moved from
+`vlasnik@example.invalid` (a fictional test account) to the society's real
+account, `doncicdragan2112@gmail.com`. This was done as a **direct change on the
+production database, outside any owner function** — which is what this runbook
+prescribes, because no owner function can do it.
+
+What is on record, verified read-only on 2026-09-22:
+
+- `access_grants` holds **exactly one** `OWNER`, the real account, `granted_at`
+  `2026-09-21 06:52:42.890698+00`.
+- `role_audit` holds two rows at that identical microsecond — `OWNER → CITIZEN`
+  for the previous owner and `CITIZEN → OWNER` for the new one — both with
+  `changed_by` set to the previous owner.
+- The identical timestamps put the grant change and the audit rows in one
+  transaction.
+- No other account, membership or status audit table recorded anything that
+  day.
+
+So the transfer was carried out as documented and was voluntarily recorded, in
+one transaction, going beyond what this runbook asked for at the time. **No
+backfill has been made and none should be** — a record written afterwards to
+make a trail look complete would be worth less than the gap it hides.
+
+The standing weakness is in the procedure, not in that particular execution:
+ownership of this system can be moved by anyone with Supabase dashboard access,
+and the database will not notice. A `owner_transfer_ownership` function that
+makes the transfer atomic and self-auditing is on the backlog at **low
+priority** — see `docs/ai/PROJECT_STATE.md`. It is not built, and it would not
+change who can reach the dashboard, which remains the real control.
+
 ## If you lose access to the owner account
 
 There is no recovery path inside the application, on purpose. Recovery is the
