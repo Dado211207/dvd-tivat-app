@@ -1082,6 +1082,17 @@ says the hosted project itself was tested by CI.
 - **No guaranteed siren.** Web Push requests high urgency and a vibration
   pattern where supported, but a PWA cannot override silent mode, Focus, battery
   policy or platform delivery. Provider acceptance is not member acknowledgement.
+- **Ownership can be transferred with nothing watching.** `owner_set_role`
+  cannot assign `OWNER`, cannot change the caller's own role and cannot touch an
+  account that already holds `OWNER`, so the only transfer path is direct SQL —
+  and there is no audit trigger on `access_grants`. The current owner
+  (`doncicdragan2112@gmail.com`, set 2026-09-21 06:52:42 UTC) was set this way,
+  outside any owner function, as `docs/OWNER_BOOTSTRAP.md` prescribes; matching
+  `role_audit` rows were written by hand in the same transaction. Those rows are
+  a statement of intent by whoever ran the change, **not independent evidence**.
+  No backfill has been made and none should be. Whoever holds the Supabase
+  dashboard holds this system; that is the real control, and no function can
+  change it.
 
 ## Blockers needing an owner decision
 
@@ -1171,6 +1182,16 @@ Not blocking the demonstration, and worth doing after it:
   the station display has no server-backed equivalent yet.
 - A second Supabase project, so a demonstration and any real use are not the
   same database.
+- **`owner_transfer_ownership` — low priority, decided 2026-09-22, do not build
+  yet.** A `security definer` function that moves `OWNER` from one account to
+  another in one transaction and writes both `role_audit` rows itself, so the
+  transfer cannot happen without its own record. Today the only path is the
+  direct SQL in `docs/OWNER_BOOTSTRAP.md`, which leaves no audit row unless the
+  person adds one by hand. Worth being honest about the ceiling: this raises the
+  floor for an honest operator making a mistake, and does **nothing** against
+  anyone with dashboard access, who can write the same `update` either way. It
+  is bookkeeping, not a security control, which is exactly why it is low
+  priority rather than urgent.
 
 ## Manual owner checklist
 
