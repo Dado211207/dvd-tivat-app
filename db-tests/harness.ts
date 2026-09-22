@@ -39,6 +39,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609200014_required_registration_profile.sql',
   'supabase/migrations/202609200015_activate_szs_account_service.sql',
   'supabase/migrations/202609210016_owner_service_membership.sql',
+  'supabase/migrations/202609220017_audit_triggers.sql',
 ];
 
 export const DATABASE_URL =

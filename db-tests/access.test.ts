@@ -210,11 +210,30 @@ describe('role elevation is refused', () => {
     );
 
     const { rows } = await db.query(
-      `select previous_role, next_role, changed_by from public.role_audit where target_user_id = $1`,
+      `select previous_role, next_role, changed_by from public.role_audit
+        where target_user_id = $1 order by changed_at`,
       [target.userId],
     );
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
+
+    /*
+     * Two rows, not one, since migration 202609220017.
+     *
+     * This asserted a single row, and that was true only because nothing
+     * recorded the grant an account is born with. The audit trigger records it
+     * now, and it should: an account inserted directly with role OWNER would
+     * otherwise appear in the system with no trace of how it got there, which
+     * is the same silent-change hole the trigger exists to close.
+     *
+     * Both rows are named rather than the count being relaxed to "at least
+     * one" - a looser assertion here would stop noticing if the assignment
+     * itself ever went unrecorded.
+     */
+    expect(rows).toHaveLength(2);
+    expect(rows[0], 'the grant the account was created with').toMatchObject({
+      previous_role: null,
+      next_role: 'CITIZEN',
+    });
+    expect(rows[1], 'and the assignment the owner made').toMatchObject({
       previous_role: 'CITIZEN',
       next_role: 'FIREFIGHTER',
       changed_by: cast.owner!.userId,
