@@ -374,6 +374,17 @@ export const me = {
     noMemberText:
       'Zbog toga vas ne mozemo staviti na spisak pozvanih, niti mozete prijaviti svoje prisustvo. Administrator to povezuje na ekranu Evidencija.',
     noMemberUntilThen: 'Do tada ovaj ekran nema sta da prikaze za vas.',
+
+    // Ove dvije recenice postoje da se NE bi reklo "niste clan" kada provjera
+    // uopste nije izvrsena. Prva je kvar servera i ponovni pokusaj ima smisla;
+    // druga je odbijanje - server je odgovorio i rekao ne, pa ponovni pokusaj
+    // nikada nece pomoci i popravlja se dodjelom prava, ne cekanjem.
+    memberCheckFailedTitle: 'Nismo mogli provjeriti vas clanski zapis.',
+    memberCheckFailedText:
+      'Server nije odgovorio na tu provjeru. Ovo ne znaci da niste clan drustva - znaci da ne znamo.',
+    memberCheckRefusedTitle: 'Server je odbio provjeru vaseg clanskog zapisa.',
+    memberCheckRefusedText:
+      'Server je odgovorio i odbio provjeru. Ovo nije podatak o tome da li ste clan drustva. Cekanje nece pomoci - javite se vlasniku naloga, jer se rjesava pravima pristupa na serveru. Kada to bude popravljeno, pritisnite dugme ispod.',
   },
 
   /**

@@ -103,7 +103,7 @@ vi.mock('@/auth/operations', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/auth/operations')>();
   return {
     ...real,
-    fetchOwnMemberId: vi.fn(async () => MEMBER_ID),
+    fetchOwnMemberId: vi.fn(async () => ({ ok: true, value: MEMBER_ID }) as const),
     fetchInterventions: vi.fn(async () => ({ ok: true, value: [INTERVENTION] }) as const),
     // Who may be CALLED is the server's answer, not a filter over the roster.
     // Pero is on the roster below but is NOT here: he stands in for the
