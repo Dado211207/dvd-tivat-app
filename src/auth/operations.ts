@@ -471,11 +471,28 @@ export async function fetchInterventionAudit(
   }
 }
 
-/** Which member the signed-in account is, or null. Read from the server, never guessed. */
-export async function fetchOwnMemberId(): Promise<string | null> {
+/**
+ * Which member the signed-in account is. Read from the server, never guessed.
+ *
+ * `ok: true, value: null` is a real answer and the most consequential one in
+ * this file: the account exists and is linked to no member record. The gate
+ * renders that as "your account is not linked to a member of the society",
+ * which is a statement about the roster.
+ *
+ * This used to return plain null on failure too, so a read that never happened
+ * produced the same sentence. The owner of this system read it on his own
+ * phone and went looking for a roster problem. `current_member_id()` is
+ * `security definer`, so no row policy can refuse it per person - but a revoked
+ * `execute` grant answers `42501`, and that would have told EVERY firefighter
+ * they were not in the society while the roster was perfectly intact.
+ *
+ * Three answers, because there are three situations, and the third one is not
+ * the roster's fault.
+ */
+export async function fetchOwnMemberId(): Promise<ReadResult<string | null>> {
   const { data, error } = await accountBackend().rpc('current_member_id');
-  if (error) return null;
-  return (data as string | null) ?? null;
+  if (error) return readFailure(error);
+  return ok((data as string | null) ?? null);
 }
 
 /** Only a successful empty read means there are no visible interventions. */

@@ -113,6 +113,28 @@ export interface FixtureOptions {
    * case gets reproduced.
    */
   readonly refuseTables?: readonly string[];
+  /**
+   * Refuse these commands by name, leaving every other answer working.
+   *
+   * `refuseTables` cannot express this one, because `current_member_id` is a
+   * command rather than a table - and it is the command whose swallowed refusal
+   * was the most expensive, because the gate turned it into "your account is
+   * not linked to a member of the society". A whole-server failure is
+   * `serverFails: 'ACCESS'`; this is the narrower and nastier case where the
+   * access check succeeds, the screens underneath work, and exactly one command
+   * answers 42501.
+   */
+  readonly refuseRpcs?: readonly string[];
+  /**
+   * What `current_member_id()` answers.
+   *
+   * `null` is a real answer, not an absence: a signed-in account with an
+   * operational role and no member record on the roster. It is the state the
+   * gate's "not linked to a member of the society" sentence is FOR, and until
+   * a refused read could be told apart from it, the fixture had no reason to
+   * express it - both produced the same screen.
+   */
+  readonly memberId?: string | null;
 }
 
 const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
@@ -443,8 +465,15 @@ export async function installFixtureProject(
         return json(route, { message: 'fixture: access check failed' }, 500);
       }
 
+      if (options.refuseRpcs?.includes(name) ?? false) {
+        return json(route, { code: '42501', message: 'permission denied for function ' + name }, 403);
+      }
+
       if (name === 'current_dvd_role') return json(route, role ?? null);
       if (name === 'current_account_status') return json(route, accountStatus);
+      if (name === 'current_member_id' && 'memberId' in options) {
+        return json(route, options.memberId ?? null);
+      }
       // Any command not named here answers "fine" - these tests are about what
       // the screens SHOW, and the commands themselves are proven against a real
       // PostgreSQL in db-tests/ and against the hosted project separately.

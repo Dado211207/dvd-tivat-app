@@ -359,6 +359,13 @@ export const en: Strings = {
     noMemberText:
       'Because of that you cannot be put on a call-out list and you cannot state your attendance. An administrator links it on the Records screen.',
     noMemberUntilThen: 'Until then this screen has nothing to show for you.',
+
+    memberCheckFailedTitle: 'We could not check your member record.',
+    memberCheckFailedText:
+      'The server did not answer that check. This does not mean you are not a member of the society - it means we do not know.',
+    memberCheckRefusedTitle: 'The server refused to check your member record.',
+    memberCheckRefusedText:
+      'The server answered and refused the check, so trying again will not help. This says nothing about whether you are a member of the society. Contact the owner of the system - this is fixed with server access rights, not by waiting.',
   },
 
   connection: {
