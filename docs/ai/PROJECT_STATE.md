@@ -968,6 +968,16 @@ invented roster and stays that way until a later slice replaces it.
 10. If a check fails, fix the cause. Do not weaken assertions or re-run until
     it passes.
 11. **Do not apply `supabase/tests/00_supabase_stub.sql` to a real project.**
+12. **Read CI progress from the JOB, never from the run.** GitHub's run-level
+    endpoint (`/actions/runs/{id}`) serves a cached summary whose `status` and
+    `updated_at` can stay frozen at the moment the run started. On 2026-09-22 it
+    reported a job as `in_progress` with `updated_at` stuck at its start time
+    while the job had in fact finished successfully six minutes earlier — which
+    made a normal 3m48s browser step look like a 13-minute hang, and produced a
+    reported "anomaly" that did not exist. Use `/actions/runs/{id}/jobs`, which
+    carries per-step `status`, `conclusion`, `started_at` and `completed_at` and
+    was correct throughout. Compute elapsed time from those timestamps rather
+    than from a local timer, so the number quoted is the one GitHub holds.
 
 ## Confirmed operating facts
 
