@@ -153,11 +153,29 @@ after insert or update on public.organization_memberships
 for each row execute function public.audit_organization_membership();
 
 -- ---------------------------------------------------------------------------
--- 4. Remove the hand-written inserts these triggers replace.
+-- 4. Replace the hand-written inserts with an assertion.
 -- ---------------------------------------------------------------------------
 --
--- Leaving them would double every row the application writes, which would make
--- the audit actively misleading rather than merely incomplete.
+-- Keeping the inserts as well as the trigger would double every row the
+-- application writes, which would make the audit actively misleading rather
+-- than merely incomplete. But simply deleting them loses something real: the
+-- function's insert was an INDEPENDENT guarantee, and without it, disabling one
+-- trigger silently removes auditing from the application path too.
+--
+-- Measured rather than assumed. With the trigger disabled and the insert gone,
+-- `owner_set_role` changed a role to FIREFIGHTER and recorded nothing at all.
+--
+-- So the function keeps a guarantee without duplicating a row: it checks that
+-- an audit row appeared and refuses to complete if one did not. Redundancy
+-- becomes a tripwire. The moment auditing stops working, role changes stop
+-- working, loudly, instead of proceeding unobserved.
+--
+-- THE COST, because this is a real trade and not a free win: an audit failure
+-- becomes an outage. If the trigger is ever broken or dropped, an owner cannot
+-- reassign a role until it is fixed. On a system whose purpose is that
+-- authority cannot move unobserved, failing closed is the right direction - but
+-- it is availability traded for accountability, on the one function that
+-- manages access.
 
 create or replace function public.owner_set_role(target_user uuid, requested_role text)
 returns void
@@ -167,6 +185,8 @@ set search_path to 'public', 'pg_temp'
 as $$
 declare
   old_role text;
+  audit_before bigint;
+  audit_after bigint;
 begin
   if not public.is_dvd_owner() then raise exception 'OWNER_REQUIRED'; end if;
   if requested_role not in ('ADMIN', 'COMMANDER', 'FIREFIGHTER', 'PENDING', 'CITIZEN') then
@@ -174,17 +194,40 @@ begin
   end if;
   if target_user = auth.uid() then raise exception 'CANNOT_CHANGE_OWN_ROLE'; end if;
 
+  -- `for update` also serialises this against any other `owner_set_role` for
+  -- the same account, which is what makes the count comparison below sound.
   select role into old_role from public.access_grants where user_id = target_user for update;
   if old_role is null or old_role = 'OWNER' then raise exception 'ACCOUNT_NOT_ASSIGNABLE'; end if;
 
-  -- The audit row is written by `audit_access_grant_role_change`. This function
-  -- no longer writes one, so that the application and a raw SQL change produce
-  -- the record by the same path.
+  select count(*) into audit_before
+  from public.role_audit where target_user_id = target_user;
+
+  -- The audit row is written by `audit_access_grant_role_change`, so the
+  -- application and a raw SQL change produce the record by the same path.
   update public.access_grants
   set role = requested_role, granted_by = auth.uid(), granted_at = now()
   where user_id = target_user;
+
+  -- An unchanged role is not an event and the trigger correctly writes nothing,
+  -- so only a real transition is asserted on.
+  if old_role is distinct from requested_role then
+    select count(*) into audit_after
+    from public.role_audit where target_user_id = target_user;
+
+    if audit_after = audit_before then
+      raise exception 'AUDIT_NOT_WRITTEN';
+    end if;
+  end if;
 end;
 $$;
+
+-- One residual race, stated rather than left to be discovered: under `read
+-- committed`, another session committing a `role_audit` row for this same
+-- account between the two counts would satisfy the check. The row lock above
+-- makes that impossible for another `owner_set_role`, leaving only a
+-- concurrent raw SQL change to the very same account. The failure direction is
+-- the safe one - it degrades to the behaviour without this check, never to a
+-- refusal of a legitimate change.
 
 create or replace function public.owner_set_organization_membership(
   target_user uuid, organization_code text, requested_role text)

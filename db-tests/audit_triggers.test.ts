@@ -222,4 +222,75 @@ describe('Every role change writes its own audit row, including raw SQL', () => 
     });
     expect(Number(readable.count)).toBeGreaterThan(0);
   });
+
+  it('refuses the role change outright when the audit row does not appear', async () => {
+    /*
+     * The independent guarantee, and the reason `owner_set_role` did not simply
+     * lose its own insert.
+     *
+     * Deleting that insert would have been a real loss: the function's write
+     * was a guarantee that did not depend on the trigger, and without it,
+     * disabling one trigger silently removes auditing from the application path
+     * too. That was measured before this assertion existed - with the trigger
+     * off, `owner_set_role` changed a role to FIREFIGHTER and recorded nothing.
+     *
+     * So the function asserts rather than duplicates. Redundancy becomes a
+     * tripwire: when auditing stops working, role changes stop working.
+     *
+     * Disabling the trigger here is the only honest way to prove it. It is not
+     * a contrived condition - `alter table ... disable trigger` is exactly what
+     * a superuser can do to this system, and is named in the migration header
+     * as one of the things no trigger can prevent.
+     */
+    const subject = await createAccount(db, 'clan-failclosed@example.invalid');
+    await completeProfile(db, subject.userId, 'Clan Fail Closed');
+    const before = await roleAudit(subject);
+
+    await db.query(
+      `alter table public.access_grants disable trigger audit_access_grant_role_change`,
+    );
+    let message = '';
+    try {
+      await asUserCommitted(db, member.userId, (client) =>
+        client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'FIREFIGHTER']),
+      );
+    } catch (error) {
+      message = (error as Error).message;
+    } finally {
+      await db.query(
+        `alter table public.access_grants enable trigger audit_access_grant_role_change`,
+      );
+    }
+
+    expect(message, 'it refuses loudly rather than changing quietly').toMatch(/AUDIT_NOT_WRITTEN/);
+
+    const { rows } = await db.query<{ role: string }>(
+      `select role from public.access_grants where user_id = $1`,
+      [subject.userId],
+    );
+    expect(rows[0]!.role, 'and the change is rolled back, not silently applied').toBe('CITIZEN');
+    expect(await roleAudit(subject), 'and no audit row was left behind either').toHaveLength(
+      before.length,
+    );
+  });
+
+  it('still allows a no-op write, which legitimately audits nothing', async () => {
+    // The assertion must not fire when the trigger correctly stays silent. An
+    // unchanged role is not an event, so asserting on it would turn a harmless
+    // write into an outage - the exact over-reach this guard must avoid.
+    const subject = await createAccount(db, 'clan-noop@example.invalid');
+    await completeProfile(db, subject.userId, 'Clan No Op');
+    await asUserCommitted(db, member.userId, (client) =>
+      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'FIREFIGHTER']),
+    );
+    const before = await roleAudit(subject);
+
+    // Same value again: the trigger writes nothing and the function must not
+    // complain about it.
+    await asUserCommitted(db, member.userId, (client) =>
+      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'FIREFIGHTER']),
+    );
+
+    expect(await roleAudit(subject)).toHaveLength(before.length);
+  });
 });
