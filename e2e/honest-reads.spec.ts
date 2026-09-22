@@ -250,3 +250,154 @@ test.describe('the invariant holds the other way too', () => {
     await expect(page.getByTestId('next-action')).toHaveCount(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The same defect one level up, in the gate rather than in a screen.
+ *
+ * `fetchOwnMemberId` swallowed its error and answered null, and null is also
+ * the honest answer for an account genuinely absent from the roster. So the
+ * gate rendered the same sentence for both:
+ *
+ *     "Vas nalog nije povezan sa clanom drustva."
+ *
+ * That sentence is a claim about the society's roster. Making it without
+ * reading the roster is the worst kind of error this application can produce,
+ * because it is a plausible statement that sends the person to the wrong place
+ * entirely - and it is exactly what the owner of this system read on his own
+ * phone before spending an evening on it.
+ *
+ * `current_member_id()` is `security definer`, so no row policy refuses it per
+ * person. A revoked `execute` grant does, with the same 42501, and it would
+ * have told EVERY firefighter they were not in the society at once.
+ */
+const NOT_LINKED_WORDING = /nije povezan sa clanom drustva|not linked to a member of the society/i;
+
+const CHECK_FAILED_WORDING =
+  /nismo mogli provjeriti vas clanski zapis|odbio provjeru vaseg clanskog zapisa|could not check your member record|refused to check your member record/i;
+
+test.describe('a refused member check is never shown as "you are not in the society"', () => {
+  test('the firefighter screen says the check failed, not that he is not a member', async ({
+    page,
+  }) => {
+    const text = await openWithRefusal(
+      page,
+      'mobilizacija',
+      { role: 'FIREFIGHTER', refuseRpcs: ['current_member_id'] },
+      CHECK_FAILED_WORDING,
+    );
+
+    expect(text, 'must not claim he is not a member of the society').not.toMatch(
+      NOT_LINKED_WORDING,
+    );
+    expect(text, 'must say the check itself did not happen').toMatch(CHECK_FAILED_WORDING);
+    await expect(page.getByTestId('member-check-failed')).toBeVisible();
+  });
+
+  test('a refusal still leaves a way out of the screen', async ({ page }) => {
+    /*
+     * This test originally asserted the OPPOSITE - that a refusal offered no
+     * button at all, on the reasoning that pressing one cannot change a
+     * server's "no". That was wrong for a dispatch screen: it left a
+     * firefighter with no action except killing the application and reopening
+     * it, on a phone, during a call-out.
+     *
+     * The sentence is what stops somebody pressing forever, not the missing
+     * button. And the button does real work - `retry` re-reads the access
+     * snapshot too, so one press picks up an administrator's fix the moment it
+     * lands. What the wording must never do is blame the connection or the
+     * roster, and that is what is asserted here.
+     */
+    await openWithRefusal(
+      page,
+      'mobilizacija',
+      { role: 'FIREFIGHTER', refuseRpcs: ['current_member_id'] },
+      CHECK_FAILED_WORDING,
+    );
+
+    const notice = page.getByTestId('member-check-failed');
+    await expect(notice).toContainText(/odbio|refused/i);
+    await expect(notice, 'waiting is named as useless, so nobody sits on it').toContainText(
+      /cekanje nece pomoci|waiting will not help/i,
+    );
+    await expect(
+      notice.getByRole('button'),
+      'and there is exactly one action, not a dead end',
+    ).toHaveCount(1);
+  });
+
+  test('an unreachable server does offer retry, and does not blame the roster', async ({
+    page,
+  }) => {
+    const text = await openWithRefusal(
+      page,
+      'mobilizacija',
+      { role: 'FIREFIGHTER', serverFails: 'ACCESS' },
+      /./,
+    );
+
+    expect(text, 'a server that did not answer is not a roster fact').not.toMatch(
+      NOT_LINKED_WORDING,
+    );
+    expect(text, 'and it says the server is the problem').toMatch(FAILURE_WORDING);
+  });
+});
+
+test.describe('the gate still lets the people through who belong on the screen', () => {
+  /*
+   * The half that stops this fix from becoming its own outage. A gate that
+   * refuses everybody is trivially honest and completely useless, and the
+   * screen guarded here is the one a firefighter opens when the siren goes.
+   */
+  test('a linked firefighter reaches the call-out', async ({ page }) => {
+    const text = await openWithRefusal(
+      page,
+      'mobilizacija',
+      { role: 'FIREFIGHTER' },
+      /Vjezba: provjera opreme/i,
+    );
+
+    expect(text).not.toMatch(NOT_LINKED_WORDING);
+    expect(text).not.toMatch(CHECK_FAILED_WORDING);
+    await expect(page.getByTestId('callout-title')).toBeVisible();
+    await expect(page.getByTestId('member-check-failed')).toHaveCount(0);
+  });
+
+  test('the owner, who is also a firefighter, reaches it too', async ({ page }) => {
+    /*
+     * The case this whole thread began with. The owner holds OWNER and a member
+     * record at once; the gate must not treat holding the top role as a reason
+     * to keep him off the screen where he answers a call-out.
+     */
+    const text = await openWithRefusal(
+      page,
+      'mobilizacija',
+      { role: 'OWNER' },
+      /Vjezba: provjera opreme/i,
+    );
+
+    expect(text).not.toMatch(NOT_LINKED_WORDING);
+    expect(text).not.toMatch(CHECK_FAILED_WORDING);
+    await expect(page.getByTestId('callout-title')).toBeVisible();
+  });
+
+  test('an account genuinely absent from the roster is still told so plainly', async ({ page }) => {
+    /*
+     * And the third state has to keep working. An account with no member record
+     * must still get the sentence that sends it to an administrator - the fix
+     * is that the sentence is now only said when the server actually looked.
+     */
+    const text = await openWithRefusal(
+      page,
+      'mobilizacija',
+      { role: 'FIREFIGHTER', memberId: null },
+      NOT_LINKED_WORDING,
+    );
+
+    expect(text, 'a read that succeeded and found nothing still says so').toMatch(
+      NOT_LINKED_WORDING,
+    );
+    expect(text, 'and does not dress it up as a failure').not.toMatch(CHECK_FAILED_WORDING);
+  });
+});

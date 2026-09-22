@@ -38,7 +38,9 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const MEMBER_ID = '11111111-1111-4111-8111-111111111111';
 
-const fetchOwnMemberId = vi.fn(async () => MEMBER_ID as string | null);
+const fetchOwnMemberId = vi.fn(
+  async () => ({ ok: true, value: MEMBER_ID as string | null }) as const,
+);
 vi.mock('@/auth/operations', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/auth/operations')>();
   return { ...real, fetchOwnMemberId: () => fetchOwnMemberId() };
@@ -221,5 +223,81 @@ describe('returning to the application preserves where you were', () => {
       fetchOwnMemberId.mock.calls.length,
       'a different signed-in account must re-read the linked member',
     ).toBeGreaterThan(before);
+  });
+
+  /*
+   * The rule this file exists for, applied to the FAILURE path - which was the
+   * untested half, and is the half the three-state gate rewrote.
+   *
+   * A commander with the console open, mid-call-out, must not lose it because
+   * one re-read did not come back. Tearing the gate down unmounts the screen
+   * and every `useState` in it: the selected intervention, the active tab,
+   * half-typed instructions. The screens underneath report their own server
+   * errors; the gate keeps the person's place.
+   *
+   * Both reasons are checked, because the gate now branches on them and a
+   * branch is exactly where a rule like this gets dropped by accident.
+   */
+  for (const reason of ['REFUSED', 'UNAVAILABLE'] as const) {
+    it(`keeps the open console when a background re-read fails with ${reason}`, async () => {
+      await act(async () => {
+        root.render(
+          <AccessProvider gateway={steadyGateway()} configured>
+            <OperationalGate allow={['COMMANDER']}>{() => <Console />}</OperationalGate>
+          </AccessProvider>,
+        );
+      });
+      await settle();
+      expect(container.querySelector('[data-testid="tab"]')).not.toBeNull();
+
+      // A different account is the one thing that legitimately forces a
+      // re-read, so it is how a background read gets triggered at all here.
+      fetchOwnMemberId.mockResolvedValueOnce({ ok: false, reason } as never);
+      const otherAccount: AccessGateway = {
+        ...steadyGateway(),
+        currentUser: async () => ({ id: 'user-2', email: 'vatrogasac1@example.invalid' }),
+      };
+      await act(async () => {
+        root.render(
+          <AccessProvider gateway={otherAccount} configured>
+            <OperationalGate allow={['COMMANDER']}>{() => <Console />}</OperationalGate>
+          </AccessProvider>,
+        );
+      });
+      await settle();
+
+      expect(
+        container.querySelector('[data-testid="tab"]'),
+        'a failed re-read must not replace an already-open console',
+      ).not.toBeNull();
+    });
+  }
+
+  it('reports a refused FIRST read, rather than blaming the roster', async () => {
+    /*
+     * The other side of the same rule. With no earlier answer to keep, silence
+     * would strand the gate on a spinner - so the first read failing has to say
+     * so, and say WHICH failure it was.
+     *
+     * The negative assertion is the one that matters: before this, a refused
+     * read produced "your account is not linked to a member of the society",
+     * a statement about the roster made without reading the roster.
+     */
+    fetchOwnMemberId.mockResolvedValueOnce({ ok: false, reason: 'REFUSED' } as never);
+    await act(async () => {
+      root.render(
+        <AccessProvider gateway={steadyGateway()} configured>
+          <OperationalGate allow={['COMMANDER']}>{() => <Console />}</OperationalGate>
+        </AccessProvider>,
+      );
+    });
+    await settle();
+
+    const text = container.textContent ?? '';
+    expect(container.querySelector('[data-testid="tab"]'), 'the console is not shown').toBeNull();
+    expect(text, 'a refusal is never reported as absence from the roster').not.toMatch(
+      /nije povezan sa clanom|not linked to a member/i,
+    );
+    expect(text).toMatch(/odbio provjeru|refused to check/i);
   });
 });

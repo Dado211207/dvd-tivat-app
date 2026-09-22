@@ -55,7 +55,7 @@ Nine accounts. One is real.
 
 | Account | Name on profile | Role | Member record | Service |
 |---|---|---|---|---|
-| `doncicdragan2112@gmail.com` | Dragan Doncic | OWNER | **none** | none |
+| *(the owner's own account)* | Dragan Doncic | OWNER | **none** | none |
 | `vatrogasac1@example.invalid` | **Dragan Doncic** | FIREFIGHTER | Ivo Vatrogasac | DVD:FIREFIGHTER |
 | `komandir@example.invalid` | Komandir Smjene | COMMANDER | Komandir Smjene | DVD:COMMANDER |
 | `vatrogasac2@example.invalid` | Pero Vatrogasac | FIREFIGHTER | Pero Vatrogasac | DVD:FIREFIGHTER |
@@ -65,7 +65,18 @@ Nine accounts. One is real.
 | `cekanje@example.invalid` | Novi Clan | CITIZEN | none | none |
 | `vlasnik@example.invalid` | Vlasnik Naloga | CITIZEN | none | none |
 
-The first row is the only real account. **Keep it.**
+The first row is the only real account. **Keep it.** Its address is deliberately
+not written here: this repository is public, and the same document says an
+export of real rows must not be committed to it. Naming the owner's mailbox in
+the table was the same mistake in a smaller font.
+
+Redacting it does **not** remove the address from this repository's history -
+it remains in the two earlier commits that carried it, and anybody can still
+read it there. Removing it from history would mean rewriting every commit from
+that point on, which breaks open pull requests and every existing clone, and
+still leaves the old blob reachable on GitHub until support runs a collection.
+That was weighed and declined. This change stops the file republishing the
+address; it does not pretend the address was never published.
 
 Two things worth naming. `vatrogasac1@example.invalid` carries **the owner's own
 name on its profile** while its member record still says "Ivo Vatrogasac", so the

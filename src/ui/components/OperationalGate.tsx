@@ -24,7 +24,7 @@ import { accessObstacle, hasOperationalAccess, type OperationalRole } from '@/au
 import type { Strings } from '@/i18n/strings.me';
 import { useText } from '@/i18n/useText';
 import { useAccess } from '@/auth/AccessProvider';
-import { fetchOwnMemberId } from '@/auth/operations';
+import { fetchOwnMemberId, type ReadFailure } from '@/auth/operations';
 import { Notice } from './primitives';
 import { hrefFor } from '../router';
 
@@ -36,10 +36,23 @@ export interface OperationalContext {
   readonly memberId: string | null;
 }
 
+/**
+ * Three answers, because there are three situations.
+ *
+ * `READY` with a null `memberId` means the server looked and found no member
+ * record. `FAILED` means nobody looked. Those had the same representation until
+ * `fetchOwnMemberId` stopped swallowing its error, and the consequence was that
+ * a read which never happened rendered "your account is not linked to a member
+ * of the society" - an assertion about the roster, made without reading it.
+ *
+ * `FAILED` carries the reason because the two reasons need different things
+ * from the person: an outage is waited out, a refusal never resolves on its own
+ * and has to be fixed with access rights on the server.
+ */
 type MemberLoad =
   | { readonly kind: 'LOADING' }
   | { readonly kind: 'READY'; readonly memberId: string | null }
-  | { readonly kind: 'FAILED' };
+  | { readonly kind: 'FAILED'; readonly reason: ReadFailure };
 
 export interface OperationalGateProps {
   /** Roles allowed to see this screen. The server still decides every command. */
@@ -73,16 +86,21 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     // it: the active tab, the selected intervention, half-typed text. That is
     // what made the application look like it reloaded on returning to the tab.
     setMember((current) => (current.kind === 'READY' ? current : { kind: 'LOADING' }));
+    // A failed BACKGROUND re-read keeps the last known answer. The screens
+    // below report their own server errors; tearing the gate down over a
+    // refresh that failed would lose the person's place for nothing.
+    const keepOrFail = (reason: ReadFailure) => (current: MemberLoad): MemberLoad =>
+      current.kind === 'READY' ? current : { kind: 'FAILED', reason };
     try {
-      const memberId = await fetchOwnMemberId();
-      if (mounted.current && ticket === generation.current) setMember({ kind: 'READY', memberId });
+      const result = await fetchOwnMemberId();
+      if (!mounted.current || ticket !== generation.current) return;
+      if (result.ok) setMember({ kind: 'READY', memberId: result.value });
+      else setMember(keepOrFail(result.reason));
     } catch {
-      if (mounted.current && ticket === generation.current) {
-        // A failed BACKGROUND re-read keeps the last known answer. The screens
-        // below report their own server errors; tearing the gate down over a
-        // refresh that failed would lose the person's place for nothing.
-        setMember((current) => (current.kind === 'READY' ? current : { kind: 'FAILED' }));
-      }
+      // The read reports refusals and outages in its result now, so reaching
+      // here means something below it threw - no network at all, or a client
+      // library fault. Neither is the server refusing, so it is UNAVAILABLE.
+      if (mounted.current && ticket === generation.current) setMember(keepOrFail('UNAVAILABLE'));
     }
   }, []);
 
@@ -96,7 +114,17 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   const operational = hasOperationalAccess(access);
   useEffect(() => {
     if (!operational) {
-      setMember({ kind: 'READY', memberId: null });
+      // NOT `READY` with a null member. `READY` means the server answered about
+      // this account, and nobody has asked it yet - an account still being
+      // checked, or one with no operational role at all, is simply unread.
+      //
+      // While this said READY, the "keep the last known answer" rule below saw
+      // a previous answer that had never been read, and a FIRST read that came
+      // back refused was discarded in favour of it. The gate then rendered the
+      // screen as though the account were linked. Nobody reads `member` on this
+      // path - every roleless case is stopped by `Blocked` above - so the only
+      // thing this state has to be is honest.
+      setMember({ kind: 'LOADING' });
       return;
     }
     void loadMember();
@@ -142,11 +170,36 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     return <p role="status">{t.gate.loadingOperational}</p>;
   }
   if (member.kind === 'FAILED') {
+    /*
+     * Both reasons get a way out of this screen, and they say different things.
+     *
+     * The first draft removed the button on a refusal, reasoning that pressing
+     * it could not change a server's "no" and would only invite somebody to
+     * press it until they concluded the fault was theirs. That was wrong, and
+     * for a dispatch screen it was the worse mistake: it left a firefighter
+     * with NO action at all. The only way forward was to kill the application
+     * and reopen it - on a phone, during a call-out.
+     *
+     * What actually prevents the pressing-it-forever trap is the sentence, not
+     * the absence of a button. And the button is genuinely useful: `retry`
+     * re-reads the access snapshot as well, so the moment an administrator
+     * restores the grant, one press picks it up. Refusals are not permanent -
+     * somebody changed something, and somebody can change it back.
+     *
+     * So the wording carries the difference. A refusal says the server answered
+     * and refused, that waiting will not help, and who to ask; its button is
+     * labelled "check again" rather than "try again", because what changes is
+     * the access rights, not the attempt.
+     */
+    const refused = member.reason === 'REFUSED';
     return (
-      <Notice tone="error">
-        <strong>{t.gate.dataUnavailableTitle}</strong> {t.gate.dataUnavailableText}{' '}
+      <Notice tone="error" testId="member-check-failed">
+        <strong>
+          {refused ? t.gate.memberCheckRefusedTitle : t.gate.memberCheckFailedTitle}
+        </strong>{' '}
+        {refused ? t.gate.memberCheckRefusedText : t.gate.memberCheckFailedText}{' '}
         <button type="button" className="btn btn--ghost" onClick={retry}>
-          {t.gate.retry}
+          {refused ? t.gate.recheck : t.gate.retry}
         </button>
       </Notice>
     );

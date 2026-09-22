@@ -5,9 +5,33 @@ const backend = vi.hoisted(() => ({
   invoke: vi.fn(async (): Promise<{ error: Error | null }> => ({ error: null })),
 }));
 
-vi.mock('@/auth/supabaseClient', () => ({
-  accountBackend: () => ({ rpc: backend.rpc, functions: { invoke: backend.invoke } }),
-}));
+/*
+ * `importOriginal` is not decoration here, it is the fix for a latent bug.
+ *
+ * This factory used to replace the whole module with a single export. It worked
+ * only because `push.ts` imported exactly one thing from it. The moment
+ * anything else was imported - `isPermissionDenied`, say, which is precisely
+ * the kind of helper this file's subject reaches for - that import would
+ * resolve to `undefined` at runtime, and the failure would surface as
+ * "x is not a function" somewhere unrelated to the change that caused it.
+ *
+ * `satisfies` closes the other half. A `vi.mock` factory's return type is not
+ * checked against the module it replaces, which is how `fetchOwnMemberId` was
+ * once mocked with the wrong return type while `tsc` stayed silent and
+ * fourteen tests failed at runtime instead. Spreading the real module keeps
+ * every other export real; `satisfies Partial<…>` makes the compiler check the
+ * shape of the ones that are replaced.
+ */
+vi.mock('@/auth/supabaseClient', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/auth/supabaseClient')>();
+  return {
+    ...real,
+    accountBackend: () =>
+      ({ rpc: backend.rpc, functions: { invoke: backend.invoke } }) as unknown as ReturnType<
+        typeof real.accountBackend
+      >,
+  } satisfies Partial<typeof import('@/auth/supabaseClient')>;
+});
 
 import {
   disableWebPush,

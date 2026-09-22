@@ -13,6 +13,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessGateway } from '@/auth/access';
+import type { RequiredProfile } from '@/auth/profile';
 import { AccessProvider } from '@/auth/AccessProvider';
 import { AccountAccessSetup } from './AccountAccessSetup';
 
@@ -28,11 +29,16 @@ vi.mock('@/auth/supabaseClient', async (importOriginal) => {
   // The messages themselves are the real ones, so this cannot pass against a
   // sentence that no longer exists.
   const real = await importOriginal<typeof import('@/auth/supabaseClient')>();
+  // `(...args: unknown[])` discarded the real parameter types entirely, so a
+  // change to either signature would have compiled here and failed only when a
+  // test happened to exercise it. `satisfies` restores the check on both the
+  // arguments and the return type.
   return {
     ...real,
-    signInWithEmail: (...args: unknown[]) => signIn(...args),
-    registerWithEmail: (...args: unknown[]) => register(...args),
-  };
+    signInWithEmail: (email: string, password: string) => signIn(email, password),
+    registerWithEmail: (email: string, password: string, profile: RequiredProfile) =>
+      register(email, password, profile),
+  } satisfies Partial<typeof import('@/auth/supabaseClient')>;
 });
 
 /** Signed out, with a project configured: the state that shows the form. */
