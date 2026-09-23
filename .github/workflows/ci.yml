@@ -68,6 +68,15 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # The half of the drift check that needs no credentials: every migration
+      # file is applied by the harness, in the order their filenames sort, and
+      # no two derive the same name. The other half - comparing against the
+      # hosted project's own migration history and schema - cannot run here for
+      # the reason given on the next step, and is run deliberately instead. See
+      # scripts/check-migration-drift.mjs.
+      - name: Migration list consistency
+        run: npm run check:migrations
+
       # Applies every migration to an empty database and asserts the role
       # matrix, intervention lifecycle, attendance invariants and the table and
       # function privileges the client roles hold.

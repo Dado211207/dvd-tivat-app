@@ -25,6 +25,11 @@ export const MIGRATIONS = [
   'supabase/migrations/202609110004_function_execute_privileges.sql',
   'supabase/migrations/202609120005_organisational_writes.sql',
   'supabase/migrations/202609130006_attendance_truth.sql',
+  // A no-op HERE and a breakage anywhere later. It re-creates thirteen function
+  // bodies at their 006 text, three of which 202609230019 re-creates again for
+  // the registry rename; applied after 019 it would put the renamed-away table
+  // back into those three. Its position is the whole point of the file.
+  'supabase/migrations/202609130006a_restore_exact_repository_function_text.sql',
   'supabase/migrations/202609140007_availability_and_journey.sql',
   'supabase/migrations/202609150008_recipient_eligibility_and_history.sql',
   // A no-op on plain PostgreSQL - there is no `supabase_realtime` publication
@@ -42,6 +47,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609220017_audit_triggers.sql',
   'supabase/migrations/202609230018_recipient_organisation_scope.sql',
   'supabase/migrations/202609230019_registry_rename.sql',
+  'supabase/migrations/202609230020_restore_exact_repository_function_text_audit_triggers.sql',
 ];
 
 export const DATABASE_URL =
