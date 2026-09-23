@@ -80,7 +80,7 @@ UNIQUE (callsign)` (globally unique across both services).
 | **D4** | SZS gets the same operational workflow DVD has: publish intervention, recipients answer, attendance, vehicles, archive. |
 | **D5** | When SZS publishes an alert it may tick "DVD Tivat" as an additional recipient organisation, and every eligible DVD member receives it exactly as a DVD call-out. |
 | **D6** | The official display name is **"Sluzba zastite i spasavanja Tivat"**, code `SZS`. Not "savez". The `organizations` row already carries this string; it is now fixed vocabulary for the plan, the interface, and all future documents. |
-| **D7** | The `eligible_recipients()` / `is_eligible_recipient()` cross-service leak is a **standing production bug**, fixed **first**, in its own PR, before any SZS membership work, and **not** bundled into the authority migration. |
+| **D7** | The missing organisation predicate in `eligible_recipients()` / `is_eligible_recipient()` is closed **first**, in its own PR, before any SZS membership work, and **not** bundled into the authority migration. *Corrected after the fact: this was decided on the claim that it was a live production bug. It is not — see P0, which proves the omission is currently unreachable. The sequencing still holds, for a weaker reason.* |
 | **D8** | The society-registry "organisation" naming is renamed early, as its own step, before the tenant concept spreads (§5). |
 
 ---
@@ -320,29 +320,60 @@ tests must fail against the code as it was before that phase.
 
 ---
 
-### P0 — Close the cross-service recipient leak *(standing production bug — ships first, alone)*
+### P0 — Close the cross-service recipient leak *(ships first, alone)*
 
 `eligible_recipients()` and `is_eligible_recipient()` have no organisation
-predicate. Today that is latent because SZS has no members. It stops being latent
-the moment the first SZS member is added, and it is a leak in the direction nobody
-asked for: each service's commander could see and page the other's people.
+predicate, which is real. **It is not reachable today**, and the first draft of
+this plan was wrong to call it a standing production bug.
 
-Per D7 this is **not** bundled into the authority migration. It ships on its own,
-against today's schema, using `organization_memberships` for the predicate — which
-is correct even before memberships carry authority, because membership is already
-the truthful statement of who serves where.
+`sync_dvd_membership_from_grant` mirrors every operational grant into an active
+DVD membership, and mirrors a DVD stand-down back to `CITIZEN`. So "holds an
+operational grant" and "is an active DVD member" are currently the same set of
+people, the owner aside, and every command-layer route to an SZS-only account
+ends in a `CITIZEN` grant — which the existing operational-role question already
+refuses. Walked in full:
+
+| Step | Grant | Memberships | Callable by a DVD commander |
+|---|---|---|---|
+| after registration | `CITIZEN` | `(none)` | no |
+| after `SZS=COMMANDER` | `CITIZEN` | `SZS=COMMANDER` | **no** |
+| after `owner_set_role COMMANDER` | `COMMANDER` | `DVD=COMMANDER,SZS=COMMANDER` | yes — correctly; they really are in DVD |
+| after `DVD=NONE` | `CITIZEN` | `DVD=COMMANDER(off),SZS=COMMANDER` | **no** |
+
+The omission is therefore **masked** by that invariant, and becomes reachable at
+**P5**, when the mirror is retired.
+
+So P0 is not urgency, it is sequencing: it removes a trap that springs at the
+point in the rewrite where the schema is most disturbed and this would be one
+defect among fifty. Closing it now costs one function and is provable against a
+fixture; closing it then is guesswork. It ships on its own, against today's
+schema, using `organization_memberships` for the predicate — correct even before
+memberships carry authority, because membership is already the truthful statement
+of who serves where, and because the rule reads no membership *role*.
 
 **Acceptance criteria**
 
-1. A DB test creates an SZS-only member and asserts `eligible_recipients()` called
-   as a DVD commander does **not** return them. Fails against current `main`.
+1. A DB test builds the post-P5 state (operational grant, SZS membership, no
+   active DVD membership) and asserts `eligible_recipients()` called as a DVD
+   commander does **not** return them. Fails against current `main`.
 2. A DB test asserts `publish_intervention` raises `RECIPIENT_NOT_ELIGIBLE` when a
-   DVD commander passes an SZS member's id directly, bypassing the UI. Fails
-   against current `main`.
-3. Every existing DVD-only test still passes unchanged — the fix must be invisible
-   to a single-organisation installation.
-4. The recipient picker in `MobilisationView` shows the same people it shows today
-   for DVD (asserted by count against the live-shaped fixture).
+   DVD commander passes such a member's id directly, bypassing the UI, and that
+   no recipient or outbox row survives. Fails against current `main`.
+3. DB tests walk every command-layer route above and pin the masking invariant,
+   so that if the mirror's behaviour ever changes it surfaces as a decision
+   rather than a surprise.
+4. A single-organisation installation sees no change: the DVD picker, DVD
+   publication and self-eligibility for push registration all behave as before.
+   *Amended: the original wording — "every existing DVD-only test passes
+   unchanged" — is not achievable. Eligibility stops being a property of the
+   target alone and becomes a property of the caller/target pair, so three rows
+   in `recipient_eligibility.test.ts` that called the RPC as the superuser with
+   no JWT have to move onto `asUser`. No real request arrives that way;
+   PostgREST attaches a JWT to every call.*
+5. The installation owner keeps its existing behaviour in both directions: it
+   sees every service's members, and stays callable by every service. It holds
+   no membership row by design (202609210016), so a plain shared-membership rule
+   would silently remove it from every roster.
 
 ---
 
@@ -581,7 +612,10 @@ push topic prefix. Applied migration **filenames** are never renamed.
 
 1. The owner answers **Q1–Q11**, or at minimum Q9, Q10 and Q11 (which block the
    first two schema phases).
-2. P0 ships on its own, immediately, because it is a live bug.
+2. P0 ships on its own, ahead of the schema phases — not because it is urgent
+   (it is not; see P0) but because it is the one piece of this that can be
+   proved correct against a fixture today, while the invariant it depends on
+   is still intact.
 3. P3's equivalence test is run against a **restored copy of production**, not only
    against fixtures, before P4 is written.
 
