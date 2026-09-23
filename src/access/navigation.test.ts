@@ -109,7 +109,7 @@ describe('the table stays in step with the gates', () => {
       'CommandView.tsx': 'poziv',
       'MobilisationView.tsx': 'mobilizacija',
       'ArchiveView.tsx': 'arhiva',
-      'OrganisationView.tsx': 'evidencija',
+      'RegistryView.tsx': 'evidencija',
     };
 
     const checked: string[] = [];

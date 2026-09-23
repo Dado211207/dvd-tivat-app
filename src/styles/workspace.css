@@ -2010,7 +2010,7 @@ dialog {
   }
 }
 
-.organisation .stack {
+.registry .stack {
   display: grid;
   gap: 0.6rem;
   margin-bottom: 1.25rem;
@@ -2018,9 +2018,9 @@ dialog {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.organisation .stack .btn { justify-self: start; }
+.registry .stack .btn { justify-self: start; }
 
-.organisation .input {
+.registry .input {
   min-height: 44px;
   width: 100%;
   max-width: 100%;
@@ -2032,19 +2032,19 @@ dialog {
   font: inherit;
 }
 
-.organisation .input:focus-visible {
+.registry .input:focus-visible {
   outline: 2px solid var(--c-accent);
   outline-offset: 1px;
 }
 
-.organisation__actions {
+.registry__actions {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
 }
 
-.organisation__reason {
+.registry__reason {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
@@ -2052,10 +2052,10 @@ dialog {
   min-width: 0;
 }
 
-.organisation__reason .input { flex: 1 1 9rem; min-width: 0; }
-.organisation__reason .btn { white-space: nowrap; min-height: 44px; }
+.registry__reason .input { flex: 1 1 9rem; min-width: 0; }
+.registry__reason .btn { white-space: nowrap; min-height: 44px; }
 
-.organisation__group {
+.registry__group {
   margin: 0 0 1rem;
   padding: 0.75rem 0.9rem 0.9rem;
   border: 1px solid var(--c-line);
@@ -2063,12 +2063,12 @@ dialog {
   background: var(--c-surface-2);
 }
 
-.organisation__group legend {
+.registry__group legend {
   padding: 0 0.35rem;
   font-weight: 700;
 }
 
-.organisation__check {
+.registry__check {
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -2077,7 +2077,7 @@ dialog {
   cursor: pointer;
 }
 
-.organisation__check input {
+.registry__check input {
   width: 1.15rem;
   height: 1.15rem;
   flex: none;

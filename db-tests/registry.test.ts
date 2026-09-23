@@ -1,5 +1,5 @@
 /**
- * The organisational write paths: members, groups, vehicles and intervention
+ * The registry write paths: members, groups, vehicles and intervention
  * drafts.
  *
  * Two rules this file exists to prove:
@@ -32,7 +32,7 @@ let commander: string;
 let firefighter: string;
 let pending: string;
 
-/** Every organisational command, with arguments that would otherwise succeed. */
+/** Every registry command, with arguments that would otherwise succeed. */
 const ADMIN_COMMANDS: ReadonlyArray<readonly [string, string, unknown[]]> = [
   ['admin_create_member', 'select public.admin_create_member($1)', ['Probno Ime']],
   [
@@ -80,8 +80,8 @@ afterAll(async () => {
   await db?.end();
 });
 
-describe('who may maintain organisational records', () => {
-  it('refuses a firefighter every organisational command', async () => {
+describe('who may maintain the registry', () => {
+  it('refuses a firefighter every registry command', async () => {
     for (const [name, sql, args] of ADMIN_COMMANDS) {
       const message = await expectRefused(db, firefighter, (client) => client.query(sql, args));
       expect(`${name}: ${message.includes('ADMIN_REQUIRED')}`).toBe(`${name}: true`);
@@ -139,7 +139,7 @@ describe('members', () => {
     expect(rows[0]).toEqual({ full_name: 'Novi Clan', specialties: ['bolnicar'], active: true });
 
     const audit = await db.query<{ event_type: string; changed_by: string }>(
-      `select event_type, changed_by from public.organisation_audit
+      `select event_type, changed_by from public.registry_audit
         where entity_kind = 'MEMBER' and entity_id = $1`,
       [id],
     );
@@ -166,7 +166,7 @@ describe('members', () => {
     );
 
     const { rows } = await db.query<{ detail: Record<string, unknown> }>(
-      `select detail from public.organisation_audit
+      `select detail from public.registry_audit
         where entity_id = $1 and event_type = 'MEMBER_UPDATED'`,
       [id],
     );
@@ -323,7 +323,7 @@ describe('linking an account to a member', () => {
       );
     }
     const { rows } = await db.query<{ n: number }>(
-      `select count(*)::int as n from public.organisation_audit
+      `select count(*)::int as n from public.registry_audit
         where entity_id = $1 and event_type = 'MEMBER_ACCOUNT_LINKED'`,
       [memberId],
     );
@@ -403,7 +403,7 @@ describe('groups', () => {
     expect(rows.map((row) => row.member_id).sort()).toEqual([two, three].sort());
 
     const audit = await db.query<{ detail: { added: string[]; removed: string[] } }>(
-      `select detail from public.organisation_audit
+      `select detail from public.registry_audit
         where entity_id = $1 and event_type = 'GROUP_MEMBERS_CHANGED'
         order by changed_at`,
       [groupId],
@@ -480,7 +480,7 @@ describe('vehicles', () => {
     );
 
     const { rows } = await db.query<{ detail: Record<string, boolean>; reason: string }>(
-      `select detail, reason from public.organisation_audit
+      `select detail, reason from public.registry_audit
         where entity_id = $1 and event_type = 'VEHICLE_ACTIVE_CHANGED'`,
       [id],
     );
@@ -729,20 +729,20 @@ describe('editing and discarding a draft', () => {
   });
 });
 
-describe('the organisational audit trail', () => {
+describe('the registry audit trail', () => {
   it('is readable by an administrator and by nobody below', async () => {
     await asUserCommitted(db, admin, (client) =>
       client.query('select public.admin_create_member($1)', ['Clan Za Reviziju']),
     );
 
     const asAdmin = await asUser(db, admin, (client) =>
-      client.query('select id from public.organisation_audit'),
+      client.query('select id from public.registry_audit'),
     );
     expect(asAdmin.rows.length).toBeGreaterThan(0);
 
     for (const actor of [commander, firefighter, pending]) {
       const { rows } = await asUser(db, actor, (client) =>
-        client.query('select id from public.organisation_audit'),
+        client.query('select id from public.registry_audit'),
       );
       expect(rows).toEqual([]);
     }
@@ -751,7 +751,7 @@ describe('the organisational audit trail', () => {
   it('cannot be written or erased directly, by anybody', async () => {
     const insert = await expectRefused(db, admin, (client) =>
       client.query(
-        `insert into public.organisation_audit(entity_kind, entity_id, event_type, changed_by)
+        `insert into public.registry_audit(entity_kind, entity_id, event_type, changed_by)
          values ('MEMBER', gen_random_uuid(), 'FORGED', $1)`,
         [admin],
       ),
@@ -759,7 +759,7 @@ describe('the organisational audit trail', () => {
     expect(insert).toMatch(/permission denied/i);
 
     const remove = await expectRefused(db, admin, (client) =>
-      client.query('delete from public.organisation_audit'),
+      client.query('delete from public.registry_audit'),
     );
     expect(remove).toMatch(/permission denied/i);
   });

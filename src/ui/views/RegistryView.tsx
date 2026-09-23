@@ -45,38 +45,38 @@ import { useText } from '@/i18n/useText';
 
 type Tab = 'clanovi' | 'grupe' | 'vozila';
 
-export function OrganisationView() {
+export function RegistryView() {
   const t = useText();
   const { access } = useAccess();
 
   return (
     <>
-      <h1 className="sr-only">{t.organisation.pageTitle}</h1>
+      <h1 className="sr-only">{t.registry.pageTitle}</h1>
       <RequireRole
         allow={['OWNER', 'ADMIN']}
         refused={
-          <section className="card" aria-labelledby="organisation-refused-h">
+          <section className="card" aria-labelledby="registry-refused-h">
             <div className="card__head">
               <div>
-                <p className="card__kicker">{t.organisation.adminOnly}</p>
-                <h2 id="organisation-refused-h">{t.organisation.pageTitle}</h2>
+                <p className="card__kicker">{t.registry.adminOnly}</p>
+                <h2 id="registry-refused-h">{t.registry.pageTitle}</h2>
               </div>
             </div>
             <Notice tone="info">
               {accessObstacle(access) === 'SIGN_IN_REQUIRED'
-                ? t.organisation.signInFirst
-                : t.organisation.denied}
+                ? t.registry.signInFirst
+                : t.registry.denied}
             </Notice>
           </section>
         }
       >
-        <OrganisationPanel />
+        <RegistryPanel />
       </RequireRole>
     </>
   );
 }
 
-function OrganisationPanel() {
+function RegistryPanel() {
   const t = useText();
   const { announce } = useApp();
   const [tab, setTab] = useState<Tab>('clanovi');
@@ -101,18 +101,18 @@ function OrganisationPanel() {
       setVehicles(vehicleRows);
       setError('');
       // The account list is owner-only; an ADMIN receives no rows. A failure
-      // here must not turn successfully loaded organisation records into an error.
+      // here must not turn successfully loaded registry records into an error.
       try {
         setAccounts(await loadDirectory());
       } catch {
         setAccounts([]);
       }
     } catch {
-      setError(t.organisation.loadFailed);
+      setError(t.registry.loadFailed);
     } finally {
       setLoading(false);
     }
-  }, [t.organisation.loadFailed]);
+  }, [t.registry.loadFailed]);
 
   useEffect(() => {
     void refresh();
@@ -128,21 +128,21 @@ function OrganisationPanel() {
           await refresh();
           announce(success);
         } else {
-          announce(outcome.message ?? t.organisation.changeFailed, 'error');
+          announce(outcome.message ?? t.registry.changeFailed, 'error');
         }
       } finally {
         setBusy(false);
       }
     },
-    [announce, refresh, t.organisation.changeFailed],
+    [announce, refresh, t.registry.changeFailed],
   );
 
   if (error) {
     return (
-      <section className="card" aria-labelledby="organisation-error-h">
-        <h2 id="organisation-error-h">{t.organisation.pageTitle}</h2>
+      <section className="card" aria-labelledby="registry-error-h">
+        <h2 id="registry-error-h">{t.registry.pageTitle}</h2>
         <Notice tone="error">{error}</Notice>
-        {loading ? <p role="status">{t.organisation.loading}</p> : null}
+        {loading ? <p role="status">{t.registry.loading}</p> : null}
         <button className="btn" type="button" disabled={loading} onClick={() => void refresh()}>
           {t.gate.retry}
         </button>
@@ -153,21 +153,21 @@ function OrganisationPanel() {
   if (members === null) {
     return (
       <section className="card">
-        <p className="muted" role="status">{t.organisation.loading}</p>
+        <p className="muted" role="status">{t.registry.loading}</p>
       </section>
     );
   }
 
   return (
-    <section className="card organisation" aria-labelledby="organisation-h">
+    <section className="card registry" aria-labelledby="registry-h">
       <div className="card__head">
         <div>
-          <p className="card__kicker">{t.organisation.serverData}</p>
-          <h2 id="organisation-h">{t.organisation.pageTitle}</h2>
+          <p className="card__kicker">{t.registry.serverData}</p>
+          <h2 id="registry-h">{t.registry.pageTitle}</h2>
         </div>
       </div>
 
-      <div className="tabs" role="tablist" aria-label={t.organisation.tabs}>
+      <div className="tabs" role="tablist" aria-label={t.registry.tabs}>
         {(['clanovi', 'grupe', 'vozila'] as Tab[]).map((name) => (
           <button
             key={name}
@@ -180,8 +180,8 @@ function OrganisationPanel() {
             onClick={() => setTab(name)}
           >
             {name === 'clanovi'
-              ? t.organisation.members
-              : name === 'grupe' ? t.organisation.groups : t.organisation.vehicles}
+              ? t.registry.members
+              : name === 'grupe' ? t.registry.groups : t.registry.vehicles}
           </button>
         ))}
       </div>
@@ -225,9 +225,9 @@ function MembersPanel({
       {unready > 0 ? (
         <Notice tone="warn">
           {unready === 1
-            ? t.organisation.unreadyOne
-            : t.organisation.unreadyMany.replace('{count}', String(unready))}{' '}
-          {t.organisation.unreadyExplain}
+            ? t.registry.unreadyOne
+            : t.registry.unreadyMany.replace('{count}', String(unready))}{' '}
+          {t.registry.unreadyExplain}
         </Notice>
       ) : null}
 
@@ -236,10 +236,10 @@ function MembersPanel({
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim().length < 2) return;
-          void run(() => createMember(name.trim(), []), t.organisation.memberAdded).then(() => setName(''));
+          void run(() => createMember(name.trim(), []), t.registry.memberAdded).then(() => setName(''));
         }}
       >
-        <Field label={t.organisation.newMember} required>
+        <Field label={t.registry.newMember} required>
           {(props) => (
             <input
               {...props}
@@ -251,24 +251,24 @@ function MembersPanel({
           )}
         </Field>
         <button type="submit" className="btn btn--primary" disabled={busy || name.trim().length < 2}>
-          {t.organisation.addMember}
+          {t.registry.addMember}
         </button>
       </form>
 
       {members.length === 0 ? (
-        <EmptyState title={t.organisation.noMembers}>
-          {t.organisation.addFirstMember}
+        <EmptyState title={t.registry.noMembers}>
+          {t.registry.addFirstMember}
         </EmptyState>
       ) : (
-        <ScrollRegion label={t.organisation.memberList}>
+        <ScrollRegion label={t.registry.memberList}>
           <table className="table">
-            <caption className="sr-only">{t.organisation.tableMembers}</caption>
+            <caption className="sr-only">{t.registry.tableMembers}</caption>
             <thead>
               <tr>
-                <th scope="col">{t.organisation.newMember}</th>
-                <th scope="col">{t.organisation.account}</th>
-                <th scope="col">{t.organisation.state}</th>
-                <th scope="col">{t.organisation.action}</th>
+                <th scope="col">{t.registry.newMember}</th>
+                <th scope="col">{t.registry.account}</th>
+                <th scope="col">{t.registry.state}</th>
+                <th scope="col">{t.registry.action}</th>
               </tr>
             </thead>
             <tbody>
@@ -278,16 +278,16 @@ function MembersPanel({
                 return (
                   <tr key={member.id}>
                     <th scope="row">{member.fullName}</th>
-                    <td>{account ? account.email : member.userId ? t.organisation.linked : t.organisation.notLinked}</td>
+                    <td>{account ? account.email : member.userId ? t.registry.linked : t.registry.notLinked}</td>
                     <td>
                       <span className={`chip chip--${readiness === 'READY' ? 'yes' : 'later'}`}>
-                        {t.organisation.readiness[readiness]}
+                        {t.registry.readiness[readiness]}
                       </span>
                     </td>
-                    <td className="organisation__actions">
+                    <td className="registry__actions">
                       {member.userId === null && withoutMember.length > 0 ? (
                         <label className="sr-only" htmlFor={`link-${member.id}`}>
-                          {t.organisation.linkAccount} {member.fullName}
+                          {t.registry.linkAccount} {member.fullName}
                         </label>
                       ) : null}
                       {member.userId === null && withoutMember.length > 0 ? (
@@ -301,11 +301,11 @@ function MembersPanel({
                             if (!userId) return;
                             void run(
                               () => linkMemberAccount(member.id, userId),
-                              t.organisation.accountLinked,
+                              t.registry.accountLinked,
                             );
                           }}
                         >
-                          <option value="">{t.organisation.linkAccountOption}</option>
+                          <option value="">{t.registry.linkAccountOption}</option>
                           {withoutMember.map((candidate) => (
                             <option key={candidate.userId} value={candidate.userId}>
                               {candidate.fullName ?? candidate.email}
@@ -317,8 +317,8 @@ function MembersPanel({
                       {member.userId !== null ? (
                         <ReasonAction
                           id={`unlink-${member.id}`}
-                          label={`${t.organisation.unlinkReason} ${member.fullName}`}
-                          action={t.organisation.unlinkAccount}
+                          label={`${t.registry.unlinkReason} ${member.fullName}`}
+                          action={t.registry.unlinkAccount}
                           busy={busy}
                           value={reason[`u-${member.id}`] ?? ''}
                           onChange={(next) =>
@@ -327,7 +327,7 @@ function MembersPanel({
                           onRun={(text) =>
                             run(
                               () => unlinkMemberAccount(member.id, text),
-                              t.organisation.accountUnlinked,
+                              t.registry.accountUnlinked,
                             )
                           }
                         />
@@ -335,8 +335,8 @@ function MembersPanel({
 
                       <ReasonAction
                         id={`active-${member.id}`}
-                        label={`${t.organisation.compositionReason} ${member.fullName}`}
-                        action={member.active ? t.organisation.removeFromRoster : t.organisation.restoreToRoster}
+                        label={`${t.registry.compositionReason} ${member.fullName}`}
+                        action={member.active ? t.registry.removeFromRoster : t.registry.restoreToRoster}
                         busy={busy}
                         value={reason[`a-${member.id}`] ?? ''}
                         onChange={(next) =>
@@ -345,7 +345,7 @@ function MembersPanel({
                         onRun={(text) =>
                           run(
                             () => setMemberActive(member.id, !member.active, text),
-                            member.active ? t.organisation.removedFromRoster : t.organisation.restoredToRoster,
+                            member.active ? t.registry.removedFromRoster : t.registry.restoredToRoster,
                           )
                         }
                       />
@@ -388,14 +388,14 @@ function ReasonAction({
 }) {
   const t = useText();
   return (
-    <span className="organisation__reason">
+    <span className="registry__reason">
       <label className="sr-only" htmlFor={id}>
         {label}
       </label>
       <input
         id={id}
         className="input"
-        placeholder={t.organisation.reason}
+        placeholder={t.registry.reason}
         value={value}
         disabled={busy}
         onChange={(event) => onChange(event.target.value)}
@@ -433,10 +433,10 @@ function GroupsPanel({
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim().length < 2) return;
-          void run(() => createGroup(name.trim()), t.organisation.groupAdded).then(() => setName(''));
+          void run(() => createGroup(name.trim()), t.registry.groupAdded).then(() => setName(''));
         }}
       >
-        <Field label={t.organisation.newGroup} required>
+        <Field label={t.registry.newGroup} required>
           {(props) => (
             <input
               {...props}
@@ -448,27 +448,27 @@ function GroupsPanel({
           )}
         </Field>
         <button type="submit" className="btn btn--primary" disabled={busy || name.trim().length < 2}>
-          {t.organisation.addGroup}
+          {t.registry.addGroup}
         </button>
       </form>
 
       {groups.length === 0 ? (
-        <EmptyState title={t.organisation.noGroups}>
-          {t.organisation.groupsHint}
+        <EmptyState title={t.registry.noGroups}>
+          {t.registry.groupsHint}
         </EmptyState>
       ) : (
         groups.map((group) => (
-          <fieldset key={group.id} className="organisation__group">
+          <fieldset key={group.id} className="registry__group">
             <legend>
               {group.name} <span className="muted small">({group.memberIds.length})</span>
             </legend>
             {members.length === 0 ? (
-              <p className="muted small">{t.organisation.addMembersFirst}</p>
+              <p className="muted small">{t.registry.addMembersFirst}</p>
             ) : (
               members.map((member) => {
                 const checked = group.memberIds.includes(member.id);
                 return (
-                  <label key={member.id} className="organisation__check">
+                  <label key={member.id} className="registry__check">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -479,7 +479,7 @@ function GroupsPanel({
                           : [...group.memberIds, member.id];
                         void run(
                           () => setGroupMembers(group.id, next),
-                          checked ? t.organisation.removedFromGroup : t.organisation.addedToGroup,
+                          checked ? t.registry.removedFromGroup : t.registry.addedToGroup,
                         );
                       }}
                     />
@@ -514,7 +514,7 @@ function VehiclesPanel({
   return (
     <div role="tabpanel" id="panel-vozila" aria-labelledby="tab-vozila">
       <Notice tone="info">
-        {t.organisation.vehiclePrivacy}
+        {t.registry.vehiclePrivacy}
       </Notice>
 
       <form
@@ -524,7 +524,7 @@ function VehiclesPanel({
           if (!ready) return;
           void run(
             () => createVehicle(callsign.trim(), name.trim(), kind.trim()),
-            t.organisation.vehicleAdded,
+            t.registry.vehicleAdded,
           ).then(() => {
             setCallsign('');
             setName('');
@@ -532,7 +532,7 @@ function VehiclesPanel({
           });
         }}
       >
-        <Field label={t.organisation.callsign} required>
+        <Field label={t.registry.callsign} required>
           {(props) => (
             <input
               {...props}
@@ -543,7 +543,7 @@ function VehiclesPanel({
             />
           )}
         </Field>
-        <Field label={t.organisation.vehicleName} required>
+        <Field label={t.registry.vehicleName} required>
           {(props) => (
             <input
               {...props}
@@ -554,7 +554,7 @@ function VehiclesPanel({
             />
           )}
         </Field>
-        <Field label={t.organisation.kind} required hint={t.organisation.vehicleKindHint}>
+        <Field label={t.registry.kind} required hint={t.registry.vehicleKindHint}>
           {(props) => (
             <input
               {...props}
@@ -566,23 +566,23 @@ function VehiclesPanel({
           )}
         </Field>
         <button type="submit" className="btn btn--primary" disabled={busy || !ready}>
-          {t.organisation.addVehicle}
+          {t.registry.addVehicle}
         </button>
       </form>
 
       {vehicles.length === 0 ? (
-        <EmptyState title={t.organisation.noVehicles} />
+        <EmptyState title={t.registry.noVehicles} />
       ) : (
-        <ScrollRegion label={t.organisation.vehicleList}>
+        <ScrollRegion label={t.registry.vehicleList}>
           <table className="table">
-            <caption className="sr-only">{t.organisation.tableVehicles}</caption>
+            <caption className="sr-only">{t.registry.tableVehicles}</caption>
             <thead>
               <tr>
-                <th scope="col">{t.organisation.callsign}</th>
-                <th scope="col">{t.organisation.vehicleName}</th>
-                <th scope="col">{t.organisation.kind}</th>
-                <th scope="col">{t.organisation.state}</th>
-                <th scope="col">{t.organisation.action}</th>
+                <th scope="col">{t.registry.callsign}</th>
+                <th scope="col">{t.registry.vehicleName}</th>
+                <th scope="col">{t.registry.kind}</th>
+                <th scope="col">{t.registry.state}</th>
+                <th scope="col">{t.registry.action}</th>
               </tr>
             </thead>
             <tbody>
@@ -593,14 +593,14 @@ function VehiclesPanel({
                   <td>{vehicle.kind}</td>
                   <td>
                     <span className={`chip chip--${vehicle.active ? 'yes' : 'later'}`}>
-                      {vehicle.active ? t.organisation.inService : t.organisation.outOfService}
+                      {vehicle.active ? t.registry.inService : t.registry.outOfService}
                     </span>
                   </td>
                   <td>
                     <ReasonAction
                       id={`vehicle-${vehicle.id}`}
-                      label={`${t.organisation.vehicleReason} ${vehicle.callsign}`}
-                      action={vehicle.active ? t.organisation.outOfService : t.organisation.inService}
+                      label={`${t.registry.vehicleReason} ${vehicle.callsign}`}
+                      action={vehicle.active ? t.registry.outOfService : t.registry.inService}
                       busy={busy}
                       value={reason[vehicle.id] ?? ''}
                       onChange={(next) =>
@@ -609,7 +609,7 @@ function VehiclesPanel({
                       onRun={(text) =>
                         run(
                           () => setVehicleActive(vehicle.id, !vehicle.active, text),
-                          vehicle.active ? t.organisation.vehicleTakenOut : t.organisation.vehicleRestored,
+                          vehicle.active ? t.registry.vehicleTakenOut : t.registry.vehicleRestored,
                         )
                       }
                     />

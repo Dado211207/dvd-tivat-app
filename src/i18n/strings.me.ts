@@ -209,7 +209,7 @@ export const me = {
     },
   },
 
-  organisation: {
+  registry: {
     pageTitle: 'Evidencija drustva', adminOnly: 'Samo administrator ili vlasnik',
     signInFirst: 'Prijavite se da biste vidjeli evidenciju.',
     denied: 'Evidenciju odrzava administrator ili vlasnik. Komandir vodi intervencije, ali ne mijenja sastav drustva.',

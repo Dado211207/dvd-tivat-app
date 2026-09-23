@@ -66,8 +66,8 @@ const CitizenReportView = lazy(() =>
 const AccountsView = lazy(() =>
   import('./ui/views/AccountsView').then((module) => ({ default: module.AccountsView })),
 );
-const OrganisationView = lazy(() =>
-  import('./ui/views/OrganisationView').then((module) => ({ default: module.OrganisationView })),
+const RegistryView = lazy(() =>
+  import('./ui/views/RegistryView').then((module) => ({ default: module.RegistryView })),
 );
 const CommandView = lazy(() =>
   import('./ui/views/CommandView').then((module) => ({ default: module.CommandView })),
@@ -90,7 +90,7 @@ const VIEWS: Record<Route, ComponentType> = {
   vozila: VehiclesView,
   prikaz: DisplayView,
   clanovi: RosterView,
-  evidencija: OrganisationView,
+  evidencija: RegistryView,
   nalozi: AccountsView,
   istorija: HistoryView,
 };

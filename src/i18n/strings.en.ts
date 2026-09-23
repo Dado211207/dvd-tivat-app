@@ -202,7 +202,7 @@ export const en: Strings = {
     },
   },
 
-  organisation: {
+  registry: {
     pageTitle: 'Organisation records', adminOnly: 'Administrator or owner only',
     signInFirst: 'Sign in to view these records.',
     denied: 'Administrators and owners maintain these records. Commanders manage interventions but do not change the organisation roster.',
