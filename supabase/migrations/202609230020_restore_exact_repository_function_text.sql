@@ -43,14 +43,15 @@
 -- twelve registry writers. Nothing here overlaps either set.
 --
 -- ---------------------------------------------------------------------------
--- A second, older entry has the same problem and is NOT addressed here
+-- A second, older entry had the same problem
 -- ---------------------------------------------------------------------------
 --
 -- The hosted project also carries `restore_exact_repository_function_text`
--- (version 20260912201050, 2026-09-12), which likewise has no file in this
--- repository. It predates the work in this file and its contents have not been
--- reviewed here. Reconciling it is a separate decision: this file deliberately
--- fixes only the entry it created.
+-- (version 20260912201050, 2026-09-12): the same mistake, eleven days earlier.
+-- It is reconciled by `202609130006a_restore_exact_repository_function_text`,
+-- which is numbered where that one actually ran - between 006 and 007 - and not
+-- here, because three of its thirteen functions are ones 202609230019 re-creates
+-- for the registry rename. See that file for the measurement.
 -- ===========================================================================
 
 create or replace function public.audit_access_grant_role()
