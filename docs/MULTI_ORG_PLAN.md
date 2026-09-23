@@ -301,9 +301,10 @@ owner's.
 | **Q10** | Do the two services share any vehicles, or is every vehicle owned by exactly one? §4.1 assumes exactly one. | P2 |
 | **Q11** | Does the owner want DVD's existing 6 accounts and 7 member records left exactly as they are during the rewrite, or is this the moment to also clean up the demo data (which is a separate, already-inventoried task)? | P2 |
 
-Q6, Q7 and Q10 have a defensible default (same as DVD, same as DVD, exactly one
-owner) and are cheap to change later. Q3, Q4, Q5 and Q9 are not: they decide what
-records mean, and changing them after records exist means migrating live history.
+Q6, Q7 and Q10 have a defensible default (same response options as DVD, same
+intervention kinds as DVD, every vehicle owned by exactly one service) and are
+cheap to change later. Q3, Q4, Q5 and Q9 are not: they decide what records mean,
+and changing them after records exist means migrating live history.
 
 ---
 
