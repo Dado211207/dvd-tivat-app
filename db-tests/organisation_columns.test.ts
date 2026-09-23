@@ -746,139 +746,229 @@ describe('a child cannot disagree with its parent', () => {
   });
 });
 
-describe('the two-parent tables, each on its own terms', () => {
-  it('vehicle_movements follows the call-out, and falls back to the vehicle without one', async () => {
-    const { rows: vehicle } = await db.query<{ id: string }>(
+describe('a vehicle movement belongs to the service that owns the vehicle', () => {
+  /*
+   * Settled by the owner on 2026-09-23, and it is a product decision rather than
+   * a schema one: `vehicle_movements.organization_id` is ALWAYS the service that
+   * owns the vehicle, never the service that published the call-out.
+   *
+   * So a DVD engine sent to an SZS incident produces a DVD movement row. DVD
+   * keeps sight of its own fleet, which is the thing a service cannot be asked
+   * to give up. SZS sees that movement during a joint incident because P7 grants
+   * it explicitly, not because the row changed hands.
+   *
+   * It also makes the invariant total - the vehicle is not nullable, so there is
+   * always an answer and it never moves. The call-out being deleted, re-linked,
+   * or never there at all cannot change a vehicle's owner, which is why none of
+   * those needs a special case any more.
+   */
+  async function makeVehicle(callsign: string, organisation: string): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
       `insert into public.vehicles(callsign, name, kind, organization_id)
-       values ('DVOJE-1', 'Vozilo Dvoje', 'NAVALNO', $1) returning id`,
-      [DVD],
+       values ($1, $2, 'NAVALNO', $3) returning id`,
+      [callsign, `Vozilo ${callsign}`, organisation],
     );
-    const { rows: intervention } = await db.query<{ id: string }>(
+    return rows[0]!.id;
+  }
+
+  async function makeIntervention(title: string, organisation: string): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
       `insert into public.interventions(
          kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
-       values ('POZAR', 'Vjezba SZS dvoje', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
-      [owner, `dvoje-${Math.random().toString(36).slice(2)}`, SZS],
+       values ('POZAR', $1, 'Okupljanje.', 'Poligon', $2, $3, $4) returning id`,
+      [title, owner, `${title}-${Math.random().toString(36).slice(2)}`, organisation],
     );
+    return rows[0]!.id;
+  }
 
-    // With a call-out, the call-out decides - consistent with every other child
-    // of an intervention. A DVD vehicle at an SZS call-out therefore produces an
-    // SZS movement row; see the migration header, this one needs an owner
-    // decision before P7 and nothing depends on it yet.
-    const { rows: withCallOut } = await db.query<{ organization_id: string }>(
-      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
-       values ($1, $2, 'Intervencija', $3) returning organization_id`,
-      [vehicle[0]!.id, intervention[0]!.id, owner],
-    );
-    expect(withCallOut[0]!.organization_id).toBe(SZS);
-
-    // Without one, the vehicle is the only parent there is. A second vehicle,
-    // because `vehicle_movement_no_overlap` refuses one that is already out.
-    const { rows: spare } = await db.query<{ id: string }>(
-      `insert into public.vehicles(callsign, name, kind, organization_id)
-       values ('DVOJE-1B', 'Vozilo Dvoje B', 'NAVALNO', $1) returning id`,
-      [DVD],
-    );
-    const { rows: withoutCallOut } = await db.query<{ organization_id: string }>(
-      `insert into public.vehicle_movements(vehicle_id, purpose, departed_by)
-       values ($1, 'Servis', $2) returning organization_id`,
-      [spare[0]!.id, owner],
-    );
-    expect(withoutCallOut[0]!.organization_id).toBe(DVD);
-  });
-
-  it('keeps a movement its service when its call-out is deleted', async () => {
-    const { rows: vehicle } = await db.query<{ id: string }>(
-      `insert into public.vehicles(callsign, name, kind, organization_id)
-       values ('DVOJE-2', 'Vozilo Dvoje Dva', 'NAVALNO', $1) returning id`,
-      [DVD],
-    );
-    const { rows: intervention } = await db.query<{ id: string }>(
-      `insert into public.interventions(
-         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
-       values ('POZAR', 'Vjezba brisanje', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
-      [owner, `brisanje-${Math.random().toString(36).slice(2)}`, SZS],
-    );
-    await db.query(
-      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
-       values ($1, $2, 'Za brisanje', $3)`,
-      [vehicle[0]!.id, intervention[0]!.id, owner],
-    );
-    await db.query(`delete from public.interventions where id = $1`, [intervention[0]!.id]);
+  it('stays with the DVD vehicle at an SZS call-out', async () => {
+    // The headline case, and the one the previous rule got backwards.
+    const vehicle = await makeVehicle('VLAS-1', DVD);
+    const szsCallOut = await makeIntervention('Vjezba SZS vlasnistvo', SZS);
 
     const { rows } = await db.query<{ organization_id: string }>(
-      `select organization_id from public.vehicle_movements
-        where vehicle_id = $1 and purpose = 'Za brisanje'`,
-      [vehicle[0]!.id],
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Ispomoc', $3) returning organization_id`,
+      [vehicle, szsCallOut, owner],
     );
-    // SZS, not the DVD its vehicle belongs to: the movement was SZS's when it
-    // happened and deleting the record of the call-out does not change that.
+    expect(rows[0]!.organization_id, 'the vehicle owns the movement').toBe(DVD);
+  });
+
+  it('stays with the SZS vehicle at a DVD call-out, the other way round', async () => {
+    const vehicle = await makeVehicle('VLAS-2', SZS);
+    const dvdCallOut = await makeIntervention('Vjezba DVD vlasnistvo', DVD);
+
+    const { rows } = await db.query<{ organization_id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Ispomoc', $3) returning organization_id`,
+      [vehicle, dvdCallOut, owner],
+    );
     expect(rows[0]!.organization_id).toBe(SZS);
   });
 
-  it('refuses a statement that detaches the call-out and moves the vehicle at once', async () => {
-    /*
-     * The detach exception exists for one caller: the UPDATE that
-     * `on delete set null` performs, which clears the link and touches nothing
-     * else. Written as "the intervention went from something to nothing" it also
-     * matches a hand-written statement that clears the link AND re-points the
-     * row at another vehicle, and that one slips through carrying a service its
-     * only remaining parent does not have.
-     */
-    const { rows: szsIntervention } = await db.query<{ id: string }>(
-      `insert into public.interventions(
-         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
-       values ('POZAR', 'Vjezba odvajanje', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
-      [owner, `odvajanje-${Math.random().toString(36).slice(2)}`, SZS],
-    );
-    const { rows: first } = await db.query<{ id: string }>(
-      `insert into public.vehicles(callsign, name, kind, organization_id)
-       values ('ODVOJ-1', 'Vozilo Odvajanje', 'NAVALNO', $1) returning id`,
-      [DVD],
-    );
-    const { rows: second } = await db.query<{ id: string }>(
-      `insert into public.vehicles(callsign, name, kind, organization_id)
-       values ('ODVOJ-2', 'Vozilo Odvajanje Dva', 'NAVALNO', $1) returning id`,
-      [DVD],
-    );
-    const { rows: movement } = await db.query<{ id: string; organization_id: string }>(
+  it('is unchanged when both are the same service, or when there is no call-out', async () => {
+    const own = await makeVehicle('VLAS-3', DVD);
+    const dvdCallOut = await makeIntervention('Vjezba ista sluzba', DVD);
+    const { rows: together } = await db.query<{ organization_id: string }>(
       `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
-       values ($1, $2, 'Odvajanje', $3) returning id, organization_id`,
-      [first[0]!.id, szsIntervention[0]!.id, owner],
+       values ($1, $2, 'Intervencija', $3) returning organization_id`,
+      [own, dvdCallOut, owner],
     );
-    expect(movement[0]!.organization_id, 'the call-out decided, as it should').toBe(SZS);
+    expect(together[0]!.organization_id).toBe(DVD);
+
+    // A second vehicle, because `vehicle_movement_no_overlap` refuses one that
+    // is already out.
+    const spare = await makeVehicle('VLAS-4', DVD);
+    const { rows: alone } = await db.query<{ organization_id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, purpose, departed_by)
+       values ($1, 'Servis', $2) returning organization_id`,
+      [spare, owner],
+    );
+    expect(alone[0]!.organization_id).toBe(DVD);
+  });
+
+  it('refuses an insert that claims the call-out\'s service instead of the vehicle\'s', async () => {
+    const vehicle = await makeVehicle('VLAS-5', DVD);
+    const szsCallOut = await makeIntervention('Vjezba laz', SZS);
+
+    const message = await expectRejected(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by, organization_id)
+       values ($1, $2, 'Laz', $3, $4)`,
+      [vehicle, szsCallOut, owner, SZS],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+
+  it('refuses rewriting the service on an existing movement', async () => {
+    const vehicle = await makeVehicle('VLAS-6', DVD);
+    const { rows: movement } = await db.query<{ id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, purpose, departed_by)
+       values ($1, 'Servis', $2) returning id`,
+      [vehicle, owner],
+    );
+    const message = await expectRejected(
+      `update public.vehicle_movements set organization_id = $2 where id = $1`,
+      [movement[0]!.id, SZS],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+
+  it('refuses moving a movement onto another service\'s vehicle', async () => {
+    const ours = await makeVehicle('VLAS-7', DVD);
+    const theirs = await makeVehicle('VLAS-8', SZS);
+    const { rows: movement } = await db.query<{ id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, purpose, departed_by)
+       values ($1, 'Servis', $2) returning id`,
+      [ours, owner],
+    );
+
+    // By vehicle alone.
+    expect(
+      await expectRejected(`update public.vehicle_movements set vehicle_id = $2 where id = $1`, [
+        movement[0]!.id,
+        theirs,
+      ]),
+    ).toMatch(/ORGANIZATION_MISMATCH/);
+
+    // And by moving both together, which would otherwise look self-consistent.
+    expect(
+      await expectRejected(
+        `update public.vehicle_movements set vehicle_id = $2, organization_id = $3 where id = $1`,
+        [movement[0]!.id, theirs, SZS],
+      ),
+    ).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+
+  it('allows moving it onto another vehicle of the same service', async () => {
+    // The refusal above must be about crossing services, not about touching the
+    // row at all.
+    const first = await makeVehicle('VLAS-9', DVD);
+    const second = await makeVehicle('VLAS-10', DVD);
+    const { rows: movement } = await db.query<{ id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, purpose, departed_by)
+       values ($1, 'Servis', $2) returning id`,
+      [first, owner],
+    );
+    await db.query(`update public.vehicle_movements set vehicle_id = $2 where id = $1`, [
+      movement[0]!.id,
+      second,
+    ]);
+    const { rows } = await db.query<{ organization_id: string }>(
+      `select organization_id from public.vehicle_movements where id = $1`,
+      [movement[0]!.id],
+    );
+    expect(rows[0]!.organization_id).toBe(DVD);
+  });
+
+  it('does not change hands when the call-out is re-linked to the other service', async () => {
+    const vehicle = await makeVehicle('VLAS-11', DVD);
+    const dvdCallOut = await makeIntervention('Vjezba veza jedan', DVD);
+    const szsCallOut = await makeIntervention('Vjezba veza dva', SZS);
+
+    const { rows: movement } = await db.query<{ id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Veza', $3) returning id`,
+      [vehicle, dvdCallOut, owner],
+    );
+    await db.query(`update public.vehicle_movements set intervention_id = $2 where id = $1`, [
+      movement[0]!.id,
+      szsCallOut,
+    ]);
+
+    const { rows } = await db.query<{ organization_id: string }>(
+      `select organization_id from public.vehicle_movements where id = $1`,
+      [movement[0]!.id],
+    );
+    expect(rows[0]!.organization_id, 'still the vehicle\'s service').toBe(DVD);
+  });
+
+  it('survives its call-out being deleted, still owned by its vehicle', async () => {
+    /*
+     * `on delete set null` performs an UPDATE. Under the old rule that needed a
+     * hand-written exception, because re-deriving would have rewritten the row's
+     * service - and where the two differed it made the DELETE itself fail. With
+     * the vehicle as the only source there is nothing to re-derive: the answer
+     * was never the call-out's to give.
+     */
+    const vehicle = await makeVehicle('VLAS-12', DVD);
+    const szsCallOut = await makeIntervention('Vjezba brisanje vlasnistvo', SZS);
+    await db.query(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Za brisanje', $3)`,
+      [vehicle, szsCallOut, owner],
+    );
+
+    await db.query(`delete from public.interventions where id = $1`, [szsCallOut]);
+
+    const { rows } = await db.query<{ organization_id: string; intervention_id: string | null }>(
+      `select organization_id, intervention_id from public.vehicle_movements
+        where vehicle_id = $1 and purpose = 'Za brisanje'`,
+      [vehicle],
+    );
+    expect(rows, 'the movement survived').toHaveLength(1);
+    expect(rows[0]!.intervention_id, 'and was detached').toBeNull();
+    expect(rows[0]!.organization_id, 'and is still its vehicle\'s').toBe(DVD);
+  });
+
+  it('refuses a statement that detaches the call-out and crosses services at once', async () => {
+    const ours = await makeVehicle('VLAS-13', DVD);
+    const theirs = await makeVehicle('VLAS-14', SZS);
+    const callOut = await makeIntervention('Vjezba odvajanje vlasnistvo', DVD);
+    const { rows: movement } = await db.query<{ id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Odvajanje', $3) returning id`,
+      [ours, callOut, owner],
+    );
 
     const message = await expectRejected(
       `update public.vehicle_movements set intervention_id = null, vehicle_id = $2 where id = $1`,
-      [movement[0]!.id, second[0]!.id],
+      [movement[0]!.id, theirs],
     );
     expect(message).toMatch(/ORGANIZATION_MISMATCH/);
   });
+});
 
-  it('refuses detaching the call-out while rewriting the service', async () => {
-    const { rows: intervention } = await db.query<{ id: string }>(
-      `insert into public.interventions(
-         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
-       values ('POZAR', 'Vjezba odvajanje dva', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
-      [owner, `odvajanje2-${Math.random().toString(36).slice(2)}`, SZS],
-    );
-    const { rows: vehicle } = await db.query<{ id: string }>(
-      `insert into public.vehicles(callsign, name, kind, organization_id)
-       values ('ODVOJ-3', 'Vozilo Odvajanje Tri', 'NAVALNO', $1) returning id`,
-      [DVD],
-    );
-    const { rows: movement } = await db.query<{ id: string }>(
-      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
-       values ($1, $2, 'Odvajanje tri', $3) returning id`,
-      [vehicle[0]!.id, intervention[0]!.id, owner],
-    );
-
-    const message = await expectRejected(
-      `update public.vehicle_movements set intervention_id = null, organization_id = $2 where id = $1`,
-      [movement[0]!.id, DVD],
-    );
-    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
-  });
-
+describe('group membership cannot span the two services', () => {
   it('refuses moving a group member across services by update, not only by insert', async () => {
     const { rows: group } = await db.query<{ id: string }>(
       `insert into public.groups(name, organization_id) values ('Smjena Premjestaj', $1) returning id`,
