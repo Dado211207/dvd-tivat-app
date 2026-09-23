@@ -687,6 +687,30 @@ describe('a child cannot disagree with its parent', () => {
     expect(rows[0]!.organization_id).toBe(SZS);
   });
 
+  it('lets a parentless audit row state its own service, which P4 has to restrict', async () => {
+    /*
+     * KNOWN GAP, recorded rather than fixed. `operational_audit` is the only
+     * table whose parent is optional from the start, so a row with no
+     * intervention has nothing to be checked against and may assert a service
+     * outright. Every other column in this schema is a copy of a parent's
+     * answer; this one can be a claim.
+     *
+     * Closing it is a question about who may write an audit row at all, which
+     * is P4's authority work - P2 must not grow into that. This test pins the
+     * behaviour so the gap cannot be closed, or widened, by accident.
+     */
+    await db.query(
+      `insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id, organization_id)
+       values (null, 'SAMOPROGLASENO', '{}'::jsonb, $1, $2)`,
+      [owner, SZS],
+    );
+    const { rows } = await db.query<{ organization_id: string }>(
+      `select organization_id from public.operational_audit where event_type = 'SAMOPROGLASENO'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.organization_id, 'accepted on its own say-so, for now').toBe(SZS);
+  });
+
   it('keeps the service when the parent is detached by a delete', async () => {
     /*
      * `on delete set null` performs an UPDATE, so the rule above would re-derive
@@ -779,6 +803,70 @@ describe('the two-parent tables, each on its own terms', () => {
     // SZS, not the DVD its vehicle belongs to: the movement was SZS's when it
     // happened and deleting the record of the call-out does not change that.
     expect(rows[0]!.organization_id).toBe(SZS);
+  });
+
+  it('refuses a statement that detaches the call-out and moves the vehicle at once', async () => {
+    /*
+     * The detach exception exists for one caller: the UPDATE that
+     * `on delete set null` performs, which clears the link and touches nothing
+     * else. Written as "the intervention went from something to nothing" it also
+     * matches a hand-written statement that clears the link AND re-points the
+     * row at another vehicle, and that one slips through carrying a service its
+     * only remaining parent does not have.
+     */
+    const { rows: szsIntervention } = await db.query<{ id: string }>(
+      `insert into public.interventions(
+         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
+       values ('POZAR', 'Vjezba odvajanje', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
+      [owner, `odvajanje-${Math.random().toString(36).slice(2)}`, SZS],
+    );
+    const { rows: first } = await db.query<{ id: string }>(
+      `insert into public.vehicles(callsign, name, kind, organization_id)
+       values ('ODVOJ-1', 'Vozilo Odvajanje', 'NAVALNO', $1) returning id`,
+      [DVD],
+    );
+    const { rows: second } = await db.query<{ id: string }>(
+      `insert into public.vehicles(callsign, name, kind, organization_id)
+       values ('ODVOJ-2', 'Vozilo Odvajanje Dva', 'NAVALNO', $1) returning id`,
+      [DVD],
+    );
+    const { rows: movement } = await db.query<{ id: string; organization_id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Odvajanje', $3) returning id, organization_id`,
+      [first[0]!.id, szsIntervention[0]!.id, owner],
+    );
+    expect(movement[0]!.organization_id, 'the call-out decided, as it should').toBe(SZS);
+
+    const message = await expectRejected(
+      `update public.vehicle_movements set intervention_id = null, vehicle_id = $2 where id = $1`,
+      [movement[0]!.id, second[0]!.id],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+
+  it('refuses detaching the call-out while rewriting the service', async () => {
+    const { rows: intervention } = await db.query<{ id: string }>(
+      `insert into public.interventions(
+         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
+       values ('POZAR', 'Vjezba odvajanje dva', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
+      [owner, `odvajanje2-${Math.random().toString(36).slice(2)}`, SZS],
+    );
+    const { rows: vehicle } = await db.query<{ id: string }>(
+      `insert into public.vehicles(callsign, name, kind, organization_id)
+       values ('ODVOJ-3', 'Vozilo Odvajanje Tri', 'NAVALNO', $1) returning id`,
+      [DVD],
+    );
+    const { rows: movement } = await db.query<{ id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Odvajanje tri', $3) returning id`,
+      [vehicle[0]!.id, intervention[0]!.id, owner],
+    );
+
+    const message = await expectRejected(
+      `update public.vehicle_movements set intervention_id = null, organization_id = $2 where id = $1`,
+      [movement[0]!.id, DVD],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
   });
 
   it('refuses moving a group member across services by update, not only by insert', async () => {

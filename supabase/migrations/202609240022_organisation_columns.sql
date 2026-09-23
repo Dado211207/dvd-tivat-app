@@ -66,6 +66,27 @@
 -- needed, wants a deliberate command with its own audit trail.
 --
 -- ---------------------------------------------------------------------------
+-- A gap this phase CANNOT close, which P4 must
+-- ---------------------------------------------------------------------------
+--
+-- `operational_audit` is the one table whose parent is optional from the start.
+-- A row with no `intervention_id` has nothing to be checked against, so it may
+-- STATE ITS OWN SERVICE and the trigger has no way to contradict it. Everything
+-- else in this schema derives its service from a parent that already has one;
+-- this is the single place a caller can assert one outright.
+--
+-- Nothing today can exploit it - no client role holds a table privilege, so the
+-- only writers are the `security definer` commands and the service role - and
+-- closing it properly is an authority question about WHO MAY WRITE AN AUDIT ROW
+-- AT ALL, which is P4's, not this phase's. P2 must not grow into an authority
+-- rewrite to fix it.
+--
+-- P4 MUST RESTRICT WHO MAY CREATE A PARENTLESS AUDIT ROW. Until it does, the
+-- column on that table is a claim rather than a fact, and it is the only one.
+-- `organisation_columns.test.ts` pins the behaviour so the gap cannot be closed
+-- or widened without the change being deliberate.
+--
+-- ---------------------------------------------------------------------------
 -- One question this phase answers provisionally and the owner must settle
 -- ---------------------------------------------------------------------------
 --
@@ -425,8 +446,17 @@ begin
   -- The call-out was deleted out from under it. The movement was that service's
   -- when it happened, and re-deriving from the vehicle here would both rewrite
   -- history and make the delete fail whenever the two services differ.
+  --
+  -- Narrowly, though. `on delete set null` clears the link and touches NOTHING
+  -- else, so the exception is written for exactly that. Stated only as "the
+  -- intervention went from something to nothing" it also matches a hand-written
+  -- statement that clears the link AND re-points the row at another vehicle in
+  -- the same breath - which would keep a service its only remaining parent does
+  -- not have, and is the one way left to leave this row disagreeing with a
+  -- parent. Anything beyond the bare detach is refused.
   if tg_op = 'UPDATE' and old.intervention_id is not null and new.intervention_id is null then
-    if new.organization_id is distinct from old.organization_id then
+    if new.vehicle_id is distinct from old.vehicle_id
+       or new.organization_id is distinct from old.organization_id then
       raise exception 'ORGANIZATION_MISMATCH';
     end if;
     return new;
