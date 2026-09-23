@@ -3,10 +3,15 @@
 One application, two organisations: **DVD Tivat** and **Sluzba zastite i spasavanja
 Tivat** (SZS).
 
-This document is a plan, not a record of built work. Nothing in it is implemented.
-Every item is marked **DECIDED** (settled by the owner) or **OPEN** (needs the owner
-before the step that depends on it can start). Nothing is guessed to make the plan
-look finished: where an answer is missing, the plan says which step it blocks.
+This document is a plan, not a record of built work. Every item is marked
+**DECIDED** (settled by the owner) or **OPEN** (needs the owner before the step
+that depends on it can start). Nothing is guessed to make the plan look finished:
+where an answer is missing, the plan says which step it blocks.
+
+**Progress, 2026-09-23:** P0 is merged (#47). D9–D13 closed Q9, Q10, Q11 and both
+flagged assumptions, which unblocks P1 through P5 end to end. Q1–Q8 remain open
+and block P6 and P7 only. No migration from this plan has been applied to
+production.
 
 The audit this is built on ran read-only against the hosted project
 `yskhdzrdbywrpfowckpn` on 2026-09-23, with code read at `2e66ace`. Counts quoted
@@ -83,6 +88,18 @@ UNIQUE (callsign)` (globally unique across both services).
 | **D7** | The missing organisation predicate in `eligible_recipients()` / `is_eligible_recipient()` is closed **first**, in its own PR, before any SZS membership work, and **not** bundled into the authority migration. *Corrected after the fact: this was decided on the claim that it was a live production bug. It is not — see P0, which proves the omission is currently unreachable. The sequencing still holds, for a weaker reason.* |
 | **D8** | The society-registry "organisation" naming is renamed early, as its own step, before the tenant concept spreads (§5). |
 
+### Answered 2026-09-23, closing Q9, Q10, Q11 and both flagged assumptions
+
+| # | Decision |
+|---|---|
+| **D9** *(was Q9)* | **A single installation owner administers both DVD and SZS.** No second owner, and no new per-organisation administrator role. **Interpretation, stated because it decides what P4 does:** the existing `ADMIN` keeps exactly the powers it has today, scoped to its own service — an SZS `ADMIN` manages SZS's registry, a DVD `ADMIN` manages DVD's. That is the only reading consistent with "no existing DVD account loses access", since production holds a live `ADMIN` account whose registry powers cannot be withdrawn by this rewrite. **The owner confirmed this reading on 2026-09-23, and restated the constraint: no account loses access as part of this rewrite.** P4f asserts it in both directions. |
+| **D10** *(was Q10)* | **Every vehicle is owned by exactly one service.** No sharing. `vehicles.organization_id` is non-null with no exception, and `UNIQUE (callsign)` becomes `UNIQUE (organization_id, callsign)` as §4.1 assumed. |
+| **D11** *(was Q11)* | The demo-data cleanup is **sequenced with this rewrite** rather than deferred. **It does not authorise any deletion.** Nothing is deleted in any phase of this plan without the full row-level inventory and a separate explicit sign-off, exactly as already agreed for `docs/DEMO_DATA_INVENTORY.md`. A phase that would benefit from cleaner data waits for that sign-off or proceeds with the data as it stands; it never deletes to make itself easier. |
+| **D12** | **The rename moves the registry side** (§5): `OrganisationView.tsx` → `RegistryView.tsx`, `organisation_audit` → `registry_audit`, `t.organisation.*` → `t.registry.*`. The tenant vocabulary — `organizations`, `organization_memberships`, `organization_id` — is **untouched**. |
+| **D13** | **A person serving in both services gets two member records**, one per service (§4.1), with `UNIQUE (user_id)` becoming `UNIQUE (organization_id, user_id)`. Accepted as designed, with its costs: two availability rows, two attendance histories, two roster entries. The interface consequence remains OPEN (Q8). |
+
+**Still OPEN: Q1–Q8.** All eight block P6 or P7 only, so P1–P5 can now run to completion without another answer.
+
 ---
 
 ## 4. Data model
@@ -111,7 +128,8 @@ not expressible with one record.
 
 It has a cost, and the owner should see it before phase 2: two rows in
 `member_availability`, two attendance histories, two entries in any roster export.
-The interface consequence is OPEN (§7, Q8).
+**Accepted as designed on 2026-09-23 — D13.** The interface consequence is still
+OPEN (§7, Q8).
 
 ### 4.2 Child tables
 
@@ -181,9 +199,10 @@ review, invisible in a grep, and a typo silently targets the wrong concept. It i
 exactly the kind of thing that produces a policy that reads the wrong table and
 passes its tests.
 
-**Proposed rename: the registry concept becomes `registry`.** The screen already
-serves the route `evidencija`, which is the Montenegrin word for registry/records,
-so the name is already in the product — it is only the code that drifted.
+**Rename confirmed on 2026-09-23 (D12): the registry concept becomes `registry`,
+and the tenant vocabulary is untouched.** The screen already serves the route
+`evidencija`, which is the Montenegrin word for registry/records, so the name is
+already in the product — it is only the code that drifted.
 
 | From | To |
 |---|---|
@@ -297,14 +316,19 @@ owner's.
 | **Q6** | Does SZS need different response options or ETA bands from DVD's, or are the current ones right for both? | P6 |
 | **Q7** | Does SZS use the same intervention kinds as DVD (`interventions.kind`), or its own taxonomy? | P6 |
 | **Q8** | For a person in both organisations: one merged operational screen, or an explicit "acting as DVD / acting as SZS" switch? And on a joint call-out, do they answer once or once per service? | P6, P7 |
-| **Q9** | Does SZS get its own owner/administrator, or does the single installation owner administer both services? Today `is_dvd_owner()` is the installation owner and there is exactly one. | P4, P5 |
-| **Q10** | Do the two services share any vehicles, or is every vehicle owned by exactly one? §4.1 assumes exactly one. | P2 |
-| **Q11** | Does the owner want DVD's existing 6 accounts and 7 member records left exactly as they are during the rewrite, or is this the moment to also clean up the demo data (which is a separate, already-inventoried task)? | P2 |
+| ~~Q9~~ | **ANSWERED — see D9.** Single installation owner for both services; no new per-organisation administrator role. | — |
+| ~~Q10~~ | **ANSWERED — see D10.** Every vehicle is owned by exactly one service. | — |
+| ~~Q11~~ | **ANSWERED — see D11.** Cleanup is sequenced with the rewrite; no deletion without separate sign-off. | — |
 
-Q6, Q7 and Q10 have a defensible default (same response options as DVD, same
-intervention kinds as DVD, every vehicle owned by exactly one service) and are
-cheap to change later. Q3, Q4, Q5 and Q9 are not: they decide what records mean,
-and changing them after records exist means migrating live history.
+Q6 and Q7 have a defensible default (same response options as DVD, same
+intervention kinds as DVD) and are cheap to change later. Q3, Q4 and Q5 are not:
+they decide what records mean, and changing them after records exist means
+migrating live history.
+
+**Every remaining open question blocks P6 or P7 only.** P1 through P5 — the
+rename, the columns, the authority functions, the policy rewrite and retiring
+the mirror — are fully specified and can run to completion without another
+answer.
 
 ---
 
@@ -318,9 +342,30 @@ Every phase is one PR. Acceptance criteria are written so they can fail: each on
 is a test that passes only if the change is correct, and each phase's regression
 tests must fail against the code as it was before that phase.
 
+### Running order and state
+
+| Phase | What it touches | Schema risk | State |
+|---|---|---|---|
+| **P0** | two eligibility functions | none | **merged** (#47, `202609230018`, not applied to production) |
+| **P1** | names only — no schema semantics | none | **next** |
+| **P2** | `organization_id` columns + backfill | additive | ready; unblocked by D10, D11 |
+| **P3** | new authority functions + DVD shim | none (functions only) | ready; unblocked by D9 |
+| **P4a–f** | the 51 policies, six PRs | none (policies only) | ready; unblocked by D9 |
+| **P5** | drop the mirror, reduce `access_grants` | destructive | ready; unblocked by D9 |
+| **P6** | SZS runs its own workflow | additive | blocked on Q5, Q6, Q7, Q8 |
+| **P7** | cross-service alerting | additive | blocked on Q1–Q5, Q8 |
+| **P8** | branding and storage keys | none | ready |
+
+P1 through P5 can now run end to end without another answer. **P4 is split into
+six PRs** — one policy rewrite per table group — because "one PR" for 51 policies
+is not a reviewable change, and because a mistake in one group should not require
+re-reviewing the other five. Each P4 PR is independently safe: P3's shim means a
+single-service installation resolves identically either way, so the groups can
+land in any order and a bad one can be reverted alone.
+
 ---
 
-### P0 — Close the cross-service recipient leak *(ships first, alone)*
+### P0 — Close the cross-service recipient leak *(merged — #47)*
 
 `eligible_recipients()` and `is_eligible_recipient()` have no organisation
 predicate, which is real. **It is not reachable today**, and the first draft of
@@ -404,7 +449,8 @@ constraints. Add `attendance_intervals.credited_organization_id` (§6.3).
 
 Authority is untouched. Nothing reads the new columns yet.
 
-**Blocked on:** Q10, Q11.
+**Blocked on:** nothing — D10 and D11 settle it. D11 means this phase never
+deletes a demo row to simplify the backfill; it backfills whatever is there.
 
 **Acceptance criteria**
 
@@ -433,7 +479,7 @@ keeping its exact signature. All 51 policies keep working, unchanged, now resolv
 through the new path. This is the phase that proves the two models are equivalent
 before anything depends on it.
 
-**Blocked on:** Q9.
+**Blocked on:** nothing — D9 settles it.
 
 **Acceptance criteria**
 
@@ -453,24 +499,51 @@ before anything depends on it.
 ### P4 — Rewrite the policies and call sites *(the large one)*
 
 Rewrite all 51 policies and the 134 guard call sites onto the organisation-aware
-functions, one table group at a time within the single PR: accounts → registry
-(members/groups/vehicles) → interventions → responses/journey → attendance →
-notifications → audit.
+functions — **as six PRs, one per table group**, not one.
 
-**Blocked on:** Q9.
+Fifty-one policies in a single diff is not a reviewable change, and a mistake in
+one group would force re-reviewing the other five. The split is safe because of
+P3: the shim makes a single-service installation resolve identically through
+either path, so the groups may land in any order and a bad one can be reverted on
+its own without stranding the rest.
 
-**Acceptance criteria**
+| PR | Tables | Policies |
+|---|---|---|
+| **P4a** — registry | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history` | 7 |
+| **P4b** — interventions | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements` | 6 |
+| **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` | 7 |
+| **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` | 8 |
+| **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** | 3 + 1 function |
+| **P4f** — accounts and audit | `operational_audit`, `registry_audit`, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 20 |
 
-1. For each of the 30 tables that gained `organization_id`, a test asserts a
-   COMMANDER of organisation A **cannot** read a row belonging to organisation B.
-   30 assertions, each failing against P3.
-2. A test asserts an SZS staff member reading `members` sees only SZS members, and
-   `attendance_totals()` called by them returns only SZS people. Fails against P3.
-3. A test asserts the DVD fixture's visible rows are **identical** before and after
-   P4 — a single-organisation installation sees no change whatsoever.
-4. `grep` asserts zero remaining references to `is_dvd_staff|is_dvd_command|is_dvd_admin`
-   in `supabase/migrations/` beyond the historical files.
-5. Full browser suite green; no screen loses data for a DVD user.
+**P4e carries a hazard the others do not.** The push worker reads `members`,
+`interventions` and `intervention_acknowledgements` with the **service-role
+client, which bypasses RLS entirely**. It inherits nothing from P4a–d: the
+organisation filter has to be written into those queries by hand, or the worker
+keeps delivering across services after every policy above it is correct.
+
+**Blocked on:** nothing — D9 settles it.
+
+**Acceptance criteria, per PR**
+
+1. For each table in that PR's group, a test asserts a COMMANDER of service A
+   **cannot** read a row belonging to service B. One assertion per table, each
+   failing against the phase before it.
+2. A test asserts the DVD fixture's visible rows are **identical** before and
+   after — a single-service installation sees no change whatsoever.
+3. The full existing suite passes at the same test count, plus that PR's new
+   tests.
+
+**Acceptance criteria, on P4f as the last of the six**
+
+4. A test asserts an SZS staff member reading `members` sees only SZS members,
+   and `attendance_totals()` called by them returns only SZS people.
+5. `grep` asserts zero remaining references to
+   `is_dvd_staff|is_dvd_command|is_dvd_admin` in `supabase/migrations/` beyond
+   the historical files.
+6. A test asserts a DVD `ADMIN` still holds every registry power it holds today,
+   scoped to DVD (D9), and holds none over SZS.
+7. Full browser suite green; no screen loses data for a DVD user.
 
 ---
 
@@ -484,7 +557,7 @@ through the client.
 After this phase, membership is the only statement of authority and there is no
 second copy to disagree with it.
 
-**Blocked on:** Q9.
+**Blocked on:** nothing — D9 settles it.
 
 **Acceptance criteria**
 
@@ -610,14 +683,17 @@ push topic prefix. Applied migration **filenames** are never renamed.
 
 ## 11. What has to happen before implementation starts
 
-1. The owner answers **Q1–Q11**, or at minimum Q9, Q10 and Q11 (which block the
-   first two schema phases).
-2. P0 ships on its own, ahead of the schema phases — not because it is urgent
-   (it is not; see P0) but because it is the one piece of this that can be
-   proved correct against a fixture today, while the invariant it depends on
-   is still intact.
-3. P3's equivalence test is run against a **restored copy of production**, not only
-   against fixtures, before P4 is written.
-
-Nothing in P2 onwards should start before Q9 is answered, because it decides
-whether "owner" is one role or two and that reaches into every phase.
+1. ~~The owner answers Q9, Q10 and Q11.~~ **Done, 2026-09-23 — D9, D10, D11.**
+   Q1–Q8 remain open and block P6 and P7 only.
+2. ~~P0 ships on its own, ahead of the schema phases.~~ **Done — merged as #47,
+   migration `202609230018`.** Not applied to production.
+3. P3's equivalence test is run against a **restored copy of production**, not
+   only against fixtures, before P4a is written. This is the one remaining
+   precondition, and it is the gate on the whole policy rewrite: P4a–f are safe
+   to split only because P3's shim is proven to resolve identically, and a
+   fixture cannot prove that about six real accounts and seven real member
+   records.
+4. Each phase's migration is applied to production on its own approval. Nothing
+   in this plan applies a migration as a side effect of merging a PR: the tree
+   already carries two unapplied migrations (`202609220017`, `202609230018`),
+   and that separation is deliberate.
