@@ -140,9 +140,19 @@ beforeAll(async () => {
     create schema public;
     grant all on schema public to postgres;
   `);
-  const earlier = MIGRATIONS.filter((file) => file !== ORGANISATION_COLUMNS);
-  expect(earlier.length, 'the migration must be in the list').toBe(MIGRATIONS.length - 1);
-  for (const file of earlier) {
+  /*
+   * Everything STRICTLY BEFORE this migration, not everything except it.
+   *
+   * Filtering it out of the whole list works only while it is last. The moment
+   * a later migration depends on it - 202609240023's `current_member_id_in`
+   * reads `members.organization_id`, and a `language sql` body is validated when
+   * it is created - stage one applies that later file against a schema without
+   * the column and dies before a single assertion runs. Slicing says what this
+   * actually wants: the database as it stood the instant before.
+   */
+  const index = MIGRATIONS.indexOf(ORGANISATION_COLUMNS);
+  expect(index, 'the migration must be in the list').toBeGreaterThan(-1);
+  for (const file of MIGRATIONS.slice(0, index)) {
     await db.query(sql(file));
   }
 
