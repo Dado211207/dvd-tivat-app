@@ -117,9 +117,23 @@ describe('is_eligible_recipient answers for every state a person can be in', () 
     ['a member with no linked account', () => cast.ineligible.noAccount, false],
     ['an inactive member record', () => cast.ineligible.inactiveMember, false],
   ])('%s -> %s', async (_label, member, expected) => {
-    const { rows } = await db.query<{ eligible: boolean }>(
-      'select public.is_eligible_recipient($1) as eligible',
-      [member()],
+    /*
+     * Asked AS THE COMMANDER, not as the superuser.
+     *
+     * This used to be a bare `db.query`, which runs as `postgres` with no
+     * `request.jwt.claims` and therefore no `auth.uid()`. That worked while
+     * eligibility was a property of the target alone. Since 202609230018 it is
+     * a property of the PAIR - can this caller call that person - so a call
+     * with no caller has no answer to give, and fails closed.
+     *
+     * No real request arrives that way: PostgREST attaches a JWT to every
+     * call, anonymous ones included. Asking as a commander is what the
+     * recipient picker and `publish_intervention` actually do.
+     */
+    const { rows } = await asUser(db, cast.commanderUser, (client) =>
+      client.query<{ eligible: boolean }>('select public.is_eligible_recipient($1) as eligible', [
+        member(),
+      ]),
     );
     expect(rows[0]!.eligible).toBe(expected);
   });
