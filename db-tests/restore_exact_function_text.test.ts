@@ -29,7 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS, asUserCommitted, completeProfile, connect, createAccount, grantRole } from './harness';
 
 const RESTORE_006A = 'supabase/migrations/202609130006a_restore_exact_repository_function_text.sql';
-const RESTORE_020 = 'supabase/migrations/202609230020_restore_exact_repository_function_text.sql';
+const RESTORE_020 = 'supabase/migrations/202609230020_restore_exact_repository_function_text_audit_triggers.sql';
 const ATTENDANCE_TRUTH = 'supabase/migrations/202609130006_attendance_truth.sql';
 const REGISTRY_RENAME = 'supabase/migrations/202609230019_registry_rename.sql';
 

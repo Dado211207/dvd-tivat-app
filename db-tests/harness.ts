@@ -47,7 +47,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609220017_audit_triggers.sql',
   'supabase/migrations/202609230018_recipient_organisation_scope.sql',
   'supabase/migrations/202609230019_registry_rename.sql',
-  'supabase/migrations/202609230020_restore_exact_repository_function_text.sql',
+  'supabase/migrations/202609230020_restore_exact_repository_function_text_audit_triggers.sql',
 ];
 
 export const DATABASE_URL =
