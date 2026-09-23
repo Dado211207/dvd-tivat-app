@@ -87,20 +87,25 @@
 -- or widened without the change being deliberate.
 --
 -- ---------------------------------------------------------------------------
--- One question this phase answers provisionally and the owner must settle
+-- A vehicle movement belongs to the service that owns the vehicle
 -- ---------------------------------------------------------------------------
 --
--- `vehicle_movements` has two parents. Here the call-out decides when there is
--- one, which keeps it consistent with every other child of an intervention, and
--- the vehicle answers when there is not.
+-- Settled by the installation owner on 2026-09-23. `vehicle_movements` has two
+-- parents; THE VEHICLE OWNS THE ROW, always, never the service that published
+-- the call-out.
 --
--- That means a DVD vehicle sent to an SZS call-out produces an SZS movement row,
--- so a DVD-scoped read would not show DVD its own vehicle's movement. The
--- alternative - the vehicle always decides - hides the movement from the service
--- actually running the incident. Neither is obviously right and it is a product
--- question, not a schema one. Nothing depends on it yet: every vehicle and every
--- call-out is DVD, so both rules give the same answer today. IT MUST BE SETTLED
--- BEFORE P7, which is where borrowed resources become real.
+-- So a DVD engine sent to an SZS incident produces a DVD movement row. DVD
+-- keeps sight of its own fleet, which is the thing a service cannot be asked to
+-- give up. SZS seeing that movement during a joint incident is P7's job, granted
+-- explicitly by a joint-intervention policy - NOT achieved by changing whose
+-- movement it is. Ownership and visibility are different questions and this
+-- migration answers only the first.
+--
+-- The rule is total, which is why the trigger for this table is shorter than the
+-- generic one rather than longer: `vehicle_id` is not nullable, so there is
+-- always an answer, and a call-out that is deleted, re-linked or never there at
+-- all cannot change it. The detach exception the generic rule needs does not
+-- exist here because there is nothing for it to protect.
 --
 -- ---------------------------------------------------------------------------
 -- The DVD default is scaffolding, and P4 must remove it
@@ -241,12 +246,11 @@ update public.notification_delivery_attempts child
    set organization_id = parent.organization_id
   from public.notification_outbox parent where parent.id = child.outbox_id;
 
--- The intervention if there is one, otherwise the vehicle, which there always
--- is - `vehicle_movements.vehicle_id` is not null.
+-- The vehicle owns the movement, whoever published the call-out. `vehicle_id`
+-- is not null, so every row has an answer.
 update public.vehicle_movements child
-   set organization_id = coalesce(
-     (select i.organization_id from public.interventions i where i.id = child.intervention_id),
-     (select v.organization_id from public.vehicles v where v.id = child.vehicle_id));
+   set organization_id = parent.organization_id
+  from public.vehicles parent where parent.id = child.vehicle_id;
 
 -- The intervention if there is one. An orphan - the intervention was deleted
 -- and the foreign key set this to null - has no parent to ask, so it is DVD.
@@ -422,17 +426,25 @@ create trigger enforce_organization before insert or update on public.operationa
     'interventions', 'intervention_id', 'id', 'dvd-if-orphaned');
 
 /*
- * `vehicle_movements` has two parents and cannot use the generic rule.
+ * `vehicle_movements` has two parents, and only one of them owns it.
  *
- * The call-out decides when there is one, which keeps it consistent with every
- * other child of an intervention; the vehicle answers when there is not.
+ * THE VEHICLE DOES, ALWAYS. Never the service that published the call-out.
+ * A DVD engine sent to an SZS incident produces a DVD movement row: DVD keeps
+ * sight of its own fleet, which is the thing a service cannot be asked to give
+ * up. SZS sees that movement during a joint incident because P7 grants it
+ * explicitly, not because the row changed hands.
  *
- * THAT FIRST CHOICE NEEDS AN OWNER DECISION BEFORE P7. It means a DVD vehicle
- * sent to an SZS call-out produces an SZS movement row, so a DVD-scoped read
- * would not show DVD its own vehicle's movement. The alternative - the vehicle
- * always decides - hides the movement from the service actually running the
- * incident. Nothing depends on it yet: every vehicle and every call-out is DVD,
- * so both rules give the same answer today.
+ * This also makes the invariant total, which is why this function is shorter
+ * than the generic one rather than longer. `vehicle_id` is not nullable, so
+ * there is always an answer; and because the call-out was never the source, a
+ * call-out that is deleted, re-linked or never there at all cannot change the
+ * answer. The detach exception the generic rule needs does not exist here - not
+ * because it was waived, but because there is nothing for it to protect.
+ *
+ * Two things are therefore refused, and the second is the less obvious one:
+ * rewriting `organization_id`, and moving the row onto another service's
+ * vehicle - including moving both together so that the row looks
+ * self-consistent afterwards. A movement changing hands is not an edit.
  */
 create or replace function public.enforce_vehicle_movement_organization()
 returns trigger
@@ -443,38 +455,22 @@ as $$
 declare
   derived uuid;
 begin
-  -- The call-out was deleted out from under it. The movement was that service's
-  -- when it happened, and re-deriving from the vehicle here would both rewrite
-  -- history and make the delete fail whenever the two services differ.
-  --
-  -- Narrowly, though. `on delete set null` clears the link and touches NOTHING
-  -- else, so the exception is written for exactly that. Stated only as "the
-  -- intervention went from something to nothing" it also matches a hand-written
-  -- statement that clears the link AND re-points the row at another vehicle in
-  -- the same breath - which would keep a service its only remaining parent does
-  -- not have, and is the one way left to leave this row disagreeing with a
-  -- parent. Anything beyond the bare detach is refused.
-  if tg_op = 'UPDATE' and old.intervention_id is not null and new.intervention_id is null then
-    if new.vehicle_id is distinct from old.vehicle_id
-       or new.organization_id is distinct from old.organization_id then
-      raise exception 'ORGANIZATION_MISMATCH';
-    end if;
-    return new;
+  -- Whose movement this is was settled when it was recorded.
+  if tg_op = 'UPDATE' and new.organization_id is distinct from old.organization_id then
+    raise exception 'ORGANIZATION_MISMATCH';
   end if;
 
-  if new.intervention_id is not null then
-    select organization_id into derived from public.interventions where id = new.intervention_id;
-  else
-    select organization_id into derived from public.vehicles where id = new.vehicle_id;
-  end if;
+  select organization_id into derived from public.vehicles where id = new.vehicle_id;
 
   if derived is null then
-    return new;  -- a missing parent is the foreign key's to report
+    return new;  -- a missing vehicle is the foreign key's to report
   end if;
 
   if new.organization_id is null then
     new.organization_id := derived;
   elsif new.organization_id is distinct from derived then
+    -- Either an insert claiming a service the vehicle does not belong to, or an
+    -- update re-pointing the row at another service's vehicle.
     raise exception 'ORGANIZATION_MISMATCH';
   end if;
 
