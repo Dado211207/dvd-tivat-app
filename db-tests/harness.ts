@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Client } from 'pg';
 
-const MIGRATIONS = [
+export const MIGRATIONS = [
   'supabase/tests/00_supabase_stub.sql',
   'supabase/migrations/202609090001_accounts_reports.sql',
   'supabase/migrations/202609090002_internal_operations.sql',
@@ -41,6 +41,7 @@ const MIGRATIONS = [
   'supabase/migrations/202609210016_owner_service_membership.sql',
   'supabase/migrations/202609220017_audit_triggers.sql',
   'supabase/migrations/202609230018_recipient_organisation_scope.sql',
+  'supabase/migrations/202609230019_registry_rename.sql',
 ];
 
 export const DATABASE_URL =
