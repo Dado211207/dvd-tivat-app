@@ -42,6 +42,13 @@
  * migrations replayed onto it - the same one `npm run test:db` uses, via
  * `DVD_TEST_DATABASE_URL`. Without it that half is skipped and said to be
  * skipped, rather than quietly passing.
+ *
+ *   exit 0   nothing found
+ *   exit 1   drift found, listed
+ *   exit 2   the comparison could not be RUN, so nothing about drift is known
+ *
+ * The last one is separate on purpose. A database that could not be reached
+ * reported as "no drift found" would be the worst thing this script could do.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -199,10 +206,32 @@ const FUNCTION_SQL = CAPTURE_SQL.slice(
   CAPTURE_SQL.indexOf('-- 3. objects'),
 );
 
-async function query(connectionString, sql) {
+/**
+ * Connects, or explains what to do about it.
+ *
+ * The local PostgreSQL this uses stops fairly often, and a refused connection
+ * arrives as an uncaught ECONNREFUSED with a Node stack trace, which reads like
+ * the tool is broken rather than the database being down. Somebody running a
+ * check they did not write, on a project they are not deep in, should be told
+ * which database and how to start it.
+ */
+async function connectTo(connectionString, what) {
   const { Client } = await import('pg');
   const client = new Client({ connectionString });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (error) {
+    const where = connectionString.replace(/\/\/[^@/]*@/, '//');
+    throw new Error(
+      `cannot reach the ${what} database at ${where}: ${error.message}` +
+        (what === 'local' ? '\n  start it with: npm run db:start' : ''),
+    );
+  }
+  return client;
+}
+
+async function query(connectionString, sql, what = 'local') {
+  const client = await connectTo(connectionString, what);
   try {
     return (await client.query(sql)).rows;
   } finally {
@@ -220,9 +249,7 @@ async function query(connectionString, sql) {
  * DVD_TEST_DATABASE_URL - the same throwaway database `npm run test:db` uses.
  */
 async function replayLocally(connectionString, files) {
-  const { Client } = await import('pg');
-  const client = new Client({ connectionString });
-  await client.connect();
+  const client = await connectTo(connectionString, 'local');
   try {
     await client.query(`
       drop schema if exists public cascade;
@@ -246,9 +273,9 @@ async function replayLocally(connectionString, files) {
 async function loadProduction(source) {
   if (source.startsWith('postgres://') || source.startsWith('postgresql://')) {
     const [migrations, functions, objects] = await Promise.all([
-      query(source, CAPTURE_SQL.slice(0, CAPTURE_SQL.indexOf('-- 2. functions'))),
-      query(source, FUNCTION_SQL),
-      query(source, OBJECT_SQL),
+      query(source, CAPTURE_SQL.slice(0, CAPTURE_SQL.indexOf('-- 2. functions')), 'hosted'),
+      query(source, FUNCTION_SQL, 'hosted'),
+      query(source, OBJECT_SQL, 'hosted'),
     ]);
     return { migrations, functions, objects: objects[0] };
   }
@@ -368,26 +395,36 @@ const wantsProduction = argv.includes('--production') && productionArgument !== 
 const repository = checkRepository();
 
 if (wantsProduction) {
-  const isConnectionString =
-    productionArgument.startsWith('postgres://') || productionArgument.startsWith('postgresql://');
-  const production = await loadProduction(
-    isConnectionString ? productionArgument : resolve(productionArgument),
-  );
-  compareMigrationHistory(repository, production.migrations);
-
-  const localUrl = process.env.DVD_TEST_DATABASE_URL;
-  if (!localUrl) {
-    notes.push(
-      'schema comparison SKIPPED: set DVD_TEST_DATABASE_URL to a PostgreSQL with the migrations replayed onto it',
+  // Anything that goes wrong reaching either database is a problem WITH THE RUN,
+  // not a drift finding, and the two must not be confused: an unreachable
+  // database reported as "no drift found" would be the worst outcome this script
+  // has. It exits 2 so a caller can tell the difference from the 1 that means
+  // drift was actually found.
+  try {
+    const isConnectionString =
+      productionArgument.startsWith('postgres://') || productionArgument.startsWith('postgresql://');
+    const production = await loadProduction(
+      isConnectionString ? productionArgument : resolve(productionArgument),
     );
-  } else {
-    await replayLocally(localUrl, harnessMigrations());
-    const [localFunctions, localObjects] = await Promise.all([
-      query(localUrl, FUNCTION_SQL),
-      query(localUrl, OBJECT_SQL),
-    ]);
-    compareFunctions(production.functions, localFunctions);
-    compareObjects(production.objects, localObjects[0]);
+    compareMigrationHistory(repository, production.migrations);
+
+    const localUrl = process.env.DVD_TEST_DATABASE_URL;
+    if (!localUrl) {
+      notes.push(
+        'schema comparison SKIPPED: set DVD_TEST_DATABASE_URL to a PostgreSQL with the migrations replayed onto it',
+      );
+    } else {
+      await replayLocally(localUrl, harnessMigrations());
+      const [localFunctions, localObjects] = await Promise.all([
+        query(localUrl, FUNCTION_SQL),
+        query(localUrl, OBJECT_SQL),
+      ]);
+      compareFunctions(production.functions, localFunctions);
+      compareObjects(production.objects, localObjects[0]);
+    }
+  } catch (error) {
+    console.error(`\nthe comparison could not be run, so nothing about drift is known:\n  ${error.message}`);
+    process.exit(2);
   }
 } else if (!argv.includes('--repo-only')) {
   console.log('no --production given; checked this checkout only (pass --repo-only to say so on purpose)');
