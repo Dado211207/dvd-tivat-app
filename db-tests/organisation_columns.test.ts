@@ -151,16 +151,116 @@ beforeAll(async () => {
   await grantRole(db, account.userId, 'OWNER');
   owner = account.userId;
 
-  // A realistic rowset under the OLD shape, standing in for what production
-  // holds: a member, a vehicle, a group, and a published intervention with the
-  // child rows a real call-out leaves behind.
-  await asUserCommitted(db, owner, async (client) => {
-    await client.query(`select public.admin_create_member($1, '{}')`, [CARRIED_MEMBER]);
-    await client.query(`select public.admin_create_vehicle($1, 'Prije Vozilo', 'NAVALNO')`, [
-      CARRIED_VEHICLE,
+  /*
+   * A realistic rowset under the OLD shape, standing in for what production
+   * holds. This has to be a WHOLE CALL-OUT, not a member and a vehicle: the
+   * checksum below proves the backfill preserved what was there, and it proves
+   * nothing at all about the seventeen child tables if they are empty when it
+   * runs. An earlier version of this fixture described a call-out in its
+   * comment and created three rows; that is why the two orphan cases below are
+   * built explicitly rather than hoped for.
+   */
+  const commanderAccount = await createAccount(db, 'komandir.prije@example.invalid');
+  await completeProfile(db, commanderAccount.userId, 'Komandir Prije');
+  await grantRole(db, commanderAccount.userId, 'COMMANDER');
+
+  const carried = await asUserCommitted(db, owner, async (client) => {
+    const member = await client.query<{ id: string }>(
+      `select public.admin_create_member($1, '{}') as id`,
+      [CARRIED_MEMBER],
+    );
+    const vehicle = await client.query<{ id: string }>(
+      `select public.admin_create_vehicle($1, 'Prije Vozilo', 'NAVALNO') as id`,
+      [CARRIED_VEHICLE],
+    );
+    const group = await client.query<{ id: string }>(
+      `select public.admin_create_group('Prije Smjena') as id`,
+    );
+    // A second vehicle, because the first stays out for the whole fixture and
+    // `record_vehicle_departure` refuses one that has not come back.
+    const spare = await client.query<{ id: string }>(
+      `select public.admin_create_vehicle('PRIJE-2', 'Prije Vozilo Dva', 'NAVALNO') as id`,
+    );
+    await client.query(`select public.admin_link_member_account($1, $2)`, [
+      member.rows[0]!.id,
+      commanderAccount.userId,
     ]);
-    await client.query(`select public.admin_create_group('Prije Smjena')`);
+    await client.query(`select public.admin_set_group_members($1, array[$2]::uuid[])`, [
+      group.rows[0]!.id,
+      member.rows[0]!.id,
+    ]);
+    return {
+      memberId: member.rows[0]!.id,
+      vehicleId: vehicle.rows[0]!.id,
+      spareVehicleId: spare.rows[0]!.id,
+    };
   });
+
+  // A call-out that leaves a row in most of the child tables.
+  const published = await asUserCommitted(db, commanderAccount.userId, async (client) => {
+    const { rows } = await client.query<{ id: string }>(
+      `select public.create_intervention_draft(
+         'POZAR', 'Vjezba prije migracije', 'Okupljanje u bazi.', 'Poligon (izmisljena lokacija)',
+         $1) as id`,
+      [`prije-${Math.random().toString(36).slice(2)}`],
+    );
+    const id = rows[0]!.id;
+    await client.query(`select public.publish_intervention($1, array[$2]::uuid[])`, [
+      id,
+      carried.memberId,
+    ]);
+    return id;
+  });
+
+  await asUserCommitted(db, commanderAccount.userId, async (client) => {
+    await client.query(`select public.submit_response($1, 'DOLAZIM', 10, false)`, [published]);
+    await client.query(`select public.acknowledge_intervention($1)`, [published]);
+    await client.query(`select public.set_journey_progress($1, 'KRECEM')`, [published]);
+    await client.query(`select public.set_own_availability(true, 'Spreman')`);
+    await client.query(`select public.attendance_check_in($1, $2, null, null, null)`, [
+      published,
+      carried.memberId,
+    ]);
+    await client.query(`select public.record_vehicle_departure($1, $2, 'Intervencija')`, [
+      carried.vehicleId,
+      published,
+    ]);
+  });
+
+  /*
+   * The two orphan cases, built rather than assumed. Deleting an intervention
+   * does not refuse - the foreign keys are `on delete set null` - so its audit
+   * rows and vehicle movements survive with no parent. Production holds 22 such
+   * audit rows and 1 such movement, and they have to be backfilled too.
+   */
+  const orphaned = await asUserCommitted(db, commanderAccount.userId, async (client) => {
+    const { rows } = await client.query<{ id: string }>(
+      `select public.create_intervention_draft(
+         'POZAR', 'Vjezba za brisanje', 'Okupljanje.', 'Poligon', $1) as id`,
+      [`sirotan-${Math.random().toString(36).slice(2)}`],
+    );
+    const id = rows[0]!.id;
+    await client.query(`select public.publish_intervention($1, array[$2]::uuid[])`, [
+      id,
+      carried.memberId,
+    ]);
+    await client.query(`select public.record_vehicle_departure($1, $2, 'Za brisanje')`, [
+      carried.spareVehicleId,
+      id,
+    ]);
+    return id;
+  });
+  await db.query(`delete from public.interventions where id = $1`, [orphaned]);
+
+  const orphanCounts = await db.query<{ audit: string; movements: string }>(
+    `select (select count(*)::text from public.operational_audit where intervention_id is null) as audit,
+            (select count(*)::text from public.vehicle_movements where intervention_id is null) as movements`,
+  );
+  expect(Number(orphanCounts.rows[0]!.audit), 'the fixture must contain orphaned audit rows').toBeGreaterThan(0);
+  expect(
+    Number(orphanCounts.rows[0]!.movements),
+    'the fixture must contain an orphaned vehicle movement',
+  ).toBeGreaterThan(0);
 
   for (const table of ALL_SCOPED) {
     beforeMigration.set(table, await rowsetChecksum(db, table));
@@ -231,6 +331,34 @@ describe('every operational table says which service it belongs to', () => {
 });
 
 describe('the rows that were already there are untouched', () => {
+  it('had rows in the child tables to begin with, or the checksum proves nothing', () => {
+    // The guard on the test below. A fixture that leaves the child tables empty
+    // makes "every row survived" a statement about nothing, and that is exactly
+    // what the first version of this file did.
+    const populated = [...beforeMigration.entries()].filter(([, v]) => v.rows > 0).map(([t]) => t);
+    for (const table of [
+      'members',
+      'vehicles',
+      'groups',
+      'interventions',
+      'group_members',
+      'member_availability',
+      'member_availability_history',
+      'intervention_recipients',
+      'intervention_responses',
+      'intervention_response_revisions',
+      'intervention_acknowledgements',
+      'intervention_journey',
+      'intervention_journey_history',
+      'attendance_intervals',
+      'vehicle_movements',
+      'notification_outbox',
+      'operational_audit',
+    ]) {
+      expect(populated, `${table} was empty before the migration`).toContain(table);
+    }
+  });
+
   it('keeps every row, with identical content', async () => {
     // Acceptance criterion 2. The checksum excludes the new column, so this is
     // asking whether the backfill rewrote anything it should not have.
@@ -448,6 +576,302 @@ describe('writes still work, which is the part that could have broken everything
       [group[0]!.id, member[0]!.id],
     );
     expect(message).toMatch(/ORGANIZATION_MISMATCH|violates|constraint/i);
+  });
+});
+
+describe('a child cannot disagree with its parent', () => {
+  /*
+   * P4 intends to use these columns as an authorisation boundary: a policy will
+   * read `organization_id` off the row rather than joining to the parent. That
+   * only holds if the column cannot lie. Three ways it could:
+   *
+   *   - an INSERT that supplies a service its parent does not have;
+   *   - an UPDATE that rewrites the column afterwards;
+   *   - an UPDATE that re-parents the row to the other service.
+   *
+   * The first version of this migration allowed all three. It derived the value
+   * only when none was supplied, and only on INSERT, which made the column a
+   * suggestion rather than a fact.
+   */
+  async function szsIntervention(): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
+      `insert into public.interventions(
+         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
+       values ('POZAR', 'Vjezba SZS', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
+      [owner, `szs-${Math.random().toString(36).slice(2)}`, SZS],
+    );
+    return rows[0]!.id;
+  }
+
+  async function dvdIntervention(): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
+      `insert into public.interventions(
+         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
+       values ('POZAR', 'Vjezba DVD', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
+      [owner, `dvd-${Math.random().toString(36).slice(2)}`, DVD],
+    );
+    return rows[0]!.id;
+  }
+
+  it('refuses an insert that claims a service its parent does not have', async () => {
+    const intervention = await dvdIntervention();
+    const message = await expectRejected(
+      `insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id, organization_id)
+       values ($1, 'TEST_EVENT', '{}'::jsonb, $2, $3)`,
+      [intervention, owner, SZS],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+
+  it('accepts an insert that supplies the same service its parent has', async () => {
+    // The refusal above must be about DISAGREEMENT, not about supplying a value
+    // at all - a later phase will pass it explicitly.
+    const intervention = await szsIntervention();
+    await db.query(
+      `insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id, organization_id)
+       values ($1, 'TEST_EVENT', '{}'::jsonb, $2, $3)`,
+      [intervention, owner, SZS],
+    );
+    const { rows } = await db.query<{ organization_id: string }>(
+      `select organization_id from public.operational_audit where intervention_id = $1`,
+      [intervention],
+    );
+    expect(rows[0]!.organization_id).toBe(SZS);
+  });
+
+  it('refuses rewriting the column after the row exists', async () => {
+    const intervention = await dvdIntervention();
+    await db.query(
+      `insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id)
+       values ($1, 'TEST_EVENT', '{}'::jsonb, $2)`,
+      [intervention, owner],
+    );
+    const message = await expectRejected(
+      `update public.operational_audit set organization_id = $2 where intervention_id = $1`,
+      [intervention, SZS],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+
+  it('refuses re-parenting a row into the other service', async () => {
+    const dvd = await dvdIntervention();
+    const szs = await szsIntervention();
+    await db.query(
+      `insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id)
+       values ($1, 'TEST_EVENT', '{}'::jsonb, $2)`,
+      [dvd, owner],
+    );
+    const message = await expectRejected(
+      `update public.operational_audit set intervention_id = $2 where intervention_id = $1`,
+      [dvd, szs],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+
+  it('allows a re-parent that moves both together, because nothing then disagrees', async () => {
+    const first = await szsIntervention();
+    const second = await szsIntervention();
+    await db.query(
+      `insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id)
+       values ($1, 'TEST_EVENT', '{}'::jsonb, $2)`,
+      [first, owner],
+    );
+    await db.query(
+      `update public.operational_audit set intervention_id = $2 where intervention_id = $1`,
+      [first, second],
+    );
+    const { rows } = await db.query<{ organization_id: string }>(
+      `select organization_id from public.operational_audit where intervention_id = $1`,
+      [second],
+    );
+    expect(rows[0]!.organization_id).toBe(SZS);
+  });
+
+  it('keeps the service when the parent is detached by a delete', async () => {
+    /*
+     * `on delete set null` performs an UPDATE, so the rule above would re-derive
+     * from a parent that is now gone and either wipe the value or fall back to
+     * DVD. Either would rewrite the service of a historical SZS record at the
+     * moment its call-out was deleted - silently, and exactly where the audit
+     * trail matters most.
+     */
+    const intervention = await szsIntervention();
+    await db.query(
+      `insert into public.operational_audit(intervention_id, event_type, detail, actor_user_id)
+       values ($1, 'DETACH_ME', '{}'::jsonb, $2)`,
+      [intervention, owner],
+    );
+    await db.query(`delete from public.interventions where id = $1`, [intervention]);
+
+    const { rows } = await db.query<{ organization_id: string; intervention_id: string | null }>(
+      `select organization_id, intervention_id from public.operational_audit where event_type = 'DETACH_ME'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.intervention_id, 'the parent really was detached').toBeNull();
+    expect(rows[0]!.organization_id, 'and the service survived it').toBe(SZS);
+  });
+});
+
+describe('the two-parent tables, each on its own terms', () => {
+  it('vehicle_movements follows the call-out, and falls back to the vehicle without one', async () => {
+    const { rows: vehicle } = await db.query<{ id: string }>(
+      `insert into public.vehicles(callsign, name, kind, organization_id)
+       values ('DVOJE-1', 'Vozilo Dvoje', 'NAVALNO', $1) returning id`,
+      [DVD],
+    );
+    const { rows: intervention } = await db.query<{ id: string }>(
+      `insert into public.interventions(
+         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
+       values ('POZAR', 'Vjezba SZS dvoje', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
+      [owner, `dvoje-${Math.random().toString(36).slice(2)}`, SZS],
+    );
+
+    // With a call-out, the call-out decides - consistent with every other child
+    // of an intervention. A DVD vehicle at an SZS call-out therefore produces an
+    // SZS movement row; see the migration header, this one needs an owner
+    // decision before P7 and nothing depends on it yet.
+    const { rows: withCallOut } = await db.query<{ organization_id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Intervencija', $3) returning organization_id`,
+      [vehicle[0]!.id, intervention[0]!.id, owner],
+    );
+    expect(withCallOut[0]!.organization_id).toBe(SZS);
+
+    // Without one, the vehicle is the only parent there is. A second vehicle,
+    // because `vehicle_movement_no_overlap` refuses one that is already out.
+    const { rows: spare } = await db.query<{ id: string }>(
+      `insert into public.vehicles(callsign, name, kind, organization_id)
+       values ('DVOJE-1B', 'Vozilo Dvoje B', 'NAVALNO', $1) returning id`,
+      [DVD],
+    );
+    const { rows: withoutCallOut } = await db.query<{ organization_id: string }>(
+      `insert into public.vehicle_movements(vehicle_id, purpose, departed_by)
+       values ($1, 'Servis', $2) returning organization_id`,
+      [spare[0]!.id, owner],
+    );
+    expect(withoutCallOut[0]!.organization_id).toBe(DVD);
+  });
+
+  it('keeps a movement its service when its call-out is deleted', async () => {
+    const { rows: vehicle } = await db.query<{ id: string }>(
+      `insert into public.vehicles(callsign, name, kind, organization_id)
+       values ('DVOJE-2', 'Vozilo Dvoje Dva', 'NAVALNO', $1) returning id`,
+      [DVD],
+    );
+    const { rows: intervention } = await db.query<{ id: string }>(
+      `insert into public.interventions(
+         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
+       values ('POZAR', 'Vjezba brisanje', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
+      [owner, `brisanje-${Math.random().toString(36).slice(2)}`, SZS],
+    );
+    await db.query(
+      `insert into public.vehicle_movements(vehicle_id, intervention_id, purpose, departed_by)
+       values ($1, $2, 'Za brisanje', $3)`,
+      [vehicle[0]!.id, intervention[0]!.id, owner],
+    );
+    await db.query(`delete from public.interventions where id = $1`, [intervention[0]!.id]);
+
+    const { rows } = await db.query<{ organization_id: string }>(
+      `select organization_id from public.vehicle_movements
+        where vehicle_id = $1 and purpose = 'Za brisanje'`,
+      [vehicle[0]!.id],
+    );
+    // SZS, not the DVD its vehicle belongs to: the movement was SZS's when it
+    // happened and deleting the record of the call-out does not change that.
+    expect(rows[0]!.organization_id).toBe(SZS);
+  });
+
+  it('refuses moving a group member across services by update, not only by insert', async () => {
+    const { rows: group } = await db.query<{ id: string }>(
+      `insert into public.groups(name, organization_id) values ('Smjena Premjestaj', $1) returning id`,
+      [DVD],
+    );
+    const { rows: dvdMember } = await db.query<{ id: string }>(
+      `insert into public.members(full_name, organization_id) values ('Clan DVD Premjestaj', $1) returning id`,
+      [DVD],
+    );
+    const { rows: szsMember } = await db.query<{ id: string }>(
+      `insert into public.members(full_name, organization_id) values ('Clan SZS Premjestaj', $1) returning id`,
+      [SZS],
+    );
+    await db.query(`insert into public.group_members(group_id, member_id) values ($1, $2)`, [
+      group[0]!.id,
+      dvdMember[0]!.id,
+    ]);
+
+    const message = await expectRejected(
+      `update public.group_members set member_id = $3 where group_id = $1 and member_id = $2`,
+      [group[0]!.id, dvdMember[0]!.id, szsMember[0]!.id],
+    );
+    expect(message).toMatch(/ORGANIZATION_MISMATCH/);
+  });
+});
+
+describe('an owning record cannot change service under its children', () => {
+  it('refuses moving an intervention to the other service', async () => {
+    /*
+     * The alternative to refusing is cascading, which would silently rewrite the
+     * attribution of every child row - including attendance credit - for a
+     * record of something that already happened. Whose call-out it was is not an
+     * editable field. If a real transfer is ever needed it wants a deliberate
+     * command with its own audit, not an UPDATE that reaches seventeen tables.
+     */
+    const { rows } = await db.query<{ id: string }>(
+      `insert into public.interventions(
+         kind, title, instructions, incident_location, created_by, idempotency_key, organization_id)
+       values ('POZAR', 'Vjezba nepromjenjiva', 'Okupljanje.', 'Poligon', $1, $2, $3) returning id`,
+      [owner, `nepromjenjiva-${Math.random().toString(36).slice(2)}`, DVD],
+    );
+    const message = await expectRejected(
+      `update public.interventions set organization_id = $2 where id = $1`,
+      [rows[0]!.id, SZS],
+    );
+    expect(message).toMatch(/ORGANIZATION_IMMUTABLE/);
+  });
+
+  it('refuses it for members, vehicles and groups too', async () => {
+    const member = await db.query<{ id: string }>(
+      `insert into public.members(full_name, organization_id) values ('Clan Nepromjenjiv', $1) returning id`,
+      [DVD],
+    );
+    const vehicle = await db.query<{ id: string }>(
+      `insert into public.vehicles(callsign, name, kind, organization_id)
+       values ('NEPR-1', 'Vozilo Nepromjenjivo', 'NAVALNO', $1) returning id`,
+      [DVD],
+    );
+    const group = await db.query<{ id: string }>(
+      `insert into public.groups(name, organization_id) values ('Smjena Nepromjenjiva', $1) returning id`,
+      [DVD],
+    );
+
+    for (const [table, id] of [
+      ['members', member.rows[0]!.id],
+      ['vehicles', vehicle.rows[0]!.id],
+      ['groups', group.rows[0]!.id],
+    ] as const) {
+      const message = await expectRejected(
+        `update public.${table} set organization_id = $2 where id = $1`,
+        [id, SZS],
+      );
+      expect(message, `${table} let its service be changed`).toMatch(/ORGANIZATION_IMMUTABLE/);
+    }
+  });
+
+  it('still allows an update that leaves the service alone', async () => {
+    // The guard must be on the column, not on the table: ordinary edits keep
+    // working, which is what `admin_update_member` does on every roster change.
+    const { rows } = await db.query<{ id: string }>(
+      `insert into public.members(full_name, organization_id) values ('Clan Preimenovan', $1) returning id`,
+      [DVD],
+    );
+    await db.query(`update public.members set full_name = 'Clan Preimenovan Opet' where id = $1`, [
+      rows[0]!.id,
+    ]);
+    const { rows: after } = await db.query<{ full_name: string }>(
+      `select full_name from public.members where id = $1`,
+      [rows[0]!.id],
+    );
+    expect(after[0]!.full_name).toBe('Clan Preimenovan Opet');
   });
 });
 

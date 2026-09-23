@@ -38,6 +38,50 @@
 -- every row that exists today because DVD is all there has ever been.
 --
 -- ---------------------------------------------------------------------------
+-- The column has to be a fact, not a field
+-- ---------------------------------------------------------------------------
+--
+-- P4 will read `organization_id` off the row rather than joining to the parent,
+-- which makes it an authorisation boundary. A boundary that can be written to
+-- is not one. The first draft of this migration derived the value only when the
+-- caller supplied none, and only on INSERT, which left three ways to make a
+-- child disagree with its parent: supply a different service on insert, rewrite
+-- the column afterwards, or re-parent the row. All three are now refused with
+-- ORGANIZATION_MISMATCH, on INSERT and on UPDATE.
+--
+-- DETACHMENT IS THE EXCEPTION, and it is load-bearing rather than defensive.
+-- With the rule applied blindly to the UPDATE that `on delete set null`
+-- performs, deleting an intervention does not mis-attribute its vehicle
+-- movements - it FAILS, because the vehicle's service and the deleted call-out's
+-- service need not agree. Measured by removing the exception and watching the
+-- delete raise ORGANIZATION_MISMATCH. A row whose parent is being taken away
+-- keeps the answer it already carries.
+--
+-- The four owning tables go further: their `organization_id` is IMMUTABLE
+-- (ORGANIZATION_IMMUTABLE). The alternative is cascading a change across
+-- seventeen child tables, silently rewriting the attribution of things that
+-- already happened, attendance credit included. Whose call-out it was is not an
+-- editable field, and by D13 a person serving in both services holds two member
+-- records rather than moving one between them. A real transfer, if one is ever
+-- needed, wants a deliberate command with its own audit trail.
+--
+-- ---------------------------------------------------------------------------
+-- One question this phase answers provisionally and the owner must settle
+-- ---------------------------------------------------------------------------
+--
+-- `vehicle_movements` has two parents. Here the call-out decides when there is
+-- one, which keeps it consistent with every other child of an intervention, and
+-- the vehicle answers when there is not.
+--
+-- That means a DVD vehicle sent to an SZS call-out produces an SZS movement row,
+-- so a DVD-scoped read would not show DVD its own vehicle's movement. The
+-- alternative - the vehicle always decides - hides the movement from the service
+-- actually running the incident. Neither is obviously right and it is a product
+-- question, not a schema one. Nothing depends on it yet: every vehicle and every
+-- call-out is DVD, so both rules give the same answer today. IT MUST BE SETTLED
+-- BEFORE P7, which is where borrowed resources become real.
+--
+-- ---------------------------------------------------------------------------
 -- The DVD default is scaffolding, and P4 must remove it
 -- ---------------------------------------------------------------------------
 --
@@ -231,102 +275,192 @@ alter table public.vehicles      alter column organization_id set default '00000
 alter table public.groups        alter column organization_id set default '00000000-0000-4000-8000-000000000001';
 alter table public.interventions alter column organization_id set default '00000000-0000-4000-8000-000000000001';
 
+
 -- ---------------------------------------------------------------------------
--- 5. Deriving the value on insert
+-- 5. Keeping the column honest
 -- ---------------------------------------------------------------------------
 
 /*
- * One function for every child table, parameterised by the trigger arguments.
+ * `organization_id` on a child row is not a field. It is a copy of its parent's
+ * answer, denormalised so that P4's policies can read it off the row instead of
+ * joining on every read of every table during a call-out.
  *
- * The table and column names come from `tg_argv`, which is written in this file
- * and cannot be influenced by a caller, and they go through `format('%I')`
- * regardless. An explicitly supplied value always wins, so a later phase can
- * pass the organisation without fighting the trigger.
+ * A copy is only worth having if it cannot disagree with the original. Three
+ * ways it could, all of which an earlier draft of this migration allowed:
  *
- * `tg_argv[3] = 'dvd-if-orphaned'` is only for `operational_audit`, whose parent
- * link is nullable and whose orphans have nothing else to ask.
+ *   - an INSERT supplying a service the parent does not have;
+ *   - an UPDATE rewriting the column afterwards;
+ *   - an UPDATE re-parenting the row to the other service.
+ *
+ * So the rule is enforced on INSERT and on UPDATE, and a disagreement is
+ * refused rather than corrected: silently rewriting somebody's write is how a
+ * boundary becomes untrustworthy in the other direction.
+ *
+ * DETACHMENT IS THE EXCEPTION. `operational_audit.intervention_id` and
+ * `vehicle_movements.intervention_id` are `on delete set null`, so deleting an
+ * intervention UPDATES its children. Re-deriving there would rewrite the
+ * service of a historical record at the moment its call-out was deleted - and
+ * for `vehicle_movements` it would also make the delete FAIL, because the
+ * vehicle's service and the deleted call-out's service need not agree. A row
+ * whose parent is being taken away keeps what it already said.
  */
-create or replace function public.derive_organization_id()
+create or replace function public.enforce_organization_from_parent()
 returns trigger
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
 declare
-  parent_table  text := tg_argv[0];
-  local_column  text := tg_argv[1];
-  parent_column text := tg_argv[2];
-  key_value     uuid;
-  derived       uuid;
+  parent_table   text := tg_argv[0];
+  local_column   text := tg_argv[1];
+  parent_column  text := tg_argv[2];
+  orphan_default boolean := coalesce(tg_argv[3] = 'dvd-if-orphaned', false);
+  key_value      uuid;
+  derived        uuid;
 begin
-  if new.organization_id is not null then
+  key_value := (to_jsonb(new) ->> local_column)::uuid;
+
+  if key_value is null then
+    -- No parent to ask: either this row never had one, or one was just taken
+    -- away. Either way nothing may change the answer it already carries.
+    if tg_op = 'UPDATE' then
+      if new.organization_id is distinct from old.organization_id then
+        raise exception 'ORGANIZATION_MISMATCH';
+      end if;
+      return new;
+    end if;
+
+    if new.organization_id is null then
+      if orphan_default then
+        new.organization_id := '00000000-0000-4000-8000-000000000001';
+      else
+        raise exception 'ORGANIZATION_PARENT_MISSING';
+      end if;
+    end if;
     return new;
   end if;
 
-  key_value := (to_jsonb(new) ->> local_column)::uuid;
+  execute format(
+    'select organization_id from public.%I where %I = $1', parent_table, parent_column)
+    into derived using key_value;
 
-  if key_value is not null then
-    execute format(
-      'select organization_id from public.%I where %I = $1', parent_table, parent_column)
-      into derived using key_value;
+  if derived is null then
+    -- The parent row does not exist. The foreign key is about to say so far
+    -- more clearly than this trigger could, so it is left to do it.
+    return new;
   end if;
 
-  if derived is null and tg_argv[3] = 'dvd-if-orphaned' then
-    derived := '00000000-0000-4000-8000-000000000001';
+  if new.organization_id is null then
+    new.organization_id := derived;
+  elsif new.organization_id is distinct from derived then
+    raise exception 'ORGANIZATION_MISMATCH';
   end if;
 
-  new.organization_id := derived;
   return new;
 end;
 $$;
 
-create trigger derive_organization_10 before insert on public.member_availability
-  for each row execute function public.derive_organization_id('members', 'member_id', 'id');
-create trigger derive_organization_10 before insert on public.member_availability_history
-  for each row execute function public.derive_organization_id('members', 'member_id', 'id');
-create trigger derive_organization_10 before insert on public.intervention_recipients
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.intervention_responses
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.intervention_updates
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.intervention_acknowledgements
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.intervention_journey
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.intervention_journey_history
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.attendance_intervals
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.notification_outbox
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_10 before insert on public.intervention_response_revisions
-  for each row execute function public.derive_organization_id('intervention_responses', 'response_id', 'id');
-create trigger derive_organization_10 before insert on public.attendance_corrections
-  for each row execute function public.derive_organization_id('attendance_intervals', 'interval_id', 'id');
-create trigger derive_organization_10 before insert on public.attendance_correction_requests
-  for each row execute function public.derive_organization_id('attendance_intervals', 'interval_id', 'id');
-create trigger derive_organization_10 before insert on public.notification_delivery_attempts
-  for each row execute function public.derive_organization_id('notification_outbox', 'outbox_id', 'id');
+create trigger enforce_organization before insert or update on public.member_availability
+  for each row execute function public.enforce_organization_from_parent('members', 'member_id', 'id');
+create trigger enforce_organization before insert or update on public.member_availability_history
+  for each row execute function public.enforce_organization_from_parent('members', 'member_id', 'id');
+create trigger enforce_organization before insert or update on public.intervention_recipients
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
+create trigger enforce_organization before insert or update on public.intervention_responses
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
+create trigger enforce_organization before insert or update on public.intervention_updates
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
+create trigger enforce_organization before insert or update on public.intervention_acknowledgements
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
+create trigger enforce_organization before insert or update on public.intervention_journey
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
+create trigger enforce_organization before insert or update on public.intervention_journey_history
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
+create trigger enforce_organization before insert or update on public.attendance_intervals
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
+create trigger enforce_organization before insert or update on public.notification_outbox
+  for each row execute function public.enforce_organization_from_parent('interventions', 'intervention_id', 'id');
 
--- Two chances, in name order: the call-out it was for, then the vehicle itself.
--- The second is a no-op whenever the first found something.
-create trigger derive_organization_10 before insert on public.vehicle_movements
-  for each row execute function public.derive_organization_id('interventions', 'intervention_id', 'id');
-create trigger derive_organization_20 before insert on public.vehicle_movements
-  for each row execute function public.derive_organization_id('vehicles', 'vehicle_id', 'id');
+-- Two hops from the call-out: these know only their immediate parent, which is
+-- the right one to follow - it is already kept honest by its own trigger.
+create trigger enforce_organization before insert or update on public.intervention_response_revisions
+  for each row execute function public.enforce_organization_from_parent('intervention_responses', 'response_id', 'id');
+create trigger enforce_organization before insert or update on public.attendance_corrections
+  for each row execute function public.enforce_organization_from_parent('attendance_intervals', 'interval_id', 'id');
+create trigger enforce_organization before insert or update on public.attendance_correction_requests
+  for each row execute function public.enforce_organization_from_parent('attendance_intervals', 'interval_id', 'id');
+create trigger enforce_organization before insert or update on public.notification_delivery_attempts
+  for each row execute function public.enforce_organization_from_parent('notification_outbox', 'outbox_id', 'id');
 
-create trigger derive_organization_10 before insert on public.operational_audit
-  for each row execute function public.derive_organization_id(
+-- The only table whose parent is optional from the start. An audit row with no
+-- intervention has nothing to check against, so it is DVD by default and may
+-- state a service explicitly; who is allowed to write one at all is P4's
+-- question, not this trigger's.
+create trigger enforce_organization before insert or update on public.operational_audit
+  for each row execute function public.enforce_organization_from_parent(
     'interventions', 'intervention_id', 'id', 'dvd-if-orphaned');
 
 /*
- * `group_members` is the one child with TWO service-scoped parents, so it is the
- * one place they can disagree. A DVD group holding an SZS member would be a
- * roster that quietly spans two services, and no later policy could tell which
- * one it belonged to. Refused here rather than reconciled later.
+ * `vehicle_movements` has two parents and cannot use the generic rule.
+ *
+ * The call-out decides when there is one, which keeps it consistent with every
+ * other child of an intervention; the vehicle answers when there is not.
+ *
+ * THAT FIRST CHOICE NEEDS AN OWNER DECISION BEFORE P7. It means a DVD vehicle
+ * sent to an SZS call-out produces an SZS movement row, so a DVD-scoped read
+ * would not show DVD its own vehicle's movement. The alternative - the vehicle
+ * always decides - hides the movement from the service actually running the
+ * incident. Nothing depends on it yet: every vehicle and every call-out is DVD,
+ * so both rules give the same answer today.
  */
-create or replace function public.derive_group_member_organization()
+create or replace function public.enforce_vehicle_movement_organization()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  derived uuid;
+begin
+  -- The call-out was deleted out from under it. The movement was that service's
+  -- when it happened, and re-deriving from the vehicle here would both rewrite
+  -- history and make the delete fail whenever the two services differ.
+  if tg_op = 'UPDATE' and old.intervention_id is not null and new.intervention_id is null then
+    if new.organization_id is distinct from old.organization_id then
+      raise exception 'ORGANIZATION_MISMATCH';
+    end if;
+    return new;
+  end if;
+
+  if new.intervention_id is not null then
+    select organization_id into derived from public.interventions where id = new.intervention_id;
+  else
+    select organization_id into derived from public.vehicles where id = new.vehicle_id;
+  end if;
+
+  if derived is null then
+    return new;  -- a missing parent is the foreign key's to report
+  end if;
+
+  if new.organization_id is null then
+    new.organization_id := derived;
+  elsif new.organization_id is distinct from derived then
+    raise exception 'ORGANIZATION_MISMATCH';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger enforce_organization before insert or update on public.vehicle_movements
+  for each row execute function public.enforce_vehicle_movement_organization();
+
+/*
+ * `group_members` also has two parents, and both are required to agree. A DVD
+ * group holding an SZS member would be a roster quietly spanning two services,
+ * and no later policy could say which one it belonged to.
+ */
+create or replace function public.enforce_group_member_organization()
 returns trigger
 language plpgsql
 security definer
@@ -339,19 +473,68 @@ begin
   select organization_id into group_organization  from public.groups  where id = new.group_id;
   select organization_id into member_organization from public.members where id = new.member_id;
 
+  if group_organization is null or member_organization is null then
+    return new;  -- a missing parent is the foreign key's to report
+  end if;
+
   if group_organization is distinct from member_organization then
     raise exception 'ORGANIZATION_MISMATCH';
   end if;
 
-  new.organization_id := group_organization;
+  if new.organization_id is null then
+    new.organization_id := group_organization;
+  elsif new.organization_id is distinct from group_organization then
+    raise exception 'ORGANIZATION_MISMATCH';
+  end if;
+
   return new;
 end;
 $$;
 
-create trigger derive_organization_10 before insert on public.group_members
-  for each row execute function public.derive_group_member_organization();
+create trigger enforce_organization before insert or update on public.group_members
+  for each row execute function public.enforce_group_member_organization();
+
+/*
+ * The owning tables: the service is fixed at creation.
+ *
+ * The alternative to refusing is cascading the change across up to seventeen
+ * child tables, silently rewriting the attribution of things that already
+ * happened - including who gets the attendance credited. Whose call-out it was
+ * is not an editable field, and by D13 a person serving in both services holds
+ * two member records rather than moving one between them.
+ *
+ * If a real transfer is ever needed it wants a deliberate command with its own
+ * audit trail, not an UPDATE that reaches seventeen tables. The trigger fires
+ * only when the column actually changes, so ordinary edits are untouched.
+ */
+create or replace function public.refuse_organization_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  raise exception 'ORGANIZATION_IMMUTABLE';
+end;
+$$;
+
+create trigger refuse_organization_change before update on public.members
+  for each row when (old.organization_id is distinct from new.organization_id)
+  execute function public.refuse_organization_change();
+create trigger refuse_organization_change before update on public.vehicles
+  for each row when (old.organization_id is distinct from new.organization_id)
+  execute function public.refuse_organization_change();
+create trigger refuse_organization_change before update on public.groups
+  for each row when (old.organization_id is distinct from new.organization_id)
+  execute function public.refuse_organization_change();
+create trigger refuse_organization_change before update on public.interventions
+  for each row when (old.organization_id is distinct from new.organization_id)
+  execute function public.refuse_organization_change();
 
 -- Credited to whoever ran the call-out until section 6.3 gives it its own rule.
+-- Deliberately insert-only and deliberately not tied to `organization_id`:
+-- section 6.3 exists precisely so the two CAN differ, once something decides
+-- how. Until then nothing writes it but this.
 create or replace function public.derive_credited_organization_id()
 returns trigger
 language plpgsql
@@ -366,13 +549,17 @@ begin
 end;
 $$;
 
--- Runs after `derive_organization_10`, which is what sets the value it copies.
-create trigger derive_organization_30 before insert on public.attendance_intervals
+-- Fires after `enforce_organization`, which is what sets the value it copies:
+-- PostgreSQL runs BEFORE triggers in name order, and `enforce_` sorts first.
+create trigger zz_derive_credited_organization before insert on public.attendance_intervals
   for each row execute function public.derive_credited_organization_id();
 
-revoke all on function public.derive_organization_id() from public, anon, authenticated;
-revoke all on function public.derive_group_member_organization() from public, anon, authenticated;
+revoke all on function public.enforce_organization_from_parent() from public, anon, authenticated;
+revoke all on function public.enforce_vehicle_movement_organization() from public, anon, authenticated;
+revoke all on function public.enforce_group_member_organization() from public, anon, authenticated;
+revoke all on function public.refuse_organization_change() from public, anon, authenticated;
 revoke all on function public.derive_credited_organization_id() from public, anon, authenticated;
+
 
 -- ---------------------------------------------------------------------------
 -- 6. Uniqueness becomes per-service
