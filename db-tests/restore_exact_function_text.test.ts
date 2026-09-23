@@ -1,13 +1,15 @@
 /**
- * The two "restore the exact repository text" migrations, and where they go.
+ * The three "restore the exact repository text" migrations, and where they go.
  *
- * Neither changes behaviour. Both exist because an apply to the hosted project
- * carried the right SQL with the in-body comments stripped, the correction was
- * run against the server, and the correction itself was never committed - so
- * the thing that fixed the drift became drift. `202609130006a` sat that way for
- * eleven days.
+ * None changes behaviour. All three exist because an apply to the hosted project
+ * carried the right SQL with the in-body comments stripped. For the first two
+ * the correction was then run against the server and never committed, so the
+ * thing that fixed the drift became drift; `202609130006a` sat that way for
+ * eleven days. The third, `202609230021`, was found by
+ * `scripts/check-migration-drift.mjs` rather than by hand, which is what that
+ * script is for.
  *
- * A file that does nothing is easy to move, and one of these two cannot be
+ * A file that does nothing is easy to move, and one of these three cannot be
  * moved. `202609130006a` re-creates thirteen function bodies at their state
  * after `202609130006`, and three of those thirteen are re-created AGAIN by
  * `202609230019` so they write to `registry_audit` instead of the renamed-away
@@ -30,6 +32,7 @@ import { MIGRATIONS, asUserCommitted, completeProfile, connect, createAccount, g
 
 const RESTORE_006A = 'supabase/migrations/202609130006a_restore_exact_repository_function_text.sql';
 const RESTORE_020 = 'supabase/migrations/202609230020_restore_exact_repository_function_text_audit_triggers.sql';
+const RESTORE_021 = 'supabase/migrations/202609230021_restore_intervention_audit_exact_text.sql';
 const ATTENDANCE_TRUTH = 'supabase/migrations/202609130006_attendance_truth.sql';
 const REGISTRY_RENAME = 'supabase/migrations/202609230019_registry_rename.sql';
 
@@ -110,6 +113,20 @@ describe('neither restore file changes anything on a replay', () => {
     const before = await functionText(db);
 
     await db.query(sql(RESTORE_020));
+    const after = await functionText(db);
+
+    expect(after.count).toBe(before.count);
+    expect(after.hash).toBe(before.hash);
+  });
+
+  it('021 is a no-op applied on top of the whole list', async () => {
+    // Safe at the end only because 202609150010 is the only migration that
+    // defines `intervention_audit`. If that stops being true this fails, which
+    // is the point of asserting it rather than reasoning about it.
+    await applyAll(db, MIGRATIONS);
+    const before = await functionText(db);
+
+    await db.query(sql(RESTORE_021));
     const after = await functionText(db);
 
     expect(after.count).toBe(before.count);
