@@ -46,6 +46,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS, asUser, connect, createAccount } from './harness';
 
 const REGISTRY = 'supabase/migrations/202609240024_organisation_registry.sql';
+const AUDIT = 'supabase/migrations/202609240025_registry_audit_organisation.sql';
+
+/** A name distinctive enough that finding it anywhere is proof of a leak. */
+const SECRET_SZS_NAME = 'Tajni Clan SZS';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
@@ -145,7 +149,10 @@ const isRefusal = (value: string) => /^[A-Z][A-Z_]{4,}$/.test(value);
  * without a savepoint to roll back to, every probe after the first one would
  * report the same "current transaction is aborted" rather than its own answer.
  *
- * Returns the command's scalar result, or the refusal code.
+ * Returns the command's scalar result, or the refusal code. A `returns void`
+ * command comes back as an empty string, so empty is reported as 'OK' - which
+ * means a query whose own result may legitimately be empty needs a sentinel
+ * rather than '', or the two become indistinguishable.
  */
 async function act(userId: string, statement: string, params: unknown[] = []): Promise<string> {
   await db.query('savepoint act');
@@ -466,6 +473,19 @@ beforeAll(async () => {
     `insert into public.members(full_name, user_id, organization_id) values ($1, $2, $3)`,
     ['Vatrogasac DVD', dvdFirefighter, DVD],
   );
+
+  // Real, COMMITTED DVD registry history, written through the real commands.
+  // Everything else in this file rolls back, so without these the audit table
+  // would be empty and 202609240025's backfill would have nothing to attribute
+  // - a test that passes because there was no work to do.
+  await db.query('begin');
+  await act(dvdAdmin, `select public.admin_create_member($1, '{}')`, ['Evidencija Clan']);
+  await act(dvdAdmin, `select public.admin_create_group($1)`, ['Evidencija Smjena']);
+  await act(dvdAdmin, `select public.admin_create_vehicle($1, $2, 'NAVALNO')`, [
+    'E-1',
+    'Evidencija Vozilo',
+  ]);
+  await db.query('commit');
 
   await snapshotVisible(visibleBefore);
   await snapshotPowers(powersBefore);
@@ -854,6 +874,49 @@ describe('after P4a: each service sees and administers only its own registry', (
     );
   });
 
+  /*
+   * The six tables are isolated by here. Their HISTORY is not, and this is the
+   * one place in the phase where that is still true - so it is asserted as a
+   * leak rather than described as one, and 202609240025 is what turns these
+   * three expectations over.
+   */
+  it('still leaks the SZS audit trail, names and all, to a DVD administrator', async () => {
+    await db.query('begin');
+    try {
+      const created = await act(szsAdmin, `select public.admin_create_member_in($1, $2, '{}')`, [
+        SZS,
+        SECRET_SZS_NAME,
+      ]);
+      expect(isRefusal(created), `the SZS member was created: ${created}`).toBe(false);
+
+      const seen = await act(
+        dvdAdmin,
+        `select coalesce(string_agg(detail->>'full_name', ','), 'NONE') as names
+           from public.registry_audit where entity_id = $1`,
+        [created],
+      );
+      expect(seen, "a DVD administrator can read the SZS member's name").toBe(SECRET_SZS_NAME);
+
+      const own = await act(
+        szsAdmin,
+        `select count(*)::text from public.registry_audit where entity_id = $1`,
+        [created],
+      );
+      expect(own, 'and the SZS administrator who wrote it can read nothing').toBe('0');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('has no organization_id on registry_audit at all yet', async () => {
+    const { rows } = await db.query<{ n: string }>(
+      `select count(*)::text as n from information_schema.columns
+        where table_schema = 'public' and table_name = 'registry_audit'
+          and column_name = 'organization_id'`,
+    );
+    expect(rows[0]!.n, 'the column the policy would need does not exist').toBe('0');
+  });
+
   it('leaves no is_dvd_* guard in the tables this phase owns', async () => {
     const { rows } = await db.query<{ policyname: string; qual: string }>(
       `select policyname, coalesce(qual, '') as qual from pg_policies
@@ -874,5 +937,222 @@ describe('after P4a: each service sees and administers only its own registry', (
         order by 1`,
     );
     expect(functions.map((row) => row.proname)).toEqual([]);
+  });
+});
+
+describe('after 202609240025: the audit trail belongs to a service too', () => {
+  /** Row counts before the migration, so nothing can be lost by it. */
+  let auditRowsBefore = 0;
+  let dvdAuditRowsBefore: string[] = [];
+
+  beforeAll(async () => {
+    const { rows: total } = await db.query<{ n: string }>(
+      `select count(*)::text as n from public.registry_audit`,
+    );
+    auditRowsBefore = Number(total[0]!.n);
+    const { rows: visible } = await db.query<{ id: string }>(
+      `select id::text from public.registry_audit order by 1`,
+    );
+    dvdAuditRowsBefore = visible.map((row) => row.id);
+
+    await db.query(sql(AUDIT));
+  }, 120_000);
+
+  it('keeps every existing row, and attributes them all to DVD', async () => {
+    const { rows } = await db.query<{ n: string }>(
+      `select count(*)::text as n from public.registry_audit`,
+    );
+    expect(Number(rows[0]!.n), 'no audit row was lost').toBe(auditRowsBefore);
+    expect(auditRowsBefore, 'there were rows to attribute in the first place').toBeGreaterThan(0);
+
+    const { rows: byService } = await db.query<{ organization_id: string; n: string }>(
+      `select organization_id::text, count(*)::text as n
+         from public.registry_audit group by 1 order by 1`,
+    );
+    expect(byService, 'every pre-existing row is DVD, which is what it was').toEqual([
+      { organization_id: DVD, n: String(auditRowsBefore) },
+    ]);
+
+    const { rows: stillThere } = await db.query<{ id: string }>(
+      `select id::text from public.registry_audit order by 1`,
+    );
+    expect(stillThere.map((row) => row.id), 'the same rows, by id').toEqual(dvdAuditRowsBefore);
+  });
+
+  it('leaves the existing columns exactly as they were', async () => {
+    const { rows } = await db.query<{ column_name: string; data_type: string; is_nullable: string }>(
+      `select column_name, data_type, is_nullable from information_schema.columns
+        where table_schema = 'public' and table_name = 'registry_audit'
+          and column_name <> 'organization_id'
+        order by ordinal_position`,
+    );
+    expect(rows).toEqual([
+      { column_name: 'id', data_type: 'uuid', is_nullable: 'NO' },
+      { column_name: 'entity_kind', data_type: 'text', is_nullable: 'NO' },
+      { column_name: 'entity_id', data_type: 'uuid', is_nullable: 'NO' },
+      { column_name: 'event_type', data_type: 'text', is_nullable: 'NO' },
+      { column_name: 'detail', data_type: 'jsonb', is_nullable: 'NO' },
+      { column_name: 'reason', data_type: 'text', is_nullable: 'YES' },
+      { column_name: 'changed_by', data_type: 'uuid', is_nullable: 'NO' },
+      { column_name: 'changed_at', data_type: 'timestamp with time zone', is_nullable: 'NO' },
+    ]);
+  });
+
+  it('shows a DVD administrator only DVD audit, and no SZS name', async () => {
+    await db.query('begin');
+    try {
+      const created = await act(szsAdmin, `select public.admin_create_member_in($1, $2, '{}')`, [
+        SZS,
+        SECRET_SZS_NAME,
+      ]);
+      expect(isRefusal(created), `the SZS member was created: ${created}`).toBe(false);
+
+      const services = await act(
+        dvdAdmin,
+        `select coalesce(string_agg(distinct organization_id::text, ','), 'NONE') from public.registry_audit`,
+      );
+      expect(services, 'a DVD administrator sees DVD rows and nothing else').toBe(DVD);
+
+      const names = await act(
+        dvdAdmin,
+        `select coalesce(string_agg(detail->>'full_name', ','), 'NONE') from public.registry_audit
+          where detail->>'full_name' = $1`,
+        [SECRET_SZS_NAME],
+      );
+      expect(names, 'and the SZS name is nowhere in what they can read').toBe('NONE');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('shows an SZS administrator their own audit trail, and only theirs', async () => {
+    await db.query('begin');
+    try {
+      const created = await act(szsAdmin, `select public.admin_create_member_in($1, $2, '{}')`, [
+        SZS,
+        SECRET_SZS_NAME,
+      ]);
+      const own = await act(
+        szsAdmin,
+        `select coalesce(string_agg(detail->>'full_name', ','), 'NONE') from public.registry_audit
+          where entity_id = $1`,
+        [created],
+      );
+      expect(own, 'the administrator who wrote it can now read it back').toBe(SECRET_SZS_NAME);
+
+      const services = await act(
+        szsAdmin,
+        `select coalesce(string_agg(distinct organization_id::text, ','), 'NONE') from public.registry_audit`,
+      );
+      expect(services, 'and sees no DVD row').toBe(SZS);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('shows the installation owner both services', async () => {
+    await db.query('begin');
+    try {
+      await act(szsAdmin, `select public.admin_create_member_in($1, $2, '{}')`, [
+        SZS,
+        SECRET_SZS_NAME,
+      ]);
+      const services = await act(
+        ownerUser,
+        `select coalesce(string_agg(distinct organization_id::text, ','), 'NONE') from public.registry_audit`,
+      );
+      expect(services.split(',').sort()).toEqual([DVD, SZS].sort());
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('keeps the existing DVD audit view: an administrator reads it, nobody else does', async () => {
+    // Exactly the property `registry.test.ts` has asserted since the audit table
+    // existed. A service filter must not have narrowed it to nothing.
+    const asAdmin = await probe(dvdAdmin, `select count(*)::text from public.registry_audit`);
+    expect(Number(asAdmin), 'a DVD administrator still reads the DVD trail').toBeGreaterThan(0);
+
+    for (const [label, user] of [
+      ['commander', dvdCommander],
+      ['firefighter', dvdFirefighter],
+      ['suspended', suspendedUser],
+      ['incomplete', incompleteUser],
+    ] as const) {
+      expect(await probe(user, `select count(*)::text from public.registry_audit`), label).toBe('0');
+    }
+  });
+
+  it('derives the service from the entity rather than from the writer', async () => {
+    // The writers are security definer, so a value they supplied would be a
+    // claim. A row naming a service its entity does not belong to is refused,
+    // and one naming none is filled in from the entity.
+    await db.query('begin');
+    try {
+      const mismatched = await db
+        .query(
+          `insert into public.registry_audit(
+             entity_kind, entity_id, event_type, detail, changed_by, organization_id)
+           values ('MEMBER', $1, 'FORGED', '{}'::jsonb, $2, $3)`,
+          [dvd.memberId, ownerUser, SZS],
+        )
+        .then(() => 'OK')
+        .catch((error: Error) => error.message);
+      expect(String(mismatched)).toContain('ORGANIZATION_MISMATCH');
+    } finally {
+      await db.query('rollback');
+    }
+
+    await db.query('begin');
+    try {
+      const { rows } = await db.query<{ organization_id: string }>(
+        `insert into public.registry_audit(entity_kind, entity_id, event_type, detail, changed_by)
+         values ('VEHICLE', $1, 'DERIVED', '{}'::jsonb, $2) returning organization_id::text`,
+        [szs.vehicleId, ownerUser],
+      );
+      expect(rows[0]!.organization_id, "filled in from the vehicle's own service").toBe(SZS);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('refuses a row about an entity it cannot attribute', async () => {
+    await db.query('begin');
+    try {
+      const orphan = await db
+        .query(
+          `insert into public.registry_audit(entity_kind, entity_id, event_type, detail, changed_by)
+           values ('MEMBER', gen_random_uuid(), 'ORPHAN', '{}'::jsonb, $1)`,
+          [ownerUser],
+        )
+        .then(() => 'OK')
+        .catch((error: Error) => error.message);
+      expect(String(orphan), 'refused rather than guessed at').toContain('ORGANIZATION_UNKNOWN');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('settles the service when the row is written, and never after', async () => {
+    await db.query('begin');
+    try {
+      const changed = await db
+        .query(`update public.registry_audit set organization_id = $1`, [SZS])
+        .then(() => 'OK')
+        .catch((error: Error) => error.message);
+      expect(String(changed)).toContain('ORGANIZATION_IMMUTABLE');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('leaves no is_dvd_* guard on the audit table either', async () => {
+    const { rows } = await db.query<{ policyname: string; qual: string }>(
+      `select policyname, coalesce(qual, '') as qual from pg_policies
+        where schemaname = 'public' and tablename = 'registry_audit'`,
+    );
+    expect(rows.map((row) => row.policyname)).toEqual(['registry_audit_admin_read']);
+    expect(rows[0]!.qual).not.toMatch(/is_dvd_admin/);
+    expect(rows[0]!.qual).toMatch(/is_admin_in/);
   });
 });

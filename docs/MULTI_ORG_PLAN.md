@@ -509,12 +509,12 @@ its own without stranding the rest.
 
 | PR | Tables | Policies |
 |---|---|---|
-| **P4a** — registry ✅ **done, `202609240024`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history` | 7 |
+| **P4a** — registry ✅ **done, `202609240024` + `202609240025`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
 | **P4b** — interventions | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements` | 6 |
 | **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` | 7 |
 | **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` | 8 |
 | **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** | 3 + 1 function |
-| **P4f** — accounts and audit | `operational_audit`, `registry_audit`, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 20 |
+| **P4f** — accounts and audit | `operational_audit`, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 19 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -533,6 +533,22 @@ same way. The pattern P4a settled on:
 - `ADMIN_REQUIRED` still means "you administer nothing" and is checked BEFORE
   any row is read, so ids cannot be probed; `ORGANIZATION_MISMATCH` means "you
   administer a different service than this row".
+
+**`registry_audit` moved from P4f to P4a**, and the reason generalises. Its one
+policy read `is_dvd_admin()` with no service filter and the table had no
+`organization_id` — harmless while only DVD could write, and a leak the moment
+P4a gave SZS its own writers, because `detail` carries the member's name.
+Measured on a schema at `202609240024`: an SZS ADMIN created `Tajni Clan SZS`
+and a DVD ADMIN read the name straight out of the audit trail, while the SZS
+ADMIN who wrote the row read nothing at all.
+
+So: **a boundary is closed by the phase that opens it, not by the phase that
+happens to own the table.** P4b–f each need to ask which audit and history
+tables their own new writers start filling, rather than assuming the table's
+listed phase will get there in time. The service on an audit row is derived
+from the entity it is about by a trigger, never supplied by the writer — the
+writers are `security definer`, so a column they filled in would be a claim
+rather than a fact.
 
 **P4e carries a hazard the others do not.** The push worker reads `members`,
 `interventions` and `intervention_acknowledgements` with the **service-role
