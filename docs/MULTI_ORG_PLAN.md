@@ -510,11 +510,11 @@ its own without stranding the rest.
 | PR | Tables | Policies |
 |---|---|---|
 | **P4a** — registry ✅ **done, `202609240024`–`202609240026`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
-| **P4b** — interventions | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements` | 6 |
-| **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` | 7 |
-| **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` | 8 |
-| **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** | 3 + 1 function |
-| **P4f** — accounts and audit | `operational_audit`, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 19 |
+| **P4b** — interventions ✅ **done, `202609250027`–`202609250029`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)*; **and the read side of all ten tables below, which its commands write** *(see "What P4b's commands write")* | 8 + 13 |
+| **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` already service-scoped by P4b; left: `submit_response`, which is DVD-blind and fails closed* | 7 |
+| **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command already service-scoped by P4b; left: the correction-request INSERT policy (DVD-only, fails closed) and crediting* | 8 |
+| **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; left: the worker's service-role queries and `register_web_push_subscription` (DVD-only)* | 3 + 1 function |
+| **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 17 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -561,6 +561,92 @@ rule** rather than only by privilege, which is what its own comment had claimed
 since the table was created. Every audit and history table P4b–f touches should
 be read the same way: *which columns decide what this row means, and is every
 one of them settled at insert?*
+
+**What P4b added to the pattern.** Two things P4a's shape did not cover:
+
+- **Recipient selection is half of publication.** `is_eligible_recipient` and
+  `eligible_recipients` asked `access_grants.role`, which since P3 carries DVD's
+  role only — an SZS member's grant reads `CITIZEN`, because anything else is
+  mirrored into an active DVD membership. So SZS could not have published a
+  call-out to anybody. Both gained `*_in(service)` forms; the old signatures are
+  DVD wrappers.
+- **"Shares a service with me" is not "may receive this call-out".**
+  `serves_with(member)` is caller-relative, and is true of *both* services for
+  somebody who serves in both — so a commander of two services could have sent
+  one service's call-out to the other's members. The question now asks the
+  service running the call-out.
+- **…but who may ASK is still a question.** `202609250027` moved the question
+  to the service and dropped P0's caller bound with it, so any signed-in
+  account — a citizen included — could ask whether a given member of either
+  service was active and serving. `202609250029` answers only somebody who is
+  staff in the service asked about. Replacing a bound is not the same as
+  removing one; check that the old question's *other* job survived.
+
+**A phase must also guard the commands it points at.** P4b's own four tables
+were not the whole surface: `attendance_check_in`, `set_journey_progress` and
+`record_vehicle_departure` write rows that hang off an intervention, are
+`security definer`, and asked only `is_dvd_staff()`. Making SZS call-outs
+possible made all three reachable across services — a DVD member checked in on
+an SZS call-out, a DVD member's journey row written onto one, a DVD vehicle
+sent to one. `202609250028` gives each the same two questions: is the caller
+staff **in that call-out's service**, and does the row being written belong
+there too. The tables themselves stay P4c's and P4d's.
+
+`submit_response` was the near miss, and it is worth knowing why it held: it
+looks its recipient up **inline against the member it is about to write**
+rather than calling `is_recipient_of`, so the two can never disagree. Every
+later phase should prefer that shape.
+
+**What P4b's commands write — derived, not listed.** Twice review found P4b's
+hand-made list of affected tables short. `202609250029` was built the other
+way: every table reachable from `interventions` by foreign key (fifteen), every
+policy on them, every function whose body names one, every trigger that labels
+their rows with a service. It closed:
+
+- **thirteen read policies on ten tables** P4b's commands write —
+  `notification_outbox`, `notification_delivery_attempts`,
+  `intervention_journey`(`_history`), `attendance_intervals`,
+  `attendance_corrections`, `attendance_correction_requests`,
+  `vehicle_movements`, `intervention_responses`(`_revisions`) — all of which a
+  DVD-only commander could read SZS rows from. The full workflows stay in P4c–e
+  (table above); only "may you see or touch this row" moved;
+- **eight commands** that act on those rows by id and asked only
+  `is_dvd_command()` / `is_dvd_staff()` — confirm, reject, unconfirm, correct,
+  confirm-many, check-out, vehicle return — plus `attendance_check_in`, whose
+  `requested_vehicle` went in unchecked, so an SZS interval could name a DVD
+  vehicle;
+- **two `security definer` readers no policy reaches**: `intervention_audit`,
+  which returned an SZS call-out's whole chronology to a DVD commander, and
+  `is_eligible_recipient_in` (above);
+- **a DVD fallback**: `operational_audit` labels a row with no call-out DVD
+  (`dvd-if-orphaned`). Once SZS could send its own vehicle out, that filed SZS
+  vehicle movements under DVD. The two vehicle commands now name the vehicle's
+  service.
+
+`organisation_interventions.test.ts` re-derives the same list from the catalogue
+and asserts that exactly two DVD-only questions survive on it —
+`submit_response` (P4c) and the correction-request INSERT policy (P4d), both
+failing closed — so a table or command added later is caught by construction.
+A DVD-only check cannot see a function that asks *nothing*, which is what
+`is_eligible_recipient_in` was; so it also asserts, installation-wide, that
+every client-callable `security definer` function asks about its caller or is a
+one-line DVD wrapper around one that does. It first applies every migration that
+sorts after 029, so a later file that reopens any of this fails there.
+
+Two consequences worth knowing. `attendance_totals()` is caller-rights and joins
+`members`, so P4a's `members` policy already bounded it; 029's policy is a
+second, independent bound, and the test pins it as NOT `security definer`
+because that would remove both at once. And `202609230021` — a "restore exact
+text" file — now has a **load-bearing position**, as `202609130006a` does: it
+re-creates `intervention_audit` at its DVD-only text, so replayed after 029 it
+would reopen that leak. `restore_exact_function_text.test.ts` asserts both the
+ordering and the consequence.
+
+**A permission the owner loses, deliberately.** The installation owner could
+publish one call-out to members of both services. That is a joint intervention,
+which Q1–Q8 have not been answered for. The owner keeps both services and may
+run a call-out in each; what is gone is mixing them into one recipient list.
+`recipient_organisation_scope.test.ts` records the change where it was asserted.
 
 **P4e carries a hazard the others do not.** The push worker reads `members`,
 `interventions` and `intervention_acknowledgements` with the **service-role
