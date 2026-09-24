@@ -510,11 +510,11 @@ its own without stranding the rest.
 | PR | Tables | Policies |
 |---|---|---|
 | **P4a** — registry ✅ **done, `202609240024`–`202609240026`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
-| **P4b** — interventions | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements` | 6 |
+| **P4b** — interventions ✅ **done, `202609250027`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)* | 8 |
 | **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` | 7 |
 | **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` | 8 |
 | **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** | 3 + 1 function |
-| **P4f** — accounts and audit | `operational_audit`, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 19 |
+| **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 17 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -561,6 +561,26 @@ rule** rather than only by privilege, which is what its own comment had claimed
 since the table was created. Every audit and history table P4b–f touches should
 be read the same way: *which columns decide what this row means, and is every
 one of them settled at insert?*
+
+**What P4b added to the pattern.** Two things P4a's shape did not cover:
+
+- **Recipient selection is half of publication.** `is_eligible_recipient` and
+  `eligible_recipients` asked `access_grants.role`, which since P3 carries DVD's
+  role only — an SZS member's grant reads `CITIZEN`, because anything else is
+  mirrored into an active DVD membership. So SZS could not have published a
+  call-out to anybody. Both gained `*_in(service)` forms; the old signatures are
+  DVD wrappers.
+- **"Shares a service with me" is not "may receive this call-out".**
+  `serves_with(member)` is caller-relative, and is true of *both* services for
+  somebody who serves in both — so a commander of two services could have sent
+  one service's call-out to the other's members. The question now asks the
+  service running the call-out.
+
+**A permission the owner loses, deliberately.** The installation owner could
+publish one call-out to members of both services. That is a joint intervention,
+which Q1–Q8 have not been answered for. The owner keeps both services and may
+run a call-out in each; what is gone is mixing them into one recipient list.
+`recipient_organisation_scope.test.ts` records the change where it was asserted.
 
 **P4e carries a hazard the others do not.** The push worker reads `members`,
 `interventions` and `intervention_acknowledgements` with the **service-role

@@ -54,6 +54,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609240024_organisation_registry.sql',
   'supabase/migrations/202609240025_registry_audit_organisation.sql',
   'supabase/migrations/202609240026_registry_audit_append_only.sql',
+  'supabase/migrations/202609250027_organisation_interventions.sql',
 ];
 
 export const DATABASE_URL =
