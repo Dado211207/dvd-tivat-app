@@ -30,6 +30,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
@@ -37,7 +38,8 @@ import pg from 'pg';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ADMIN_URL =
   process.env.DVD_TEST_DATABASE_URL ?? 'postgresql://postgres@localhost:55432/postgres';
-const GATE_DB = 'p3_equivalence_gate';
+// A fresh name prevents a run from destroying a previous local database.
+const GATE_DB = `p3_equivalence_gate_${process.pid}_${randomBytes(8).toString('hex')}`;
 const DVD = '00000000-0000-4000-8000-000000000001';
 
 const P2 = 'supabase/migrations/202609240022_organisation_columns.sql';
@@ -50,8 +52,9 @@ function check(label, ok, detail = '') {
 }
 
 function unrunnable(message) {
-  console.error(`\nThe gate could not be run: ${message}`);
-  process.exit(2);
+  const error = new Error(message);
+  error.exitCode = 2;
+  throw error;
 }
 
 /**
@@ -109,22 +112,36 @@ async function main() {
   console.log(`  production state  ${before.length} files, last ${before[before.length - 1]}`);
   toApply.forEach((file, i) => console.log(`  to apply       ${i + 1}. ${file}`));
 
+  // This script creates and drops a database. Never allow a remote endpoint,
+  // even when DVD_TEST_DATABASE_URL was set accidentally in this shell.
+  let adminUrl;
+  try {
+    adminUrl = new URL(ADMIN_URL);
+  } catch {
+    unrunnable('DVD_TEST_DATABASE_URL must be a local PostgreSQL URL');
+  }
+  if (
+    !['postgres:', 'postgresql:'].includes(adminUrl.protocol) ||
+    !['localhost', '127.0.0.1', '[::1]'].includes(adminUrl.hostname)
+  ) {
+    unrunnable('the gate only accepts a loopback PostgreSQL server');
+  }
+
   const admin = new pg.Client({ connectionString: ADMIN_URL });
   try {
     await admin.connect();
+    await admin.query(`create database ${GATE_DB}`);
   } catch (error) {
-    unrunnable(`no local PostgreSQL at ${ADMIN_URL} - run \`npm run db:start\` (${error.message})`);
+    unrunnable(`could not create the isolated local database - run \`npm run db:start\` (${error.message || String(error)})`);
+  } finally {
+    await admin.end();
   }
-  await admin.query(`drop database if exists ${GATE_DB} with (force)`);
-  await admin.query(`create database ${GATE_DB}`);
-  await admin.end();
 
-  const gateUrl = new URL(ADMIN_URL);
+  const gateUrl = new URL(adminUrl);
   gateUrl.pathname = `/${GATE_DB}`;
   const db = new pg.Client({ connectionString: gateUrl.toString() });
-  await db.connect();
-
   try {
+    await db.connect();
     console.log('\n=== 2. rebuild the production schema state ===');
     for (const file of before) {
       try {
@@ -360,8 +377,9 @@ async function main() {
       `${mismatches.length} mismatch(es) of ${pre.length}`,
     );
     if (mismatches.length > 0) {
-      console.error('\nThe copy does not match production, so nothing measured on it means anything.');
-      process.exit(1);
+      const error = new Error('the copy does not match production; comparison aborted');
+      error.exitCode = 1;
+      throw error;
     }
 
     console.log('\n=== 6. apply the unapplied migrations, in order ===');
@@ -371,7 +389,8 @@ async function main() {
         await db.query(sqlFile(file));
       } catch (error) {
         check(`${file} applies to real production state`, false, error.message);
-        process.exit(1);
+        error.exitCode = 1;
+        throw error;
       }
       console.log(`  ${i + 1}. ${file} - applied in ${Date.now() - started} ms`);
     }
@@ -468,6 +487,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`\nThe gate could not be run: ${error.message}`);
-  process.exit(2);
+  console.error(`\n${error.exitCode === 1 ? 'GATE FAILED' : 'The gate could not be run'}: ${error.message}`);
+  process.exitCode = error.exitCode ?? 2;
 });
