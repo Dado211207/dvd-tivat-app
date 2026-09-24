@@ -47,6 +47,7 @@ import { MIGRATIONS, asUser, connect, createAccount } from './harness';
 
 const REGISTRY = 'supabase/migrations/202609240024_organisation_registry.sql';
 const AUDIT = 'supabase/migrations/202609240025_registry_audit_organisation.sql';
+const APPEND_ONLY = 'supabase/migrations/202609240026_registry_audit_append_only.sql';
 
 /** A name distinctive enough that finding it anywhere is proof of a leak. */
 const SECRET_SZS_NAME = 'Tajni Clan SZS';
@@ -1146,6 +1147,47 @@ describe('after 202609240025: the audit trail belongs to a service too', () => {
     }
   });
 
+  /*
+   * ...but only that column is watched, and the service is not the only thing
+   * that decides which service a row belongs to. `entity_id` does too, and
+   * nothing guards it - so a DVD row can be repointed into SZS while keeping
+   * its DVD label. Asserted as the hole it still is; 202609240026 turns it over.
+   */
+  it('still lets an audit row be repointed at another service\'s entity', async () => {
+    await db.query('begin');
+    try {
+      const szsMember = await act(szsAdmin, `select public.admin_create_member_in($1, $2, '{}')`, [
+        SZS,
+        SECRET_SZS_NAME,
+      ]);
+      const { rows: before } = await db.query<{ id: string }>(
+        `select id from public.registry_audit where organization_id = $1 limit 1`,
+        [DVD],
+      );
+      expect(before, 'there is a DVD audit row to repoint').toHaveLength(1);
+
+      await db.query(`update public.registry_audit set entity_id = $1 where id = $2`, [
+        szsMember,
+        before[0]!.id,
+      ]);
+
+      const { rows: after } = await db.query<{ label: string; entity: string; name: string }>(
+        `select audit.organization_id::text as label,
+                member.organization_id::text as entity,
+                member.full_name as name
+           from public.registry_audit audit
+           join public.members member on member.id = audit.entity_id
+          where audit.id = $1`,
+        [before[0]!.id],
+      );
+      expect(after[0]!.label, 'the row still reads as DVD').toBe(DVD);
+      expect(after[0]!.entity, 'while pointing into SZS').toBe(SZS);
+      expect(after[0]!.name).toBe(SECRET_SZS_NAME);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
   it('leaves no is_dvd_* guard on the audit table either', async () => {
     const { rows } = await db.query<{ policyname: string; qual: string }>(
       `select policyname, coalesce(qual, '') as qual from pg_policies
@@ -1154,5 +1196,146 @@ describe('after 202609240025: the audit trail belongs to a service too', () => {
     expect(rows.map((row) => row.policyname)).toEqual(['registry_audit_admin_read']);
     expect(rows[0]!.qual).not.toMatch(/is_dvd_admin/);
     expect(rows[0]!.qual).toMatch(/is_admin_in/);
+  });
+});
+
+describe('after 202609240026: an audit entry is written once and never touched', () => {
+  let auditRows = 0;
+  let dvdAuditRow = '';
+
+  beforeAll(async () => {
+    const { rows } = await db.query<{ id: string }>(
+      `select id from public.registry_audit where organization_id = $1 order by changed_at limit 1`,
+      [DVD],
+    );
+    dvdAuditRow = rows[0]!.id;
+    const { rows: total } = await db.query<{ n: string }>(
+      `select count(*)::text as n from public.registry_audit`,
+    );
+    auditRows = Number(total[0]!.n);
+
+    await db.query(sql(APPEND_ONLY));
+  }, 120_000);
+
+  /** Runs one statement as the superuser and reports OK or the refusal. */
+  async function attempt(statement: string, params: unknown[] = []): Promise<string> {
+    await db.query('begin');
+    try {
+      await db.query(statement, params);
+      return 'OK';
+    } catch (error) {
+      return (error as Error).message;
+    } finally {
+      await db.query('rollback');
+    }
+  }
+
+  it('refuses the repointing that 202609240025 still allowed', async () => {
+    await db.query('begin');
+    try {
+      const szsMember = await act(szsAdmin, `select public.admin_create_member_in($1, $2, '{}')`, [
+        SZS,
+        SECRET_SZS_NAME,
+      ]);
+      await db.query('savepoint repoint');
+      const refused = await db
+        .query(`update public.registry_audit set entity_id = $1 where id = $2`, [
+          szsMember,
+          dvdAuditRow,
+        ])
+        .then(() => 'OK')
+        .catch((error: Error) => error.message);
+      await db.query('rollback to savepoint repoint');
+      expect(String(refused)).toContain('AUDIT_APPEND_ONLY');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  const UPDATES: ReadonlyArray<readonly [string, string, 'row' | 'service' | 'account']> = [
+    ['entity_kind', `update public.registry_audit set entity_kind = 'VEHICLE' where id = $1`, 'row'],
+    ['entity_id', `update public.registry_audit set entity_id = gen_random_uuid() where id = $1`, 'row'],
+    ['organization_id', `update public.registry_audit set organization_id = $2 where id = $1`, 'service'],
+    ['detail', `update public.registry_audit set detail = '{"full_name":"Neko Drugi"}' where id = $1`, 'row'],
+    ['event_type', `update public.registry_audit set event_type = 'REWRITTEN' where id = $1`, 'row'],
+    ['changed_by', `update public.registry_audit set changed_by = $2 where id = $1`, 'account'],
+    ['changed_at', `update public.registry_audit set changed_at = now() where id = $1`, 'row'],
+    ['reason', `update public.registry_audit set reason = 'drugi razlog' where id = $1`, 'row'],
+  ];
+
+  it.each(UPDATES)('refuses an update of %s', async (column, statement, shape) => {
+    // Every column, not only the ones somebody thought of: rewriting `detail`
+    // falsifies the recorded name and rewriting `changed_by` blames the wrong
+    // person, both worse than a mislabelled service.
+    const params =
+      shape === 'service' ? [dvdAuditRow, SZS]
+      : shape === 'account' ? [dvdAuditRow, szsAdmin]
+      : [dvdAuditRow];
+    expect(String(await attempt(statement, params)), column).toContain('AUDIT_APPEND_ONLY');
+  });
+
+  it('refuses a delete, including by the superuser', async () => {
+    expect(
+      String(await attempt(`delete from public.registry_audit where id = $1`, [dvdAuditRow])),
+    ).toContain('AUDIT_APPEND_ONLY');
+    expect(String(await attempt(`delete from public.registry_audit`))).toContain(
+      'AUDIT_APPEND_ONLY',
+    );
+  });
+
+  it('still appends, which is the whole point', async () => {
+    await db.query('begin');
+    try {
+      const created = await act(szsAdmin, `select public.admin_create_member_in($1, $2, '{}')`, [
+        SZS,
+        'Novi Poslije Zabrane',
+      ]);
+      expect(isRefusal(created), `the command still works: ${created}`).toBe(false);
+      const { rows } = await db.query<{ organization_id: string }>(
+        `select organization_id::text from public.registry_audit where entity_id = $1`,
+        [created],
+      );
+      expect(rows, 'and its audit row was written').toHaveLength(1);
+      expect(rows[0]!.organization_id, 'still attributed from the entity').toBe(SZS);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('keeps 202609240025 backfill intact: same rows, same attribution', async () => {
+    const { rows: total } = await db.query<{ n: string }>(
+      `select count(*)::text as n from public.registry_audit`,
+    );
+    expect(Number(total[0]!.n), 'no row lost to the new guard').toBe(auditRows);
+
+    const { rows: nulls } = await db.query<{ n: string }>(
+      `select count(*)::text as n from public.registry_audit where organization_id is null`,
+    );
+    expect(nulls[0]!.n, 'every row is still attributed').toBe('0');
+  });
+
+  it('replaced the narrower guard rather than stacking on it', async () => {
+    const { rows } = await db.query<{ tgname: string; def: string }>(
+      `select t.tgname, pg_get_triggerdef(t.oid) as def
+         from pg_trigger t join pg_class c on c.oid = t.tgrelid
+         join pg_namespace n on n.oid = c.relnamespace
+        where not t.tgisinternal and n.nspname = 'public' and c.relname = 'registry_audit'
+        order by t.tgname`,
+    );
+    expect(rows.map((row) => row.tgname).sort()).toEqual(['enforce_organization', 'refuse_change']);
+    const refuse = rows.find((row) => row.tgname === 'refuse_change')!;
+    // PostgreSQL normalises the event list, so this reads DELETE OR UPDATE.
+    expect(refuse.def, 'covers both statements').toMatch(/BEFORE DELETE OR UPDATE/i);
+  });
+
+  it('leaves the guard uncallable as an RPC', async () => {
+    const { rows } = await db.query<{ acl: string }>(
+      `select coalesce(array_to_string(p.proacl::text[], ' '), 'DEFAULT') as acl
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'refuse_registry_audit_change'`,
+    );
+    expect(rows[0]!.acl).not.toMatch(/\banon=/);
+    expect(rows[0]!.acl).not.toMatch(/\bauthenticated=/);
+    expect(rows[0]!.acl, 'and no bare PUBLIC grant either').not.toMatch(/(^|\s)=X/);
   });
 });

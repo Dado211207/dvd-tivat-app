@@ -509,7 +509,7 @@ its own without stranding the rest.
 
 | PR | Tables | Policies |
 |---|---|---|
-| **P4a** — registry ✅ **done, `202609240024` + `202609240025`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
+| **P4a** — registry ✅ **done, `202609240024`–`202609240026`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
 | **P4b** — interventions | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements` | 6 |
 | **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` | 7 |
 | **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` | 8 |
@@ -549,6 +549,18 @@ listed phase will get there in time. The service on an audit row is derived
 from the entity it is about by a trigger, never supplied by the writer — the
 writers are `security definer`, so a column they filled in would be a claim
 rather than a fact.
+
+**And deriving it on INSERT is not the whole invariant.** `202609240025` did
+that, and guarded only `organization_id` on UPDATE — so an existing DVD row
+could be repointed at an SZS member by changing `entity_id`, keeping its DVD
+label while resolving into the other service. Freezing the two entity columns
+would have closed that and left `detail` rewritable (falsifying the recorded
+name) and `changed_by` rewritable (blaming the wrong person), which are worse.
+`202609240026` therefore makes `registry_audit` append-only **as a database
+rule** rather than only by privilege, which is what its own comment had claimed
+since the table was created. Every audit and history table P4b–f touches should
+be read the same way: *which columns decide what this row means, and is every
+one of them settled at insert?*
 
 **P4e carries a hazard the others do not.** The push worker reads `members`,
 `interventions` and `intervention_acknowledgements` with the **service-role
