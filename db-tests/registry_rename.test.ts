@@ -58,8 +58,15 @@ beforeAll(async () => {
     create schema public;
     grant all on schema public to postgres;
   `);
-  const before = MIGRATIONS.filter((file) => file !== RENAME);
-  expect(before.length, 'the rename must be in the migration list').toBe(MIGRATIONS.length - 1);
+  // Strictly before, not "everything except". Filtering applied the migrations
+  // that come AFTER the rename as well, which put this file's schema in an
+  // order no deployment will ever be in - and made a later phase re-creating
+  // these same writers look like a defect in the rename. P4a is the phase that
+  // tripped it; slicing is what P3 had to do to 202609240022's test for the
+  // same reason.
+  const index = MIGRATIONS.indexOf(RENAME);
+  expect(index, 'the rename must be in the migration list').toBeGreaterThan(-1);
+  const before = MIGRATIONS.slice(0, index);
   for (const file of before) {
     await db.query(readFileSync(resolve(process.cwd(), file), 'utf8'));
   }

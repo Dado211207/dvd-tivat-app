@@ -51,6 +51,9 @@ export const MIGRATIONS = [
   'supabase/migrations/202609230021_restore_intervention_audit_exact_text.sql',
   'supabase/migrations/202609240022_organisation_columns.sql',
   'supabase/migrations/202609240023_organisation_authority.sql',
+  'supabase/migrations/202609240024_organisation_registry.sql',
+  'supabase/migrations/202609240025_registry_audit_organisation.sql',
+  'supabase/migrations/202609240026_registry_audit_append_only.sql',
 ];
 
 export const DATABASE_URL =
