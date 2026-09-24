@@ -35,6 +35,7 @@ const RESTORE_020 = 'supabase/migrations/202609230020_restore_exact_repository_f
 const RESTORE_021 = 'supabase/migrations/202609230021_restore_intervention_audit_exact_text.sql';
 const ATTENDANCE_TRUTH = 'supabase/migrations/202609130006_attendance_truth.sql';
 const REGISTRY_RENAME = 'supabase/migrations/202609230019_registry_rename.sql';
+const P4B_OUTPUTS = 'supabase/migrations/202609250029_intervention_outputs.sql';
 
 let db: Client;
 
@@ -119,11 +120,14 @@ describe('neither restore file changes anything on a replay', () => {
     expect(after.hash).toBe(before.hash);
   });
 
-  it('021 is a no-op applied on top of the whole list', async () => {
-    // Safe at the end only because 202609150010 is the only migration that
-    // defines `intervention_audit`. If that stops being true this fails, which
-    // is the point of asserting it rather than reasoning about it.
-    await applyAll(db, MIGRATIONS);
+  it('021 is a no-op applied where it sits', async () => {
+    // This used to be asserted at the END of the list, which held only while
+    // 202609150010 was the sole migration defining `intervention_audit`. The
+    // test said it would fail when that stopped being true, and it did:
+    // 202609250029 re-creates the function with a service check. So 021 is
+    // now asserted where it sits, and the block below asserts what it would
+    // undo anywhere later.
+    await applyAll(db, MIGRATIONS.slice(0, MIGRATIONS.indexOf(RESTORE_021) + 1));
     const before = await functionText(db);
 
     await db.query(sql(RESTORE_021));
@@ -131,6 +135,35 @@ describe('neither restore file changes anything on a replay', () => {
 
     expect(after.count).toBe(before.count);
     expect(after.hash).toBe(before.hash);
+  });
+});
+
+describe('021 after the P4b output migration is not harmless either', () => {
+  /*
+   * 021 restores `intervention_audit` at its DVD-only text. 202609250029
+   * re-creates it asking the call-out's own service, because as a `security
+   * definer` reader it returned an SZS call-out's whole chronology to any DVD
+   * commander. Replayed after 029 - where a later contributor would put it,
+   * since that is where new migrations go - 021 would reopen exactly that.
+   * Its position is load-bearing now, as 006a's always was.
+   */
+  it('keeps 021 before the migration that secures the function it restores', () => {
+    expect(MIGRATIONS.indexOf(RESTORE_021)).toBeGreaterThan(-1);
+    expect(MIGRATIONS.indexOf(RESTORE_021)).toBeLessThan(MIGRATIONS.indexOf(P4B_OUTPUTS));
+  });
+
+  it('puts the DVD-only predicate back if replayed after it', async () => {
+    await applyAll(db, MIGRATIONS);
+    const body = async () =>
+      (
+        await db.query<{ src: string }>(
+          `select prosrc as src from pg_proc where oid = 'public.intervention_audit(uuid)'::regprocedure`,
+        )
+      ).rows[0]!.src;
+    expect(await body()).toContain('is_command_in(entry.organization_id)');
+
+    await db.query(sql(RESTORE_021));
+    expect(await body()).toContain('is_dvd_command()');
   });
 });
 

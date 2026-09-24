@@ -299,10 +299,22 @@ describe('a single-service installation sees no change at all', () => {
 
   it('still lets somebody confirm their own eligibility, for push registration', async () => {
     // `register_web_push_subscription` asks `is_eligible_recipient` about the
-    // caller's OWN member record. Somebody always serves with themselves, but
-    // that has to hold THROUGH the new clause, not by accident around it.
+    // caller's OWN member record. That still holds for somebody who actually
+    // serves in the service being asked about.
     expect(await eligible(cast.dvdFirefighter.userId, cast.dvdFirefighter.memberId)).toBe(true);
-    expect(await eligible(cast.szsOnly.userId, cast.szsOnly.memberId)).toBe(true);
+
+    // CHANGED BY P4b (202609250027). `is_eligible_recipient` now means
+    // "eligible for a DVD call-out" rather than "eligible anywhere", so it is
+    // answered against DVD authority rather than the installation-wide grant.
+    // This person's member record sits in DVD - `createMember` takes the
+    // transitional default - but by this point in the file the mirror has stood
+    // their DVD membership down, so they hold no DVD authority and are not
+    // somebody a DVD call-out may reach. Asking themselves does not change that.
+    //
+    // Nothing reachable regresses: `register_web_push_subscription` already
+    // refuses this account at its own `current_dvd_role()` gate, several checks
+    // earlier, so the caller never arrives here.
+    expect(await eligible(cast.szsOnly.userId, cast.szsOnly.memberId)).toBe(false);
   });
 });
 
@@ -318,24 +330,53 @@ describe('the installation owner belongs to every service', () => {
     expect(await eligible(cast.dvdCommander.userId, cast.owner.memberId)).toBe(true);
   });
 
-  it('is still callable by an SZS commander', async () => {
-    expect(await eligible(cast.szsOnly.userId, cast.owner.memberId)).toBe(true);
+  it('is not asked about by an SZS commander in DVD terms', async () => {
+    // CHANGED BY P4b (202609250029). Under P0 this was true through
+    // `serves_with`, whose owner clause answers for the owner to everybody.
+    // Since 027 `is_eligible_recipient` means "may a DVD call-out reach this
+    // person", and 029 answers that only for somebody who is staff in DVD -
+    // which this account, stood down from DVD by the mirror, is not. 027 had
+    // dropped P0's caller bound altogether, so a citizen could ask it too.
+    //
+    // SZS still pages the owner: through an SZS member record, with
+    // `is_eligible_recipient_in(<that record>, SZS)` - asserted in
+    // organisation_interventions.test.ts.
+    expect(await eligible(cast.szsOnly.userId, cast.owner.memberId)).toBe(false);
   });
 
-  it('still sees every member of every service', async () => {
+  it('sees every member of the service it is picking for', async () => {
+    // CHANGED BY P4b (202609250027). `eligible_recipients()` is now the DVD
+    // list, and `eligible_recipients_in(service)` is the general one. The owner
+    // still reaches both - one service at a time, which is the only shape a
+    // call-out has until P7 answers the joint-intervention questions.
     const offered = await picker(cast.owner.userId);
     expect(offered).toContain('Ivo Vatrogasac');
     expect(offered).toContain('Komandir Dvd');
-    expect(offered).toContain('Komandir Szs');
     expect(offered).toContain('Vlasnik Sistema');
+    // Stood down from DVD by the mirror earlier in this file, so not somebody a
+    // DVD call-out may reach.
+    expect(offered).not.toContain('Komandir Szs');
   });
 
-  it('may publish a call-out to members of either service', async () => {
+  it('may no longer put two services on one call-out', async () => {
+    // CHANGED BY P4b (202609250027), and deliberately: one call-out reaches one
+    // service. The owner keeps both services - they may run a call-out in each -
+    // but mixing them into a single recipient list is a joint intervention,
+    // which Q1-Q8 have not been answered for and P7 is where it is designed.
     const draft = await createDraft(db, cast.owner.userId, { key: 'owner-both-1' });
+    const message = await expectRefused(db, cast.owner.userId, (client) =>
+      client.query(`select public.publish_intervention($1, $2)`, [
+        draft,
+        [cast.dvdFirefighter.memberId, cast.szsOnly.memberId],
+      ]),
+    );
+    expect(message).toContain('RECIPIENT_NOT_ELIGIBLE');
+
+    // ...and the same call-out to its own service still goes out.
     const published = await asUserCommitted(db, cast.owner.userId, async (client) => {
       const { rows } = await client.query<{ id: string }>(
         `select public.publish_intervention($1, $2) as id`,
-        [draft, [cast.dvdFirefighter.memberId, cast.szsOnly.memberId]],
+        [draft, [cast.dvdFirefighter.memberId]],
       );
       return rows[0]!.id;
     });
