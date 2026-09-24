@@ -1,0 +1,11 @@
+{
+  // Type-checks db-tests/, which the root config does not include. Vitest does
+  // not type-check, so without this file nothing would. The tests import the
+  // application's data layer, which reads `import.meta.env`, hence the Vite
+  // client types. Run by `npm run typecheck`, and therefore by CI.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": ["db-tests", "vitest.db.config.ts"]
+}
