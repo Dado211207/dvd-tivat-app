@@ -13,6 +13,7 @@
     "audit:production": "npm audit --omit=dev --audit-level=high",
     "verify:bundle": "node scripts/check-bundle-secrets.mjs dist",
     "check:migrations": "node scripts/check-migration-drift.mjs --repo-only",
+    "gate:p3": "node scripts/p3-equivalence-gate.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
