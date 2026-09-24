@@ -330,8 +330,18 @@ describe('the installation owner belongs to every service', () => {
     expect(await eligible(cast.dvdCommander.userId, cast.owner.memberId)).toBe(true);
   });
 
-  it('is still callable by an SZS commander', async () => {
-    expect(await eligible(cast.szsOnly.userId, cast.owner.memberId)).toBe(true);
+  it('is not asked about by an SZS commander in DVD terms', async () => {
+    // CHANGED BY P4b (202609250029). Under P0 this was true through
+    // `serves_with`, whose owner clause answers for the owner to everybody.
+    // Since 027 `is_eligible_recipient` means "may a DVD call-out reach this
+    // person", and 029 answers that only for somebody who is staff in DVD -
+    // which this account, stood down from DVD by the mirror, is not. 027 had
+    // dropped P0's caller bound altogether, so a citizen could ask it too.
+    //
+    // SZS still pages the owner: through an SZS member record, with
+    // `is_eligible_recipient_in(<that record>, SZS)` - asserted in
+    // organisation_interventions.test.ts.
+    expect(await eligible(cast.szsOnly.userId, cast.owner.memberId)).toBe(false);
   });
 
   it('sees every member of the service it is picking for', async () => {

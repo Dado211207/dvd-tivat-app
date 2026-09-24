@@ -53,6 +53,7 @@ import { MIGRATIONS, asUser, connect, createAccount } from './harness';
 
 const INTERVENTIONS = 'supabase/migrations/202609250027_organisation_interventions.sql';
 const SCOPED_COMMANDS = 'supabase/migrations/202609250028_intervention_scoped_commands.sql';
+const OUTPUTS = 'supabase/migrations/202609250029_intervention_outputs.sql';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
@@ -93,6 +94,9 @@ let szsFirefighter = '';
 let dualUser = '';
 let suspendedUser = '';
 let incompleteUser = '';
+// Signed up, profile complete, serving nowhere. Not in ACCOUNTS: it exists for
+// the eligibility question in 202609250029, not for the table snapshots.
+let citizenUser = '';
 
 let dvd: ServiceCallout;
 let szs: ServiceCallout;
@@ -401,6 +405,10 @@ beforeAll(async () => {
     incompleteUser,
   ]);
 
+  const citizen = await createAccount(db, 'gradjanin.int@example.invalid');
+  citizenUser = citizen.userId;
+  await usable(citizenUser, 'Gradjanin Test', 'CITIZEN');
+
   // Member records, one per service per person who needs one.
   const dvdCommanderMember = await memberIn(DVD, 'Komandir DVD', dvdCommander);
   const dvdFirefighterMember = await memberIn(DVD, 'Vatrogasac DVD', dvdFirefighter);
@@ -491,6 +499,15 @@ describe('before P4b: a call-out does not know which service ran it', () => {
       [szs.interventionId],
     );
     expect(seen, 'their own call-out does not recognise them').toBe('false');
+  });
+
+  it('answers a citizen false about a DVD member, as P0 decided', async () => {
+    // The baseline for the regression 202609250029 repairs. P0 answered only
+    // about somebody the caller served with (`serves_with`), and a citizen
+    // serves with nobody. 027 dropped that bound; see the 028 block below.
+    expect(await probe(citizenUser, `select public.is_eligible_recipient($1)::text`, [dvd.memberId])).toBe(
+      'false',
+    );
   });
 });
 
@@ -1047,5 +1064,789 @@ describe('after 202609250028: a command may only touch a call-out in its own ser
         szs.interventionId,
       ]),
     ).toBe('MEMBER_RECORD_REQUIRED');
+  });
+});
+
+/*
+ * The rest of what P4b opened, derived from the catalogue rather than listed
+ * from memory - the two lists before this one were made by hand, and review
+ * found each of them short.
+ *
+ * P4b's commands WRITE into ten tables outside its four, and every one of them
+ * read DVD-wide. Two definer functions read the same data with no policy in the
+ * way. And a vehicle sent out with no call-out had its audit row labelled DVD,
+ * whichever service's vehicle it was.
+ *
+ * All ten tables already carry `organization_id` - P2 gave it to them, derived
+ * from the parent row by trigger - so nothing here has to be backfilled. What
+ * is missing is that the policies and the definer functions never ask.
+ */
+const OUTPUT_TABLES = [
+  'notification_outbox',
+  'notification_delivery_attempts',
+  'intervention_journey',
+  'intervention_journey_history',
+  'attendance_intervals',
+  'attendance_corrections',
+  'attendance_correction_requests',
+  'vehicle_movements',
+  'intervention_responses',
+  'intervention_response_revisions',
+] as const;
+
+/**
+ * Every table reachable from `interventions` by foreign key, however deep, and
+ * any table carrying an `intervention_id`. The derivation the migration header
+ * describes, run against the live catalogue, so a table added later is in
+ * scope without anybody remembering to list it.
+ */
+const REACHABLE_TABLES = `
+  with recursive edge as (
+    select c.conrelid::regclass as child, c.confrelid::regclass as parent
+      from pg_constraint c where c.contype = 'f'
+  ), reach(tbl) as (
+    select 'public.interventions'::regclass
+    union
+    select edge.child from edge join reach on edge.parent = reach.tbl
+  )
+  select c.relname::text as tbl
+    from reach join pg_class c on c.oid = reach.tbl
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+  union
+  select c.relname::text
+    from pg_attribute a
+    join pg_class c on c.oid = a.attrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'r'
+     and a.attname = 'intervention_id' and not a.attisdropped`;
+
+/** A question that can only ever be answered about DVD. */
+const DVD_ONLY = String.raw`is_dvd_(staff|command|admin|owner)\(\)|current_dvd_role\(\)|current_member_id\(\)`;
+
+/** The distinct services whose rows this account can read from one table. */
+async function servicesVisible(userId: string, table: string): Promise<string[]> {
+  return asUser(db, userId, async (client) => {
+    const { rows } = await client.query<{ organization: string }>(
+      `select distinct organization_id::text as organization from public.${table} order by 1`,
+    );
+    return rows.map((row) => row.organization);
+  });
+}
+
+let szsInterval = '';
+let szsMovement = '';
+let szsSpareVehicle = '';
+
+/** The service `operational_audit` filed one vehicle event under. */
+async function auditServiceOf(movement: string, event: string): Promise<string> {
+  const { rows } = await db.query<{ organization_id: string }>(
+    `select organization_id::text from public.operational_audit
+      where event_type = $2 and detail->>'movement_id' = $1`,
+    [movement, event],
+  );
+  return rows[0]?.organization_id ?? 'NONE';
+}
+
+/** How many audit rows about one movement this account can read directly. */
+const auditRowsAbout = `select count(*)::text from public.operational_audit
+  where detail->>'movement_id' = $1`;
+
+/**
+ * The queue, delivery and answer rows of one call-out, plus a correction
+ * request on one of its intervals.
+ *
+ * Inserted directly: publication fills the outbox, but both fixture call-outs
+ * were built by direct insert, so their queue rows are too. And no command can
+ * reach the others for SZS yet - `submit_response` is DVD-blind (P4c's) and the
+ * correction-request INSERT policy is DVD-only (P4d's). The POLICY still has
+ * to be right before those rows can exist.
+ */
+async function plantRows(callout: ServiceCallout, interval: string, requester: string): Promise<void> {
+  const { rows: outbox } = await db.query<{ id: string }>(
+    `insert into public.notification_outbox(intervention_id, member_id, channel, state, dedupe_key)
+     values ($1, $2, 'IN_APP', 'QUEUED', $3) returning id`,
+    [callout.interventionId, callout.memberId, `outbox-${Math.random().toString(36).slice(2, 8)}`],
+  );
+  await db.query(
+    `insert into public.notification_delivery_attempts(outbox_id, provider, provider_status)
+     values ($1, 'WEB_PUSH', '201')`,
+    [outbox[0]!.id],
+  );
+  const { rows: response } = await db.query<{ id: string }>(
+    `insert into public.intervention_responses(intervention_id, member_id, answer)
+     values ($1, $2, 'DOLAZIM') returning id`,
+    [callout.interventionId, callout.memberId],
+  );
+  await db.query(
+    `insert into public.intervention_response_revisions(
+       response_id, revision, answer, direct_to_location)
+     values ($1, 1, 'DOLAZIM', false)`,
+    [response[0]!.id],
+  );
+  await db.query(
+    `insert into public.attendance_correction_requests(interval_id, requested_by, message)
+     values ($1, $2, 'Molim ispravku vremena')`,
+    [interval, requester],
+  );
+}
+
+/** A second vehicle in one service, free to go out whenever a test needs it. */
+async function spareVehicle(organization: string, callsign: string): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    `insert into public.vehicles(callsign, name, kind, organization_id)
+     values ($1, 'Rezervno vozilo', 'NAVALNO', $2) returning id`,
+    [callsign, organization],
+  );
+  return rows[0]!.id;
+}
+
+describe('still open at 202609250028: everything P4b writes outside its own four tables', () => {
+  beforeAll(async () => {
+    // A real operational trail in EACH service, through the real commands
+    // wherever one exists. Committed, because the reads below are separate
+    // transactions. Both services, so every isolation assertion below has rows
+    // on both sides to get wrong.
+    szsSpareVehicle = await spareVehicle(SZS, 'V-SZS-REZ');
+    const dvdSpareVehicle = await spareVehicle(DVD, 'V-DVD-REZ');
+
+    await db.query('begin');
+    const outcomes: Record<string, string> = {};
+    // SZS.
+    outcomes['SZS journey'] = await act(szsFirefighter, `select public.set_journey_progress($1, 'KRECEM')`, [
+      szs.interventionId,
+    ]);
+    szsInterval = await act(szsCommander, `select public.attendance_check_in($1, $2)::text`, [
+      szs.interventionId,
+      szs.memberId,
+    ]);
+    szsMovement = await act(szsCommander, `select public.record_vehicle_departure($1, $2)::text`, [
+      szsVehicle,
+      szs.interventionId,
+    ]);
+    // A second SZS interval, corrected into the past, so an SZS correction row
+    // exists. At this schema only DVD command may call `attendance_correct`;
+    // the owner holds it and commands SZS too, so this is a legitimate
+    // correction whose row lands in SZS.
+    const szsCorrected = await act(szsCommander, `select public.attendance_check_in($1, $2)::text`, [
+      szs.interventionId,
+      dualSzsMember,
+    ]);
+    outcomes['SZS correction'] = await act(
+      ownerUser,
+      `select public.attendance_correct($1, now() - interval '3 hours', now() - interval '2 hours', 'Pogresno vrijeme')`,
+      [szsCorrected],
+    );
+    // DVD, on the commander's own member record and a spare vehicle, so none
+    // of it stands in the way of the DVD member and vehicle later tests use.
+    outcomes['DVD journey'] = await act(dvdFirefighter, `select public.set_journey_progress($1, 'KRECEM')`, [
+      dvd.interventionId,
+    ]);
+    const dvdCorrected = await act(dvdCommander, `select public.attendance_check_in($1)::text`, [
+      dvd.interventionId,
+    ]);
+    outcomes['DVD correction'] = await act(
+      dvdCommander,
+      `select public.attendance_correct($1, now() - interval '3 hours', now() - interval '2 hours', 'Pogresno vrijeme')`,
+      [dvdCorrected],
+    );
+    outcomes['DVD movement'] = await act(dvdCommander, `select public.record_vehicle_departure($1, $2)::text`, [
+      dvdSpareVehicle,
+      dvd.interventionId,
+    ]);
+    await db.query('commit');
+    Object.assign(outcomes, {
+      'SZS interval': szsInterval,
+      'SZS movement': szsMovement,
+      'second SZS interval': szsCorrected,
+      'DVD interval': dvdCorrected,
+    });
+    for (const [what, outcome] of Object.entries(outcomes)) {
+      expect(isRefusal(outcome), `the ${what} was recorded: ${outcome}`).toBe(false);
+    }
+
+    await plantRows(szs, szsInterval, szsFirefighter);
+    await plantRows(dvd, dvdCorrected, dvdCommander);
+  }, 120_000);
+
+  it.each(OUTPUT_TABLES)('leaks SZS %s to a DVD commander', async (table) => {
+    expect(await servicesVisible(dvdCommander, table)).toEqual([DVD, SZS].sort());
+  });
+
+  it('lets an SZS attendance row reference a DVD vehicle', async () => {
+    // `requested_vehicle` is passed straight into the interval and nothing
+    // checks it against the call-out's service.
+    await db.query('begin');
+    try {
+      const interval = await act(
+        szsCommander,
+        `select public.attendance_check_in($1, $2, null, null, $3)::text`,
+        [szs.interventionId, szs.commanderMemberId, dvdVehicle],
+      );
+      expect(isRefusal(interval), `the check-in was accepted: ${interval}`).toBe(false);
+      const { rows } = await db.query<{ organization_id: string; vehicle: string }>(
+        `select a.organization_id::text, v.organization_id::text as vehicle
+           from public.attendance_intervals a join public.vehicles v on v.id = a.vehicle_id
+          where a.id = $1`,
+        [interval],
+      );
+      expect(rows[0]!.organization_id, 'an SZS interval').toBe(SZS);
+      expect(rows[0]!.vehicle, 'pointing at a DVD vehicle').toBe(DVD);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it.each([
+    ['confirm', `select public.attendance_confirm($1, null)`],
+    ['reject', `select public.attendance_reject($1, 'Razlog')`],
+    [
+      'correct',
+      `select public.attendance_correct($1, now() - interval '2 hours', now() - interval '1 hour', 'Razlog')`,
+    ],
+  ])('lets a DVD commander %s an SZS attendance interval', async (_verb, statement) => {
+    expect(await probe(dvdCommander, statement, [szsInterval])).toBe('OK');
+  });
+
+  it('lets a DVD commander withdraw an SZS confirmation', async () => {
+    await db.query('begin');
+    try {
+      // Confirmed by the owner, who commands SZS: a legitimate confirmation.
+      expect(await act(ownerUser, `select public.attendance_confirm($1, null)`, [szsInterval])).toBe('OK');
+      expect(
+        await act(dvdCommander, `select public.attendance_unconfirm($1, 'Razlog')`, [szsInterval]),
+      ).toBe('OK');
+      const { rows } = await db.query<{ verified: boolean }>(
+        `select verified from public.attendance_intervals where id = $1`,
+        [szsInterval],
+      );
+      expect(rows[0]!.verified, 'and the SZS confirmation is gone').toBe(false);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('lets a DVD commander confirm SZS attendance in a batch', async () => {
+    expect(
+      await probe(dvdCommander, `select outcome from public.attendance_confirm_many($1::uuid[], null)`, [
+        [szsInterval],
+      ]),
+    ).toBe('CONFIRMED');
+  });
+
+  it('lets a DVD member return an SZS vehicle', async () => {
+    expect(
+      await probe(dvdFirefighter, `select public.record_vehicle_return($1)::text`, [szsMovement]),
+    ).toBe('OK');
+  });
+
+  // --- the two definer readers, which no policy reaches ---------------------
+
+  it('lets a DVD commander read an SZS call-out\'s chronology through intervention_audit', async () => {
+    // The table itself has shown DVD nothing of SZS since 027...
+    expect(
+      await probe(dvdCommander, `select count(*)::text from public.operational_audit where intervention_id = $1`, [
+        szs.interventionId,
+      ]),
+      'a direct read',
+    ).toBe('0');
+    // ...and the definer function reads straight past that policy.
+    expect(
+      await probe(
+        dvdCommander,
+        `select coalesce(string_agg(detail->>'location', ','), 'NONE') from public.intervention_audit($1)`,
+        [szs.interventionId],
+      ),
+      'the same rows through intervention_audit',
+    ).toBe('Lokacija SZS');
+  });
+
+  it('tells anybody whether any member of either service can be paged', async () => {
+    expect(
+      await probe(dvdCommander, `select public.is_eligible_recipient_in($1, $2)::text`, [szs.memberId, SZS]),
+      'a DVD commander, about an SZS member',
+    ).toBe('true');
+    expect(
+      await probe(citizenUser, `select public.is_eligible_recipient($1)::text`, [dvd.memberId]),
+      'a citizen, about a DVD member - P0 answered this false (see the first block)',
+    ).toBe('true');
+  });
+
+  // --- the audit row of a vehicle sent out with no call-out ----------------
+
+  it('files an SZS vehicle sent out with no call-out under DVD', async () => {
+    await db.query('begin');
+    try {
+      // Possible since 028: SZS may send its own vehicle out.
+      const movement = await act(
+        szsCommander,
+        `select public.record_vehicle_departure($1, null, 'Tocenje goriva')::text`,
+        [szsSpareVehicle],
+      );
+      expect(isRefusal(movement), `the departure was recorded: ${movement}`).toBe(false);
+      expect(await auditServiceOf(movement, 'VEHICLE_DEPARTED'), 'its audit row').toBe(DVD);
+      expect(await act(dvdCommander, auditRowsAbout, [movement]), 'which DVD command reads').toBe('1');
+      expect(await act(szsCommander, auditRowsAbout, [movement]), 'and SZS command cannot').toBe('0');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+});
+
+describe('after 202609250029: everything a call-out produces belongs to its service', () => {
+  beforeAll(async () => {
+    await db.query(sql(OUTPUTS));
+  }, 120_000);
+
+  it.each(OUTPUT_TABLES)('isolates %s between the two services', async (table) => {
+    // Exact sets, not "does not contain": each commander still reads their own.
+    expect(await servicesVisible(dvdCommander, table), 'DVD commander').toEqual([DVD]);
+    expect(await servicesVisible(szsCommander, table), 'SZS commander').toEqual([SZS]);
+  });
+
+  it.each(OUTPUT_TABLES)('still shows the owner both services in %s', async (table) => {
+    expect(await servicesVisible(ownerUser, table)).toEqual([DVD, SZS].sort());
+  });
+
+  it('refuses a vehicle from the other service on a check-in', async () => {
+    expect(
+      await probe(szsCommander, `select public.attendance_check_in($1, $2, null, null, $3)::text`, [
+        szs.interventionId,
+        szs.commanderMemberId,
+        dvdVehicle,
+      ]),
+    ).toBe('ORGANIZATION_MISMATCH');
+  });
+
+  it('still accepts a vehicle of the call-out\'s own service', async () => {
+    await db.query('begin');
+    try {
+      const interval = await act(
+        szsCommander,
+        `select public.attendance_check_in($1, $2, null, null, $3)::text`,
+        [szs.interventionId, szs.commanderMemberId, szsVehicle],
+      );
+      expect(isRefusal(interval), `SZS vehicle on an SZS call-out: ${interval}`).toBe(false);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it.each([
+    ['attendance_confirm', `select public.attendance_confirm($1, null)`],
+    ['attendance_reject', `select public.attendance_reject($1, 'Razlog')`],
+    ['attendance_unconfirm', `select public.attendance_unconfirm($1, 'Razlog')`],
+    [
+      'attendance_correct',
+      `select public.attendance_correct($1, now() - interval '2 hours', now() - interval '1 hour', 'Razlog')`,
+    ],
+  ])('refuses a DVD commander the SZS %s', async (_name, statement) => {
+    expect(await probe(dvdCommander, statement, [szsInterval])).toBe('ORGANIZATION_MISMATCH');
+  });
+
+  it('reports the SZS interval as refused inside a DVD commander\'s batch', async () => {
+    // The batch reports per interval rather than raising, so one refusal cannot
+    // abandon the rest - and an interval of another service is now one.
+    expect(
+      await probe(dvdCommander, `select outcome from public.attendance_confirm_many($1::uuid[], null)`, [
+        [szsInterval],
+      ]),
+    ).toBe('ORGANIZATION_MISMATCH');
+  });
+
+  it('refuses a DVD member returning an SZS vehicle', async () => {
+    expect(
+      await probe(dvdFirefighter, `select public.record_vehicle_return($1)::text`, [szsMovement]),
+    ).toBe('STAFF_REQUIRED');
+  });
+
+  it('refuses a DVD commander checking an SZS member out', async () => {
+    expect(
+      await probe(dvdCommander, `select public.attendance_check_out($1, $2)`, [
+        szs.interventionId,
+        szs.memberId,
+      ]),
+    ).toBe('STAFF_REQUIRED');
+  });
+
+  /**
+   * Every attendance and vehicle command, once, as one service's commander.
+   * Exact outcomes: a check-constraint failure is not a pass just because it is
+   * not STAFF_REQUIRED.
+   */
+  async function runLifecycle(commander: string, callout: ServiceCallout, interval: string, movement: string) {
+    const step = (statement: string, params: unknown[]) => act(commander, statement, params);
+    expect(await step(`select public.attendance_check_out($1, $2)`, [callout.interventionId, callout.memberId]), 'check out').toBe('OK');
+    expect(await step(`select public.attendance_confirm($1, null)`, [interval]), 'confirm').toBe('OK');
+    expect(await step(`select public.attendance_unconfirm($1, 'Razlog')`, [interval]), 'unconfirm').toBe('OK');
+    expect(
+      await step(
+        `select public.attendance_correct($1, now() - interval '3 hours', now() - interval '2 hours', 'Razlog')`,
+        [interval],
+      ),
+      'correct',
+    ).toBe('OK');
+    expect(await step(`select public.attendance_reject($1, 'Razlog')`, [interval]), 'reject').toBe('OK');
+    expect(await step(`select public.record_vehicle_return($1)::text`, [movement]), 'return the vehicle').toBe('OK');
+  }
+
+  it('lets SZS run its own attendance lifecycle end to end', async () => {
+    await db.query('begin');
+    try {
+      // The interval and the movement were committed earlier, so check-out and
+      // return land strictly after them.
+      await runLifecycle(szsCommander, szs, szsInterval, szsMovement);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('keeps every DVD attendance and vehicle workflow working', async () => {
+    await db.query('begin');
+    try {
+      const interval = await act(dvdCommander, `select public.attendance_check_in($1, $2)::text`, [
+        dvd.interventionId,
+        dvd.memberId,
+      ]);
+      expect(isRefusal(interval), `DVD check-in: ${interval}`).toBe(false);
+      const movement = await act(dvdCommander, `select public.record_vehicle_departure($1, $2)::text`, [
+        dvdVehicle,
+        dvd.interventionId,
+      ]);
+      expect(isRefusal(movement), `DVD departure: ${movement}`).toBe(false);
+      // Everything below shares this transaction's `now()`, which
+      // `attendance_interval_order` and `vehicle_movement_order` (end after
+      // start) rightly refuse. In the application these are separate requests.
+      // Move the starts back rather than commit rows that would leak into every
+      // later test.
+      await db.query(
+        `update public.attendance_intervals set started_at = now() - interval '1 hour' where id = $1`,
+        [interval],
+      );
+      await db.query(
+        `update public.vehicle_movements set departed_at = now() - interval '1 hour' where id = $1`,
+        [movement],
+      );
+      await runLifecycle(dvdCommander, dvd, interval, movement);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('keeps attendance_totals caller-rights, so two policies bound it', async () => {
+    // It is NOT security definer, so the caller's own policies decide what it
+    // aggregates - and it joins `members` as well as `attendance_intervals`.
+    //
+    // Measured, not assumed: this assertion passes even WITHOUT 202609250029,
+    // because P4a's `members` policy already drops the SZS member from the
+    // join. So what this proves is not "029 scopes it" but "it is bounded by
+    // two independent policies". The load-bearing check is `secdef = false`:
+    // making it security definer would silently remove both at once.
+    const { rows } = await db.query<{ secdef: boolean }>(
+      `select p.prosecdef as secdef from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'attendance_totals'`,
+    );
+    expect(rows[0]!.secdef, 'attendance_totals must stay caller-rights').toBe(false);
+
+    const dvdSees = await asUser(db, dvdCommander, async (client) => {
+      const { rows: totals } = await client.query<{ member_id: string }>(
+        `select member_id::text from public.attendance_totals()`,
+      );
+      return totals.map((row) => row.member_id);
+    });
+    expect(dvdSees, 'no SZS member appears in a DVD commander\'s totals').not.toContain(szs.memberId);
+  });
+
+  // --- the two definer readers ---------------------------------------------
+
+  it('returns from intervention_audit exactly what the table itself would show, for every account', async () => {
+    // The function reads with its owner's rights; the table read is bound by
+    // the caller's policies. Equal for every account and both call-outs means
+    // the function adds nothing to what a direct read would give.
+    const everyone: Record<string, string> = {
+      owner: ownerUser,
+      dvdCommander,
+      dvdFirefighter,
+      szsCommander,
+      szsFirefighter,
+      dual: dualUser,
+      suspended: suspendedUser,
+      incomplete: incompleteUser,
+      citizen: citizenUser,
+    };
+    const sizes = new Map<string, number>();
+    for (const [label, userId] of Object.entries(everyone)) {
+      for (const [service, callout] of [
+        ['DVD', dvd],
+        ['SZS', szs],
+      ] as const) {
+        const [viaFunction, viaTable] = await asUser(db, userId, async (client): Promise<[string[], string[]]> => {
+          const fn = await client.query<{ id: string }>(
+            `select event_id::text as id from public.intervention_audit($1) order by 1`,
+            [callout.interventionId],
+          );
+          const table = await client.query<{ id: string }>(
+            `select id::text from public.operational_audit where intervention_id = $1 order by 1`,
+            [callout.interventionId],
+          );
+          return [fn.rows.map((row) => row.id), table.rows.map((row) => row.id)];
+        });
+        expect(viaFunction, `${label} on the ${service} call-out`).toEqual(viaTable);
+        sizes.set(`${label}/${service}`, viaFunction.length);
+      }
+    }
+    // ...and the equality is not the empty one.
+    expect(sizes.get('dvdCommander/SZS'), 'DVD command sees nothing of SZS').toBe(0);
+    expect(sizes.get('szsCommander/DVD'), 'SZS command sees nothing of DVD').toBe(0);
+    for (const seen of ['owner/DVD', 'owner/SZS', 'dvdCommander/DVD', 'szsCommander/SZS', 'szsFirefighter/SZS']) {
+      expect(sizes.get(seen), `${seen} sees its trail`).toBeGreaterThan(0);
+    }
+  });
+
+  it('answers eligibility only to somebody who serves in that service', async () => {
+    const ask = (userId: string, statement: string, params: unknown[]) => probe(userId, statement, params);
+    expect(
+      await ask(dvdCommander, `select public.is_eligible_recipient_in($1, $2)::text`, [szs.memberId, SZS]),
+      'a DVD commander, about an SZS member',
+    ).toBe('false');
+    expect(
+      await ask(citizenUser, `select public.is_eligible_recipient($1)::text`, [dvd.memberId]),
+      'a citizen, about a DVD member - P0\'s answer again',
+    ).toBe('false');
+    expect(
+      await ask(citizenUser, `select public.is_eligible_recipient_in($1, $2)::text`, [szs.memberId, SZS]),
+      'a citizen, about an SZS member',
+    ).toBe('false');
+
+    // Everybody who needs the answer still gets it.
+    expect(
+      await ask(szsCommander, `select public.is_eligible_recipient_in($1, $2)::text`, [szs.memberId, SZS]),
+      'SZS command, about its own member',
+    ).toBe('true');
+    expect(
+      await ask(dvdCommander, `select public.is_eligible_recipient($1)::text`, [dvd.memberId]),
+      'DVD command, about its own member',
+    ).toBe('true');
+    expect(
+      await ask(dvdFirefighter, `select public.is_eligible_recipient($1)::text`, [dvd.memberId]),
+      'a member about themselves, as push registration asks',
+    ).toBe('true');
+  });
+
+  it('still lets SZS pick its own people and publish to them', async () => {
+    await db.query('begin');
+    try {
+      const offered = await act(
+        szsCommander,
+        `select string_agg(member_id::text, ',') from public.eligible_recipients_in($1)`,
+        [SZS],
+      );
+      expect(offered.split(','), 'the SZS picker').toContain(szs.memberId);
+      const draft = await act(
+        szsCommander,
+        `select public.create_intervention_draft_in($1, 'POZAR', 'Pozar SZS 029', 'Upute.', 'Lokacija', $2)`,
+        [SZS, `szs-029-${Math.random().toString(36).slice(2, 8)}`],
+      );
+      expect(isRefusal(draft), `the draft was created: ${draft}`).toBe(false);
+      expect(
+        await act(szsCommander, `select public.publish_intervention($1, $2)`, [draft, [szs.memberId]]),
+        'published through the eligibility check',
+      ).toBe(draft);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('still lets SZS page the owner, through the owner\'s SZS member record', async () => {
+    // What P0's "is still callable by an SZS commander" meant. The owner holds
+    // no membership anywhere; a service pages them through a member record of
+    // its own, and the owner clause answers for them there.
+    await db.query('begin');
+    try {
+      const { rows } = await db.query<{ id: string }>(
+        `insert into public.members(full_name, user_id, organization_id, active)
+         values ('Vlasnik Instalacije', $1, $2, true) returning id`,
+        [ownerUser, SZS],
+      );
+      expect(
+        await act(szsCommander, `select public.is_eligible_recipient_in($1, $2)::text`, [rows[0]!.id, SZS]),
+      ).toBe('true');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  // --- the audit row of a vehicle sent out with no call-out ----------------
+
+  it('files a vehicle movement with no call-out under the vehicle\'s own service', async () => {
+    await db.query('begin');
+    try {
+      const out = await act(
+        szsCommander,
+        `select public.record_vehicle_departure($1, null, 'Tocenje goriva')::text`,
+        [szsSpareVehicle],
+      );
+      expect(isRefusal(out), `the departure was recorded: ${out}`).toBe(false);
+      expect(await auditServiceOf(out, 'VEHICLE_DEPARTED'), 'the departure').toBe(SZS);
+      expect(await act(szsCommander, auditRowsAbout, [out]), 'SZS command reads it').toBe('1');
+      expect(await act(dvdCommander, auditRowsAbout, [out]), 'DVD command does not').toBe('0');
+
+      await db.query(`update public.vehicle_movements set departed_at = now() - interval '1 hour' where id = $1`, [
+        out,
+      ]);
+      expect(await act(szsCommander, `select public.record_vehicle_return($1)::text`, [out])).toBe('OK');
+      expect(await auditServiceOf(out, 'VEHICLE_RETURNED'), 'and the return').toBe(SZS);
+
+      // A DVD vehicle with no call-out is filed exactly where it always was.
+      const dvdOut = await act(
+        dvdCommander,
+        `select public.record_vehicle_departure($1, null, 'Tocenje goriva')::text`,
+        [dvdVehicle],
+      );
+      expect(isRefusal(dvdOut), `the DVD departure was recorded: ${dvdOut}`).toBe(false);
+      expect(await auditServiceOf(dvdOut, 'VEHICLE_DEPARTED'), 'a DVD vehicle').toBe(DVD);
+      expect(await act(dvdCommander, auditRowsAbout, [dvdOut]), 'DVD command reads it').toBe('1');
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('still derives the service from the call-out when there is one', async () => {
+    await db.query('begin');
+    try {
+      const out = await act(szsCommander, `select public.record_vehicle_departure($1, $2)::text`, [
+        szsSpareVehicle,
+        szs.interventionId,
+      ]);
+      expect(isRefusal(out), `the departure was recorded: ${out}`).toBe(false);
+      expect(await auditServiceOf(out, 'VEHICLE_DEPARTED')).toBe(SZS);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  // --- documented as a later phase's ---------------------------------------
+
+  it('keeps the correction-request path shut for SZS, as P4d\'s to open', async () => {
+    // Fails closed: the INSERT policy finds the member through the DVD shim,
+    // so an SZS member cannot ask for a correction to their own attendance.
+    // When P4d opens this, this assertion is the one it should change.
+    const outcome = await probe(
+      szsFirefighter,
+      `insert into public.attendance_correction_requests(interval_id, requested_by, message)
+       values ($1, auth.uid(), 'Molim ispravku vremena') returning id::text`,
+      [szsInterval],
+    );
+    expect(outcome).toMatch(/row-level security/);
+  });
+});
+
+/*
+ * The guard against a fourth hand-made list coming up short. Everything above
+ * names what review found; this names nothing, and asks the catalogue instead.
+ * It also applies every migration that sorts after this one first, so a later
+ * file that re-opens any of it fails here rather than in review.
+ */
+describe('after P4b and anything that sorts after it: asked of the catalogue, not a list', () => {
+  beforeAll(async () => {
+    for (const file of MIGRATIONS.slice(MIGRATIONS.indexOf(OUTPUTS) + 1)) {
+      await db.query(sql(file));
+    }
+  }, 120_000);
+
+  it('derives the fifteen tables a call-out reaches', async () => {
+    // Pinned so that a sixteenth is looked at by whoever adds it: the two
+    // assertions below cover it automatically, but somebody should know.
+    const { rows } = await db.query<{ tbl: string }>(REACHABLE_TABLES);
+    expect(rows.map((row) => row.tbl).sort()).toEqual(
+      [
+        'interventions',
+        'intervention_recipients',
+        'intervention_updates',
+        'intervention_acknowledgements',
+        'operational_audit',
+        ...OUTPUT_TABLES,
+      ].sort(),
+    );
+  });
+
+  it('leaves one DVD-only policy on those tables - the correction request P4d opens', async () => {
+    const { rows } = await db.query<{ policy: string }>(
+      `select tablename || '.' || policyname as policy from pg_policies
+        where schemaname = 'public'
+          and tablename in (${REACHABLE_TABLES})
+          and (coalesce(qual, '') ~ $1 or coalesce(with_check, '') ~ $1)
+        order by 1`,
+      [DVD_ONLY],
+    );
+    expect(rows.map((row) => row.policy)).toEqual([
+      'attendance_correction_requests.correction_requests_self_create',
+    ]);
+  });
+
+  it('leaves one DVD-only function touching them - submit_response, which P4c makes service-aware', async () => {
+    // Every function whose body names one of those tables: commands, readers,
+    // triggers. Both survivors fail closed; the tests above say how.
+    const { rows } = await db.query<{ proname: string }>(
+      `with reachable as (${REACHABLE_TABLES})
+       select distinct p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.prosrc ~ ('\\m(' || (select string_agg(tbl, '|') from reachable) || ')\\M')
+          and p.prosrc ~ $1
+        order by 1`,
+      [DVD_ONLY],
+    );
+    expect(rows.map((row) => row.proname)).toEqual(['submit_response']);
+  });
+
+  it('lets no client call a definer function that asks nothing about the caller', async () => {
+    // What the DVD-only check above cannot see: a function asking no question
+    // at all. `is_eligible_recipient_in` was one until 029, and was found by
+    // reading rather than by any check. Installation-wide, because nothing
+    // about that defect was specific to call-outs. The one exception is a
+    // one-line DVD wrapper, and then the function it wraps must ask.
+    const { rows } = await db.query<{ fn: string; body: string }>(
+      `select p.proname as fn, p.prosrc as body
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.prosecdef
+          and has_function_privilege('authenticated', p.oid, 'execute')
+          and p.prorettype <> 'trigger'::regtype`,
+    );
+    const asksTheCaller =
+      /auth\.uid\(\)|is_(staff|command|admin)_(in|anywhere)\(|is_dvd_(staff|command|admin|owner)\(\)|current_(member_id|role)_in\(|current_dvd_role\(\)|current_member_id\(\)|is_installation_owner\(\)|current_account_is_usable\(\)|is_recipient_of\(|serves_with\(/;
+    // A single `select` whose one call is an `*_in` function, handed DVD.
+    const dvdWrapperOf = (body: string): string | undefined => {
+      const calls = [...body.matchAll(/public\.(\w+)\(/g)].map((match) => match[1]!);
+      return /^\s*select\b/.test(body) &&
+        calls.length === 1 &&
+        calls[0]!.endsWith('_in') &&
+        body.includes(`'${DVD}'::uuid`)
+        ? calls[0]
+        : undefined;
+    };
+    const asks = new Map(rows.map((row) => [row.fn, asksTheCaller.test(row.body)]));
+    const silent = rows
+      .filter((row) => {
+        if (asks.get(row.fn)) return false;
+        const wrapped = dvdWrapperOf(row.body);
+        return !(wrapped && asks.get(wrapped));
+      })
+      .map((row) => row.fn)
+      .sort();
+    expect(silent).toEqual([]);
+  });
+
+  it('falls back to DVD on exactly one of those tables, for rows with no call-out', async () => {
+    // `operational_audit` labels a row with no call-out DVD unless its writer
+    // names a service. Its only writers of such rows are the two vehicle
+    // commands, which now always do - asserted by behaviour above, both
+    // services. Pinned so a second table with a DVD fallback is noticed.
+    const { rows } = await db.query<{ relname: string }>(
+      `select c.relname::text from pg_trigger t join pg_class c on c.oid = t.tgrelid
+        where not t.tgisinternal and pg_get_triggerdef(t.oid) ~ 'dvd-if-orphaned'
+          and c.relname in (${REACHABLE_TABLES})
+        order by 1`,
+    );
+    expect(rows.map((row) => row.relname)).toEqual(['operational_audit']);
   });
 });
