@@ -20,6 +20,11 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Production-derived data - never commit, pseudonymised or not.
+# scripts/p3-equivalence-export.sql produces one of these; it belongs outside
+# the tree entirely, and this is only the backstop for when it is not.
+*.production-export.json
+
 # Logs
 *.log
 npm-debug.log*

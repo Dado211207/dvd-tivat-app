@@ -687,13 +687,73 @@ push topic prefix. Applied migration **filenames** are never renamed.
    Q1–Q8 remain open and block P6 and P7 only.
 2. ~~P0 ships on its own, ahead of the schema phases.~~ **Done — merged as #47,
    migration `202609230018`.** Not applied to production.
-3. P3's equivalence test is run against a **restored copy of production**, not
-   only against fixtures, before P4a is written. This is the one remaining
-   precondition, and it is the gate on the whole policy rewrite: P4a–f are safe
-   to split only because P3's shim is proven to resolve identically, and a
-   fixture cannot prove that about six real accounts and seven real member
-   records.
+3. ~~P3's equivalence test is run against a **restored copy of production**,
+   not only against fixtures, before P4a is written.~~ **Done, 2026-09-24 —
+   the gate passed. P4a is unblocked.** See "The P3 equivalence gate" below.
 4. Each phase's migration is applied to production on its own approval. Nothing
    in this plan applies a migration as a side effect of merging a PR: the tree
    already carries two unapplied migrations (`202609220017`, `202609230018`),
    and that separation is deliberate.
+
+---
+
+## 12. The P3 equivalence gate
+
+Run 2026-09-24 against an isolated local copy of the hosted project's
+authority-relevant state. `scripts/p3-equivalence-gate.mjs` is the gate;
+`scripts/p3-equivalence-export.sql` produces its input over a read-only path
+and says exactly which columns it reads. **Production was not written to, and
+no migration was applied to it.**
+
+### What it found
+
+| | |
+|---|---|
+| Accounts compared | 9 |
+| With a role before P3 | 2 |
+| With a role after P3 | 2 |
+| **Divergences** | **0** |
+| Migrations applied to the copy | `202609240022`, then `202609240023` |
+
+The copy was built by applying the 22 migrations production has, verifying
+`current_dvd_role()` and `current_member_id()` were **byte-identical** to the
+hosted ones, then loading the exported rows with triggers suppressed — a copy,
+not a re-enactment — and confirming it reproduced production's own answers for
+all 9 accounts before anything was applied. Both cases the phase exists to
+protect were present in the real data and survived: the installation owner
+holding no organisation membership, and a suspended account whose DVD
+membership is still active because the mirror never fires on `active`.
+
+### What it does not prove
+
+Seven of the nine accounts resolve to NULL both before and after, so they would
+pass under almost any implementation. The gate's weight is in the four
+supporting checks, not in the count:
+
+- the copy reproduces production exactly before the comparison begins;
+- both migrations apply cleanly, in order, to real production state;
+- three negative controls fail the comparison when the equivalence is broken
+  on purpose, including one that confirms the owner is unaffected by
+  memberships and one that confirms a membership-only shim really would return
+  NULL for the owner — the lockout `202609240023`'s header describes, now
+  measured against the real installation rather than argued;
+- breadth comes from `db-tests/organisation_authority.test.ts`, whose
+  twenty-six constructed states cover the combinations production does not
+  currently contain.
+
+### A finding worth acting on separately
+
+Five accounts hold an active operational grant (`FIREFIGHTER`, `COMMANDER`,
+`ADMIN`) but have **no operational access today**, because their profile was
+never completed and `current_dvd_role()` requires `profile_complete`. This is
+existing behaviour, unchanged by P2 or P3 and unrelated to this gate — but it
+means the live installation currently has two usable accounts, not seven.
+Worth confirming with the owner that this is understood rather than a surprise.
+
+### Re-running it
+
+The export is production-derived and is **not kept in the repository**. To
+re-run: execute `scripts/p3-equivalence-export.sql` over a read-only path, save
+its output plus the two blocks documented at the bottom of that file as a
+`.json` outside the tree, then `npm run gate:p3 -- <path>`. The gate exits `2`
+rather than `0` when it cannot run, so a missing export never reads as a pass.
