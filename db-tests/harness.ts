@@ -49,6 +49,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609230019_registry_rename.sql',
   'supabase/migrations/202609230020_restore_exact_repository_function_text_audit_triggers.sql',
   'supabase/migrations/202609230021_restore_intervention_audit_exact_text.sql',
+  'supabase/migrations/202609240022_organisation_columns.sql',
 ];
 
 export const DATABASE_URL =
