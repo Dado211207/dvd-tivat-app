@@ -510,7 +510,7 @@ its own without stranding the rest.
 | PR | Tables | Policies |
 |---|---|---|
 | **P4a** — registry ✅ **done, `202609240024`–`202609240026`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
-| **P4b** — interventions ✅ **done, `202609250027`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)* | 8 |
+| **P4b** — interventions ✅ **done, `202609250027` + `202609250028`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)* | 8 |
 | **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` | 7 |
 | **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` | 8 |
 | **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** | 3 + 1 function |
@@ -575,6 +575,21 @@ one of them settled at insert?*
   somebody who serves in both — so a commander of two services could have sent
   one service's call-out to the other's members. The question now asks the
   service running the call-out.
+
+**A phase must also guard the commands it points at.** P4b's own four tables
+were not the whole surface: `attendance_check_in`, `set_journey_progress` and
+`record_vehicle_departure` write rows that hang off an intervention, are
+`security definer`, and asked only `is_dvd_staff()`. Making SZS call-outs
+possible made all three reachable across services — a DVD member checked in on
+an SZS call-out, a DVD member's journey row written onto one, a DVD vehicle
+sent to one. `202609250028` gives each the same two questions: is the caller
+staff **in that call-out's service**, and does the row being written belong
+there too. The tables themselves stay P4c's and P4d's.
+
+`submit_response` was the near miss, and it is worth knowing why it held: it
+looks its recipient up **inline against the member it is about to write**
+rather than calling `is_recipient_of`, so the two can never disagree. Every
+later phase should prefer that shape.
 
 **A permission the owner loses, deliberately.** The installation owner could
 publish one call-out to members of both services. That is a joint intervention,

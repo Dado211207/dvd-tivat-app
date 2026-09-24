@@ -52,6 +52,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS, asUser, connect, createAccount } from './harness';
 
 const INTERVENTIONS = 'supabase/migrations/202609250027_organisation_interventions.sql';
+const SCOPED_COMMANDS = 'supabase/migrations/202609250028_intervention_scoped_commands.sql';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
@@ -95,6 +96,10 @@ let incompleteUser = '';
 
 let dvd: ServiceCallout;
 let szs: ServiceCallout;
+let dvdVehicle = '';
+let szsVehicle = '';
+let dualDvdMember = '';
+let dualSzsMember = '';
 
 const visibleBefore = new Map<string, Row[]>();
 const commandsBefore = new Map<string, string>();
@@ -401,11 +406,36 @@ beforeAll(async () => {
   const dvdFirefighterMember = await memberIn(DVD, 'Vatrogasac DVD', dvdFirefighter);
   const szsCommanderMember = await memberIn(SZS, 'Komandir SZS', szsCommander);
   const szsFirefighterMember = await memberIn(SZS, 'Vatrogasac SZS', szsFirefighter);
-  await memberIn(DVD, 'Oba Servisa', dualUser);
-  await memberIn(SZS, 'Oba Servisa', dualUser);
+  dualDvdMember = await memberIn(DVD, 'Oba Servisa', dualUser);
+  dualSzsMember = await memberIn(SZS, 'Oba Servisa', dualUser);
 
   dvd = await buildCallout(DVD, 'DVD', dvdCommanderMember, dvdFirefighterMember, dvdCommander);
   szs = await buildCallout(SZS, 'SZS', szsCommanderMember, szsFirefighterMember, szsCommander);
+
+  // One vehicle per service, for record_vehicle_departure.
+  const { rows: dvdVehicleRow } = await db.query<{ id: string }>(
+    `insert into public.vehicles(callsign, name, kind, organization_id)
+     values ('V-DVD-INT', 'Vozilo DVD', 'NAVALNO', $1) returning id`,
+    [DVD],
+  );
+  dvdVehicle = dvdVehicleRow[0]!.id;
+  const { rows: szsVehicleRow } = await db.query<{ id: string }>(
+    `insert into public.vehicles(callsign, name, kind, organization_id)
+     values ('V-SZS-INT', 'Vozilo SZS', 'NAVALNO', $1) returning id`,
+    [SZS],
+  );
+  szsVehicle = szsVehicleRow[0]!.id;
+
+  // The dual-service person is a recipient of the SZS call-out through their
+  // SZS member record. This is what makes the journey-progress mismatch
+  // reachable: is_recipient_of resolves their SZS record while the command
+  // still writes their DVD one.
+  await db.query(
+    `insert into public.intervention_recipients(
+       intervention_id, member_id, recipient_version, member_name_at_publication)
+     values ($1, $2, 1, 'Oba Servisa')`,
+    [szs.interventionId, dualSzsMember],
+  );
 
   await snapshotVisible(visibleBefore);
   await snapshotCommands(commandsBefore);
@@ -813,5 +843,209 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
         ).toBe(false);
       }
     }
+  });
+});
+
+/*
+ * P4b made SZS call-outs possible. Four commands OUTSIDE its four tables write
+ * records that hang off an intervention, and each is `security definer` - so
+ * none of them is reached by the policies above. Their own tables belong to
+ * P4c and P4d, but the question "may you touch THIS call-out" is about
+ * `interventions`, and a phase closes the boundary it opens.
+ */
+describe('still open at 202609250027: commands that write records linked to a call-out', () => {
+  it('lets a DVD commander check a DVD member in on an SZS call-out', async () => {
+    const outcome = await probe(
+      dvdCommander,
+      `select public.attendance_check_in($1, $2)::text`,
+      [szs.interventionId, dvd.memberId],
+    );
+    expect(isRefusal(outcome), `attendance was recorded: ${outcome}`).toBe(false);
+  });
+
+  it('lets a dual-service member write a DVD journey row on an SZS call-out', async () => {
+    // `is_recipient_of` resolves their SZS record, so the recipient check
+    // passes - while `current_member_id()` still answers with the DVD one.
+    await db.query('begin');
+    try {
+      expect(
+        await act(dualUser, `select public.set_journey_progress($1, 'KRECEM')`, [
+          szs.interventionId,
+        ]),
+      ).toBe('OK');
+      const { rows } = await db.query<{ member_id: string; organization_id: string }>(
+        `select member_id::text, organization_id::text from public.intervention_journey
+          where intervention_id = $1`,
+        [szs.interventionId],
+      );
+      expect(rows[0]!.member_id, 'the row names their DVD member record').toBe(dualDvdMember);
+      expect(rows[0]!.organization_id, 'on a row belonging to SZS').toBe(SZS);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('lets a DVD vehicle be sent to an SZS call-out', async () => {
+    const outcome = await probe(
+      dvdCommander,
+      `select public.record_vehicle_departure($1, $2)::text`,
+      [dvdVehicle, szs.interventionId],
+    );
+    expect(isRefusal(outcome), `the departure was recorded: ${outcome}`).toBe(false);
+  });
+
+  it('does NOT let submit_response cross services, and here is why', async () => {
+    // Documented rather than assumed. `submit_response` looks the recipient up
+    // INLINE against `acting_member` instead of calling `is_recipient_of`, so
+    // the member it writes and the member it checks are always the same one.
+    // That is the whole difference from `set_journey_progress` above.
+    expect(
+      await probe(dualUser, `select public.submit_response($1, 'DOLAZIM', null, true)`, [
+        szs.interventionId,
+      ]),
+      'their DVD member is not on the SZS recipient list',
+    ).toBe('NOT_A_RECIPIENT');
+    expect(
+      await probe(szsFirefighter, `select public.submit_response($1, 'DOLAZIM', null, true)`, [
+        szs.interventionId,
+      ]),
+      // Fail-closed, and P4c's to fix: an SZS recipient cannot answer their own
+      // call-out because the command resolves them through the DVD shim.
+      'and an SZS recipient cannot answer at all',
+    ).toBe('MEMBER_RECORD_REQUIRED');
+  });
+});
+
+describe('after 202609250028: a command may only touch a call-out in its own service', () => {
+  beforeAll(async () => {
+    await db.query(sql(SCOPED_COMMANDS));
+  }, 120_000);
+
+  it('refuses a DVD commander checking anybody in on an SZS call-out', async () => {
+    expect(
+      await probe(dvdCommander, `select public.attendance_check_in($1, $2)::text`, [
+        szs.interventionId,
+        dvd.memberId,
+      ]),
+    ).toBe('STAFF_REQUIRED');
+  });
+
+  it('refuses checking in a member who does not serve in that call-out\'s service', async () => {
+    // The owner IS staff in both, so the refusal here is about the member
+    // rather than the caller - the two are separate questions.
+    expect(
+      await probe(ownerUser, `select public.attendance_check_in($1, $2)::text`, [
+        szs.interventionId,
+        dvd.memberId,
+      ]),
+    ).toBe('ORGANIZATION_MISMATCH');
+  });
+
+  it('still lets a DVD commander check a DVD member in on a DVD call-out', async () => {
+    await db.query('begin');
+    try {
+      const outcome = await act(dvdCommander, `select public.attendance_check_in($1, $2)::text`, [
+        dvd.interventionId,
+        dvd.memberId,
+      ]);
+      expect(isRefusal(outcome), `DVD attendance still works: ${outcome}`).toBe(false);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('writes the journey row against the member of the call-out\'s own service', async () => {
+    await db.query('begin');
+    try {
+      expect(
+        await act(dualUser, `select public.set_journey_progress($1, 'KRECEM')`, [
+          szs.interventionId,
+        ]),
+      ).toBe('OK');
+      const { rows } = await db.query<{ member_id: string; organization_id: string }>(
+        `select member_id::text, organization_id::text from public.intervention_journey
+          where intervention_id = $1`,
+        [szs.interventionId],
+      );
+      expect(rows[0]!.member_id, 'their SZS member record, not their DVD one').toBe(dualSzsMember);
+      expect(rows[0]!.organization_id).toBe(SZS);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('refuses a DVD-only member journey progress on an SZS call-out', async () => {
+    expect(
+      await probe(dvdFirefighter, `select public.set_journey_progress($1, 'KRECEM')`, [
+        szs.interventionId,
+      ]),
+    ).toBe('STAFF_REQUIRED');
+  });
+
+  it('refuses a DVD vehicle being sent to an SZS call-out', async () => {
+    expect(
+      await probe(dvdCommander, `select public.record_vehicle_departure($1, $2)::text`, [
+        dvdVehicle,
+        szs.interventionId,
+      ]),
+    ).toBe('STAFF_REQUIRED');
+    // The owner is staff in both, so for them the refusal is the one that
+    // matters: a vehicle and a call-out of different services. Whether a DVD
+    // vehicle may ever attend an SZS incident is P7's to decide, not P4b's.
+    expect(
+      await probe(ownerUser, `select public.record_vehicle_departure($1, $2)::text`, [
+        dvdVehicle,
+        szs.interventionId,
+      ]),
+    ).toBe('ORGANIZATION_MISMATCH');
+  });
+
+  it('still records a DVD vehicle on a DVD call-out, owned by the vehicle', async () => {
+    await db.query('begin');
+    try {
+      const movement = await act(dvdCommander, `select public.record_vehicle_departure($1, $2)::text`, [
+        dvdVehicle,
+        dvd.interventionId,
+      ]);
+      expect(isRefusal(movement), `DVD departure still works: ${movement}`).toBe(false);
+      const { rows } = await db.query<{ organization_id: string }>(
+        `select organization_id::text from public.vehicle_movements where id = $1`,
+        [movement],
+      );
+      // The settled rule from 202609240022: a movement belongs to the service
+      // that owns the VEHICLE. P4b does not touch that.
+      expect(rows[0]!.organization_id).toBe(DVD);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('lets an SZS member run their own service end to end', async () => {
+    await db.query('begin');
+    try {
+      expect(
+        await act(szsFirefighter, `select public.set_journey_progress($1, 'KRECEM')`, [
+          szs.interventionId,
+        ]),
+        'journey progress on their own call-out',
+      ).toBe('OK');
+      const departure = await act(szsCommander, `select public.record_vehicle_departure($1, $2)::text`, [
+        szsVehicle,
+        szs.interventionId,
+      ]);
+      expect(isRefusal(departure), `SZS vehicle to an SZS call-out: ${departure}`).toBe(false);
+    } finally {
+      await db.query('rollback');
+    }
+  });
+
+  it('leaves submit_response alone, as P4c\'s to make service-aware', async () => {
+    // Unchanged by this migration, and unchanged in behaviour: it was never
+    // exploitable, only DVD-blind.
+    expect(
+      await probe(szsFirefighter, `select public.submit_response($1, 'DOLAZIM', null, true)`, [
+        szs.interventionId,
+      ]),
+    ).toBe('MEMBER_RECORD_REQUIRED');
   });
 });
