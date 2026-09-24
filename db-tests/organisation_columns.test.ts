@@ -748,7 +748,7 @@ describe('a child cannot disagree with its parent', () => {
 
 describe('a vehicle movement belongs to the service that owns the vehicle', () => {
   /*
-   * Settled by the owner on 2026-09-23, and it is a product decision rather than
+   * Settled by the owner on 2026-09-24, and it is a product decision rather than
    * a schema one: `vehicle_movements.organization_id` is ALWAYS the service that
    * owns the vehicle, never the service that published the call-out.
    *
