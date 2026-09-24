@@ -25,7 +25,6 @@ import {
 
 let db: Client;
 let commander: string;
-let commanderMember: string;
 let seq = 0;
 
 beforeAll(async () => {
@@ -35,7 +34,8 @@ beforeAll(async () => {
   await completeProfile(db, account.userId, 'Ime Komandir');
   await grantRole(db, account.userId, 'COMMANDER');
   commander = account.userId;
-  commanderMember = await createMember(db, 'Ime Komandir', account.userId);
+  // The commander needs a member record of their own for self-actions.
+  await createMember(db, 'Ime Komandir', account.userId);
 }, 60_000);
 
 afterAll(async () => {
@@ -654,6 +654,3 @@ describe('reading attendance', () => {
     expect(count).toBe(0);
   });
 });
-
-// commanderMember exists so the commander has a member record for self-actions.
-void commanderMember;

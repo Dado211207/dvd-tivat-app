@@ -673,7 +673,7 @@ export async function fetchAvailability(): Promise<ReadResult<readonly Availabil
  * Participation per member, computed by the server.
  *
  * The client can compute the same figures from intervals it already has -
- * `participationSeconds()` applies the identical rule - and the history screen
+ * `participationMs()` applies the identical rule - and the history screen
  * does exactly that for one intervention. This reads the server's own answer
  * across every intervention, which is the figure a yearly record would be built
  * from, and which must never be assembled in the browser.

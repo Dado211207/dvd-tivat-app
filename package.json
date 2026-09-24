@@ -15,7 +15,7 @@
     "check:migrations": "node scripts/check-migration-drift.mjs --repo-only",
     "gate:p3": "node scripts/p3-equivalence-gate.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.db-tests.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

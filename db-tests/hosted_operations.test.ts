@@ -42,7 +42,7 @@ import {
   fetchParticipationTotals,
   fetchRecipientFacts,
   fetchVehicleMovements,
-  participationSeconds,
+  participationMs,
   publishIntervention,
   recordVehicleDeparture,
   recordVehicleReturn,
@@ -50,6 +50,7 @@ import {
   setJourneyProgress,
   setOwnAvailability,
   submitResponse,
+  type ReadResult,
 } from '../src/auth/operations';
 import { loadRoster, loadVehicles } from '../src/auth/roster';
 import { accountBackend, isAccountBackendConfigured, signInWithEmail, signOut } from '../src/auth/supabaseClient';
@@ -63,6 +64,18 @@ const DECLINER = 'vatrogasac2@example.invalid';
 
 /** A title nobody could mistake for a real incident, unique per run. */
 const TITLE = `Vjezba (automatska provjera) ${new Date().toISOString()}`;
+
+/**
+ * The value of a read that must have succeeded.
+ *
+ * Throws with the reason rather than letting a refusal fall through as an empty
+ * list: `[]` and "the server said no" are exactly what `ReadResult` exists to
+ * keep apart, and a test that blurred them would pass for the wrong reason.
+ */
+function valueOf<T>(result: ReadResult<T>): T {
+  if (!result.ok) throw new Error(`read failed: ${result.reason}`);
+  return result.value;
+}
 
 async function become(email: string): Promise<void> {
   await signOut();
@@ -124,7 +137,7 @@ describe.skipIf(!CONFIGURED)('the data layer against the hosted project', () => 
     ]);
     expect(published.ok, published.ok ? '' : published.message).toBe(true);
 
-    const facts = await fetchRecipientFacts(interventionId);
+    const facts = valueOf(await fetchRecipientFacts(interventionId));
     expect(facts.map((f) => f.memberName).sort()).toEqual(['Ivo Vatrogasac', 'Pero Vatrogasac']);
     // Published, and nothing more: nobody has opened it or answered.
     expect(facts.every((f) => f.acknowledgedAt === null && f.answer === null)).toBe(true);
@@ -132,11 +145,11 @@ describe.skipIf(!CONFIGURED)('the data layer against the hosted project', () => 
 
   it('a firefighter states availability, opens, answers, moves and attends', async () => {
     await become(FIREFIGHTER);
-    expect(await fetchOwnMemberId()).toBe(firefighterMemberId);
+    expect(await fetchOwnMemberId()).toEqual({ ok: true, value: firefighterMemberId });
 
     const available = await setOwnAvailability(true, 'U gradu sam.');
     expect(available.ok, available.ok ? '' : available.message).toBe(true);
-    const availability = await fetchAvailability();
+    const availability = valueOf(await fetchAvailability());
     expect(availability.find((a) => a.memberId === firefighterMemberId)?.available).toBe(true);
 
     const opened = await acknowledgeIntervention(interventionId);
@@ -167,7 +180,7 @@ describe.skipIf(!CONFIGURED)('the data layer against the hosted project', () => 
     await become(COMMANDER);
     const roster = await loadRoster();
     const names = new Map(roster.map((m) => [m.id, m.fullName]));
-    const facts = await fetchRecipientFacts(interventionId);
+    const facts = valueOf(await fetchRecipientFacts(interventionId));
 
     const attended = facts.find((f) => f.memberId === firefighterMemberId);
     expect(attended?.acknowledgedAt).not.toBeNull();
@@ -180,31 +193,31 @@ describe.skipIf(!CONFIGURED)('the data layer against the hosted project', () => 
     // and declining is not a reason to write anything into attendance either.
     expect(declined?.journey).toBeNull();
 
-    const intervals = await fetchAttendance(interventionId, names);
+    const intervals = valueOf(await fetchAttendance(interventionId, names));
     expect(intervals.map((i) => i.memberId)).toEqual([firefighterMemberId]);
     expect(attendanceState(intervals[0]!)).toBe('PENDING');
-    expect(participationSeconds(intervals[0]!)).toBe(0);
+    expect(participationMs(intervals[0]!)).toBe(0);
   }, 90_000);
 
   it('a batch confirmation needs no note, and only then does time count', async () => {
     const roster = await loadRoster();
     const names = new Map(roster.map((m) => [m.id, m.fullName]));
-    const before = await fetchAttendance(interventionId, names);
+    const before = valueOf(await fetchAttendance(interventionId, names));
     const pending = before.filter((i) => attendanceState(i) === 'PENDING').map((i) => i.id);
     expect(pending.length).toBeGreaterThan(0);
 
     const confirmed = await confirmAttendanceMany(pending, null);
     expect(confirmed.ok, confirmed.ok ? '' : confirmed.message).toBe(true);
 
-    const after = await fetchAttendance(interventionId, names);
+    const after = valueOf(await fetchAttendance(interventionId, names));
     expect(after.every((i) => attendanceState(i) === 'CONFIRMED')).toBe(true);
-    expect(after.reduce((sum, i) => sum + participationSeconds(i), 0)).toBeGreaterThan(0);
+    expect(after.reduce((sum, i) => sum + participationMs(i), 0)).toBeGreaterThan(0);
   }, 90_000);
 
   it('a vehicle movement records a vehicle and never an attendance', async () => {
     const roster = await loadRoster();
     const names = new Map(roster.map((m) => [m.id, m.fullName]));
-    const attendanceBefore = (await fetchAttendance(interventionId, names)).length;
+    const attendanceBefore = valueOf(await fetchAttendance(interventionId, names)).length;
 
     const vehicles = await loadVehicles();
     const vehicle = vehicles.find((v) => v.active) ?? vehicles[0];
@@ -214,10 +227,10 @@ describe.skipIf(!CONFIGURED)('the data layer against the hosted project', () => 
     expect(out.ok, out.ok ? '' : out.message).toBe(true);
     if (!out.ok) return;
 
-    const movements = await fetchVehicleMovements();
+    const movements = valueOf(await fetchVehicleMovements());
     expect(movements.some((m) => m.id === out.value && m.returnedAt === null)).toBe(true);
 
-    expect((await fetchAttendance(interventionId, names)).length).toBe(attendanceBefore);
+    expect(valueOf(await fetchAttendance(interventionId, names)).length).toBe(attendanceBefore);
 
     const back = await recordVehicleReturn(out.value);
     expect(back.ok, back.ok ? '' : back.message).toBe(true);
@@ -227,7 +240,7 @@ describe.skipIf(!CONFIGURED)('the data layer against the hosted project', () => 
     const deployed = await setInterventionStatus(interventionId, 'DEPLOYED', 1);
     // The version is optimistic; re-read rather than assume which one is current.
     if (!deployed.ok) {
-      const current = (await fetchInterventions()).find((i) => i.id === interventionId);
+      const current = valueOf(await fetchInterventions()).find((i) => i.id === interventionId);
       expect(current).toBeDefined();
       const retry = await setInterventionStatus(interventionId, 'DEPLOYED', current!.version);
       expect(retry.ok, retry.ok ? '' : retry.message).toBe(true);
@@ -237,35 +250,39 @@ describe.skipIf(!CONFIGURED)('the data layer against the hosted project', () => 
       interventionId, 'CLOSED', 'Automatska provjera zavrsena.', false);
     expect(closed.ok, closed.ok ? '' : closed.message).toBe(true);
 
-    const record = (await fetchInterventions()).find((i) => i.id === interventionId);
+    const record = valueOf(await fetchInterventions()).find((i) => i.id === interventionId);
     expect(record?.status).toBe('CLOSED');
     expect(record?.closedAt).not.toBeNull();
     interventionId = '';
   }, 120_000);
 
   it('the server totals agree with the figure the archive computes', async () => {
-    const totals = await fetchParticipationTotals();
+    const totals = valueOf(await fetchParticipationTotals());
     const row = totals.find((t) => t.memberId === firefighterMemberId);
     expect(row, 'the confirmed interval is missing from the totals').toBeDefined();
-    expect(row!.confirmedSeconds).toBeGreaterThan(0);
+    expect(row!.confirmedMs).toBeGreaterThan(0);
     // Confirmed and unconfirmed are reported apart, never summed together.
     expect(row!.confirmedIntervals).toBeGreaterThan(0);
 
     const declined = totals.find((t) => t.memberId === declinerMemberId);
-    expect(declined?.confirmedSeconds ?? 0).toBe(0);
+    expect(declined?.confirmedMs ?? 0).toBe(0);
   }, 90_000);
 
   it('a pending account gets no operational identity and sees no rows', async () => {
     await become('cekanje@example.invalid');
-    expect(await fetchOwnMemberId()).toBeNull();
-    expect(await fetchInterventions()).toEqual([]);
+    // Answered and linked to nobody - not a read that failed. Row level security
+    // filters an unapproved account's reads to nothing rather than refusing
+    // them (db-tests/interventions.test.ts, attendance.test.ts), so an empty
+    // list here must be a SUCCESSFUL empty list; a refusal is a different fact.
+    expect(await fetchOwnMemberId()).toEqual({ ok: true, value: null });
+    expect(await fetchInterventions()).toEqual({ ok: true, value: [] });
     expect(await loadRoster()).toEqual([]);
   }, 90_000);
 
   it('a suspended account is refused the same way', async () => {
     await become('ukinut@example.invalid');
-    expect(await fetchOwnMemberId()).toBeNull();
-    expect(await fetchInterventions()).toEqual([]);
+    expect(await fetchOwnMemberId()).toEqual({ ok: true, value: null });
+    expect(await fetchInterventions()).toEqual({ ok: true, value: [] });
 
     // And its commands are refused server-side, not merely hidden.
     const refused = await setOwnAvailability(true, null);
