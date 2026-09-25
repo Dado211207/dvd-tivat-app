@@ -514,7 +514,7 @@ its own without stranding the rest.
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
 | **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service — only for a recipient of a call-out still running — the worker sweeps `push_delivery_queue()`, which hands out only alerts that are due by the worker's clock, so neither an unwritable row nor one waiting out its repeat can block it, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
-| **P4f** — accounts and audit ⏳ **in review, `202609250033`** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD: the abandoned DVD-only feature, an explicit exception to criterion 5 (owner, 2026-09-25)* | 16 |
+| **P4f** — accounts and audit ⏳ **in review, `202609250033`, with follow-ups `202609250034` (retention) and `202609250035` (current-row identity)** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD: the abandoned DVD-only feature, an explicit exception to criterion 5 (owner, 2026-09-25)* | 16 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -897,6 +897,41 @@ change:
   This conflicts with Step 3 of the unapproved
   `docs/DEMO_DATA_INVENTORY.md`, which deletes those five published demo
   call-outs; see that file.
+- **An answer, the current journey step and the current availability stay
+  whose they are: `202609250035`, a further follow-up commit on the P4f PR,
+  not to be deployed yet.** It was found in review at 034. The revisions of an
+  answer were append-only, but the answer they hang from was not. Reproduced
+  on the 034 schema, with the stored rows and what each account reads:
+
+  - an answer and its revisions could be re-attributed to another member of
+    the same service;
+  - an answer could be moved onto the other service's call-out and member,
+    its label moved too. P2 accepts that, and the revisions kept the old
+    label, so each service's command read half of the answer;
+  - an answer written without a revision, which the service role can do,
+    could be deleted from a published call-out;
+  - the current journey step and the current availability could be
+    re-attributed the same way.
+
+  What 035 does:
+
+  - An answer's id, call-out, member, service and first-answered time are
+    fixed. `submit_response()` still revises its answer, ETA, direct-travel
+    flag, `updated_at` and revision number.
+  - An answer is removed only with its call-out, so a published call-out
+    keeps every answer, with or without a revision. A never-published draft
+    still goes, taking any answer written to it outside the commands.
+  - The current journey step keeps its call-out, member and service; the
+    current availability its member and service.
+  - Every rule runs after P2's label check.
+
+  Evidence: `db-tests/current_row_identity.test.ts` fails 6 of 12 without
+  the migration and passes all 12 with it. Thirteen negative controls are
+  each caught. One sabotage is not caught: dropping the service from the
+  fixed columns is redundant, because the call-out, or the member, is fixed
+  and P2 ties the label to it. No DVD behaviour changes through the
+  application. The service role keeps its privileges on the three tables, a
+  separate decision.
 
 **Not decided by P4e:** delivering one service's call-out to another service's
 member (a joint call-out) and one alert per person across services — Q1–Q5,
@@ -1352,3 +1387,14 @@ nothing, so its verdict says nothing about deletion. Deletion was checked on
 the same copy separately: each of the 5 real call-outs, all published and all
 CLOSED, is refused (`PUBLISHED_INTERVENTION_RETAINED`), and so is each of the
 4 real answers, which are held by their revisions.
+
+With `202609250035` added as well: **passed**, identical to the 034 run apart
+from the line naming the new migration. Every DVD read, command, live call-out
+step and push outcome is unchanged. The only writes 035 refuses are made
+outside the commands, and the gate makes none. Checked on the same copy
+separately:
+
+- deleting each of the 4 real answers is refused (`RESPONSE_RETAINED`);
+- re-attributing each answer, the 3 journey steps and the 1 availability is
+  refused (`*_IDENTITY_FIXED`);
+- no real answer carries another service than its revisions.

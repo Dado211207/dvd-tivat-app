@@ -12,11 +12,11 @@ This is the current checkpoint for the DVD Tivat / Sluzba zastite i spasavanja T
 | P4a/P4b production gate | **Passed** 2026-09-25 on an isolated copy of production (plan section 13): copy proven identical to production first (schema 7/7 categories, rows 32/32 tables, 621/621 read facts over 9 accounts), then 0 divergences in reads, commands and a live call-out, with and without completed profiles, and with synthetic SZS-only and dual-service accounts added. Three expected differences, named in the gate (E1–E3). Re-run: `npm run gate:p4 -- <capture>`; the capture is taken read-only by `scripts/p4-equivalence-production.sql` and never committed. |
 | P4c (responses and journey) | PR [#61](https://github.com/Dado211207/dvd-tivat-app/pull/61) merged into `main` as `471c5a969a150e75894ddee3531805c477405ddb` after independent review; CI passed on head `597f9726935ee733554a11c4a7efa6688b5f370b`. Migration `202609250030_response_service.sql` remains unapplied to production. |
 | P4d (attendance) | PR [#62](https://github.com/Dado211207/dvd-tivat-app/pull/62) merged into `main` as `33d60d0230f01c88544d9bce4112df8910ce446f` after independent review and green CI run `36145332057` on `a2e932295b3bd5915416531336f8c3a16cfe71a4`. Migration `202609250031_attendance_service.sql` remains unapplied to production. |
-| P4e (notifications and push) | **Draft PR [#63](https://github.com/Dado211207/dvd-tivat-app/pull/63)** from `claude/dvd-tivat-app-dev-n8wctb-p4e` at `0c0a390dd32cf70d8c2c212d5cf1c553e528375e`, retargeted to `main` after #62 merged; not merged. Five reviewed commits, the last being `ac3ee0a`, then two documentation-only commits: `1d9e2bf`, a merge of the P4d checkpoint `a2e9322`, and `0c0a390`, which records #62's merge. The reviewed commits are unchanged. The five: the phase (`4022ea3`); a test fix (`3ac2717` — `4022ea3` alone fails the repository's secret scan on a literal service-role claim in its test, first reported as passing because the file was untracked when the unit suite ran); the first review follow-up (`5bf35e1` — recipient-list and call-out-status checks and the unblockable sweep); a handoff note (`9bd7fac`); and the second review follow-up (`ac3ee0a` — the sweep takes only alerts that are due by the worker's clock). Migration `202609250032_push_service.sql` plus the `send-web-push` Edge Function (not deployed). Retargeting alone did not trigger CI; CI run `36146640864` (lint, typecheck, unit, database and browser tests) passed on `0c0a390`. |
-| P4f (accounts and audit) | **Draft PR [#64](https://github.com/Dado211207/dvd-tivat-app/pull/64)** from `claude/dvd-tivat-app-dev-n8wctb-p4f` (phase commit `67d15b7d74eb1d28b597b27d10eec40df4eb9e5e`), **stacked on #63** (base branch `claude/dvd-tivat-app-dev-n8wctb-p4e`, now `0c0a390`, brought in by merge commits — no rebase, the reviewed P4f commits are unchanged); not merged. Migration `202609250033_audit_history.sql`, and in a separate follow-up commit `202609250034_history_retention.sql` (the owner's retention rule: published call-outs and their history stay; not to be deployed yet). No CI until #63 merges and it is retargeted to `main`; local checks only. |
+| P4e (notifications and push) | PR [#63](https://github.com/Dado211207/dvd-tivat-app/pull/63) merged into `main` as `97f385337bea6c3928ce588fcfeeb31e1a32ba8a` after independent review and green CI run `36146640864` on `0c0a390dd32cf70d8c2c212d5cf1c553e528375e`. Migration `202609250032_push_service.sql` remains unapplied to production, and the `send-web-push` Edge Function in it is not deployed. |
+| P4f (accounts and audit) | **Draft PR [#64](https://github.com/Dado211207/dvd-tivat-app/pull/64)** from `claude/dvd-tivat-app-dev-n8wctb-p4f`, retargeted to `main` after #63 merged, which it has taken in by merge commit `61adab4` (a clean merge; no reviewed commit rewritten); not merged. Three migrations, each in its own commit: `202609250033_audit_history.sql` (the phase, `67d15b7`); `202609250034_history_retention.sql` (the owner's retention rule, `5743443`); `202609250035_current_row_identity.sql` (found in review of 034, `1011e32`). 034 and 035 are not to be deployed yet. CI run `36147627306` passed on `17ed78e`, before 035; the head carrying 035 needs its own green CI - see the PR. |
 | P5–P8 | Not started. P5 (retire the mirror) is next once the P4 stack is reviewed; P6 and P7 wait on Q1–Q8. |
 
-**Production gate:** None of the organization rewrite migrations `202609240022` through `202609250034` has been applied to the hosted project (rechecked read-only on 2026-09-25: 22 migrations, through `202609230021`), and the `send-web-push` function in these branches has not been deployed — the deployed worker is the one on `main`. A green local or PR test does not imply production deployment. Do not apply these migrations as a side effect of merging a PR. The plan requires separate approval per production phase. **Deploy order for P4e, when approved:** migration `202609250032` first, then the function — the new worker sweeps `push_delivery_queue()` and asks `push_delivery_verdict()`; without them its first read fails, it answers 503 and sends nothing. P4e changes one DVD behaviour on purpose (gate E5): an alert still queued when its call-out is closed or cancelled is no longer sent. Do not invent or delete member accounts or demo records.
+**Production gate:** None of the organization rewrite migrations `202609240022` through `202609250035` has been applied to the hosted project (rechecked read-only on 2026-09-25: 22 migrations, through `202609230021`), and the `send-web-push` function in these branches has not been deployed — the deployed worker is the one on `main`. A green local or PR test does not imply production deployment. Do not apply these migrations as a side effect of merging a PR. The plan requires separate approval per production phase. **Deploy order for P4e, when approved:** migration `202609250032` first, then the function — the new worker sweeps `push_delivery_queue()` and asks `push_delivery_verdict()`; without them its first read fails, it answers 503 and sends nothing. P4e changes one DVD behaviour on purpose (gate E5): an alert still queued when its call-out is closed or cancelled is no longer sent. Do not invent or delete member accounts or demo records.
 
 ## P4c: what changed and what it proves
 
@@ -131,13 +131,73 @@ The 19 files that build the whole chain (`resetSchema`), and the three that appl
 - `docs/DEMO_DATA_INVENTORY.md` is a proposal and was never run. Its Step 3 deletes the five production call-outs with their answers, revisions and journey history. All five were published, so that is no longer an ordinary operation. Step 3 as written also deletes the 47 `operational_audit` rows tied to them, which P4f already refuses. Steps 4–5 (members, accounts) depend on Step 3. If the owner wants that data gone, it is an exceptional purge, with its own approval. It can be done either before 033/034 reach production, or afterwards by a superuser disabling named triggers.
 - `db-tests/hosted_operations.test.ts`, when someone runs it by hand with credentials, publishes and closes one fictional call-out in production. It never deleted them, and from 034 nothing ordinary can: each run leaves a permanent record.
 
+## Follow-up `202609250035`: an answer, the current journey step and the current availability stay whose they are
+
+Found in review of #64 at 034. It is a separate commit (`1011e32`), leaves 034 untouched, and is **not to be deployed yet**.
+
+**Reproduced first**, on the 034 schema (`db-tests/current_row_identity.test.ts`, first describe). Each case asserts the stored rows and what each account reads:
+
+- An answer and its two revisions were re-attributed to another DVD member who was never sent the call-out. DVD command then read that member as coming, with the first member's history behind it. The first member, still a recipient, read the other member's answer and none of their own.
+- An answer was moved onto an SZS call-out and member with its label moved too, which P2 accepts as consistent. Its revisions kept the DVD label. SZS command read the answer and none of its history; DVD command read the history of an answer it could not see; the SZS recipient read an answer they never gave.
+- The service role wrote an answer with no revision; nothing requires one. That answer was then deleted from a published call-out, by the service role and by a superuser session.
+- The current journey step and the current availability were re-attributed, within the service and across services. The board then showed a member on the way whose history says somebody else set out.
+
+**What 035 does:**
+
+- **Answer identity is fixed.** An answer's id, call-out, member, service and first-answered time can no longer change (`RESPONSE_IDENTITY_FIXED`). This holds for the service role and a superuser session alike. `submit_response()` still revises the answer, ETA, direct-travel flag, `updated_at` and revision number, including a first answer in SZS. An answer and its revisions can no longer carry different services; the tests check this across every row.
+- **Answers are retained.** An answer is removed only together with its call-out (`RESPONSE_RETAINED`), and the table cannot be truncated.
+  - A published call-out is never removed (034), so it keeps every answer, with or without a revision.
+  - A never-published draft can still be deleted, and it takes with it any answer written to it outside the commands. `submit_response()` refuses drafts, so such an answer only arrives that way.
+  - Deleting such a draft's answer on its own is refused. That way the rule needs no second definition of "published".
+- **Current rows keep their identity.** The current journey step keeps its call-out, member and service (`JOURNEY_IDENTITY_FIXED`). The current availability keeps its member and service (`AVAILABILITY_IDENTITY_FIXED`). `set_journey_progress()` and `set_own_availability_in()` still work in each service.
+- **P2 still answers first.** Each rule's trigger sorts after P2's `enforce_organization`, so a contradicting label is still refused as `ORGANIZATION_MISMATCH` first.
+
+**Evidence.** On `61adab4` (the 034 schema), 6 of the 12 tests fail and 6 pass. The 6 that pass are the four reproductions and two checks that the commands still revise and move their rows. With 035, all 12 pass. The full suite gives 842 passed, 12 skipped (830 plus the 12 new tests), with no existing test changed.
+
+Thirteen negative controls are each caught:
+
+- the answer's freeze dropped;
+- its call-out left free;
+- its first-answered time left free;
+- no delete rule;
+- no truncate rule (`TRUNCATE … CASCADE` is then still refused, by 034's rule on the revisions);
+- the delete rule refusing a draft's cascade;
+- the delete rule letting every delete through;
+- no journey freeze;
+- no availability freeze;
+- an answer's `answer` frozen too;
+- a journey step's progress frozen too;
+- an availability's `available` frozen too;
+- the answer rule sorted before P2's.
+
+The three over-freezing controls are caught by the commands failing.
+
+One sabotage is not caught, and that result is accurate. Dropping the answer's service from its fixed columns changes nothing observable, because its call-out is fixed and P2 requires the label to match the call-out. The same holds for the journey step's service (its call-out is fixed) and the availability's (its member is fixed). Those clauses are defence in depth; no test covers them on its own.
+
+**Production copy** (offline; nothing read from production):
+
+- 035 applies after 034.
+- The 4 real answers all have revisions, and none carries another service than its revisions.
+- Deleting any of them gives `RESPONSE_RETAINED`; re-attributing one gives `RESPONSE_IDENTITY_FIXED`.
+- The 3 real journey steps and the 1 availability give their `*_IDENTITY_FIXED` code.
+- The 5 call-outs are still refused deletion.
+
+**Gate:** passed, identical to the 034 run apart from the line naming 035. **Replay:** re-applying 035 (and 034, 033, 032) is a no-op. The restore-exact-text files re-create the same 13 functions and none of 035's objects.
+
+**DVD behaviour.** Nothing changes through the application: every command writes exactly what it did, as the gate shows. The only thing refused is a direct write outside the commands: re-attributing an answer, journey step or availability, or deleting an answer.
+
+**Not changed by 035:**
+
+- The service role keeps its privileges on the three tables (the open decision above).
+- The current journey step and availability can still be deleted. They are state, and their history is kept.
+
 ## P4b review resolved; next boundary
 
 At head `ccc59a8`, DVD-only command/staff policies exposed SZS rows created by publication, journey, attendance and vehicle departure. The final `202609250029` migration closed reads on ten output tables, scoped the attendance and vehicle lifecycle commands, fixed a definer-read leak in `intervention_audit()`, restored the caller check in `is_eligible_recipient_in()`, and labelled parentless vehicle audit events with the vehicle's service. It also refuses an attendance check-in naming a vehicle from the other service. The database suite reported **700 passed, 12 skipped**; disabling that last migration fails 26 new tests. Independent review found no remaining P4b blocker, and CI passed on its exact SHA.
 
-**P4f is done for its own tables; the P4 group is not complete.** In review: #61 → #62 → #63 → #64. Open, in order of consequence: the cross-cutting existence question (whether another service's call-out id should be indistinguishable from an unknown one, plan P4 section); before `202609250034` is deployed, what happens to the published demo call-outs (the conflict with `docs/DEMO_DATA_INVENTORY.md` above). Settled since: the three history tables are append-only, and a published call-out and its answer history stay (`202609250034`, the owner's rule, in review on #64 and not deployed). Citizen reports stay DVD-only as the abandoned feature, an explicit exception to criterion 5 (owner, 2026-09-25). P5 (retire the mirror) must not start before the stack is reviewed.
+**P4f is done for its own tables; the P4 group is not complete.** #61, #62 and #63 are merged; #64 is in review. Open, in order of consequence: the cross-cutting existence question (whether another service's call-out id should be indistinguishable from an unknown one, plan P4 section); before `202609250034` is deployed, what happens to the published demo call-outs (the conflict with `docs/DEMO_DATA_INVENTORY.md` above). Settled since: the three history tables are append-only, and a published call-out and its answer history stay (`202609250034`, the owner's rule, in review on #64 and not deployed). Citizen reports stay DVD-only as the abandoned feature, an explicit exception to criterion 5 (owner, 2026-09-25). An answer, the current journey step and the current availability can no longer be re-attributed, and a published call-out keeps every answer (`202609250035`, in review on #64). Not decided, and not changed by 035: whether the service role should keep INSERT, UPDATE and DELETE on those three tables. Nothing it runs writes them; while it keeps them, it can write such a row outside the commands and change an answer's content without a revision, though no longer move or delete one. P5 (retire the mirror) must not start before the stack is reviewed.
 
-**Who is watching:** the working session that opened these PRs is subscribed to activity on all four (#61–#64) — the platform confirmed each subscription, although this session's own subscribe calls asked for an approval nobody was present to give. It receives CI failures and review comments while it lives. A timed check-in (for events webhooks miss, such as a base merging) could not be scheduled for the same reason, so a merge of #61 must be noticed by whoever merges it: retarget #62 to `main` then, and wait for its real CI.
+**Who is watching:** the working session that opened these PRs was subscribed to all four; the three merged ones unsubscribed themselves, and it stays subscribed to #64. It receives CI failures and review comments while it lives. It could not schedule a timed check-in (the call asked for an approval nobody was present to give), so events webhooks miss must be noticed by whoever acts on the PR.
 
 ## Account and service model
 
@@ -148,7 +208,7 @@ Unanswered product questions Q1–Q8 in the plan block the SZS user interface (P
 ## How to resume
 
 1. Read this file, `docs/MULTI_ORG_PLAN.md`, and the current GitHub PR head before acting; this checkpoint can become stale.
-2. Review P4e at PR #63's current head and require full CI on that exact SHA before merging. Then retarget #64 to `main`, verify its exact-head CI before review and merge. Production migration and push-worker deployment have separate gates. Each later phase requires failing-before/passing-after database evidence, preserved DVD behavior (re-run `npm run gate:p4` against a fresh read-only capture) and CI success on the exact final SHA.
+2. Review P4f at PR #64's current head - migrations 033, 034 and 035 - and require full CI on that exact SHA before merging. Production migration and push-worker deployment have separate gates. Each later phase requires failing-before/passing-after database evidence, preserved DVD behavior (re-run `npm run gate:p4` against a fresh read-only capture) and CI success on the exact final SHA.
 3. Run the unit suite on COMMITTED files: `src/config/accountReadiness.test.ts` scans `git ls-files` only, so a new file passes it until it is tracked. Build service-role claims in tests with `JSON.stringify`, never as a literal.
 4. Keep the next phase's own boundary closed. Audit all security-definer commands and every table they populate, including history, audit, notifications and service-role workers. Keep one reviewable phase per PR.
 5. Record the reviewed SHA, CI run, production migration state, open decisions and next blocker here after each phase. Production deployment and user acceptance testing are separate milestones.
