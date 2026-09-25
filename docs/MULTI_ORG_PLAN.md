@@ -514,7 +514,7 @@ its own without stranding the rest.
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
 | **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
-| **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* | 16 |
+| **P4f** — accounts and audit ⏳ **in review, `202609250033`** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD pending an owner decision* | 16 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -752,6 +752,48 @@ call-out cannot be updated at all (P2's trigger refuses any UPDATE of it), so th
 worker cannot set it aside — it refuses it on every run and reports it as
 failed; and P4d's own replay check ordered its hash by a constant, which a later
 migration's triggers reordered — fixed.
+
+**What P4f did, and what it left.** Catalogued at `202609250032` before any
+change:
+
+- **Reads needed nothing.** Every account-table policy that is not "your own
+  row" asks `is_dvd_owner()` or `current_dvd_role() = 'OWNER'`, and both are the
+  installation owner by definition: `current_role_in()` answers OWNER for the
+  owner in every service and for nobody else. `db-tests/audit_history.test.ts`
+  asserts the equivalence with the owner active, suspended, half-registered and
+  with DVD stood down, and that every account reads exactly what it read
+  before. An ADMIN of either service reads its own grant, profile and
+  memberships and nothing else — D9's ADMIN powers are the registry's, which
+  P4a scoped and `organisation_registry.test.ts` asserts in both directions.
+- **History was append-only by privilege only.** A superuser session or the
+  service role could rewrite who changed a role, why an account was suspended,
+  what a citizen-report review decided or which call-out an event was about, or
+  delete them; P4a's and P4d's append-only rules stopped at TRUNCATE, which
+  fires no row trigger (`202609240026` said so); and the service role could
+  write an `operational_audit` row with no call-out claiming either service —
+  the gap `organisation_columns.test.ts` pinned for P4 to close.
+  `202609250033` makes `role_audit`, `account_status_audit`,
+  `organization_membership_audit`, `report_status_audit` and
+  `operational_audit` refuse UPDATE and DELETE (`AUDIT_APPEND_ONLY`), refuses
+  TRUNCATE on those and on `registry_audit` and `attendance_corrections`, and
+  withdraws every service-role write on all seven — nothing the service role
+  runs writes history. The one change `operational_audit` still accepts is its
+  own foreign keys' `ON DELETE SET NULL` when a call-out or account is deleted:
+  it arrives nested inside the referential trigger and only clears links, so the
+  row keeps its service, wording and time. A superuser can still disable a
+  trigger; rewriting history is now a deliberate act, as `202609220017` said of
+  its own step.
+- **Citizen reports are left with DVD — an open decision, not one of Q1–Q8.**
+  `citizen_reports`, `report_media`, `report_status_audit` and `review_report()`
+  answer DVD staff and DVD command, and the rows carry no service. Whether
+  citizen reports exist at all and who reviews them is recorded as open in
+  `docs/PRODUCTION_ARCHITECTURE.md` and `docs/MEETING_DECISIONS.md`; scoping
+  them to a service would be answering it. Nothing crosses a service boundary
+  meanwhile: an SZS-only account reads none of them and they hold no SZS data.
+  **So P4f acceptance criterion 5 cannot close yet**: `is_dvd_staff()` and a
+  `current_dvd_role()` check survive in exactly those four places, pinned by the
+  catalogue test with the reason, alongside the shims themselves, the
+  owner-level functions and policies, and `serves_with()` (no caller since P4b).
 
 **Not decided by P4e:** delivering one service's call-out to another service's
 member (a joint call-out) and one alert per person across services — Q1–Q5,
@@ -1157,3 +1199,13 @@ a suspended or half-registered account still cannot register; a device another
 account registered cannot be claimed; and a member of both services withdrawn
 from SZS after publication is refused their SZS alert and still sent their DVD
 one.
+
+### Re-run with P4f
+
+With `202609250033` added: **passed**, identical to the P4e run — E1, E2 and E4
+and nothing else, the push comparison 0 differences, every SZS step as before.
+The commands that write audit history (`owner_set_role`,
+`owner_set_account_active`, `owner_set_organization_membership` and every
+call-out command) do exactly what they did, for every real account; P2's
+backfill, which rewrites `operational_audit` rows, runs before the new rule
+exists, as it always will.

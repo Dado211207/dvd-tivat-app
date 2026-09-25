@@ -701,6 +701,19 @@ interventions. It is a SELECT policy only: no client holds INSERT, UPDATE or
 DELETE on that table through any policy in any role, and the actor on every row
 is `auth.uid()` recorded by the command that did the work.
 
+Since `202609250033` audit history is append-only **as a rule**, not only by
+privilege. `operational_audit`, `role_audit`, `account_status_audit`,
+`organization_membership_audit` and `report_status_audit` refuse UPDATE and
+DELETE (`AUDIT_APPEND_ONLY`), as `registry_audit` has since `202609240026`; and
+none of them, nor `attendance_corrections`, can be truncated — TRUNCATE fires no
+row trigger, which is where the earlier rules stopped. The one change an
+`operational_audit` row still accepts is its own foreign keys' `ON DELETE SET
+NULL` when a call-out or an account is deleted: recognised because it arrives
+nested inside the referential action and only clears links. The row keeps its
+service, wording and time. The service role reads these tables and writes none
+of them; the `security definer` commands write every row. None of this binds the
+superuser, which can disable a trigger — it makes rewriting history deliberate.
+
 ## 11. Realtime
 
 `202609150009` adds eight operational tables to the `supabase_realtime`

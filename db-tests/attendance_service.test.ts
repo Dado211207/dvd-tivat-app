@@ -739,18 +739,23 @@ describe('after P4d: attendance is asked about, and stays, in the service that o
     });
 
     it('keeps the grants a client holds on the four tables exactly as they were', async () => {
+      // Clients only - `authenticated` and `anon`. What the service role holds
+      // is not P4d's: 202609250033 (P4f) withdraws its writes on the correction
+      // history, which a later migration applied here would otherwise trip.
       const { rows } = await db.query<{ grants: string }>(
-        `select string_agg(c.relname || ':' || coalesce(array_to_string(c.relacl, ' '), ''), ' / ' order by c.relname) as grants
+        `select string_agg(c.relname || ':' || coalesce(array_to_string(array(
+                  select entry::text from unnest(c.relacl) entry where entry::text ~ '^(authenticated|anon)='), ' '), ''),
+                ' / ' order by c.relname) as grants
            from pg_class c
           where c.relnamespace = 'public'::regnamespace
             and c.relname in ('attendance_intervals', 'attendance_corrections', 'attendance_correction_requests', 'vehicle_movements')`,
       );
       expect(rows[0]!.grants).toBe(
         [
-          'attendance_correction_requests:postgres=arwdDxt/postgres service_role=arwdDxt/postgres authenticated=ar/postgres',
-          'attendance_corrections:postgres=arwdDxt/postgres service_role=arwdDxt/postgres authenticated=r/postgres',
-          'attendance_intervals:postgres=arwdDxt/postgres service_role=arwdDxt/postgres authenticated=r/postgres',
-          'vehicle_movements:postgres=arwdDxt/postgres service_role=arwdDxt/postgres authenticated=r/postgres',
+          'attendance_correction_requests:authenticated=ar/postgres',
+          'attendance_corrections:authenticated=r/postgres',
+          'attendance_intervals:authenticated=r/postgres',
+          'vehicle_movements:authenticated=r/postgres',
         ].join(' / '),
       );
     });
