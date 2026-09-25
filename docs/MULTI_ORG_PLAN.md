@@ -838,23 +838,53 @@ change:
   `current_dvd_role()` check survive in exactly those four places, pinned by the
   catalogue test with the reason, alongside the shims themselves, the
   owner-level functions and policies, and `serves_with()` (no caller since P4b).
-- **Three more history tables are not append-only yet — a separate reviewed
-  follow-up, not part of P4f.** `member_availability_history`,
-  `intervention_journey_history` and `intervention_response_revisions` (P4a/P4c
-  tables) are written only by INSERT, by `set_own_availability_in`,
-  `set_journey_progress` and `submit_response`; no function updates or deletes
-  them or deletes their parents. The service role holds every privilege on
-  them, and measured on the merged P4f tree it can rewrite, delete and forge
-  their rows. The first two sit under RESTRICT foreign keys only, so a strict
-  refuse-UPDATE/DELETE/TRUNCATE rule breaks nothing. Revisions go with their
-  response through `ON DELETE CASCADE` — today a call-out with answers and no
-  journey progress can still be deleted by hand, taking its answer history
-  with it — so their rule must refuse DELETE except when the response is already
-  gone (the cascade). That is prototyped on a scratch copy: direct changes are
-  refused, both cascades still work, the commands still write. The follow-up
-  should also withdraw the service role's writes on all three. Whether deleting
-  a call-out should remove answer history at all is an owner question the rule
-  does not need.
+- **Three more history tables, and published call-outs: `202609250034`, a
+  follow-up commit on the P4f PR, not to be deployed yet.** The owner settled
+  the deletion question on 2026-09-25: a published intervention and its
+  response history remain in the database. A published call-out is closed or
+  cancelled, never hard-deleted through ordinary database operations, and a
+  draft that was never published may still be deleted.
+
+  Measured first, on the P4f tree: `member_availability_history`,
+  `intervention_journey_history` and `intervention_response_revisions` are
+  written only by INSERT, by `set_own_availability_in`, `set_journey_progress`
+  and `submit_response`. Even so:
+
+  - the service role could rewrite, delete, truncate and forge their rows;
+  - deleting an answer erased its revisions (`ON DELETE CASCADE`);
+  - a published call-out with nothing under it that RESTRICTs could be
+    deleted, answers and all.
+
+  `202609250034` makes the three tables refuse UPDATE, DELETE and TRUNCATE with
+  P4f's strict functions. P2's organisation trigger on each is unchanged and
+  still answers first. The migration also:
+
+  - withdraws the service role's writes on all three (SELECT stays);
+  - makes the revisions' foreign key RESTRICT, so an answer with revisions,
+    which is every answer, cannot be deleted;
+  - refuses deleting (`PUBLISHED_INTERVENTION_RETAINED`) or truncating
+    `interventions` if any trace of publication exists: a status past
+    DRAFT/CANCELLED, a publisher, a recipient list, or the append-only
+    `INTERVENTION_PUBLISHED` audit row.
+
+  The publisher alone is not enough: the `202609150008` publish never recorded
+  one, and two of production's five call-outs have none. The audit row is what
+  the service role cannot undo. A draft, or a draft discarded before
+  publication, is still deleted, and its audit rows are detached by P4f's SET
+  NULL. No command deletes any of these rows. An exceptional purge, such as
+  removing demo data, is a superuser disabling named triggers: a separate,
+  deliberate decision, not application behaviour.
+
+  Evidence: `db-tests/history_retention.test.ts`, where 10 of 17 tests fail
+  without the migration. Eleven negative controls, one per clause, each fail.
+  The whole suite passes with no existing test changed. Every earlier test that
+  deletes a published call-out builds only to a migration before 034. On the
+  production copy, all 5 real call-outs and all 4 real answers are refused
+  deletion.
+
+  This conflicts with Step 3 of the unapproved
+  `docs/DEMO_DATA_INVENTORY.md`, which deletes those five published demo
+  call-outs; see that file.
 
 **Not decided by P4e:** delivering one service's call-out to another service's
 member (a joint call-out) and one alert per person across services — Q1–Q5,
@@ -1293,3 +1323,14 @@ The commands that write audit history (`owner_set_role`,
 call-out command) do exactly what they did, for every real account; P2's
 backfill, which rewrites `operational_audit` rows, runs before the new rule
 exists, as it always will.
+
+With `202609250034` added as well: **passed**, identical to the run on
+`0049bd5` apart from the line naming the new migration. It shows E1, E2 and E4
+in reads and commands, E5 in the push comparison, and every SZS step as before.
+The commands that write history (`set_own_availability`, `set_journey_progress`,
+`submit_response`) do exactly what they did for every real account, on the
+copy as production is and with every profile completed. The gate deletes
+nothing, so its verdict says nothing about deletion. Deletion was checked on
+the same copy separately: each of the 5 real call-outs, all published and all
+CLOSED, is refused (`PUBLISHED_INTERVENTION_RETAINED`), and so is each of the
+4 real answers, which are held by their revisions.

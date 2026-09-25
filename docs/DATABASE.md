@@ -737,6 +737,30 @@ service, wording and time. The service role reads these tables and writes none
 of them; the `security definer` commands write every row. None of this binds the
 superuser, which can disable a trigger — it makes rewriting history deliberate.
 
+**A published call-out, and the history under it, stay** (`202609250034`, the
+owner's rule of 2026-09-25; in review, not deployed). A published call-out is
+closed or cancelled, never deleted. The migration does four things:
+
+- `member_availability_history`, `intervention_journey_history` and
+  `intervention_response_revisions` are append-only by the same functions:
+  UPDATE, DELETE and TRUNCATE are refused. P2's organisation trigger on each
+  still refuses a contradicting label first. The service role reads them and
+  writes none of them; `set_own_availability_in`, `set_journey_progress` and
+  `submit_response` write every row.
+- An answer's revisions RESTRICT its deletion. The current answer in
+  `intervention_responses` still changes, but the answer row itself cannot be
+  deleted once it has a revision, and every answer has one.
+- `interventions` refuses DELETE (`PUBLISHED_INTERVENTION_RETAINED`) for any
+  call-out showing a trace of publication: a status past DRAFT/CANCELLED, a
+  publisher, a recipient list, or the `INTERVENTION_PUBLISHED` audit row. It
+  also refuses TRUNCATE.
+- A draft, or a draft discarded before anybody was sent it, is still deleted.
+  Its audit rows stay, detached by the SET NULL above.
+
+No command deletes a call-out, an answer or any history. Removing such rows,
+for example demo data, is an exceptional purge by a superuser, outside the
+application and decided separately.
+
 ## 11. Realtime
 
 `202609150009` adds eight operational tables to the `supabase_realtime`
