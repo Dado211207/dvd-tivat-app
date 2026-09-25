@@ -83,6 +83,15 @@ const EXPECTED_COMMANDS = [
       && JSON.stringify(pre.effect) === JSON.stringify(post.effect),
   },
 ];
+EXPECTED_COMMANDS.push({
+  id: 'E4',
+  migration: 'supabase/migrations/202609250031_attendance_service.sql',
+  what: 'A correction request that arrives with a decision already on it is refused. Before 031 the requester could fill '
+    + 'resolved_by, resolved_at, resolution_note and requested_at themselves; no client sends them.',
+  matches: ({ name, pre, post, applied }) => applied.has('supabase/migrations/202609250031_attendance_service.sql')
+    && name === 'correction_request_prefilled' && pre.outcome.startsWith('OK')
+    && post.outcome.startsWith('ERR 42501 new row violates row-level security policy'),
+});
 // E3, the deliberate prohibition on one call-out naming members of two
 // services, is only reachable with SZS data; it is asserted as an expected
 // outcome of step 9 (scripts/p4-gate/szs.mjs), in both directions.

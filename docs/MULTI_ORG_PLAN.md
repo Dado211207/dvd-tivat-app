@@ -512,7 +512,7 @@ its own without stranding the rest.
 | **P4a** — registry ✅ **done, `202609240024`–`202609240026`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
 | **P4b** — interventions ✅ **done, `202609250027`–`202609250029`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)*; **and the read side of all ten tables below, which its commands write** *(see "What P4b's commands write")* | 8 + 13 |
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
-| **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command already service-scoped by P4b; left: the correction-request INSERT policy (DVD-only, fails closed) and crediting* | 8 |
+| **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
 | **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; left: the worker's service-role queries and `register_web_push_subscription` (DVD-only)* | 3 + 1 function |
 | **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 17 |
 
@@ -626,8 +626,7 @@ their rows with a service. It closed:
 `organisation_interventions.test.ts` re-derives the same list from the catalogue
 and asserts which DVD-only questions survive on it — after P4b, `submit_response`
 (P4c) and the correction-request INSERT policy (P4d), both failing closed; after
-P4c, only the latter — so a table or command added later is caught by
-construction.
+P4d, none — so a table or command added later is caught by construction.
 A DVD-only check cannot see a function that asks *nothing*, which is what
 `is_eligible_recipient_in` was; so it also asserts, installation-wide, that
 every client-callable `security definer` function asks about its caller or is a
@@ -654,6 +653,22 @@ lookup that made the old version fail closed. For DVD the member resolved is
 the shim's, so every DVD refusal and its order is unchanged; section 13's gate
 re-measures that on the production copy. An answer writes its response and its
 revision and nothing else, so no further table became reachable.
+
+**What P4d did.** The one direct write a member may make — asking for their own
+attendance to be corrected — checked the interval against the DVD shim, so an
+SZS member was refused and a dual-service member only had their DVD record.
+`202609250031` asks for the caller's member in the service of the stored
+interval, and requires the request to be what a request is: OPEN, with no
+decision on it, dated by the server (a DVD member could previously file one
+already "decided" by a commander, a month back — gate difference E4). It also
+settles what each row is about at insert, as the P4a rule asks: an interval's
+call-out, member and credited service; a correction (append-only); a request's
+interval, author, time and message. `vehicle_movements` keeps P2's rules — a
+movement belongs to its vehicle and may be moved within that service. Crediting
+stays exactly as it is: every interval credited to the service whose call-out it
+was, now fixed once written; whether that may ever differ is Q5's. No command
+resolves a correction request (none ever did), and the four tables' reads and
+every attendance command were already P4b's.
 
 **Reviewed after P4c: what a call-out id tells somebody who cannot read it.**
 `submit_response` reads the stored call-out's service before resolving the
@@ -988,6 +1003,10 @@ pass is what drives the real commander and admin through a whole call-out.
   `set_own_availability_in()`; a plpgsql `void` yields an empty value and a SQL
   one yields null. The effect is identical row for row, and the client's
   `command()` reads only `error`.
+- **E4 — a correction request cannot arrive already decided**
+  (`202609250031`). The requester could fill `resolved_by`, `resolved_at`,
+  `resolution_note` and `requested_at`; now the server dates it and a
+  commander decides it. The same request as any client sends it is unchanged.
 - **E3 — one call-out can no longer name members of two services**
   (`202609250027`). The installation owner could do this before; the owner
   keeps both services and may run a call-out in each. Only reachable with SZS
@@ -1052,3 +1071,14 @@ What P4c does **not** reach is the screen. The client finds "my member" through
 `current_member_id()`, which is DVD's, so an SZS-only account is held at the
 operational gate and a dual-service account is not shown as a recipient of an
 SZS call-out. The database path is open; offering it in the interface is P6's.
+
+### Re-run with P4d
+
+With `202609250031` added: **passed**. The matrix gained the correction
+request — as a client sends it and pre-filled with a decision — for every real
+account, and a correction step in the live call-out: 396 probes and 51 steps,
+135 with profiles completed. Every DVD read and command is unchanged except E4,
+for the one account with attendance (the real firefighter): the pre-filled
+request is now refused, the client-shaped one still accepted. On the SZS side an
+SZS member now files a correction to their own attendance; a DVD member and the
+SZS commander still cannot file one for it.

@@ -10,10 +10,11 @@ This is the current checkpoint for the DVD Tivat / Sluzba zastite i spasavanja T
 | P4a (registry) | PR [#56](https://github.com/Dado211207/dvd-tivat-app/pull/56) merged as `f149c7ff7a00ac126ca4dd872ad0b73b03fb3c1b`. It includes migrations `202609240024`–`202609240026`, service-scoped registry writers and audit reads, and an append-only registry audit. |
 | P4b (interventions and outputs) | PR [#57](https://github.com/Dado211207/dvd-tivat-app/pull/57) merged as `44314ebd3b4a8b5684e096c0a22a7d2ecd5a3035` after independent review of head `1ced6565611a6273b485e6fa42727c42175e1ae2`. CI run `36044525290` passed, including database and browser tests. Migrations `202609250027`–`202609250029` remain unapplied to production. |
 | P4a/P4b production gate | **Passed** 2026-09-25 on an isolated copy of production (plan section 13): copy proven identical to production first (schema 7/7 categories, rows 32/32 tables, 621/621 read facts over 9 accounts), then 0 divergences in reads, commands and a live call-out, with and without completed profiles, and with synthetic SZS-only and dual-service accounts added. Three expected differences, named in the gate (E1–E3). Re-run: `npm run gate:p4 -- <capture>`; the capture is taken read-only by `scripts/p4-equivalence-production.sql` and never committed. |
-| P4c (responses and journey) | **Draft PR [#61](https://github.com/Dado211207/dvd-tivat-app/pull/61)** from `claude/dvd-tivat-app-dev-n8wctb`, for independent review; not merged. Migration `202609250030_response_service.sql`: `submit_response()` resolves the caller's member in the stored call-out's service and checks and writes that same member. Separate first commit: the P4a/P4b gate. |
-| P4d–P4f, P5–P8 | Not completed. Follow the phase and decision gates in the plan. |
+| P4c (responses and journey) | PR [#61](https://github.com/Dado211207/dvd-tivat-app/pull/61) merged into `main` as `471c5a969a150e75894ddee3531805c477405ddb` after independent review; CI passed on head `597f9726935ee733554a11c4a7efa6688b5f370b`. Migration `202609250030_response_service.sql` remains unapplied to production. |
+| P4d (attendance) | **Draft PR [#62](https://github.com/Dado211207/dvd-tivat-app/pull/62)** from `claude/dvd-tivat-app-dev-n8wctb-p4d`, retargeted to `main`; not merged. Migration `202609250031_attendance_service.sql`. Full CI on its new head is required before merge. |
+| P4e–P4f, P5–P8 | Not completed. Follow the phase and decision gates in the plan. |
 
-**Production gate:** None of the organization rewrite migrations `202609240022` through `202609250030` has been applied to the hosted project (rechecked read-only on 2026-09-25: 22 migrations, through `202609230021`). A green local or PR test does not imply production deployment. Do not apply these migrations as a side effect of merging a PR. The plan requires separate approval per production phase. Do not invent or delete member accounts or demo records.
+**Production gate:** None of the organization rewrite migrations `202609240022` through `202609250031` has been applied to the hosted project (rechecked read-only on 2026-09-25: 22 migrations, through `202609230021`). A green local or PR test does not imply production deployment. Do not apply these migrations as a side effect of merging a PR. The plan requires separate approval per production phase. Do not invent or delete member accounts or demo records.
 
 ## P4c: what changed and what it proves
 
@@ -25,11 +26,15 @@ Evidence: `db-tests/response_service.test.ts` — 13 of its 18 tests fail on the
 
 **Not reached by P4c:** the interface. The client resolves "my member" through `current_member_id()` (DVD), so an SZS-only account is held at the operational gate and a dual-service account is not shown as a recipient of an SZS call-out. That is P6.
 
+## P4d: what changed and what it proves
+
+The correction-request INSERT policy asked the DVD shim, so an SZS member could not ask for a correction to their own attendance (fails closed). `202609250031` asks for the caller's member in the stored interval's service and requires an OPEN, undecided, server-dated request (a DVD member could previously pre-fill the decision — gate difference E4). It settles identity at insert: interval call-out/member/credit (`ATTENDANCE_IDENTITY_FIXED`), corrections append-only (`CORRECTION_HISTORY_APPEND_ONLY`), request interval/author/time/message (`CORRECTION_REQUEST_IDENTITY_FIXED`); vehicle movements keep P2's rules. `db-tests/attendance_service.test.ts`: 9 of 24 fail without it, all pass with it; the production-copy gate passes with it (DVD unchanged except E4). Crediting across services, and any command that resolves a request, are not implemented: the first is Q5's, the second never existed and no client uses the table.
+
 ## P4b review resolved; next boundary
 
 At head `ccc59a8`, DVD-only command/staff policies exposed SZS rows created by publication, journey, attendance and vehicle departure. The final `202609250029` migration closed reads on ten output tables, scoped the attendance and vehicle lifecycle commands, fixed a definer-read leak in `intervention_audit()`, restored the caller check in `is_eligible_recipient_in()`, and labelled parentless vehicle audit events with the vehicle's service. It also refuses an attendance check-in naming a vehicle from the other service. The database suite reported **700 passed, 12 skipped**; disabling that last migration fails 26 new tests. Independent review found no remaining P4b blocker, and CI passed on its exact SHA.
 
-**Next phase after P4c: P4d.** The correction-request INSERT policy is still DVD-only (it fails closed), so SZS members cannot request a correction; attendance crediting across services stays open. Then P4e: the push worker's service-role queries bypass RLS and must be scoped by hand, and `register_web_push_subscription` is DVD-only. Those workflows remain incomplete.
+**Next phase after P4d: P4e.** The push worker's service-role queries bypass RLS and must be scoped by hand, and `register_web_push_subscription` is DVD-only. Those workflows remain incomplete.
 
 ## Account and service model
 
@@ -40,6 +45,6 @@ Unanswered product questions Q1–Q8 in the plan block the SZS user interface (P
 ## How to resume
 
 1. Read this file, `docs/MULTI_ORG_PLAN.md`, and the current GitHub PR head before acting; this checkpoint can become stale.
-2. If the P4c PR is merged, start P4d from the current `main`. Require failing-before/passing-after database evidence, preserved DVD behavior (re-run `npm run gate:p4` against a fresh read-only capture) and CI success on the exact final SHA.
+2. Review P4d at PR #62's current head and require full CI on that exact SHA before merging. Then retarget #63 to `main`, verify its exact-head CI, and repeat for #64. Production migration and push-worker deployment have separate gates.
 3. Keep the next phase's own boundary closed. Audit all security-definer commands and every table they populate, including history, audit, notifications and service-role workers. Keep one reviewable phase per PR.
 4. Record the reviewed SHA, CI run, production migration state, open decisions and next blocker here after each phase. Production deployment and user acceptance testing are separate milestones.

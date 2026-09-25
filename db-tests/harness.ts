@@ -58,6 +58,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609250028_intervention_scoped_commands.sql',
   'supabase/migrations/202609250029_intervention_outputs.sql',
   'supabase/migrations/202609250030_response_service.sql',
+  'supabase/migrations/202609250031_attendance_service.sql',
 ];
 
 export const DATABASE_URL =
