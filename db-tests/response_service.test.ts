@@ -318,6 +318,18 @@ describe('before P4c: submit_response asks the DVD shim who is answering', () =>
       expect(await answer('dual', dvdCallout, 'NE_MOGU')).toBe('OK');
     });
   });
+
+  it('tells somebody holding only a DVD record whether an SZS call-out exists, AND whether it is open', async () => {
+    // The baseline for the existence question asked of P4c: through the shim,
+    // an SZS id reached the status and recipient checks, so the refusal said
+    // which state a call-out the caller cannot read was in.
+    await isolated(async () => {
+      expect(await answer('dvdFirefighter', szsCallout, 'DOLAZIM')).toBe('NOT_A_RECIPIENT');
+      expect(await answer('dvdFirefighter', szsClosed, 'DOLAZIM')).toBe('INTERVENTION_NOT_OPEN');
+      expect(await answer('dvdFirefighter', szsDraft, 'DOLAZIM')).toBe('INTERVENTION_NOT_OPEN');
+      expect(await answer('dvdFirefighter', UNKNOWN, 'DOLAZIM')).toBe('INTERVENTION_NOT_FOUND');
+    });
+  });
 });
 
 describe('after P4c: an answer comes from the member the call-out was sent to', () => {
@@ -490,6 +502,81 @@ describe('after P4c: an answer comes from the member the call-out was sent to', 
           expect(await answer('owner', callout, 'DOLAZIM')).toBe('MEMBER_RECORD_REQUIRED');
         }
         expect(await answersOn(szsCallout)).toEqual([]);
+      });
+    });
+  });
+
+  /*
+   * What a call-out id tells somebody who cannot read the call-out.
+   *
+   * Asked of this phase in review: `submit_response` reads the stored call-out's
+   * service before resolving the member, so somebody holding a DVD record gets
+   * MEMBER_RECORD_REQUIRED for an SZS call-out and INTERVENTION_NOT_FOUND for
+   * an id that matches nothing. That IS a distinguishable answer: one bit,
+   * "a call-out of another service has this id".
+   *
+   * Pinned here rather than changed, for three measured reasons:
+   *
+   *   - it is the convention P4a documented and P4b follows: a caller with no
+   *     standing learns nothing, a caller with standing may learn that an id
+   *     belongs to another service (ORGANIZATION_MISMATCH, STAFF_REQUIRED);
+   *   - the same bit reaches the same caller through five P4b commands, so
+   *     hiding it here alone would buy nothing;
+   *   - P4c NARROWED it: before, the refusal also said whether the other
+   *     service's call-out was open, closed or a draft (asserted above).
+   *
+   * Making another service's call-out indistinguishable from no call-out is a
+   * decision about every command at once, recorded as an open item in
+   * docs/MULTI_ORG_PLAN.md rather than half-made in one function.
+   */
+  describe('what a call-out id tells somebody who cannot read the call-out', () => {
+    it('a DVD record learns that an SZS call-out exists - and nothing about its state', async () => {
+      await isolated(async () => {
+        for (const callout of [szsCallout, szsClosed, szsDraft]) {
+          expect(await answer('dvdFirefighter', callout, 'DOLAZIM')).toBe('MEMBER_RECORD_REQUIRED');
+        }
+        expect(await answer('dvdFirefighter', UNKNOWN, 'DOLAZIM')).toBe('INTERVENTION_NOT_FOUND');
+      });
+    });
+
+    it('which is the same bit P4b\'s commands already give that caller', async () => {
+      await isolated(async () => {
+        const dvdFirefighter = people.dvdFirefighter.user;
+        for (const callout of [szsCallout, szsClosed, szsDraft]) {
+          expect(await act(dvdFirefighter, `select public.set_journey_progress($1, 'KRECEM')`, [callout])).toBe('STAFF_REQUIRED');
+          expect(await act(dvdFirefighter, 'select public.acknowledge_intervention($1)', [callout])).toBe('STAFF_REQUIRED');
+          expect(await act(dvdFirefighter, 'select public.attendance_check_in($1)', [callout])).toBe('STAFF_REQUIRED');
+        }
+        expect(await act(dvdFirefighter, `select public.set_journey_progress($1, 'KRECEM')`, [UNKNOWN])).toBe('INTERVENTION_NOT_FOUND');
+        expect(await act(dvdFirefighter, 'select public.acknowledge_intervention($1)', [UNKNOWN])).toBe('NOT_A_RECIPIENT');
+        expect(await act(dvdFirefighter, 'select public.attendance_check_in($1)', [UNKNOWN])).toBe('INTERVENTION_NOT_FOUND');
+      });
+    });
+
+    it('an SZS-only record learns nothing about a DVD call-out from this command', async () => {
+      await isolated(async () => {
+        expect(await answer('szsFirefighter', dvdCallout, 'DOLAZIM')).toBe('MEMBER_RECORD_REQUIRED');
+        expect(await answer('szsFirefighter', UNKNOWN, 'DOLAZIM')).toBe('MEMBER_RECORD_REQUIRED');
+      });
+    });
+
+    it('somebody serving in both is told about SZS call-outs only what an SZS member is', async () => {
+      await isolated(async () => {
+        // Within the service they serve in, as a DVD firefighter always was
+        // about DVD call-outs not sent to them.
+        expect(await answer('dual', szsClosed, 'DOLAZIM')).toBe('INTERVENTION_NOT_OPEN');
+        expect(await answer('dual', szsDraft, 'DOLAZIM')).toBe('INTERVENTION_NOT_OPEN');
+        expect(await answer('dual', UNKNOWN, 'DOLAZIM')).toBe('INTERVENTION_NOT_FOUND');
+      });
+    });
+
+    it('nobody without a member record learns anything at all', async () => {
+      await isolated(async () => {
+        for (const who of ['owner', 'citizen', 'szsSuspended'] as const) {
+          for (const callout of [szsCallout, szsClosed, dvdCallout, UNKNOWN]) {
+            expect(await answer(who, callout, 'DOLAZIM'), `${who}`).toBe('MEMBER_RECORD_REQUIRED');
+          }
+        }
       });
     });
   });

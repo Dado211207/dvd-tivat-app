@@ -655,6 +655,32 @@ the shim's, so every DVD refusal and its order is unchanged; section 13's gate
 re-measures that on the production copy. An answer writes its response and its
 revision and nothing else, so no further table became reachable.
 
+**Reviewed after P4c: what a call-out id tells somebody who cannot read it.**
+`submit_response` reads the stored call-out's service before resolving the
+member, so a caller holding a DVD record gets `MEMBER_RECORD_REQUIRED` for an
+SZS call-out and `INTERVENTION_NOT_FOUND` for an id that matches nothing — one
+bit: "another service has a call-out with this id". Measured at `202609250030`
+for every command that takes a call-out id (`db-tests/response_service.test.ts`):
+
+- the same bit reaches the same caller through `set_journey_progress`,
+  `acknowledge_intervention`, `attendance_check_in`/`_check_out` and
+  `record_vehicle_departure` (`STAFF_REQUIRED`), and a commander through the
+  draft, publish and status commands (`ORGANIZATION_MISMATCH`) — the
+  convention P4a set down on purpose: a caller with no standing learns nothing,
+  a caller with standing may learn that an id belongs to another service;
+- an SZS member can learn the same about a DVD id through those P4b commands;
+- nobody without standing (citizen, suspended, half-registered, the owner
+  without a member record) learns anything from any of them;
+- P4c **narrowed** it: before, `submit_response` also said whether the other
+  service's call-out was open, closed or a draft.
+
+Ids are random UUIDs and every read path to them is service-scoped (section
+13's grid), so the bit is only available about an id obtained out of band. It
+was therefore pinned, not changed. **Open, and not one of Q1–Q8:** whether a
+call-out of another service should be indistinguishable from no call-out. If
+yes, it is one change to every command at once, with a catalogue test asserting
+the uniform refusal — hiding it in one function would leave the bit in five.
+
 **A permission the owner loses, deliberately.** The installation owner could
 publish one call-out to members of both services. That is a joint intervention,
 which Q1–Q8 have not been answered for. The owner keeps both services and may
