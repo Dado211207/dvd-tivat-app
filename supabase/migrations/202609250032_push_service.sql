@@ -43,7 +43,8 @@
 --    database rule rather than by the absence of a writer.
 --
 -- Review of the first draft of this file (3ac2717) found three more, each
--- measured by a test that failed against it:
+-- measured by a test that failed against it (5-7), and review of the second
+-- a fourth (8):
 --
 -- 5. Being sent the call-out. The verdict asked that the alert, its call-out
 --    and its member share a service, never that the member was on the
@@ -64,6 +65,15 @@
 --    trigger), so the worker could neither send it nor set it aside, and
 --    counted it as failed on every run. Fifty of them at the front of the
 --    queue, and no valid alert behind them was ever reached.
+--
+-- 8. The sweep, again (found at 9bd7fac). Whether an alert was due - an accepted one waits ninety
+--    seconds for its repeat, a claimed one thirty before another worker may
+--    take it - was asked only of the fifty rows already read. Fifty accepted
+--    alerts waiting for their repeat were the whole sweep: an alert queued
+--    behind them went out two scheduler runs late (nothing at the first run,
+--    the fifty repeats at the second, the alert at the third), and a
+--    commander's wake-up of a call-out with fifty of its own waiting sent
+--    nothing at all.
 --
 -- ---------------------------------------------------------------------------
 -- The change
@@ -135,17 +145,30 @@
 --                                      call-out that is removed still takes its
 --                                      alerts and their history with it.
 --
--- 6. `push_delivery_queue()` is what the worker sweeps: every open Web Push
---    alert whose stored service agrees with its call-out's. The worker
---    filters, orders and limits it exactly as it did the table. An alert whose
---    label contradicts its call-out is not handed out: nobody but a superuser
---    with the triggers off can write it, so the worker could never send it,
---    close it or get past it - handing it out only let it hold a place at the
---    front of every sweep. It stays where it is, unchanged and unsent, and
---    `push_delivery_mislabelled(call-out)` counts such alerts, for one
---    call-out or all, so the worker reports them on every run until somebody
---    repairs them. P2's rule is exactly as strict as it was; nothing reads a
---    broken row as a valid one.
+-- 6. `push_delivery_queue(accepted_before, claimed_before)` is what the worker
+--    sweeps: every open Web Push alert that is DUE and whose stored service
+--    agrees with its call-out's. The worker filters it by attempts, orders it
+--    oldest first and limits it to fifty exactly as it did the table - but
+--    both exclusions come first, so nothing that cannot be acted on now can
+--    hold a place in the sweep.
+--
+--    Due is policy.ts's rule, unchanged: queued or refused, at once; accepted,
+--    once its repeat is due; claimed, once its worker is presumed dead. The
+--    worker passes the two instants - its own `now` less each wait - so the
+--    database never consults a clock of its own, and a test that sets the
+--    worker's clock sets the cutoff too. The stored time is compared truncated
+--    to the millisecond, as `Date.parse` reads it: the worker's own
+--    `holdForNow`, still asked of every row it is handed, agrees with the
+--    sweep on every row, to the millisecond.
+--
+--    An alert whose label contradicts its call-out is not handed out: nobody
+--    but a superuser with the triggers off can write it, so the worker could
+--    never send it, close it or get past it - handing it out only let it hold
+--    a place at the front of every sweep. It stays where it is, unchanged and
+--    unsent, and `push_delivery_mislabelled(call-out)` counts such alerts, for
+--    one call-out or all, so the worker reports them on every run until
+--    somebody repairs them. P2's rule is exactly as strict as it was; nothing
+--    reads a broken row as a valid one.
 --
 -- ---------------------------------------------------------------------------
 -- What this does NOT decide
@@ -365,7 +388,12 @@ alter table public.notification_outbox
 -- 3. The worker's sweep, and what it cannot sweep
 -- ---------------------------------------------------------------------------
 
-create or replace function public.push_delivery_queue()
+-- The first draft of this file (5bf35e1) defined the sweep without arguments,
+-- handing out alerts that were not yet due. It was never applied outside test
+-- databases; dropped so that no copy of it can stand beside this one.
+drop function if exists public.push_delivery_queue();
+
+create or replace function public.push_delivery_queue(accepted_before timestamptz, claimed_before timestamptz)
 returns table (
   id uuid,
   intervention_id uuid,
@@ -389,12 +417,27 @@ as $$
      and callout.organization_id = outbox_row.organization_id
    where outbox_row.channel = 'WEB_PUSH'
      and outbox_row.delivery_closed_at is null
+     -- Due now, by the WORKER's clock, before the worker's limit: a first
+     -- attempt or a refused one at once, an accepted alert once its repeat is
+     -- due, a claimed one once its worker is presumed dead. The two instants
+     -- are the worker's `now` less policy.ts's two waits; the stored time is
+     -- read to the millisecond, as the worker reads it, so this and the
+     -- worker's own `holdForNow` agree on every row.
+     and (
+       outbox_row.state in ('QUEUED', 'PROVIDER_REJECTED')
+       or (outbox_row.state = 'PROVIDER_ACCEPTED'
+           and date_trunc('milliseconds', outbox_row.updated_at) <= accepted_before)
+       or (outbox_row.state = 'SENT_TO_PROVIDER'
+           and date_trunc('milliseconds', outbox_row.updated_at) <= claimed_before)
+     )
 $$;
 
-comment on function public.push_delivery_queue() is
-  'Every open Web Push alert whose stored service agrees with its call-out''s: '
-  'what the push worker sweeps, filtered, ordered and limited by the worker as '
-  'it did the table. For the service role only.';
+comment on function public.push_delivery_queue(timestamptz, timestamptz) is
+  'Every open Web Push alert that is due - queued or refused; accepted at or '
+  'before accepted_before; claimed at or before claimed_before - and whose stored '
+  'service agrees with its call-out''s: what the push worker sweeps, ordered and '
+  'limited by the worker. The worker passes both instants from its own clock. '
+  'For the service role only.';
 
 create or replace function public.push_delivery_mislabelled(target_intervention uuid default null)
 returns integer
@@ -416,9 +459,9 @@ comment on function public.push_delivery_mislabelled(uuid) is
   'contradicts their call-out''s: never handed to the worker, never sent, never '
   'changed, and reported by it on every run. For the service role only.';
 
-revoke all on function public.push_delivery_queue() from public, anon, authenticated;
+revoke all on function public.push_delivery_queue(timestamptz, timestamptz) from public, anon, authenticated;
 revoke all on function public.push_delivery_mislabelled(uuid) from public, anon, authenticated;
-grant execute on function public.push_delivery_queue() to service_role;
+grant execute on function public.push_delivery_queue(timestamptz, timestamptz) to service_role;
 grant execute on function public.push_delivery_mislabelled(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------

@@ -40,6 +40,14 @@
  *                                      front of the queue, stopped every valid
  *                                      alert behind them
  *
+ * and, in review of the next draft (9bd7fac), one more:
+ *
+ *   what the sweep counts as due       fifty alerts waiting out their repeat
+ *                                      filled the sweep, because whether an
+ *                                      alert was due was asked after the limit:
+ *                                      a call-out queued behind them went out
+ *                                      two scheduler runs late
+ *
  * The worker's queries are exercised as written, through db-tests/postgrest.ts,
  * as the service role, against the rows built here. Nothing is sent: the push
  * service is a recording fake.
@@ -644,7 +652,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     );
     expect(functions).toEqual([
       { fn: 'push_delivery_mislabelled(uuid)', client: false },
-      { fn: 'push_delivery_queue()', client: false },
+      { fn: 'push_delivery_queue(timestamp with time zone,timestamp with time zone)', client: false },
       { fn: 'push_delivery_verdict(uuid)', client: false },
       { fn: 'refuse_delivery_attempt_change()', client: false },
       { fn: 'refuse_outbox_rebinding()', client: false },
@@ -761,7 +769,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
 
   it('answers only the service role, with the caller\'s own privileges', async () => {
     // The verdict, the sweep and the count of what the sweep leaves out.
-    for (const fn of ['push_delivery_verdict(uuid)', 'push_delivery_queue()', 'push_delivery_mislabelled(uuid)']) {
+    for (const fn of ['push_delivery_verdict(uuid)', 'push_delivery_queue(timestamptz,timestamptz)', 'push_delivery_mislabelled(uuid)']) {
       const { rows } = await db.query<{ anon: boolean; authenticated: boolean; service: boolean; definer: boolean; config: string[] | null; volatility: string }>(
         `select has_function_privilege('anon', p.oid, 'execute') as anon,
                 has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
@@ -775,7 +783,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     }
     await isolated(async () => {
       expect(await act(people.dvdCommander.user, 'select * from public.push_delivery_verdict($1)', [forgedMember])).toBe('DENIED');
-      expect(await act(people.dvdCommander.user, 'select * from public.push_delivery_queue()')).toBe('DENIED');
+      expect(await act(people.dvdCommander.user, 'select * from public.push_delivery_queue(now(), now())')).toBe('DENIED');
       expect(await act(people.dvdCommander.user, 'select public.push_delivery_mislabelled(null)')).toBe('DENIED');
     });
   });
@@ -1390,6 +1398,110 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
           ),
         ).toBe('ORGANIZATION_MISMATCH');
       });
+    });
+  });
+
+  // --- behind alerts that are not due yet -------------------------------------
+
+  describe('behind fifty alerts waiting out their repeat', () => {
+    /**
+     * Fifty alerts on the DVD call-out, all to one of its recipients, older than
+     * anything the fixture queued: the push service accepted each thirty
+     * seconds ago, so each waits another minute for its one repeat. The sweep
+     * is the fifty oldest open alerts - and whether an alert is due was asked
+     * only after the fifty had been read.
+     */
+    const HELD = 50;
+    let held: string[] = [];
+
+    /** `ids` accepted by the push service at `at`, plus `micros` microseconds the worker's clock cannot see. */
+    async function acceptedAt(ids: readonly string[], at: number, micros = 0): Promise<void> {
+      await db.query(
+        `update public.notification_outbox
+            set state = 'PROVIDER_ACCEPTED', attempt_count = 1, delivery_closed_at = null, delivery_close_reason = null,
+                updated_at = $2::timestamptz + make_interval(secs => $3::double precision / 1000000)
+          where id = any($1::uuid[])`,
+        [ids, new Date(at).toISOString(), micros],
+      );
+    }
+
+    /** How many of `ids` are exactly as `acceptedAt` left them: not repeated, not claimed, no attempt. */
+    const untouched = async (ids: readonly string[], at: number) =>
+      (await db.query<{ n: number }>(
+        `select count(*)::int as n from public.notification_outbox o
+          where o.id = any($1::uuid[]) and o.state = 'PROVIDER_ACCEPTED' and o.attempt_count = 1
+            and o.updated_at = $2::timestamptz and o.delivery_closed_at is null
+            and not exists (select 1 from public.notification_delivery_attempts a where a.outbox_id = o.id)`,
+        [ids, new Date(at).toISOString()],
+      )).rows[0]!.n;
+
+    beforeAll(async () => {
+      const { rows } = await db.query<{ id: string }>(
+        `insert into public.notification_outbox(intervention_id, member_id, channel, dedupe_key, created_at)
+         select $1, $2, 'WEB_PUSH', 'p4e-held-' || n, now() - interval '1 day' + n * interval '1 second'
+           from generate_series(1, ${HELD}) as n
+         returning id::text`,
+        [dvdCallout, people.dvdFirefighter.dvd],
+      );
+      held = rows.map((row) => row.id);
+    });
+
+    afterAll(async () => {
+      await db.query(`delete from public.notification_outbox where id = any($1::uuid[])`, [held]);
+    });
+
+    it('sends newly queued alerts at once on the scheduler, and leaves the fifty to their hold', async () => {
+      await resetQueue();
+      const now = Date.now();
+      await acceptedAt(held, now - 30_000);
+      const push = fakePush();
+      const tally = await deliverQueued({ service, send: push.send, scheduler: true, now: () => now });
+      expect(sentTo(push.sent), JSON.stringify(tally)).toEqual([...FIXTURE_ALERTED].sort());
+      // Exactly the run there would be without them: they are not in the sweep at all.
+      expect(tally).toEqual({ accepted: 5, rejected: 3, skipped: 3, failed: 0, mislabelled: 1 });
+      expect(await untouched(held, now - 30_000), 'none repeated early').toBe(HELD);
+    });
+
+    it('sends a call-out\'s newly queued alerts at once when its commander wakes it, behind fifty of its own', async () => {
+      await resetQueue();
+      const now = Date.now();
+      await acceptedAt(held, now - 30_000);
+      const push = fakePush();
+      const tally = await deliverQueued({ service, send: push.send, scheduler: false, now: () => now }, dvdCallout);
+      expect(sentTo(push.sent), JSON.stringify(tally)).toEqual(['dual@DVD', 'dualSzsWithdrawn@DVD', 'dvdFirefighter@DVD']);
+      expect(await untouched(held, now - 30_000), 'none repeated early').toBe(HELD);
+    });
+
+    it('ends both holds on the worker\'s own clock, to the millisecond, as it always has', async () => {
+      await resetQueue();
+      const now = Date.now();
+      // Ten waiting for their repeat, accepted at `now - 30 s` and 999 microseconds:
+      // the worker reads a stored time to the millisecond, so their hold ends at
+      // `now + 60 s` exactly. The other forty are out of the way.
+      const waiting = held.slice(0, 10);
+      await acceptedAt(waiting, now - 30_000, 999);
+      await db.query(`update public.notification_outbox set state = 'FAILED' where id = any($1::uuid[])`, [held.slice(10)]);
+      // And one alert a worker claimed and never finished, at `now + 30 s` and 999
+      // microseconds: presumed dead, and taken over, at `now + 60 s` exactly too.
+      await db.query(
+        `update public.notification_outbox
+            set state = 'SENT_TO_PROVIDER', attempt_count = 1, updated_at = $2::timestamptz + interval '999 microseconds'
+          where id = $1`,
+        [await alertOf('szsFirefighter', szsCallout), new Date(now + 30_000).toISOString()],
+      );
+      const edge = now + 60_000;
+
+      const early = fakePush();
+      await deliverQueued({ service, send: early.send, scheduler: true, now: () => edge - 1 });
+      const onTime = fakePush();
+      await deliverQueued({ service, send: onTime.send, scheduler: true, now: () => edge });
+
+      const count = (sent: readonly Sent[]) => ({
+        repeats: sent.filter((s) => s.payload.repeat === true).length,
+        takenOver: sent.filter((s) => s.endpoint === endpointOf('szsFirefighter')).length,
+      });
+      expect(count(early.sent), 'a millisecond before').toEqual({ repeats: 0, takenOver: 0 });
+      expect(count(onTime.sent), 'on the millisecond').toEqual({ repeats: waiting.length, takenOver: 1 });
     });
   });
 

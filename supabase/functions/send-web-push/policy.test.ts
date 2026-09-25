@@ -18,6 +18,7 @@ import {
   attemptsRemain,
   CLAIM_STALE_AFTER_MS,
   deliveryAction,
+  dueCutoffs,
   holdForNow,
   isRepeat,
   mapWithConcurrency,
@@ -78,6 +79,29 @@ describe('at most one repeat, and only after the member has had time', () => {
     for (const broken of [null, undefined, '', 'not a time']) {
       expect(holdForNow('PROVIDER_ACCEPTED', broken, NOW), String(broken)).toBe(false);
     }
+  });
+
+  it('gives the sweep the same answer, as two instants on the worker\'s clock', () => {
+    expect(dueCutoffs(NOW)).toEqual({ acceptedBefore: ago(REPEAT_AFTER_MS), claimedBefore: ago(CLAIM_STALE_AFTER_MS) });
+    // The database's side of it, as push_delivery_queue() asks it: the stored
+    // time, truncated to the millisecond, at or before the instant. Asked at
+    // the edge of each wait, a millisecond either side, with and without
+    // microseconds the worker's clock cannot see - never a different answer.
+    const { acceptedBefore, claimedBefore } = dueCutoffs(NOW);
+    const sweepTakes = (stored: string, before: string) => Date.parse(stored) <= Date.parse(before);
+    for (const [state, before, wait] of [
+      ['PROVIDER_ACCEPTED', acceptedBefore, REPEAT_AFTER_MS],
+      ['SENT_TO_PROVIDER', claimedBefore, CLAIM_STALE_AFTER_MS],
+    ] as const) {
+      for (const offset of [-1, 0, 1]) {
+        for (const micros of ['', '999']) {
+          const stored = ago(wait + offset).replace('Z', `${micros}Z`);
+          expect(sweepTakes(stored, before), `${state} ${stored}`).toBe(!holdForNow(state, stored, NOW));
+        }
+      }
+    }
+    // Queued and refused alerts are never held, and the sweep never holds them.
+    for (const state of ['QUEUED', 'PROVIDER_REJECTED']) expect(holdForNow(state, ago(0), NOW), state).toBe(false);
   });
 
   it('knows which state means "this would be the repeat"', () => {
