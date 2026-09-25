@@ -1285,8 +1285,9 @@ one.
 
 With `202609250033` added: **passed**, identical to the P4e run — E1, E2 and E4
 in reads and commands and nothing else, the push comparison showing E5 exactly
-as P4e's own run does since its review follow-up (re-run on the merged tree,
-`a50cfe7`), every SZS step as before.
+as P4e's own run does since its review follow-up (re-run on the merged trees
+`a50cfe7` and, after the due-sweep follow-up, `0049bd5` — identical output),
+every SZS step as before.
 The commands that write audit history (`owner_set_role`,
 `owner_set_account_active`, `owner_set_organization_membership` and every
 call-out command) do exactly what they did, for every real account; P2's
