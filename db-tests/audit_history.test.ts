@@ -16,11 +16,12 @@
  *              question, and an ADMIN of either service reads nothing but their
  *              own rows, today and after. Asserted, not changed.
  *   citizen    `citizen_reports`, `report_media`, `report_status_audit` and
- *   reports    `review_report()` answer DVD staff and DVD command only. The rows
- *              carry no service, and which service reviews a citizen report is
- *              an unanswered owner decision ("whether citizen reports are wanted
- *              at all, and who reviews them", docs/PRODUCTION_ARCHITECTURE.md).
- *              Pinned, not changed.
+ *   reports    `review_report()` answer DVD staff and DVD command only, and the
+ *              rows carry no service. The owner decided (2026-09-25) that
+ *              citizen reports remain the abandoned DVD-only research feature
+ *              of docs/MULTI_ORG_PLAN.md section 10: an explicit exception to
+ *              P4f's acceptance criterion 5, with no access for SZS and the
+ *              feature not activated. Pinned, not changed.
  *   history    None of the four account/report audit tables, nor
  *              `operational_audit`, was append-only as a database rule - only by
  *              the absence of a client privilege. The service role could
@@ -403,7 +404,7 @@ describe('after P4f: history is written once, by the commands that write it', ()
     });
   });
 
-  it('leaves citizen reports with DVD, as before, until somebody decides who reviews them', async () => {
+  it('leaves citizen reports with DVD, as before: the abandoned DVD-only feature, by the owner\'s decision', async () => {
     await isolated(async () => {
       const seen = async (who: Label) =>
         (await rowsAs<{ id: string }>(people[who].user, 'select id::text from public.citizen_reports')).map((row) => row.id);
@@ -577,7 +578,8 @@ describe('after P4f: history is written once, by the commands that write it', ()
         'is_dvd_admin', 'is_dvd_command', 'is_dvd_owner', 'is_dvd_staff',
         // The installation owner under its DVD name - asserted equal above.
         'owner_set_account_active', 'owner_set_organization_membership', 'owner_set_role',
-        // Citizen reports: DVD reviews them until somebody decides otherwise.
+        // Citizen reports: the abandoned DVD-only feature, the owner's explicit
+        // exception to criterion 5 (2026-09-25). SZS gets no access.
         'review_report',
         // "Shares a service with me", owner clause; nothing calls it since P4b.
         'serves_with',

@@ -514,7 +514,7 @@ its own without stranding the rest.
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
 | **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service — only for a recipient of a call-out still running — the worker sweeps `push_delivery_queue()`, which hands out only alerts that are due by the worker's clock, so neither an unwritable row nor one waiting out its repeat can block it, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
-| **P4f** — accounts and audit ⏳ **in review, `202609250033`** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD pending an owner decision* | 16 |
+| **P4f** — accounts and audit ⏳ **in review, `202609250033`** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD: the abandoned DVD-only feature, an explicit exception to criterion 5 (owner, 2026-09-25)* | 16 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -827,17 +827,28 @@ change:
   row keeps its service, wording and time. A superuser can still disable a
   trigger; rewriting history is now a deliberate act, as `202609220017` said of
   its own step.
-- **Citizen reports are left with DVD — an open decision, not one of Q1–Q8.**
-  `citizen_reports`, `report_media`, `report_status_audit` and `review_report()`
-  answer DVD staff and DVD command, and the rows carry no service. Whether
-  citizen reports exist at all and who reviews them is recorded as open in
-  `docs/PRODUCTION_ARCHITECTURE.md` and `docs/MEETING_DECISIONS.md`; scoping
-  them to a service would be answering it. Nothing crosses a service boundary
-  meanwhile: an SZS-only account reads none of them and they hold no SZS data.
-  **So P4f acceptance criterion 5 cannot close yet**: `is_dvd_staff()` and a
-  `current_dvd_role()` check survive in exactly those four places, pinned by the
-  catalogue test with the reason, alongside the shims themselves, the
-  owner-level functions and policies, and `serves_with()` (no caller since P4b).
+- **Citizen reports stay with DVD: the owner's explicit exception to
+  criterion 5 (decided 2026-09-25).** Citizen reports remain the abandoned
+  DVD-only research feature that section 10 describes. It is not part of
+  either service's workflow, it is not activated, and SZS is given no access
+  to it.
+
+  `citizen_reports`, `report_media`, `report_status_audit` and
+  `review_report()` keep answering DVD staff and DVD command, and their rows
+  carry no service. Nothing crosses a service boundary: an SZS-only account
+  reads none of them, and they hold no SZS data. In the client, the
+  `dojava` screen stays a local simulation that is not offered in navigation.
+
+  `is_dvd_staff()` and a `current_dvd_role()` check therefore survive in
+  exactly those four places, by decision rather than as unfinished work. The
+  catalogue test in `audit_history.test.ts` pins them, alongside the shims
+  themselves, the owner-level functions and policies, and `serves_with()`
+  (which has had no caller since P4b).
+
+  The broader product question, whether DVD Tivat wants citizen intake at
+  all (`docs/PRODUCTION_ARCHITECTURE.md` section 1, item 3), is not answered
+  by this. Reviving the feature would be a new, separately approved decision.
+  It would also have to answer which service reviews a report.
 - **Three more history tables, and published call-outs: `202609250034`, a
   follow-up commit on the P4f PR, not to be deployed yet.** The owner settled
   the deletion question on 2026-09-25: a published intervention and its
@@ -914,6 +925,12 @@ the screen that does it.
 5. `grep` asserts zero remaining references to
    `is_dvd_staff|is_dvd_command|is_dvd_admin` in `supabase/migrations/` beyond
    the historical files.
+   **Explicit exception (owner, 2026-09-25):** the abandoned citizen-report
+   feature (section 10) keeps its DVD-only checks: `reports_staff_read`,
+   `media_owner_or_staff_read`, `report_audit_leader_read` and
+   `review_report()`. They are pinned by name in the catalogue check of
+   `audit_history.test.ts`, which fails on any other DVD-only check present
+   at `202609250033`. `202609250034` adds none.
 6. A test asserts a DVD `ADMIN` still holds every registry power it holds today,
    scoped to DVD (D9), and holds none over SZS.
 7. Full browser suite green; no screen loses data for a DVD user.
