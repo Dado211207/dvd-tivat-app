@@ -82,7 +82,18 @@ Measured on the tree before it (`ff76dde`): `member_availability_history`, `inte
 - **A published call-out cannot be deleted** (`PUBLISHED_INTERVENTION_RETAINED`: a BEFORE DELETE trigger on `interventions`, and a BEFORE TRUNCATE one). "Published" is decided from every trace publication leaves, and any one of them keeps the call-out: a status other than DRAFT or CANCELLED, a publisher, a recipient list, or the `INTERVENTION_PUBLISHED` row in the append-only `operational_audit`. The publisher alone would not do: `202609150008`'s `publish_intervention` never recorded one, and two of production's five call-outs have none. The audit trace is what stops the service role, which can reset a status, clear a publisher and delete a recipient list, from making a published call-out look like a discarded draft. A DRAFT may still be deleted, and so may a draft discarded before publication (`discard_intervention_draft` leaves it CANCELLED with no publisher, no recipients and no publication). Their audit rows stay, detached by P4f's SET NULL.
 - **Exceptional purges stay outside the application.** No function deletes a call-out, an answer or any history (asserted from the catalogue). A superuser can still disable named triggers; that is the deliberate, separately decided act that a purge of demo data would be.
 
-Evidence: `db-tests/history_retention.test.ts`, 17 tests. On `ff76dde`, without 034: 10 fail and 7 pass. The 7 are the four measurements above plus three preservation checks: the commands still write, drafts still delete, and a member or account named by history is still refused deletion. With 034 all 17 pass. Eleven negative controls on 034 are each caught by the test aimed at it:
+Evidence: `db-tests/history_retention.test.ts`, 17 tests. On `ff76dde`, without 034: 10 fail and 7 pass. The 7 are the four measurements above plus three preservation checks: the commands still write, drafts still delete, and a member or account named by history is still refused deletion. With 034 all 17 pass.
+
+Each history table is tested the same way:
+
+- a direct UPDATE, DELETE and TRUNCATE by a client, the service role and a superuser session;
+- a relabel, and an insert claiming the other service, by the superuser (still `ORGANIZATION_MISMATCH`) and by the service role (now `permission denied`);
+- a row nobody wrote that is consistent with its parent's service. Before 034 the service role could write one in every table, including a DVD member recorded arriving at an SZS call-out.
+- a row moved onto another service's parent with its label moved too;
+- the command that writes it, and who it attributes the row to;
+- every foreign key by name, with its delete action.
+
+Twelve negative controls on 034 are each caught by the test aimed at it:
 
 - the revisions foreign key back to CASCADE;
 - no row rule;
@@ -91,7 +102,8 @@ Evidence: `db-tests/history_retention.test.ts`, 17 tests. On `ff76dde`, without 
 - each of the four publication traces removed on its own (four controls);
 - no delete trigger;
 - no truncate trigger on `interventions`;
-- a trigger that refuses every delete (drafts stop deleting).
+- a trigger that refuses every delete (drafts stop deleting);
+- P2's organisation trigger dropped from revisions. The organisation test catches it, and so does the command test, since `submit_response` relies on that trigger to fill in the service.
 
 Two controls show what the new rule adds, not only what it alone protects:
 

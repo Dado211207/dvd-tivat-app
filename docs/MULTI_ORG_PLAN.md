@@ -887,7 +887,8 @@ change:
   deliberate decision, not application behaviour.
 
   Evidence: `db-tests/history_retention.test.ts`, where 10 of 17 tests fail
-  without the migration. Eleven negative controls, one per clause, each fail.
+  without the migration. Twelve negative controls, one per clause, are each
+  caught; one of them drops P2's organisation trigger from a history table.
   The whole suite passes with no existing test changed. Every earlier test that
   deletes a published call-out builds only to a migration before 034. On the
   production copy, all 5 real call-outs and all 4 real answers are refused

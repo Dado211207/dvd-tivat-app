@@ -99,6 +99,23 @@ async function asService(statement: string, params: unknown[] = []): Promise<str
   }
 }
 
+/** As a signed-in account of the application, with row-level security, inside a savepoint. */
+async function asClient(userId: string, statement: string, params: unknown[] = []): Promise<string> {
+  await db.query('savepoint client');
+  try {
+    await db.query(`select set_config('request.jwt.claims', $1, true)`, [claims(userId)]);
+    await db.query('set local role authenticated');
+    await db.query(statement, params);
+    await db.query('reset role');
+    await db.query('release savepoint client');
+    return 'OK';
+  } catch (error) {
+    await db.query('rollback to savepoint client');
+    await db.query('reset role');
+    return refusal(error);
+  }
+}
+
 /** A refusal as one word: DENIED, a foreign key's name, or the exception's code. */
 function refusal(error: unknown): string {
   const message = (error as Error).message;
@@ -222,6 +239,75 @@ async function answerOn(callout: string): Promise<string> {
   return rows[0]!.id;
 }
 
+type Statement = [sql: string, params: unknown[]];
+type PerTable = Record<(typeof HISTORY)[number], Statement>;
+
+/**
+ * A row nobody wrote, for each history table: either consistent with its
+ * parent's service - which P2's rule accepts - or claiming the other service.
+ */
+async function forgeries(label: 'consistent' | 'contradicting'): Promise<PerTable> {
+  const claim = (service: string) => (label === 'consistent' ? null : service === DVD ? SZS : DVD);
+  return {
+    // An SZS member's availability change nobody made.
+    member_availability_history: [
+      `insert into public.member_availability_history(member_id, previous_available, next_available, note, changed_by, organization_id)
+       values ($1, true, false, 'Izmisljeno', $2, $3)`,
+      [people.szsFirefighter.szs, people.szsFirefighter.user, claim(SZS)],
+    ],
+    // A DVD member arriving at an SZS call-out they were never sent: the label
+    // follows the call-out, so for P2 this is consistent.
+    intervention_journey_history: [
+      `insert into public.intervention_journey_history(intervention_id, member_id, previous_progress, next_progress, changed_by, organization_id)
+       values ($1, $2, 'KRECEM', 'NA_LICU_MJESTA', $3, $4)`,
+      [callouts.szsAnswered, people.dvdFirefighter.dvd, people.dvdFirefighter.user, claim(SZS)],
+    ],
+    // An answer the SZS member never gave.
+    intervention_response_revisions: [
+      `insert into public.intervention_response_revisions(response_id, revision, answer, eta_minutes, direct_to_location, organization_id)
+       values ($1, 99, 'DOLAZIM', null, false, $2)`,
+      [await answerOn(callouts.szsAnswered), claim(SZS)],
+    ],
+  };
+}
+
+/** One DVD row of each table relabelled SZS, and nothing else changed. */
+async function relabels(): Promise<PerTable> {
+  const relabel = async (table: (typeof HISTORY)[number]): Promise<Statement> => [
+    `update public.${table} set organization_id = $2 where id = $1`,
+    [await rowOf(table, DVD), SZS],
+  ];
+  return {
+    member_availability_history: await relabel('member_availability_history'),
+    intervention_journey_history: await relabel('intervention_journey_history'),
+    intervention_response_revisions: await relabel('intervention_response_revisions'),
+  };
+}
+
+/** One DVD row of each table moved onto an SZS parent, its label moved with it. */
+async function moves(): Promise<PerTable> {
+  // The DVD answer's second revision: the SZS answer has only a first, so the
+  // move breaks no uniqueness of its own.
+  const { rows } = await db.query<{ id: string }>(
+    `select id::text from public.intervention_response_revisions where response_id = $1 and revision = 2`,
+    [await answerOn(callouts.dvdAnswered)],
+  );
+  return {
+    member_availability_history: [
+      `update public.member_availability_history set member_id = $2, organization_id = $3 where id = $1`,
+      [await rowOf('member_availability_history', DVD), people.szsFirefighter.szs, SZS],
+    ],
+    intervention_journey_history: [
+      `update public.intervention_journey_history set intervention_id = $2, member_id = $3, organization_id = $4 where id = $1`,
+      [await rowOf('intervention_journey_history', DVD), callouts.szsAnswered, people.szsFirefighter.szs, SZS],
+    ],
+    intervention_response_revisions: [
+      `update public.intervention_response_revisions set response_id = $2, organization_id = $3 where id = $1`,
+      [rows[0]!.id, await answerOn(callouts.szsAnswered), SZS],
+    ],
+  };
+}
+
 beforeAll(async () => {
   db = await connect();
   await db.query(`
@@ -305,8 +391,17 @@ describe('before 202609250034: history is kept by the absence of a writer, and a
     });
   });
 
-  it('lets a superuser session and the service role rewrite, delete and truncate them', async () => {
+  it('lets a superuser session and the service role rewrite, delete, truncate and forge them', async () => {
     await isolated(async () => {
+      // Rows nobody wrote. Only a label contradicting the parent stops the
+      // service role, and on journey history a DVD member can be recorded
+      // arriving at an SZS call-out, because the label follows the call-out.
+      const consistent = await forgeries('consistent');
+      const contradicting = await forgeries('contradicting');
+      for (const table of HISTORY) {
+        expect(await asService(...consistent[table]), `forge ${table}`).toBe('OK');
+        expect(await asService(...contradicting[table]), `mislabel ${table}`).toBe('ORGANIZATION_MISMATCH');
+      }
       expect(await raw(`update public.member_availability_history set note = 'Prepravljeno' where id = $1`, [await rowOf('member_availability_history', DVD)])).toBe('OK');
       expect(await asService(`update public.intervention_journey_history set changed_at = changed_at - interval '1 hour' where id = $1`, [await rowOf('intervention_journey_history', SZS)])).toBe('OK');
       expect(await asService(`update public.intervention_response_revisions set answer = 'DOLAZIM' where id = $1`, [await rowOf('intervention_response_revisions', DVD)])).toBe('OK');
@@ -315,16 +410,12 @@ describe('before 202609250034: history is kept by the absence of a writer, and a
     });
   });
 
-  it('lets a row move to another service\'s call-out or member, when its label moves with it', async () => {
+  it('lets a row move to another service\'s call-out, member or answer, when its label moves with it', async () => {
     await isolated(async () => {
       // P2's rule checks that the label matches the parent, not that the row
       // stays where it was written.
-      expect(
-        await raw(
-          `update public.intervention_journey_history set intervention_id = $2, member_id = $3, organization_id = $4 where id = $1`,
-          [await rowOf('intervention_journey_history', DVD), callouts.szsAnswered, people.szsFirefighter.szs, SZS],
-        ),
-      ).toBe('OK');
+      const moved = await moves();
+      for (const table of HISTORY) expect(await raw(...moved[table]), table).toBe('OK');
     });
   });
 
@@ -348,85 +439,50 @@ describe('after 202609250034: history is written once, and a published call-out 
 
   // --- the three histories --------------------------------------------------
 
-  it('refuses rewriting, deleting or truncating any of them, even in a superuser session', async () => {
+  it('refuses rewriting, deleting or truncating any of them, to a client and even in a superuser session', async () => {
     await isolated(async () => {
       for (const [table, rewrite] of [
         ['member_availability_history', `set note = 'Prepravljeno'`],
         ['intervention_journey_history', `set changed_at = changed_at - interval '1 hour'`],
         ['intervention_response_revisions', `set answer = 'DOLAZIM'`],
       ] as const) {
-        for (const service of [DVD, SZS]) {
+        for (const [service, commander] of [[DVD, people.dvdCommander.user], [SZS, people.szsCommander.user]] as const) {
           const id = await rowOf(table, service);
           expect(await raw(`update public.${table} ${rewrite} where id = $1`, [id]), `update ${table}`).toBe('AUDIT_APPEND_ONLY');
           expect(await raw(`delete from public.${table} where id = $1`, [id]), `delete ${table}`).toBe('AUDIT_APPEND_ONLY');
+          // A client never held more than SELECT; still so.
+          expect(await asClient(commander, `update public.${table} ${rewrite} where id = $1`, [id]), `client update ${table}`).toBe('DENIED');
+          expect(await asClient(commander, `delete from public.${table} where id = $1`, [id]), `client delete ${table}`).toBe('DENIED');
+          expect(await asClient(commander, `truncate public.${table}`), `client truncate ${table}`).toBe('DENIED');
         }
         expect(await raw(`truncate public.${table}`), `truncate ${table}`).toBe('AUDIT_APPEND_ONLY');
       }
     });
   });
 
-  it('keeps the organisation rule exactly as strict: a relabel is refused by it, a label that moves with its row by the new rule', async () => {
+  it('keeps the organisation rule exactly as strict on all three: a relabel or a contradicting row is refused by it, a row moved with its label by the new rule', async () => {
     await isolated(async () => {
       // P2's trigger still answers a contradicting label first, on update and on insert.
-      expect(
-        await raw(`update public.member_availability_history set organization_id = $2 where id = $1`, [await rowOf('member_availability_history', DVD), SZS]),
-      ).toBe('ORGANIZATION_MISMATCH');
-      expect(
-        await raw(
-          `insert into public.intervention_journey_history(intervention_id, member_id, previous_progress, next_progress, changed_by, organization_id)
-           values ($1, $2, null, 'KRECEM', $3, $4)`,
-          [callouts.dvdAnswered, people.dvdFirefighter.dvd, people.dvdFirefighter.user, SZS],
-        ),
-      ).toBe('ORGANIZATION_MISMATCH');
-      expect(
-        await raw(
-          `insert into public.intervention_response_revisions(response_id, revision, answer, eta_minutes, direct_to_location, organization_id)
-           values ($1, 99, 'DOLAZIM', null, false, $2)`,
-          [await answerOn(callouts.dvdAnswered), SZS],
-        ),
-      ).toBe('ORGANIZATION_MISMATCH');
-      // A row moved onto another service's call-out with its label moved too:
-      // consistent for P2, refused now because it is a rewrite.
-      expect(
-        await raw(
-          `update public.intervention_journey_history set intervention_id = $2, member_id = $3, organization_id = $4 where id = $1`,
-          [await rowOf('intervention_journey_history', DVD), callouts.szsAnswered, people.szsFirefighter.szs, SZS],
-        ),
-      ).toBe('AUDIT_APPEND_ONLY');
-      expect(
-        await raw(
-          `update public.intervention_response_revisions set response_id = $2, organization_id = $3 where id = $1`,
-          [await rowOf('intervention_response_revisions', DVD), await answerOn(callouts.szsAnswered), SZS],
-        ),
-      ).toBe('AUDIT_APPEND_ONLY');
+      const relabelled = await relabels();
+      const contradicting = await forgeries('contradicting');
+      const moved = await moves();
+      for (const table of HISTORY) {
+        expect(await raw(...relabelled[table]), `relabel ${table}`).toBe('ORGANIZATION_MISMATCH');
+        expect(await raw(...contradicting[table]), `mislabelled insert ${table}`).toBe('ORGANIZATION_MISMATCH');
+        // Consistent for P2, refused now because it is a rewrite.
+        expect(await raw(...moved[table]), `move ${table}`).toBe('AUDIT_APPEND_ONLY');
+      }
     });
   });
 
   it('withdraws every write from the service role, forged history included, and keeps its reads', async () => {
     await isolated(async () => {
-      // A journey step nobody took, consistent with its call-out and member.
-      expect(
-        await asService(
-          `insert into public.intervention_journey_history(intervention_id, member_id, previous_progress, next_progress, changed_by)
-           values ($1, $2, 'KRECEM', 'NA_LICU_MJESTA', $3)`,
-          [callouts.szsAnswered, people.szsFirefighter.szs, people.szsFirefighter.user],
-        ),
-      ).toBe('DENIED');
-      expect(
-        await asService(
-          `insert into public.member_availability_history(member_id, previous_available, next_available, note, changed_by)
-           values ($1, true, false, 'Izmisljeno', $2)`,
-          [people.dvdFirefighter.dvd, people.dvdFirefighter.user],
-        ),
-      ).toBe('DENIED');
-      expect(
-        await asService(
-          `insert into public.intervention_response_revisions(response_id, revision, answer, eta_minutes, direct_to_location)
-           values ($1, 99, 'DOLAZIM', null, false)`,
-          [await answerOn(callouts.dvdAnswered)],
-        ),
-      ).toBe('DENIED');
+      const consistent = await forgeries('consistent');
+      const contradicting = await forgeries('contradicting');
       for (const table of HISTORY) {
+        // A row nobody wrote, with its parent's service or claiming the other.
+        expect(await asService(...consistent[table]), `forge ${table}`).toBe('DENIED');
+        expect(await asService(...contradicting[table]), `mislabel ${table}`).toBe('DENIED');
         expect(await asService(`update public.${table} set organization_id = organization_id`), `update ${table}`).toBe('DENIED');
         expect(await asService(`delete from public.${table}`), `delete ${table}`).toBe('DENIED');
         expect(await asService(`truncate public.${table}`), `truncate ${table}`).toBe('DENIED');
@@ -448,12 +504,25 @@ describe('after 202609250034: history is written once, and a published call-out 
       expect(Object.fromEntries(Object.entries(after).map(([key, n]) => [key, n - (before[key] ?? 0)]))).toEqual(
         Object.fromEntries(Object.keys(before).map((key) => [key, 1])),
       );
+      // Each new row names whoever acted, in the service it belongs to.
       const { rows } = await db.query<{ changed_by: string; organization_id: string }>(
         `select changed_by::text, organization_id::text from public.intervention_journey_history
           where intervention_id = $1 order by changed_at desc, id limit 1`,
         [callouts.szsAnswered],
       );
       expect(rows[0]).toEqual({ changed_by: people.szsFirefighter.user, organization_id: SZS });
+      const { rows: availability } = await db.query<{ changed_by: string; organization_id: string; next_available: boolean }>(
+        `select changed_by::text, organization_id::text, next_available from public.member_availability_history
+          where member_id = $1 order by changed_at desc, id limit 1`,
+        [people.szsFirefighter.szs],
+      );
+      expect(availability[0]).toEqual({ changed_by: people.szsFirefighter.user, organization_id: SZS, next_available: false });
+      const { rows: revision } = await db.query<{ answer: string; revision: number; organization_id: string }>(
+        `select answer, revision, organization_id::text from public.intervention_response_revisions
+          where response_id = $1 order by revision desc limit 1`,
+        [await answerOn(callouts.szsAnswered)],
+      );
+      expect(revision[0]).toEqual({ answer: 'NE_MOGU', revision: 2, organization_id: SZS });
       // The answer itself is the current answer, not history: it still changes.
       const { rows: answer } = await db.query<{ answer: string; revision: number }>(
         `select answer, revision from public.intervention_responses where intervention_id = $1`,
@@ -610,25 +679,40 @@ describe('after 202609250034: history is written once, and a published call-out 
 
   // --- asked of the catalogue -------------------------------------------------
 
-  it('makes all three append-only by rule, keeps P2\'s trigger on each, and lets nothing cascade into them', async () => {
-    const { rows } = await db.query<{ table: string; row_rule: boolean; truncate_rule: boolean; organisation_rule: boolean; deletes_into: string }>(
+  it('makes all three append-only by rule, keeps P2\'s trigger on each, and no parent\'s deletion reaches them', async () => {
+    const { rows } = await db.query<{ table: string; row_rule: boolean; truncate_rule: boolean; organisation_rule: boolean }>(
       `select c.relname::text as table,
               exists (select 1 from pg_trigger t where t.tgrelid = c.oid and not t.tgisinternal
                         and pg_get_triggerdef(t.oid) ~ 'BEFORE (DELETE OR UPDATE|UPDATE OR DELETE)') as row_rule,
               exists (select 1 from pg_trigger t where t.tgrelid = c.oid and not t.tgisinternal
                         and pg_get_triggerdef(t.oid) ~ 'BEFORE TRUNCATE') as truncate_rule,
-              exists (select 1 from pg_trigger t where t.tgrelid = c.oid and t.tgname = 'enforce_organization') as organisation_rule,
-              (select string_agg(distinct f.confdeltype::text, '' order by f.confdeltype::text) from pg_constraint f
-                where f.conrelid = c.oid and f.contype = 'f') as deletes_into
+              exists (select 1 from pg_trigger t where t.tgrelid = c.oid and t.tgname = 'enforce_organization') as organisation_rule
          from pg_class c
         where c.relnamespace = 'public'::regnamespace and c.relname = any($1)
         order by 1`,
       [[...HISTORY]],
     );
-    // 'a' is NO ACTION (the organization), 'r' RESTRICT: no cascade, no SET NULL.
-    expect(rows).toEqual(
-      [...HISTORY].sort().map((table) => ({ table, row_rule: true, truncate_rule: true, organisation_rule: true, deletes_into: 'ar' })),
+    expect(rows).toEqual([...HISTORY].sort().map((table) => ({ table, row_rule: true, truncate_rule: true, organisation_rule: true })));
+    // Every parent, by name, and what deleting it does to the history: refused,
+    // never cascaded or cleared. Only the answer's action is new here.
+    const { rows: parents } = await db.query<{ key: string }>(
+      `select conrelid::regclass::text || '.' || conname || ' -> ' || confrelid::regclass::text || ' ' ||
+              case confdeltype when 'r' then 'RESTRICT' when 'a' then 'NO ACTION' when 'c' then 'CASCADE'
+                               when 'n' then 'SET NULL' else 'SET DEFAULT' end as key
+         from pg_constraint where contype = 'f' and conrelid::regclass::text = any($1)`,
+      [[...HISTORY]],
     );
+    expect(parents.map((row) => row.key).sort()).toEqual([
+      'intervention_journey_history.intervention_journey_history_changed_by_fkey -> auth.users RESTRICT',
+      'intervention_journey_history.intervention_journey_history_intervention_id_fkey -> interventions RESTRICT',
+      'intervention_journey_history.intervention_journey_history_member_id_fkey -> members RESTRICT',
+      'intervention_journey_history.intervention_journey_history_organization_id_fkey -> organizations NO ACTION',
+      'intervention_response_revisions.intervention_response_revisions_organization_id_fkey -> organizations NO ACTION',
+      'intervention_response_revisions.intervention_response_revisions_response_id_fkey -> intervention_responses RESTRICT',
+      'member_availability_history.member_availability_history_changed_by_fkey -> auth.users RESTRICT',
+      'member_availability_history.member_availability_history_member_id_fkey -> members RESTRICT',
+      'member_availability_history.member_availability_history_organization_id_fkey -> organizations NO ACTION',
+    ]);
     const { rows: acl } = await db.query<{ table: string; acl: string }>(
       `select relname::text as table, array_to_string(relacl, ' ') as acl from pg_class
         where relnamespace = 'public'::regnamespace and relname = any($1) order by 1`,
