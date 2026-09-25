@@ -822,6 +822,23 @@ change:
   `current_dvd_role()` check survive in exactly those four places, pinned by the
   catalogue test with the reason, alongside the shims themselves, the
   owner-level functions and policies, and `serves_with()` (no caller since P4b).
+- **Three more history tables are not append-only yet — a separate reviewed
+  follow-up, not part of P4f.** `member_availability_history`,
+  `intervention_journey_history` and `intervention_response_revisions` (P4a/P4c
+  tables) are written only by INSERT, by `set_own_availability_in`,
+  `set_journey_progress` and `submit_response`; no function updates or deletes
+  them or deletes their parents. The service role holds every privilege on
+  them, and measured on the merged P4f tree it can rewrite, delete and forge
+  their rows. The first two sit under RESTRICT foreign keys only, so a strict
+  refuse-UPDATE/DELETE/TRUNCATE rule breaks nothing. Revisions go with their
+  response through `ON DELETE CASCADE` — today a call-out with answers and no
+  journey progress can still be deleted by hand, taking its answer history
+  with it — so their rule must refuse DELETE except when the response is already
+  gone (the cascade). That is prototyped on a scratch copy: direct changes are
+  refused, both cascades still work, the commands still write. The follow-up
+  should also withdraw the service role's writes on all three. Whether deleting
+  a call-out should remove answer history at all is an owner question the rule
+  does not need.
 
 **Not decided by P4e:** delivering one service's call-out to another service's
 member (a joint call-out) and one alert per person across services — Q1–Q5,
@@ -1251,7 +1268,9 @@ one.
 ### Re-run with P4f
 
 With `202609250033` added: **passed**, identical to the P4e run — E1, E2 and E4
-and nothing else, the push comparison 0 differences, every SZS step as before.
+in reads and commands and nothing else, the push comparison showing E5 exactly
+as P4e's own run does since its review follow-up (re-run on the merged tree,
+`a50cfe7`), every SZS step as before.
 The commands that write audit history (`owner_set_role`,
 `owner_set_account_active`, `owner_set_organization_membership` and every
 call-out command) do exactly what they did, for every real account; P2's
