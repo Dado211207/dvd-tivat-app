@@ -62,7 +62,7 @@ At head `ccc59a8`, DVD-only command/staff policies exposed SZS rows created by p
 
 **After P4f the P4 group is complete in the repository, pending review:** #61 → #62 → #63 → #64. Open, in order of consequence: the citizen-report decision (P4f criterion 5); the cross-cutting existence question (whether another service's call-out id should be indistinguishable from an unknown one, plan P4 section); the three history tables above. P5 (retire the mirror) is the next phase and must not start before the stack is reviewed.
 
-**Session limits recorded:** subscribing this session to PR activity on #63 and #64 and scheduling a follow-up check-in all needed an interactive approval that could not be given while the owner was away, so neither is set up; nobody is watching these PRs for CI or review events until someone looks.
+**Who is watching:** the working session that opened these PRs is subscribed to activity on all four (#61–#64) — the platform confirmed each subscription, although this session's own subscribe calls asked for an approval nobody was present to give. It receives CI failures and review comments while it lives. A timed check-in (for events webhooks miss, such as a base merging) could not be scheduled for the same reason, so a merge of #61 must be noticed by whoever merges it: retarget #62 to `main` then, and wait for its real CI.
 
 ## Account and service model
 
