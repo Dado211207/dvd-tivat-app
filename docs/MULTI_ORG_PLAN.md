@@ -511,7 +511,7 @@ its own without stranding the rest.
 |---|---|---|
 | **P4a** — registry ✅ **done, `202609240024`–`202609240026`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
 | **P4b** — interventions ✅ **done, `202609250027`–`202609250029`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)*; **and the read side of all ten tables below, which its commands write** *(see "What P4b's commands write")* | 8 + 13 |
-| **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` already service-scoped by P4b; left: `submit_response`, which is DVD-blind and fails closed* | 7 |
+| **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command already service-scoped by P4b; left: the correction-request INSERT policy (DVD-only, fails closed) and crediting* | 8 |
 | **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; left: the worker's service-role queries and `register_web_push_subscription` (DVD-only)* | 3 + 1 function |
 | **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 17 |
@@ -624,9 +624,10 @@ their rows with a service. It closed:
   service.
 
 `organisation_interventions.test.ts` re-derives the same list from the catalogue
-and asserts that exactly two DVD-only questions survive on it —
-`submit_response` (P4c) and the correction-request INSERT policy (P4d), both
-failing closed — so a table or command added later is caught by construction.
+and asserts which DVD-only questions survive on it — after P4b, `submit_response`
+(P4c) and the correction-request INSERT policy (P4d), both failing closed; after
+P4c, only the latter — so a table or command added later is caught by
+construction.
 A DVD-only check cannot see a function that asks *nothing*, which is what
 `is_eligible_recipient_in` was; so it also asserts, installation-wide, that
 every client-callable `security definer` function asks about its caller or is a
@@ -641,6 +642,44 @@ text" file — now has a **load-bearing position**, as `202609130006a` does: it
 re-creates `intervention_audit` at its DVD-only text, so replayed after 029 it
 would reopen that leak. `restore_exact_function_text.test.ts` asserts both the
 ordering and the consequence.
+
+**What P4c did, and why it is one function.** Of the four P4c tables, P4b had
+already scoped every read and `set_journey_progress`; the catalogue names only
+two functions that write them. `submit_response` resolved its caller through the
+DVD shim, so an SZS recipient was refused their own call-out and a dual-service
+one was checked as their DVD record. `202609250030` resolves the member in the
+service read from the stored call-out — an unknown id judged as DVD's, as
+before — and checks and writes that same member, keeping the inline recipient
+lookup that made the old version fail closed. For DVD the member resolved is
+the shim's, so every DVD refusal and its order is unchanged; section 13's gate
+re-measures that on the production copy. An answer writes its response and its
+revision and nothing else, so no further table became reachable.
+
+**Reviewed after P4c: what a call-out id tells somebody who cannot read it.**
+`submit_response` reads the stored call-out's service before resolving the
+member, so a caller holding a DVD record gets `MEMBER_RECORD_REQUIRED` for an
+SZS call-out and `INTERVENTION_NOT_FOUND` for an id that matches nothing — one
+bit: "another service has a call-out with this id". Measured at `202609250030`
+for every command that takes a call-out id (`db-tests/response_service.test.ts`):
+
+- the same bit reaches the same caller through `set_journey_progress`,
+  `acknowledge_intervention`, `attendance_check_in`/`_check_out` and
+  `record_vehicle_departure` (`STAFF_REQUIRED`), and a commander through the
+  draft, publish and status commands (`ORGANIZATION_MISMATCH`) — the
+  convention P4a set down on purpose: a caller with no standing learns nothing,
+  a caller with standing may learn that an id belongs to another service;
+- an SZS member can learn the same about a DVD id through those P4b commands;
+- nobody without standing (citizen, suspended, half-registered, the owner
+  without a member record) learns anything from any of them;
+- P4c **narrowed** it: before, `submit_response` also said whether the other
+  service's call-out was open, closed or a draft.
+
+Ids are random UUIDs and every read path to them is service-scoped (section
+13's grid), so the bit is only available about an id obtained out of band. It
+was therefore pinned, not changed. **Open, and not one of Q1–Q8:** whether a
+call-out of another service should be indistinguishable from no call-out. If
+yes, it is one change to every command at once, with a catalogue test asserting
+the uniform refusal — hiding it in one function would leave the bit in five.
 
 **A permission the owner loses, deliberately.** The installation owner could
 publish one call-out to members of both services. That is a joint intervention,
@@ -889,3 +928,127 @@ re-run: execute `scripts/p3-equivalence-export.sql` over a read-only path, save
 its output plus the two blocks documented at the bottom of that file as a
 `.json` outside the tree, then `npm run gate:p3 -- <path>`. The gate exits `2`
 rather than `0` when it cannot run, so a missing export never reads as a pass.
+
+## 13. The P4a/P4b equivalence gate
+
+Run 2026-09-25, before P4c, against an isolated local copy of the hosted
+project. `scripts/p4-equivalence-gate.mjs` is the gate (`npm run gate:p4`);
+`scripts/p4-equivalence-production.sql` is the one read-only batch it needs
+from production, and says exactly what it reads. **Production was not written
+to, no migration was applied to it, and `hosted_operations.test.ts` was not run
+against it.** Every production query ran in a transaction that reported
+`transaction_read_only = on`.
+
+The P3 gate asked what two functions answer. P4a and P4b rewrote the policies
+and commands over the registry, call-outs, what a call-out produces and its
+history, so this one asks what every real account can **read** — every row key
+of all 33 public tables, and every reader function — and what it can **do**:
+every command a signed-in client can call, as every account, against real rows,
+with the outcome *and* the effect on every table.
+
+### What it found
+
+| | |
+|---|---|
+| Production | 22 migrations, through `202609230021`; `202609240022`–`202609250029` under test |
+| Copy fidelity, before anything was compared | schema fingerprint 7/7 categories (60 functions, 51 policies, 186 constraints, 63 indexes, 254 columns, 33 tables, 4 triggers); rows 32/32 tables; reads 621/621 facts over 9 accounts; 65 foreign keys, 0 orphans |
+| Reads, before vs after | 621 facts; **0 divergences**; 5 expected (E1) |
+| Commands, before vs after | 42 commands × 9 accounts (45 succeed) + 50 steps of a live call-out; **0 divergences**; 1 expected (E2) |
+| The same with every profile completed | 621 facts, 378 probes (79 succeed), 132 steps; **0 divergences**; 4 + 4 expected (E1, E2) |
+| SZS-only and dual-service, added to the migrated copy | 61 steps and postconditions as expected; mixing refused both ways (E3); real accounts' 621 facts about existing rows unchanged by SZS data; 14 accounts × 24 service-owned tables, no cross-service read; every DVD command unchanged with SZS data present |
+| Negative controls | a one-second change to one attendance row, `is_recipient_of()` answering yes to everybody, `submit_response()` accepting a non-recipient: each caught |
+| Production unchanged at the end | same migrations, same 32 table digests as at the export |
+
+**The copy was proven before it was used.** It is built from the harness
+migration list up to production's boundary, the capture's rows are loaded with
+triggers suppressed — a copy of the stored state, not a re-enactment — and the
+same batch that captured production is run against it. The gate refuses to
+compare anything unless the schema fingerprint, every table's rows and every
+account's answers come back identical to production's.
+
+**Why the second pass exists.** Production has two accounts that can act today —
+the owner, who holds no membership, and one firefighter. The commander, the
+admin and two firefighters never completed registration (section 12's finding,
+unchanged). So the gate repeats everything with those profiles completed through
+`complete_own_profile()`, as each account: the near-future production in which
+membership-derived authority is exercised on the real roster and history. That
+pass is what drives the real commander and admin through a whole call-out.
+
+### The three expected differences
+
+- **E1 — `is_eligible_recipient()` answers only a caller who is staff in the
+  service** (`202609250029`). P0 answered anybody who served with the member,
+  so an account with an active DVD membership but no operational access —
+  profile incomplete, or suspended — was told `true`. Five such accounts on
+  production today; the suspended one only, once profiles are complete. The
+  client never calls it; publication and web-push registration refuse such an
+  account before asking.
+- **E2 — `set_own_availability()` returns null instead of an empty void**
+  (`202609240024`). It became a one-line SQL wrapper over
+  `set_own_availability_in()`; a plpgsql `void` yields an empty value and a SQL
+  one yields null. The effect is identical row for row, and the client's
+  `command()` reads only `error`.
+- **E3 — one call-out can no longer name members of two services**
+  (`202609250027`). The installation owner could do this before; the owner
+  keeps both services and may run a call-out in each. Only reachable with SZS
+  data, so it is asserted in the SZS pass, in both directions:
+  `ORGANIZATION_MISMATCH`. Joint interventions are P7's, once Q1–Q8 are
+  answered.
+
+### What it found that P4c has to fix
+
+On the production-derived copy, exactly as on the fixtures: an SZS recipient
+answering their own call-out gets `MEMBER_RECORD_REQUIRED`, and a dual-service
+recipient gets `NOT_A_RECIPIENT`, because `submit_response()` resolves the
+caller through the DVD shim. It fails closed and writes nothing. The gate
+already states what P4c must change these to (`scripts/p4-gate/szs.mjs`), so the
+same run grades P4c when it lands.
+
+### What it does not prove
+
+- **Commands were measured on the copy, never on production** — they write. The
+  copy is only as good as the four fidelity checks above; they are why the
+  command results are evidence.
+- **PostgreSQL 16 locally, 17 hosted**, and a local stand-in for Supabase's
+  `auth` schema. The fingerprint normalises the one catalogue difference that
+  showed (PG17's `MAINTAIN` privilege letter); reads through RLS were compared
+  directly against production's own answers.
+- **PostgREST is not in the loop.** E2 is exactly the kind of difference that
+  only matters at that layer, which is why the client code was checked for it.
+- **Text is synthetic.** The capture carries only whether a name, note or
+  location was present, so validation that depends on a text value is
+  exercised on synthetic values.
+- **The SZS side is synthetic by construction** — production has no SZS
+  members, call-outs or SZS-only accounts yet. It is built through the real
+  commands, by the real owner.
+- **Delivery is not exercised**: the push worker runs with the service role and
+  bypasses RLS (P4e's hazard above), and Realtime is not driven. Both read
+  tables whose policies this gate did compare.
+
+### Re-running it
+
+The capture is production-derived and is **not kept in the repository**. Run
+`scripts/p4-equivalence-production.sql` as one batch over a read-only path, save
+the returned row as a `*.production-export.json` outside the tree (`.gitignore`
+covers the suffix, as a backstop), then `npm run gate:p4 -- <path>`. With the
+local server running (`npm run db:start`) it takes about ninety seconds. It
+exits `2`, not `0`, when it cannot run — no capture, no local server, or a copy
+that does not reproduce production — so a missing input never reads as a pass.
+
+### Re-run with P4c
+
+With `202609250030` added, the same capture and the same command: **passed**.
+Every DVD read and every DVD command on the production copy is unchanged —
+the same E1 and E2 and nothing else, across 621 facts, 378 probes and the live
+call-out in both passes, `submit_response` for every real account included.
+On the SZS side the steps the gate had already written down for P4c now hold:
+an SZS recipient answers, repeats without a new revision and revises; a
+dual-service recipient answers each call-out as that service's member; the
+stored answers and revisions carry the SZS member and the SZS label; a DVD-only
+account answering an SZS call-out gets `MEMBER_RECORD_REQUIRED`, and an SZS
+member it was not sent to gets `NOT_A_RECIPIENT`.
+
+What P4c does **not** reach is the screen. The client finds "my member" through
+`current_member_id()`, which is DVD's, so an SZS-only account is held at the
+operational gate and a dual-service account is not shown as a recipient of an
+SZS call-out. The database path is open; offering it in the interface is P6's.
