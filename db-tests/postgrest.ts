@@ -165,7 +165,18 @@ export function postgrest(caller: Caller, poolSize = 4): Rest {
       }
       const args = Object.entries(spec.args ?? {}).map(([name, value]) => `${identifier(name)} => ${param(value)}`);
       const call = `public.${identifier(spec.table)}(${args.join(', ')})`;
-      sql = setOf.get(spec.table) ? `select to_jsonb(x) as row from ${call} x` : `select to_jsonb(${call}) as row`;
+      if (setOf.get(spec.table)) {
+        // As PostgREST does for a function returning rows: its result is
+        // selected, filtered, ordered and limited like a table's.
+        const order = spec.order ? `order by t.${spec.order.column} ${spec.order.ascending ? 'asc' : 'desc'}` : '';
+        const limit = spec.limit === null ? '' : `limit ${Number(spec.limit)}`;
+        sql = `select to_jsonb(x) as row from (
+                 select ${(spec.columns ?? ['*']).map((c) => (c === '*' ? 't.*' : `t.${c}`)).join(', ')}
+                   from ${call} t ${whereSql} ${order} ${limit}) x`;
+      } else {
+        if (where.length || spec.order || spec.limit !== null) throw new Error(`${spec.table} returns no rows to filter`);
+        sql = `select to_jsonb(${call}) as row`;
+      }
     }
 
     const client = await pool.connect();

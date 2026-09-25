@@ -24,9 +24,9 @@ user JWT; the function itself requires either the server-only
 `x-push-worker-secret` header or a signed-in account with command in the
 service of the call-out the request names, read from the stored call-out.
 
-Deploy it together with migration `202609250032` or later: the worker asks the
-database `push_delivery_verdict()` about every queued alert and, without that
-function, counts each one as failed and sends nothing.
+Deploy it only after migration `202609250032` (or later) is applied: the worker
+sweeps `push_delivery_queue()` and asks `push_delivery_verdict()` about every
+alert. Without them its first read fails, it answers 503 and sends nothing.
 
 ## Where the service boundary is
 
@@ -34,10 +34,21 @@ The worker holds the service-role key, which bypasses row-level security. No
 policy bounds what it reads or sends, so:
 
 - whether an alert may still be sent is answered by `push_delivery_verdict()`
-  from the stored alert, call-out and member, in the service of the call-out -
-  never from anything a request carries;
-- an alert whose call-out or member is not in its service is set aside unsent
-  (`delivery_close_reason = 'SERVICE_MISMATCH'`);
+  from the stored alert, call-out, recipient list and member, in the service of
+  the call-out - never from anything a request carries;
+- an alert is sent only to somebody on the call-out's recipient list, and only
+  while the call-out is `PUBLISHED`, `ASSEMBLING`, `DEPLOYED` or `CONTAINED`.
+  Closing or cancelling a call-out leaves its queued alerts in place; the worker
+  sets them aside unsent (`CALLOUT_NOT_OPEN`), the repeat included;
+- an alert whose call-out or member is not in its service, or whose member was
+  never sent the call-out, is set aside unsent (`SERVICE_MISMATCH`,
+  `NOT_A_RECIPIENT`) - no command writes either;
+- an alert whose stored service contradicts its call-out's cannot be written by
+  anybody but a superuser, so `push_delivery_queue()` never hands it out and it
+  cannot hold up the alerts behind it. The worker reports how many there are on
+  every run - `mislabelled` in its reply, and a `PUSH_ALERTS_MISLABELLED`
+  warning with the count in the function's log - and leaves them untouched for
+  whoever investigates;
 - a device belongs to the account, so somebody serving in two services has one
   device, reached as whichever member each call-out was sent to.
 

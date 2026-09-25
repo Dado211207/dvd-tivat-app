@@ -42,6 +42,29 @@
 --    P4a is that what a row is about is settled when it is written, as a
 --    database rule rather than by the absence of a writer.
 --
+-- Review of the first draft of this file (3ac2717) found three more, each
+-- measured by a test that failed against it:
+--
+-- 5. Being sent the call-out. The verdict asked that the alert, its call-out
+--    and its member share a service, never that the member was on the
+--    call-out's frozen recipient list. `notification_outbox` has one foreign
+--    key to the call-out and another to the member; nothing ties the pair to
+--    `intervention_recipients`. An alert naming an eligible member of the right
+--    service who was never sent the call-out - which no command writes, and
+--    the service role or a superuser can - was DELIVERed.
+--
+-- 6. The call-out still running. The verdict never read the call-out's status,
+--    and `close_intervention` changes the call-out and nothing queued under it.
+--    An alert still waiting - a first attempt whose wake-up failed, or the
+--    repeat ninety seconds later - went out for a call-out already closed or
+--    cancelled, on the scheduler and on a commander's wake-up alike.
+--
+-- 7. The sweep. The worker reads the fifty oldest open alerts. One whose stored
+--    service contradicts its call-out can never be written again (P2's
+--    trigger), so the worker could neither send it nor set it aside, and
+--    counted it as failed on every run. Fifty of them at the front of the
+--    queue, and no valid alert behind them was ever reached.
+--
 -- ---------------------------------------------------------------------------
 -- The change
 -- ---------------------------------------------------------------------------
@@ -58,12 +81,30 @@
 -- 2. `web_push_subscriptions_self_read` asks `is_staff_anywhere()`.
 --
 -- 3. `push_delivery_verdict(outbox)` - for the service role only - answers the
---    worker's question from the STORED rows: the alert, its call-out and its
---    member must all be in one service (SERVICE_MISMATCH otherwise); a member
---    who has opened the call-out is not alarmed again (OPENED); otherwise the
---    member must still be somebody that service may call out (DELIVER, with
---    the account whose devices to use and when the call-out went out) or not
---    (INELIGIBLE). Nothing the worker is sent decides a service.
+--    worker's question from the STORED rows, first answer wins:
+--
+--      SERVICE_MISMATCH  the alert, its call-out and its member are not all in
+--                        one service
+--      NOT_A_RECIPIENT   the member is not on the call-out's recipient list in
+--                        that service. `publish_intervention` writes the
+--                        recipient and the alert together; an alert without
+--                        one was written by something else
+--      OPENED            the member has opened the call-out, so is not alarmed
+--                        again - whatever became of the call-out since, as
+--                        before
+--      CALLOUT_NOT_OPEN  the call-out is not running: closed, cancelled, or
+--                        never published. Running is PUBLISHED, ASSEMBLING,
+--                        DEPLOYED or CONTAINED - what `set_intervention_status`
+--                        may set and the client's `isOpenStatus` answers. A
+--                        list of what may be sent, so a status added later
+--                        sends nothing until somebody adds it here
+--      DELIVER           the member is still somebody that service may call
+--                        out, with the account whose devices to use and when
+--                        the call-out went out
+--      INELIGIBLE        anything else
+--
+--    Nothing the worker is sent decides any of it: a wake-up names a call-out
+--    to look at, and the stored rows answer.
 --
 --    The eligibility conditions are `is_eligible_recipient_in`'s, repeated:
 --    that function answers only a caller who is staff in the service, and the
@@ -73,9 +114,12 @@
 --    It is caller-rights: were it ever granted to a signed-in role, it could
 --    read no more than that role already can.
 --
--- 4. A mismatched alert is set aside with `delivery_close_reason =
---    'SERVICE_MISMATCH'`, the way an opened one is closed with MEMBER_OPENED:
---    no attempt is recorded because none was made.
+-- 4. An alert that must not be sent is set aside - `delivery_closed_at` and a
+--    reason, with no attempt recorded because none was made: MEMBER_OPENED as
+--    before; SERVICE_MISMATCH and NOT_A_RECIPIENT for rows no command writes;
+--    CALLOUT_NOT_OPEN for a call-out that ended before its alert went out,
+--    including the repeat. INELIGIBLE is still an attempt refused
+--    (ACCESS_REVOKED), as it always was. Nothing is deleted.
 --
 -- 5. Identity settled at insert:
 --
@@ -91,6 +135,18 @@
 --                                      call-out that is removed still takes its
 --                                      alerts and their history with it.
 --
+-- 6. `push_delivery_queue()` is what the worker sweeps: every open Web Push
+--    alert whose stored service agrees with its call-out's. The worker
+--    filters, orders and limits it exactly as it did the table. An alert whose
+--    label contradicts its call-out is not handed out: nobody but a superuser
+--    with the triggers off can write it, so the worker could never send it,
+--    close it or get past it - handing it out only let it hold a place at the
+--    front of every sweep. It stays where it is, unchanged and unsent, and
+--    `push_delivery_mislabelled(call-out)` counts such alerts, for one
+--    call-out or all, so the worker reports them on every run until somebody
+--    repairs them. P2's rule is exactly as strict as it was; nothing reads a
+--    broken row as a valid one.
+--
 -- ---------------------------------------------------------------------------
 -- What this does NOT decide
 -- ---------------------------------------------------------------------------
@@ -99,6 +155,10 @@
 -- call-out to another service's member at all, are P7's (Q1-Q5): until then a
 -- member of another service on a call-out is a mismatch. Two call-outs, one in
 -- each service, are two alerts. The `dvd-` topic prefix is P8's.
+--
+-- The verdict is asked immediately before an alert is claimed. A call-out
+-- closed in the instant between the two can still be alerted once, exactly as
+-- a member who opens it in that instant always could be.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
@@ -212,6 +272,7 @@ as $$
            outbox_row.member_id,
            outbox_row.organization_id as service,
            callout.organization_id as callout_service,
+           callout.status as callout_status,
            callout.published_at as callout_published_at,
            member_row.organization_id as member_service,
            member_row.user_id as account,
@@ -230,11 +291,24 @@ as $$
           or queued.callout_service is distinct from queued.service
           or queued.member_service is distinct from queued.service
           then 'SERVICE_MISMATCH'
+        -- Somebody the call-out was published to, in its service. The outbox
+        -- row's two foreign keys do not say so; the frozen list does.
+        when not exists (
+          select 1 from public.intervention_recipients recipient
+          where recipient.intervention_id = queued.intervention_id
+            and recipient.member_id = queued.member_id
+            and recipient.organization_id = queued.service
+        ) then 'NOT_A_RECIPIENT'
         when exists (
           select 1 from public.intervention_acknowledgements acknowledgement
           where acknowledgement.intervention_id = queued.intervention_id
             and acknowledgement.member_id = queued.member_id
         ) then 'OPENED'
+        -- Only while the call-out runs. What may be sent is listed; anything
+        -- else - closed, cancelled, a draft, a status not yet invented - is not.
+        when queued.callout_status is null
+          or queued.callout_status not in ('PUBLISHED', 'ASSEMBLING', 'DEPLOYED', 'CONTAINED')
+          then 'CALLOUT_NOT_OPEN'
         -- `is_eligible_recipient_in`'s conditions, for the call-out's service.
         when queued.member_active = true
           and queued.account is not null
@@ -272,20 +346,83 @@ $$;
 
 comment on function public.push_delivery_verdict(uuid) is
   'The push worker''s one question about a queued Web Push alert, answered from '
-  'the stored alert, call-out and member: SERVICE_MISMATCH, OPENED, INELIGIBLE, or '
-  'DELIVER with the account whose devices to use. For the service role only.';
+  'the stored alert, call-out, recipient list and member: SERVICE_MISMATCH, '
+  'NOT_A_RECIPIENT, OPENED, CALLOUT_NOT_OPEN, INELIGIBLE, or DELIVER with the '
+  'account whose devices to use. For the service role only.';
 
 revoke all on function public.push_delivery_verdict(uuid) from public, anon, authenticated;
 grant execute on function public.push_delivery_verdict(uuid) to service_role;
 
+-- Why an alert was set aside unsent. Every value is one the worker writes.
 alter table public.notification_outbox
   drop constraint if exists notification_outbox_delivery_close_reason_check;
 alter table public.notification_outbox
   add constraint notification_outbox_delivery_close_reason_check
-  check (delivery_close_reason is null or delivery_close_reason in ('MEMBER_OPENED', 'SERVICE_MISMATCH'));
+  check (delivery_close_reason is null or delivery_close_reason in (
+    'MEMBER_OPENED', 'SERVICE_MISMATCH', 'NOT_A_RECIPIENT', 'CALLOUT_NOT_OPEN'));
 
 -- ---------------------------------------------------------------------------
--- 3. Identity settled at insert
+-- 3. The worker's sweep, and what it cannot sweep
+-- ---------------------------------------------------------------------------
+
+create or replace function public.push_delivery_queue()
+returns table (
+  id uuid,
+  intervention_id uuid,
+  member_id uuid,
+  state text,
+  attempt_count integer,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  -- The label P2's trigger checks on every write: the call-out's service. An
+  -- alert that disagrees cannot be written, so it is not handed out.
+  select outbox_row.id, outbox_row.intervention_id, outbox_row.member_id, outbox_row.state,
+         outbox_row.attempt_count, outbox_row.created_at, outbox_row.updated_at
+    from public.notification_outbox outbox_row
+    join public.interventions callout
+      on callout.id = outbox_row.intervention_id
+     and callout.organization_id = outbox_row.organization_id
+   where outbox_row.channel = 'WEB_PUSH'
+     and outbox_row.delivery_closed_at is null
+$$;
+
+comment on function public.push_delivery_queue() is
+  'Every open Web Push alert whose stored service agrees with its call-out''s: '
+  'what the push worker sweeps, filtered, ordered and limited by the worker as '
+  'it did the table. For the service role only.';
+
+create or replace function public.push_delivery_mislabelled(target_intervention uuid default null)
+returns integer
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select count(*)::integer
+    from public.notification_outbox outbox_row
+    left join public.interventions callout on callout.id = outbox_row.intervention_id
+   where outbox_row.channel = 'WEB_PUSH'
+     and outbox_row.delivery_closed_at is null
+     and callout.organization_id is distinct from outbox_row.organization_id
+     and (target_intervention is null or outbox_row.intervention_id = target_intervention)
+$$;
+
+comment on function public.push_delivery_mislabelled(uuid) is
+  'How many open Web Push alerts - of one call-out, or all - carry a service that '
+  'contradicts their call-out''s: never handed to the worker, never sent, never '
+  'changed, and reported by it on every run. For the service role only.';
+
+revoke all on function public.push_delivery_queue() from public, anon, authenticated;
+revoke all on function public.push_delivery_mislabelled(uuid) from public, anon, authenticated;
+grant execute on function public.push_delivery_queue() to service_role;
+grant execute on function public.push_delivery_mislabelled(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 4. Identity settled at insert
 -- ---------------------------------------------------------------------------
 
 create or replace function public.refuse_outbox_rebinding()

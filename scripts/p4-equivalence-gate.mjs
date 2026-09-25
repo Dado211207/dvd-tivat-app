@@ -27,8 +27,10 @@
  *        that can act today, and authority that comes from a membership needs
  *        the others to be exercised
  *   8b   the push worker's decision on every queued alert, and on a new one for
- *        every member: the rule it applied in TypeScript before P4e against the
- *        verdict the database gives since
+ *        every member on a running and on an ended call-out: the rule it
+ *        applied in TypeScript before P4e against the verdict the database
+ *        gives since - identical but for E5, an alert about a call-out that
+ *        has ended
  *   9    SZS-only and dual-service accounts, which production does not contain
  *        yet, added through the real commands to the migrated copy
  *   10   negative controls: break the data, a read and a command on purpose
@@ -52,7 +54,7 @@ import {
   exportDigestOf, loadExport, localAdminUrl, migrationsFromHarness, productionBoundary,
 } from './p4-gate/database.mjs';
 import { accountsOf, commandMatrix, compareMatrices, findTargets, publicColumns } from './p4-gate/commands.mjs';
-import { P4E, pushDecisions } from './p4-gate/push.mjs';
+import { P4E, PUSH_EXPECTED, RUNNING, pushDecisions } from './p4-gate/push.mjs';
 import { runExtension, serviceVisibility, visibilityExpectation } from './p4-gate/szs.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -99,6 +101,8 @@ EXPECTED_COMMANDS.push({
 // E3, the deliberate prohibition on one call-out naming members of two
 // services, is only reachable with SZS data; it is asserted as an expected
 // outcome of step 9 (scripts/p4-gate/szs.mjs), in both directions.
+// E5, no alert about a call-out that has ended, is a push-worker decision and
+// is classified in step 8b (scripts/p4-gate/push.mjs, PUSH_EXPECTED).
 
 let failures = 0;
 function check(label, ok, detail = '') {
@@ -278,17 +282,35 @@ async function main() {
     if (!applied.has(P4E)) {
       console.log(`  skipped: ${P4E} is not under test`);
     } else {
+      console.log(`  expected (${PUSH_EXPECTED.id}, ${PUSH_EXPECTED.migration}): ${PUSH_EXPECTED.what}`);
       report.push = {};
       for (const [label, base] of [['as production is', post], ['every profile completed', postFull]]) {
         client = await databases.connect(base);
         const push = await pushDecisions(client);
         await client.end();
-        for (const [what, result] of [['every queued alert', push.existing], ['a new DVD alert for every member', push.everyMember]]) {
-          check(`${label}, ${what}: the verdict decides as the old worker did`,
+        for (const [what, result] of [
+          ['every queued alert', push.existing],
+          ['a new DVD alert for every member, call-out running', push.everyMember],
+          ['a new DVD alert for every member, call-out closed first', push.everyMemberEnded],
+        ]) {
+          check(`${label}, ${what}: the verdict decides as the old worker did, but for ${PUSH_EXPECTED.id}`,
             result.differing.length === 0 && result.answered === result.compared,
-            `${result.compared} alerts (${Object.entries(result.tally).map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}), ${result.differing.length} differ`);
+            `${result.compared} alerts (${Object.entries(result.tally).map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}), `
+            + `${result.expected.length} expected differences, ${result.differing.length} divergences`);
+          // Every expected difference is shown, grouped: what it was, the call-out's
+          // status, and whether the worker would have taken the alert up again.
+          const groups = {};
+          for (const d of result.expected) {
+            const key = `${d.before} -> ${d.after} on ${d.callout}${d.due ? ', still due' : ''}`;
+            groups[key] = (groups[key] ?? 0) + 1;
+          }
+          for (const [key, n] of Object.entries(groups)) console.log(`       expected (${PUSH_EXPECTED.id}) ${n} x ${key}`);
           for (const d of result.differing) console.log(`       DIVERGENCE ${JSON.stringify(d)}`);
         }
+        // The closed call-out must actually exercise the rule for every member.
+        check(`${label}: every member's alert on a call-out closed first is set aside unsent`,
+          push.everyMemberEnded.expected.length === push.everyMemberEnded.compared && push.everyMemberEnded.compared > 0,
+          `${push.everyMemberEnded.expected.length} of ${push.everyMemberEnded.compared}`);
         report.push[label] = push;
       }
     }
@@ -417,6 +439,20 @@ async function main() {
       await client.end();
       check('push_delivery_verdict() refusing everybody: the push comparison reports it', brokenPush.everyMember.differing.length > 0,
         `${brokenPush.everyMember.differing.length} alerts differ`);
+
+      // E5 excuses an alert on a call-out that has ENDED. A verdict that set
+      // aside alerts on a running one must still be a divergence.
+      const endPush = await databases.create('neg_push_running', postFull);
+      client = await databases.connect(endPush);
+      const running = `'${RUNNING.join("', '")}'`;
+      const ending = verdictFn[0].def.replace(running, `'NONE'`);
+      if (ending === verdictFn[0].def) throw new Unrunnable('push_delivery_verdict no longer lists the running statuses where the control expects it');
+      await client.query(ending);
+      const endedPush = await pushDecisions(client);
+      await client.end();
+      check('push_delivery_verdict() treating a running call-out as ended: the push comparison reports it, not E5',
+        endedPush.everyMember.differing.length > 0 && endedPush.everyMember.expected.length === 0,
+        `${endedPush.everyMember.differing.length} alerts differ, ${endedPush.everyMember.expected.length} excused`);
     }
   } finally {
     if (keep) console.log(`\n  kept: ${databases.created.join(', ')}`);

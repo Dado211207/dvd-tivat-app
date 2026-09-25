@@ -27,6 +27,19 @@
  *                                      the delivery history under it, could be
  *                                      rewritten by an UPDATE
  *
+ * and three more found by review of the first draft (3ac2717), each a test
+ * below that failed against it:
+ *
+ *   the recipient list                 an alert for an eligible member of the
+ *                                      right service who was never sent the
+ *                                      call-out was delivered
+ *   the call-out's status              an alert still queued when its call-out
+ *                                      was closed or cancelled went out - the
+ *                                      repeat too
+ *   the sweep                          fifty alerts nobody can write, at the
+ *                                      front of the queue, stopped every valid
+ *                                      alert behind them
+ *
  * The worker's queries are exercised as written, through db-tests/postgrest.ts,
  * as the service role, against the rows built here. Nothing is sent: the push
  * service is a recording fake.
@@ -504,18 +517,18 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   };
 
   /**
-   * Every Web Push alert back to QUEUED, unsent, with every device live. The
-   * mislabelled row is left alone: nothing can update it, which is the point
-   * of one of the tests below.
+   * Every Web Push alert back to QUEUED, unsent, with every device live. A row
+   * whose stored service contradicts its call-out is left alone: nothing can
+   * update it, which is the point of several tests below.
    */
   async function resetQueue(): Promise<void> {
     await db.query(`delete from public.notification_delivery_attempts`);
     await db.query(
-      `update public.notification_outbox
+      `update public.notification_outbox o
           set state = 'QUEUED', attempt_count = 0, delivery_closed_at = null,
               delivery_close_reason = null, updated_at = now()
-        where channel = 'WEB_PUSH' and id <> $1`,
-      [forgedLabel],
+        where o.channel = 'WEB_PUSH'
+          and o.organization_id = (select c.organization_id from public.interventions c where c.id = o.intervention_id)`,
     );
     await db.query(`update public.web_push_subscriptions set revoked_at = null, last_used_at = null where endpoint like $1`, [
       `${endpointOf('')}%`,
@@ -532,6 +545,18 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     );
     return rows[0]!;
   }
+
+  /** Who was alerted about what, as `<device's account>@<call-out>`, sorted. */
+  const sentTo = (sent: readonly Sent[], callouts: ReadonlyMap<string, string> = new Map()) =>
+    sent
+      .map((s) => {
+        const callout = String(s.payload.interventionId);
+        const label = callout === dvdCallout ? 'DVD' : callout === szsCallout ? 'SZS' : (callouts.get(callout) ?? callout);
+        return `${s.endpoint.replace(endpointOf(''), '')}@${label}`;
+      })
+      .sort();
+  /** Everybody the two fixture call-outs may alert. */
+  const FIXTURE_ALERTED = ['dvdFirefighter@DVD', 'dual@DVD', 'dualSzsWithdrawn@DVD', 'szsFirefighter@SZS', 'dual@SZS'];
 
   beforeAll(async () => {
     if (MIGRATIONS.includes(PUSH)) await db.query(sql(PUSH));
@@ -613,10 +638,13 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       `select p.oid::regprocedure::text as fn,
               has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute') as client
          from pg_proc p where p.pronamespace = 'public'::regnamespace
-          and p.proname in ('register_web_push_subscription', 'push_delivery_verdict', 'refuse_outbox_rebinding', 'refuse_delivery_attempt_change')
+          and p.proname in ('register_web_push_subscription', 'push_delivery_verdict', 'push_delivery_queue',
+                            'push_delivery_mislabelled', 'refuse_outbox_rebinding', 'refuse_delivery_attempt_change')
         order by 1`,
     );
     expect(functions).toEqual([
+      { fn: 'push_delivery_mislabelled(uuid)', client: false },
+      { fn: 'push_delivery_queue()', client: false },
       { fn: 'push_delivery_verdict(uuid)', client: false },
       { fn: 'refuse_delivery_attempt_change()', client: false },
       { fn: 'refuse_outbox_rebinding()', client: false },
@@ -732,17 +760,23 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   // --- the verdict the worker acts on --------------------------------------
 
   it('answers only the service role, with the caller\'s own privileges', async () => {
-    const { rows } = await db.query<{ anon: boolean; authenticated: boolean; service: boolean; definer: boolean; config: string[] | null; volatility: string }>(
-      `select has_function_privilege('anon', p.oid, 'execute') as anon,
-              has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
-              has_function_privilege('service_role', p.oid, 'execute') as service,
-              p.prosecdef as definer, p.proconfig as config, p.provolatile::text as volatility
-         from pg_proc p where p.oid = 'public.push_delivery_verdict(uuid)'::regprocedure`,
-    );
-    expect(rows[0]).toMatchObject({ anon: false, authenticated: false, service: true, definer: false, volatility: 's' });
-    expect(rows[0]!.config).toContain('search_path=public, pg_temp');
+    // The verdict, the sweep and the count of what the sweep leaves out.
+    for (const fn of ['push_delivery_verdict(uuid)', 'push_delivery_queue()', 'push_delivery_mislabelled(uuid)']) {
+      const { rows } = await db.query<{ anon: boolean; authenticated: boolean; service: boolean; definer: boolean; config: string[] | null; volatility: string }>(
+        `select has_function_privilege('anon', p.oid, 'execute') as anon,
+                has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
+                has_function_privilege('service_role', p.oid, 'execute') as service,
+                p.prosecdef as definer, p.proconfig as config, p.provolatile::text as volatility
+           from pg_proc p where p.oid = $1::regprocedure`,
+        [`public.${fn}`],
+      );
+      expect(rows[0], fn).toMatchObject({ anon: false, authenticated: false, service: true, definer: false, volatility: 's' });
+      expect(rows[0]!.config, fn).toContain('search_path=public, pg_temp');
+    }
     await isolated(async () => {
       expect(await act(people.dvdCommander.user, 'select * from public.push_delivery_verdict($1)', [forgedMember])).toBe('DENIED');
+      expect(await act(people.dvdCommander.user, 'select * from public.push_delivery_queue()')).toBe('DENIED');
+      expect(await act(people.dvdCommander.user, 'select public.push_delivery_mislabelled(null)')).toBe('DENIED');
     });
   });
 
@@ -881,7 +915,9 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       expect(await raw(`update public.notification_outbox set state = 'SENT_TO_PROVIDER', attempt_count = 1, updated_at = now() where id = $1`, [alert])).toBe('OK');
       expect(await raw(`update public.notification_outbox set state = 'PROVIDER_ACCEPTED', updated_at = now() where id = $1`, [alert])).toBe('OK');
       expect(await raw(`update public.notification_outbox set delivery_closed_at = now(), delivery_close_reason = 'MEMBER_OPENED' where id = $1`, [alert])).toBe('OK');
-      expect(await raw(`update public.notification_outbox set delivery_close_reason = 'SERVICE_MISMATCH' where id = $1`, [alert])).toBe('OK');
+      for (const reason of ['SERVICE_MISMATCH', 'NOT_A_RECIPIENT', 'CALLOUT_NOT_OPEN']) {
+        expect(await raw(`update public.notification_outbox set delivery_close_reason = $2 where id = $1`, [alert, reason]), reason).toBe('OK');
+      }
       expect(await raw(`update public.notification_outbox set delivery_close_reason = 'BECAUSE_I_SAID_SO' where id = $1`, [alert])).toMatch(/check constraint|violates/);
     });
   });
@@ -916,9 +952,10 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     expect(alerted).toEqual(
       ['dvdFirefighter@DVD', 'dual@DVD', 'dualSzsWithdrawn@DVD', 'szsFirefighter@SZS', 'dual@SZS'].sort(),
     );
-    // Five sent; three refused; two already opened and one set aside; and one
-    // that can be neither sent nor set aside - reported, every run, as failed.
-    expect(tally).toEqual({ accepted: 5, rejected: 3, skipped: 3, failed: 1 });
+    // Five sent; three refused; two already opened and one set aside. The row
+    // that can be neither sent nor set aside is not handed to the worker at all
+    // - see "behind rows nobody can close" below - and is counted instead.
+    expect(tally).toEqual({ accepted: 5, rejected: 3, skipped: 3, failed: 0, mislabelled: 1 });
 
     expect(await stateOf(await alertOf('szsFirefighter', szsCallout))).toEqual({
       state: 'PROVIDER_ACCEPTED', attempt_count: 1, delivery_close_reason: null, attempts: 'ACCEPTED_SCHEDULED',
@@ -937,10 +974,10 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     expect(await stateOf(forgedMember)).toEqual({ state: 'QUEUED', attempt_count: 0, delivery_close_reason: 'SERVICE_MISMATCH', attempts: '' });
     // P2's trigger refuses every update of a row whose label contradicts its
     // call-out, the worker's close included. It stays exactly as it was: unsent,
-    // and counted as failed so whoever reads the worker's answer sees it.
+    // and counted on every run so whoever reads the worker's answer sees it.
     expect(await stateOf(forgedLabel)).toEqual({ state: 'QUEUED', attempt_count: 0, delivery_close_reason: null, attempts: '' });
     const again = fakePush();
-    expect(await deliverQueued({ service, send: again.send, scheduler: true })).toMatchObject({ failed: 1 });
+    expect(await deliverQueued({ service, send: again.send, scheduler: true })).toMatchObject({ failed: 0, mislabelled: 1 });
     expect(again.sent).toHaveLength(0);
   });
 
@@ -1020,6 +1057,340 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       [endpointOf('szsFirefighter')],
     );
     expect(rows[0]!.revoked).toBe(true);
+  });
+
+  // --- only somebody the call-out was published to --------------------------
+
+  describe('an alert for a member the call-out was never published to', () => {
+    /**
+     * A commander in each service: in the call-out's service, somebody that
+     * service may call out, holding a device - and not on the call-out's
+     * frozen recipient list. `notification_outbox` has one foreign key to the
+     * call-out and another to the member; nothing ties the pair to a recipient.
+     * No command writes such a row. The service role or a superuser can: a bug,
+     * a hand-run repair, an import.
+     */
+    const strays = new Map<string, Label>();
+    const STRAYS = [['dvdCommander', DVD], ['szsCommander', SZS]] as const;
+
+    beforeAll(async () => {
+      for (const [who, inService] of STRAYS) {
+        await db.query(
+          `insert into public.web_push_subscriptions(user_id, endpoint, p256dh, auth_secret) values ($1, $2, $3, $4)`,
+          [people[who].user, endpointOf(who), P256DH, AUTH],
+        );
+        const { rows } = await db.query<{ id: string }>(
+          `insert into public.notification_outbox(intervention_id, member_id, channel, dedupe_key)
+           values ($1, $2, 'WEB_PUSH', $3) returning id::text`,
+          [inService === DVD ? dvdCallout : szsCallout, inService === DVD ? people[who].dvd : people[who].szs, `p4e-stray-${who}`],
+        );
+        strays.set(rows[0]!.id, who);
+      }
+    });
+
+    afterAll(async () => {
+      await db.query(`delete from public.notification_outbox where id = any($1::uuid[])`, [[...strays.keys()]]);
+      await db.query(`delete from public.web_push_subscriptions where endpoint = any($1)`, [STRAYS.map(([who]) => endpointOf(who))]);
+    });
+
+    it('is about somebody eligible, in the call-out\'s service, with a device - only the recipient row is missing', async () => {
+      await isolated(async () => {
+        for (const [who, inService] of STRAYS) {
+          const member = inService === DVD ? people[who].dvd : people[who].szs;
+          const callout = inService === DVD ? dvdCallout : szsCallout;
+          const eligible = await rowsAs<{ answer: boolean }>(people.owner.user, 'select public.is_eligible_recipient_in($1, $2) as answer', [member, inService]);
+          const { rows: recipient } = await db.query(
+            `select 1 from public.intervention_recipients where intervention_id = $1 and member_id = $2`,
+            [callout, member],
+          );
+          const { rows: label } = await db.query<{ same: boolean }>(
+            `select o.organization_id = c.organization_id and o.organization_id = m.organization_id as same
+               from public.notification_outbox o
+               join public.interventions c on c.id = o.intervention_id
+               join public.members m on m.id = o.member_id
+              where o.dedupe_key = $1`,
+            [`p4e-stray-${who}`],
+          );
+          expect({ eligible: eligible[0]!.answer, recipients: recipient.length, oneService: label[0]!.same }, who).toEqual({
+            eligible: true, recipients: 0, oneService: true,
+          });
+        }
+      });
+    });
+
+    it('is NOT_A_RECIPIENT to the worker, read from the stored recipient list', async () => {
+      const verdicts = await isolated(() =>
+        rowsAs<{ id: string; verdict: string; user_id: string | null }>(
+          'service_role',
+          `select s.id::text, v.verdict, v.user_id::text from unnest($1::uuid[]) as s(id), public.push_delivery_verdict(s.id) v`,
+          [[...strays.keys()]],
+        ));
+      expect(verdicts.map((row) => `${strays.get(row.id)}: ${row.verdict} ${row.user_id === null ? 'no account' : 'an account'}`).sort()).toEqual([
+        'dvdCommander: NOT_A_RECIPIENT no account',
+        'szsCommander: NOT_A_RECIPIENT no account',
+      ]);
+    });
+
+    it('is not made a recipient by a list entry filed under another service', async () => {
+      await isolated(async () => {
+        // Only with the triggers off: P2 files a recipient under its call-out's service.
+        await db.query('set local session_replication_role = replica');
+        await db.query(
+          `insert into public.intervention_recipients(intervention_id, member_id, recipient_version, member_name_at_publication, organization_id)
+           values ($1, $2, 1, 'dvdCommander Clan', $3)`,
+          [dvdCallout, people.dvdCommander.dvd, SZS],
+        );
+        await db.query('set local session_replication_role = origin');
+        const stray = [...strays].find(([, who]) => who === 'dvdCommander')![0];
+        expect(await rowsAs('service_role', 'select verdict from public.push_delivery_verdict($1)', [stray])).toEqual([{ verdict: 'NOT_A_RECIPIENT' }]);
+        // Filed where it belongs, the same entry does make them one.
+        await db.query(`update public.intervention_recipients set organization_id = $3 where intervention_id = $1 and member_id = $2`, [
+          dvdCallout, people.dvdCommander.dvd, DVD,
+        ]);
+        expect(await rowsAs('service_role', 'select verdict from public.push_delivery_verdict($1)', [stray])).toEqual([{ verdict: 'DELIVER' }]);
+      });
+    });
+
+    it('reaches none of their devices, and is set aside, while the call-out\'s recipients are alerted as before', async () => {
+      await resetQueue();
+      const push = fakePush();
+      await deliverQueued({ service, send: push.send, scheduler: true });
+      expect(sentTo(push.sent)).toEqual([...FIXTURE_ALERTED].sort());
+      for (const [id, who] of strays) {
+        // Closed without an attempt: nothing was tried. Its own reason, so
+        // whoever finds it knows the row was never a recipient's.
+        expect(await stateOf(id), who).toEqual({ state: 'QUEUED', attempt_count: 0, delivery_close_reason: 'NOT_A_RECIPIENT', attempts: '' });
+      }
+    });
+  });
+
+  // --- only while the call-out is running ------------------------------------
+
+  describe('an alert whose call-out is no longer running', () => {
+    /**
+     * Published through the real commands to one member of its own service,
+     * then - before any worker reaches its alert - closed or cancelled through
+     * `close_intervention`, which changes the call-out and nothing queued under
+     * it. Two call-outs are left running, in a status other than PUBLISHED.
+     */
+    const made = new Map<string, string>();
+    const CASES = [
+      ['DVD', 'dvdFirefighter', 'CLOSED'],
+      ['DVD', 'dual', 'CANCELLED'],
+      ['SZS', 'szsFirefighter', 'CANCELLED'],
+      ['SZS', 'dual', 'CLOSED'],
+      ['DVD', 'dvdFirefighter', 'ASSEMBLING'],
+      ['SZS', 'szsFirefighter', 'CONTAINED'],
+    ] as const;
+    const commanderOf = (inService: 'DVD' | 'SZS') => people[inService === 'DVD' ? 'dvdCommander' : 'szsCommander'].user;
+
+    async function publishedTo(inService: 'DVD' | 'SZS', who: Label, key: string): Promise<string> {
+      const callout = await committed(
+        commanderOf(inService),
+        `select public.create_intervention_draft_in($1, 'POZAR', 'P4e poziv', 'Okupljanje.', 'Poligon', $2)`,
+        [inService === 'DVD' ? DVD : SZS, key],
+      );
+      await committed(commanderOf(inService), 'select public.publish_intervention($1, $2)', [
+        callout,
+        [inService === 'DVD' ? people[who].dvd : people[who].szs],
+      ]);
+      return callout;
+    }
+    const endCallout = (inService: 'DVD' | 'SZS', callout: string, status: 'CLOSED' | 'CANCELLED') =>
+      committed(commanderOf(inService), `select public.close_intervention($1, $2, 'P4e: zavrseno prije slanja')`, [callout, status]);
+    const alertOn = async (callout: string) =>
+      (await db.query<{ id: string }>(`select id::text from public.notification_outbox where intervention_id = $1 and channel = 'WEB_PUSH'`, [callout])).rows[0]!.id;
+
+    beforeAll(async () => {
+      // Publication queues a Web Push alert only for a live device.
+      await resetQueue();
+      for (const [inService, who, status] of CASES) {
+        const callout = await publishedTo(inService, who, `p4e-${inService}-${status}`.toLowerCase());
+        made.set(callout, `${inService}-${status}`);
+        if (status === 'CLOSED' || status === 'CANCELLED') await endCallout(inService, callout, status);
+        else await committed(commanderOf(inService), 'select public.set_intervention_status($1, $2, null)', [callout, status]);
+      }
+    }, 60_000);
+
+    afterAll(async () => {
+      await db.query(`delete from public.interventions where id = any($1::uuid[])`, [[...made.keys()]]);
+    });
+
+    it('was published, queued and then ended, with the alert still waiting', async () => {
+      const { rows } = await db.query<{ callout: string; status: string; recipients: number; waiting: number }>(
+        `select c.id::text as callout, c.status,
+                (select count(*)::int from public.intervention_recipients r where r.intervention_id = c.id) as recipients,
+                (select count(*)::int from public.notification_outbox o
+                  where o.intervention_id = c.id and o.channel = 'WEB_PUSH' and o.state = 'QUEUED' and o.delivery_closed_at is null) as waiting
+           from public.interventions c where c.id = any($1::uuid[])`,
+        [[...made.keys()]],
+      );
+      expect(rows.map((row) => `${made.get(row.callout)}: ${row.status} ${row.recipients} ${row.waiting}`).sort()).toEqual([
+        'DVD-ASSEMBLING: ASSEMBLING 1 1',
+        'DVD-CANCELLED: CANCELLED 1 1',
+        'DVD-CLOSED: CLOSED 1 1',
+        'SZS-CANCELLED: CANCELLED 1 1',
+        'SZS-CLOSED: CLOSED 1 1',
+        'SZS-CONTAINED: CONTAINED 1 1',
+      ]);
+    });
+
+    it('is CALLOUT_NOT_OPEN to the worker once closed or cancelled, and DELIVER while it runs', async () => {
+      const verdicts = await isolated(() =>
+        rowsAs<{ callout: string; verdict: string }>(
+          'service_role',
+          `select o.intervention_id::text as callout, v.verdict
+             from public.notification_outbox o, public.push_delivery_verdict(o.id) v
+            where o.intervention_id = any($1::uuid[]) and o.channel = 'WEB_PUSH'`,
+          [[...made.keys()]],
+        ));
+      expect(verdicts.map((row) => `${made.get(row.callout)}: ${row.verdict}`).sort()).toEqual([
+        'DVD-ASSEMBLING: DELIVER',
+        'DVD-CANCELLED: CALLOUT_NOT_OPEN',
+        'DVD-CLOSED: CALLOUT_NOT_OPEN',
+        'SZS-CANCELLED: CALLOUT_NOT_OPEN',
+        'SZS-CLOSED: CALLOUT_NOT_OPEN',
+        'SZS-CONTAINED: DELIVER',
+      ]);
+    });
+
+    it('sends nothing for it - on a commander\'s wake-up or on the scheduler - and still alerts for running ones', async () => {
+      await resetQueue();
+      // The wake-up names the call-out; the stored call-out decides.
+      const woken = fakePush();
+      for (const [callout, label] of made) {
+        if (/CLOSED|CANCELLED/.test(label)) await deliverQueued({ service, send: woken.send, scheduler: false }, callout);
+      }
+      expect(sentTo(woken.sent, made), 'woken').toEqual([]);
+
+      const push = fakePush();
+      await deliverQueued({ service, send: push.send, scheduler: true });
+      expect(sentTo(push.sent, made), 'scheduled').toEqual(
+        [...FIXTURE_ALERTED, 'dvdFirefighter@DVD-ASSEMBLING', 'szsFirefighter@SZS-CONTAINED'].sort(),
+      );
+      for (const [callout, label] of made) {
+        if (!/CLOSED|CANCELLED/.test(label)) continue;
+        // Set aside without an attempt, with its own reason.
+        expect(await stateOf(await alertOn(callout)), label).toEqual({
+          state: 'QUEUED', attempt_count: 0, delivery_close_reason: 'CALLOUT_NOT_OPEN', attempts: '',
+        });
+      }
+    });
+
+    it('sends no repeat once the call-out it alerted about has ended', async () => {
+      await resetQueue();
+      const start = Date.now();
+      const at = (seconds: number) => () => start + seconds * 1000;
+      for (const status of ['CLOSED', 'CANCELLED'] as const) {
+        const callout = await publishedTo('DVD', 'dvdFirefighter', `p4e-repeat-${status}`.toLowerCase());
+        made.set(callout, `DVD-${status}-AFTER-ALERT`);
+        const first = fakePush();
+        await deliverQueued({ service, send: first.send, scheduler: false, now: at(0) }, callout);
+        expect(sentTo(first.sent, made), status).toEqual([`dvdFirefighter@DVD-${status}-AFTER-ALERT`]);
+
+        await endCallout('DVD', callout, status);
+        const later = fakePush();
+        await deliverQueued({ service, send: later.send, scheduler: true, now: at(91) });
+        expect(sentTo(later.sent, made).filter((entry) => entry.endsWith('-AFTER-ALERT')), status).toEqual([]);
+        // The alert that did go out stays on record; the repeat is closed, unsent.
+        expect(await stateOf(await alertOn(callout)), status).toEqual({
+          state: 'PROVIDER_ACCEPTED', attempt_count: 1, delivery_close_reason: 'CALLOUT_NOT_OPEN', attempts: 'ACCEPTED_IMMEDIATE',
+        });
+      }
+    });
+  });
+
+  // --- behind rows nobody can close -----------------------------------------
+
+  describe('behind fifty alerts nobody can close', () => {
+    /**
+     * Fifty alerts labelled DVD on the SZS call-out, older than every real one,
+     * written with the triggers off - as only a superuser can. P2's trigger
+     * refuses any later update of such a row, so the worker can neither send
+     * nor set one aside. The worker's sweep is the fifty oldest open alerts:
+     * with these at the front, that is all it ever sees.
+     */
+    const BROKEN = 50;
+    let broken: string[] = [];
+
+    beforeAll(async () => {
+      await db.query('begin');
+      await db.query('set local session_replication_role = replica');
+      const { rows } = await db.query<{ id: string }>(
+        `insert into public.notification_outbox(intervention_id, member_id, channel, dedupe_key, organization_id, created_at, updated_at)
+         select $1, $2, 'WEB_PUSH', 'p4e-broken-' || n, $3, now() - interval '1 day' + n * interval '1 second', now() - interval '1 day'
+           from generate_series(1, ${BROKEN}) as n
+         returning id::text`,
+        [szsCallout, people.szsCommander.szs, DVD],
+      );
+      await db.query('commit');
+      broken = rows.map((row) => row.id);
+    });
+
+    afterAll(async () => {
+      await db.query(`delete from public.notification_outbox where id = any($1::uuid[])`, [broken]);
+    });
+
+    it('still reaches every valid alert, run after run', async () => {
+      await resetQueue();
+      const start = Date.now();
+      const runs: { sent: string[]; tally: Record<string, unknown> }[] = [];
+      for (const minute of [0, 1, 2]) {
+        const push = fakePush();
+        const tally = await deliverQueued({ service, send: push.send, scheduler: true, now: () => start + minute * 60_000 });
+        runs.push({ sent: sentTo(push.sent), tally: { ...tally } });
+      }
+      // The first alerts, nothing while they are held, then the one repeat.
+      expect(runs.map((run) => run.sent), JSON.stringify(runs.map((run) => run.tally))).toEqual([
+        [...FIXTURE_ALERTED].sort(), [], [...FIXTURE_ALERTED].sort(),
+      ]);
+    });
+
+    it('still reaches a call-out\'s alerts when its commander wakes it', async () => {
+      await resetQueue();
+      const push = fakePush();
+      const tally = await deliverQueued({ service, send: push.send, scheduler: false }, szsCallout);
+      expect(sentTo(push.sent), JSON.stringify(tally)).toEqual(['dual@SZS', 'szsFirefighter@SZS']);
+    });
+
+    it('leaves them exactly as they are, never judges them deliverable, and counts them on every run', async () => {
+      await resetQueue();
+      const counted = [
+        await deliverQueued({ service, send: fakePush().send, scheduler: true }),
+        await deliverQueued({ service, send: fakePush().send, scheduler: false }, szsCallout),
+        await deliverQueued({ service, send: fakePush().send, scheduler: false }, dvdCallout),
+      ].map((tally) => tally.mislabelled);
+      // Every such row, the fixture's own included; for a call-out, only its own -
+      // a DVD commander's wake-up says nothing about the SZS call-out's rows.
+      expect(counted).toEqual([BROKEN + 1, BROKEN + 1, 0]);
+
+      const { rows } = await db.query<{ untouched: number }>(
+        `select count(*)::int as untouched
+           from public.notification_outbox o join public.interventions c on c.id = o.intervention_id
+          where o.id = any($1::uuid[]) and o.organization_id = $2 and c.organization_id = $3
+            and o.state = 'QUEUED' and o.attempt_count = 0 and o.delivery_closed_at is null
+            and not exists (select 1 from public.notification_delivery_attempts a where a.outbox_id = o.id)`,
+        [broken, DVD, SZS],
+      );
+      expect(rows[0]!.untouched).toBe(BROKEN);
+
+      await isolated(async () => {
+        const verdicts = await rowsAs<{ verdict: string }>(
+          'service_role',
+          `select v.verdict from unnest($1::uuid[]) as s(id), public.push_delivery_verdict(s.id) v`,
+          [broken],
+        );
+        expect(new Set(verdicts.map((row) => row.verdict))).toEqual(new Set(['SERVICE_MISMATCH']));
+        // The organisation rule is exactly as strict as it was: nobody but a
+        // superuser with the triggers off can touch these rows.
+        expect(
+          await raw(
+            `update public.notification_outbox set delivery_closed_at = now(), delivery_close_reason = 'SERVICE_MISMATCH' where id = $1`,
+            [broken[0]],
+          ),
+        ).toBe('ORGANIZATION_MISMATCH');
+      });
+    });
   });
 
   // --- the immediate wake-up -----------------------------------------------
