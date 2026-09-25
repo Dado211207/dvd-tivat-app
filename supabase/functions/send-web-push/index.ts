@@ -106,6 +106,10 @@ Deno.serve(async (request) => {
       },
       interventionId,
     );
+    // An alert nobody can write is never handed to the worker. Said where
+    // whoever runs the service looks, on every run until somebody repairs it:
+    // a count, nothing about whom.
+    if (tally.mislabelled) console.warn(JSON.stringify({ event: 'PUSH_ALERTS_MISLABELLED', count: tally.mislabelled }));
     return response(request, 200, { ...tally });
   } catch {
     return response(request, 503, { error: 'PUSH_WORKER_UNAVAILABLE' });

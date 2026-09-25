@@ -10,9 +10,11 @@
  * Everything the worker reads and writes, it does as the SERVICE ROLE, which
  * bypasses row-level security. No policy bounds it: the service boundary on
  * this side exists only in these queries. So the one question that depends on
- * a service - may this member still be alerted about this call-out - is put to
- * the database as `push_delivery_verdict()`, answered from the stored alert,
- * call-out and member. Nothing a request carries names a service.
+ * the stored rows - may this member still be alerted about this call-out - is
+ * put to the database as `push_delivery_verdict()`, answered from the alert,
+ * its call-out and recipient list, and the member. What the worker sweeps is
+ * `push_delivery_queue()`, which never hands out a row nobody can write.
+ * Nothing a request carries names a service or decides a verdict.
  */
 
 import {
@@ -24,6 +26,7 @@ import {
   isRepeat,
   mapWithConcurrency,
   MAX_ATTEMPTS,
+  QUARANTINE,
   SEND_CONCURRENCY,
   subscriptionUsable,
 } from './policy.ts';
@@ -136,7 +139,18 @@ export interface Tally {
   rejected: number;
   skipped: number;
   failed: number;
+  /**
+   * Open alerts - of the woken call-out, or all - whose stored service
+   * contradicts their call-out's. Nobody but a superuser can write such a row,
+   * so it is never handed to the worker, never sent and never changed; it is
+   * counted on every run so that it is seen until somebody repairs it. `null`
+   * when the count itself could not be read - which never holds up delivery.
+   */
+  mislabelled: number | null;
 }
+
+/** How many alerts one run may take on: the sweep's bound, unchanged. */
+const SWEEP = 50;
 
 /**
  * Every due Web Push alert - or, for a wake-up, every due alert of one
@@ -147,15 +161,17 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
   const now = worker.now ?? Date.now;
   const stamp = () => new Date(now()).toISOString();
 
+  // `push_delivery_queue()` is the open Web Push alerts, less any whose stored
+  // service contradicts its call-out's: those can never be written, so the
+  // worker could neither send nor set one aside, and fifty of them at the front
+  // used to be every sweep there was. They are counted below instead.
   let outboxQuery = service
-    .from('notification_outbox')
+    .rpc('push_delivery_queue')
     .select('id, intervention_id, member_id, state, attempt_count, created_at, updated_at')
-    .eq('channel', 'WEB_PUSH')
-    .is('delivery_closed_at', null)
     .in('state', ['QUEUED', 'SENT_TO_PROVIDER', 'PROVIDER_ACCEPTED', 'PROVIDER_REJECTED'])
     .lt('attempt_count', MAX_ATTEMPTS)
     .order('created_at', { ascending: true })
-    .limit(50);
+    .limit(SWEEP);
   if (interventionId !== undefined) outboxQuery = outboxQuery.eq('intervention_id', interventionId);
 
   const { data: rows, error: rowsError } = await outboxQuery;
@@ -183,11 +199,11 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
 
     /*
      * One question, answered from the stored rows: are the alert, its
-     * call-out and its member in one service; has the member already opened
-     * the call-out; may that service still alert them. Asked for every row,
-     * first attempt included - a QUEUED row whose immediate wake-up failed can
-     * sit for minutes, and the member may have opened the call-out through the
-     * in-app path in the meantime.
+     * call-out and its member in one service; was the member sent this
+     * call-out; have they already opened it; is it still running; may that
+     * service still alert them. Asked for every row, first attempt and repeat
+     * alike - a QUEUED row whose immediate wake-up failed can sit for minutes,
+     * in which the member may open the call-out or a commander close it.
      */
     const { data: verdict, error: verdictError } = await service
       .rpc('push_delivery_verdict', { target_outbox: row.id })
@@ -199,17 +215,18 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
       return 'SKIPPED';
     }
     if (action.kind === 'CLOSE') {
-      // Somebody who has opened the call-out is not alarmed again; an alert
-      // whose rows disagree about its service is set aside, unsent. Neither is
-      // an attempt, so neither is recorded as one.
+      // Somebody who has opened the call-out is not alarmed again, nor anybody
+      // about a call-out that has ended; a row no command would have written is
+      // set aside, unsent. None of it is an attempt, so none is recorded as one.
       const { error: closeError } = await service.from('notification_outbox').update({
         delivery_closed_at: stamp(),
         delivery_close_reason: action.reason,
         updated_at: stamp(),
       }).eq('id', row.id).eq('state', state).eq('attempt_count', row.attempt_count);
-      // A mismatch that cannot even be set aside is an integrity problem, not a
-      // lost race: surfaced as a failed row on every run until somebody looks.
-      if (closeError && action.reason === 'SERVICE_MISMATCH') throw new Error('OUTBOX_QUARANTINE_FAILED');
+      // A row that should not exist and cannot even be set aside is an
+      // integrity problem, not a lost race: surfaced as a failed row on every
+      // run until somebody looks.
+      if (closeError && QUARANTINE.has(action.reason)) throw new Error('OUTBOX_QUARANTINE_FAILED');
       return 'SKIPPED';
     }
 
@@ -334,7 +351,7 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
 
   const settled = await mapWithConcurrency((rows ?? []) as Row[], SEND_CONCURRENCY, deliverRow);
 
-  const tally: Tally = { accepted: 0, rejected: 0, skipped: 0, failed: 0 };
+  const tally: Tally = { accepted: 0, rejected: 0, skipped: 0, failed: 0, mislabelled: null };
   for (const result of settled) {
     // A row that threw - a failed claim, a lost connection, a verdict that could
     // not be read - is counted and left for the scheduler. One broken row is not
@@ -344,5 +361,13 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
     else if (result.value === 'REJECTED') tally.rejected += 1;
     else tally.skipped += 1;
   }
+
+  // Asked after the alerts have gone, so that it can never delay one. For a
+  // wake-up, only the woken call-out's: a commander learns nothing about
+  // another service's rows.
+  const { data: mislabelled, error: countError } = await service.rpc('push_delivery_mislabelled', {
+    target_intervention: interventionId ?? null,
+  });
+  tally.mislabelled = !countError && typeof mislabelled === 'number' ? mislabelled : null;
   return tally;
 }

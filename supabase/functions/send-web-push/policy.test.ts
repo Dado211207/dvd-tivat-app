@@ -22,6 +22,7 @@ import {
   isRepeat,
   mapWithConcurrency,
   MAX_ATTEMPTS,
+  QUARANTINE,
   REPEAT_AFTER_MS,
   SEND_CONCURRENCY,
   subscriptionUsable,
@@ -110,9 +111,19 @@ describe('the database\'s verdict decides what happens to an alert', () => {
     }
   });
 
-  it('closes an opened alert, and sets aside one whose rows disagree about the service', () => {
+  it('closes an opened alert and one whose call-out has ended, and sets aside a row no command writes', () => {
     expect(deliveryAction({ verdict: 'OPENED' })).toEqual({ kind: 'CLOSE', reason: 'MEMBER_OPENED' });
+    expect(deliveryAction({ verdict: 'CALLOUT_NOT_OPEN' })).toEqual({ kind: 'CLOSE', reason: 'CALLOUT_NOT_OPEN' });
     expect(deliveryAction({ verdict: 'SERVICE_MISMATCH' })).toEqual({ kind: 'CLOSE', reason: 'SERVICE_MISMATCH' });
+    expect(deliveryAction({ verdict: 'NOT_A_RECIPIENT' })).toEqual({ kind: 'CLOSE', reason: 'NOT_A_RECIPIENT' });
+    // Whatever else it carries, a closing verdict never sends.
+    expect(deliveryAction({ verdict: 'CALLOUT_NOT_OPEN', user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' })).toEqual({
+      kind: 'CLOSE', reason: 'CALLOUT_NOT_OPEN',
+    });
+  });
+
+  it('treats only a row that should not exist as an integrity problem', () => {
+    expect([...QUARANTINE].sort()).toEqual(['NOT_A_RECIPIENT', 'SERVICE_MISMATCH']);
   });
 
   it('leaves alone anything it does not recognise, rather than send on it', () => {

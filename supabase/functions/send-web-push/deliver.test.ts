@@ -2,10 +2,11 @@
  * The worker's handling of answers a real database rarely gives.
  *
  * db-tests/push_service.test.ts runs `deliver.ts` against real rows as the
- * service role - who is alerted, who is refused, the repeat, the race. This
- * covers what fixtures cannot easily produce: a verdict that cannot be read or
- * is not recognised, a quarantine the database refuses, and exactly what the
- * wake-up asks of each client. The database here is a script.
+ * service role - who is alerted, who is refused, the repeat, the race, a
+ * call-out that ended, a row nobody can write. This covers what fixtures
+ * cannot easily produce: a verdict or a count that cannot be read, a verdict
+ * that is not recognised, a close the database refuses, and exactly what the
+ * worker and the wake-up ask of each client. The database here is a script.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -62,11 +63,21 @@ const CALLOUT = '22222222-2222-4222-8222-222222222222';
 const SZS = '00000000-0000-4000-8000-000000000002';
 const queued = { id: ALERT, intervention_id: CALLOUT, member_id: 'm', state: 'QUEUED', attempt_count: 0, updated_at: null };
 
-/** One queued alert; `verdict` answers push_delivery_verdict, `write` every update and insert. */
-function queue(verdict: Reply, write: Reply = { data: null, error: null }) {
+/**
+ * One queued alert; `verdict` answers push_delivery_verdict, `write` every
+ * update and insert, `count` push_delivery_mislabelled and `sweep` the queue.
+ */
+function queue(
+  verdict: Reply,
+  write: Reply = { data: null, error: null },
+  count: Reply = { data: 0, error: null },
+  sweep: Reply = { data: [queued], error: null },
+) {
   return scripted((op) => {
-    if (op.kind === 'select' && op.table === 'notification_outbox') return { data: [queued], error: null };
+    if (op.kind === 'rpc' && op.table === 'push_delivery_queue') return sweep;
     if (op.kind === 'rpc' && op.table === 'push_delivery_verdict') return verdict;
+    if (op.kind === 'rpc' && op.table === 'push_delivery_mislabelled') return count;
+    if (op.kind === 'select' && op.table === 'notification_outbox') throw new Error('the table is never swept directly');
     return write;
   });
 }
@@ -75,12 +86,53 @@ const neverSend = async () => {
   throw new Error('nothing may be sent');
 };
 const writes = (db: { ops: Op[] }) => db.ops.filter((op) => op.kind === 'update' || op.kind === 'insert');
+const verdictOf = (verdict: string) => ({ data: { verdict, user_id: null, published_at: null }, error: null });
+
+describe('what the worker sweeps', () => {
+  it('reads push_delivery_queue() - never the table - with the filters it always used', async () => {
+    for (const woken of [undefined, CALLOUT]) {
+      const db = queue({ data: null, error: null });
+      await deliverQueued({ service: db, send: neverSend, scheduler: woken === undefined }, woken);
+      const sweep = db.ops.filter((op) => op.kind === 'rpc' && op.table === 'push_delivery_queue');
+      expect(sweep.map((op) => op.filters), String(woken)).toEqual([[
+        ['state', ['QUEUED', 'SENT_TO_PROVIDER', 'PROVIDER_ACCEPTED', 'PROVIDER_REJECTED']],
+        ['attempt_count', 2],
+        ...(woken === undefined ? [] : [['intervention_id', CALLOUT]]),
+      ]]);
+    }
+  });
+
+  it('fails the run, and sends nothing, when the sweep cannot be read', async () => {
+    const db = queue({ data: null, error: null }, undefined, undefined, { data: null, error: { message: 'timeout' } });
+    await expect(deliverQueued({ service: db, send: neverSend, scheduler: true })).rejects.toThrow('OUTBOX_READ_FAILED');
+  });
+
+  it('reports the alerts nobody can write - all of them, or only the woken call-out\'s', async () => {
+    for (const woken of [undefined, CALLOUT]) {
+      const db = queue(verdictOf('OPENED'), undefined, { data: 51, error: null });
+      expect(await deliverQueued({ service: db, send: neverSend, scheduler: true }, woken)).toMatchObject({ mislabelled: 51, skipped: 1 });
+      const asked = db.ops.filter((op) => op.kind === 'rpc' && op.table === 'push_delivery_mislabelled');
+      expect(asked.map((op) => op.payload)).toEqual([{ target_intervention: woken ?? null }]);
+    }
+  });
+
+  it('delivers as usual, and says it could not count, when the count cannot be read', async () => {
+    for (const count of [{ data: null, error: { message: 'timeout' } }, { data: '51', error: null }]) {
+      const db = queue(verdictOf('OPENED'), undefined, count);
+      expect(await deliverQueued({ service: db, send: neverSend, scheduler: true }), JSON.stringify(count)).toEqual({
+        accepted: 0, rejected: 0, skipped: 1, failed: 0, mislabelled: null,
+      });
+      // The count is asked after every alert has been dealt with.
+      expect(db.ops.at(-1)).toMatchObject({ kind: 'rpc', table: 'push_delivery_mislabelled' });
+    }
+  });
+});
 
 describe('an answer the worker cannot act on', () => {
   it('counts a row as failed, and touches nothing, when its verdict cannot be read', async () => {
     const db = queue({ data: null, error: { message: 'connection lost' } });
     expect(await deliverQueued({ service: db, send: neverSend, scheduler: true })).toEqual({
-      accepted: 0, rejected: 0, skipped: 0, failed: 1,
+      accepted: 0, rejected: 0, skipped: 0, failed: 1, mislabelled: 0,
     });
     expect(writes(db)).toEqual([]);
   });
@@ -96,38 +148,45 @@ describe('an answer the worker cannot act on', () => {
   it('asks about the alert by its stored id, and nothing else', async () => {
     const db = queue({ data: null, error: null });
     await deliverQueued({ service: db, send: neverSend, scheduler: true });
-    expect(db.ops.find((op) => op.kind === 'rpc')?.payload).toEqual({ target_outbox: ALERT });
+    expect(db.ops.find((op) => op.kind === 'rpc' && op.table === 'push_delivery_verdict')?.payload).toEqual({ target_outbox: ALERT });
   });
 });
 
 describe('setting an alert aside', () => {
-  it('closes a mismatched alert only if nobody has moved it on, without an attempt', async () => {
-    const db = queue({ data: { verdict: 'SERVICE_MISMATCH', user_id: null, published_at: null }, error: null });
-    expect(await deliverQueued({ service: db, send: neverSend, scheduler: true })).toMatchObject({ skipped: 1 });
-    expect(writes(db)).toEqual([
-      expect.objectContaining({
-        kind: 'update',
-        table: 'notification_outbox',
-        payload: expect.objectContaining({ delivery_close_reason: 'SERVICE_MISMATCH' }),
-        filters: [['id', ALERT], ['state', 'QUEUED'], ['attempt_count', 0]],
-      }),
-    ]);
+  const CLOSES = [
+    ['SERVICE_MISMATCH', 'SERVICE_MISMATCH'],
+    ['NOT_A_RECIPIENT', 'NOT_A_RECIPIENT'],
+    ['OPENED', 'MEMBER_OPENED'],
+    ['CALLOUT_NOT_OPEN', 'CALLOUT_NOT_OPEN'],
+  ] as const;
+
+  it('closes it with its own reason, only if nobody has moved it on, without an attempt', async () => {
+    for (const [verdict, reason] of CLOSES) {
+      const db = queue(verdictOf(verdict));
+      expect(await deliverQueued({ service: db, send: neverSend, scheduler: true }), verdict).toMatchObject({ skipped: 1 });
+      expect(writes(db), verdict).toEqual([
+        expect.objectContaining({
+          kind: 'update',
+          table: 'notification_outbox',
+          payload: expect.objectContaining({ delivery_close_reason: reason }),
+          filters: [['id', ALERT], ['state', 'QUEUED'], ['attempt_count', 0]],
+        }),
+      ]);
+    }
   });
 
-  it('reports a mismatch the database will not let it set aside, and still sends nothing', async () => {
-    const db = queue(
-      { data: { verdict: 'SERVICE_MISMATCH', user_id: null, published_at: null }, error: null },
-      { data: null, error: { message: 'ORGANIZATION_MISMATCH' } },
-    );
-    expect(await deliverQueued({ service: db, send: neverSend, scheduler: true })).toMatchObject({ failed: 1, skipped: 0 });
+  it('reports a row that should not exist and cannot be set aside, and still sends nothing', async () => {
+    for (const verdict of ['SERVICE_MISMATCH', 'NOT_A_RECIPIENT']) {
+      const db = queue(verdictOf(verdict), { data: null, error: { message: 'ORGANIZATION_MISMATCH' } });
+      expect(await deliverQueued({ service: db, send: neverSend, scheduler: true }), verdict).toMatchObject({ failed: 1, skipped: 0 });
+    }
   });
 
-  it('treats a lost race to close an opened alert as it always did', async () => {
-    const db = queue(
-      { data: { verdict: 'OPENED', user_id: null, published_at: null }, error: null },
-      { data: null, error: { message: 'serialization failure' } },
-    );
-    expect(await deliverQueued({ service: db, send: neverSend, scheduler: true })).toMatchObject({ skipped: 1, failed: 0 });
+  it('treats a lost race to close an opened alert, or one whose call-out ended, as it always did', async () => {
+    for (const verdict of ['OPENED', 'CALLOUT_NOT_OPEN']) {
+      const db = queue(verdictOf(verdict), { data: null, error: { message: 'serialization failure' } });
+      expect(await deliverQueued({ service: db, send: neverSend, scheduler: true }), verdict).toMatchObject({ skipped: 1, failed: 0 });
+    }
   });
 });
 
