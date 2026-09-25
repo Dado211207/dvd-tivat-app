@@ -511,7 +511,7 @@ its own without stranding the rest.
 |---|---|---|
 | **P4a** — registry ✅ **done, `202609240024`–`202609240026`** | `members`, `groups`, `group_members`, `vehicles`, `member_availability`, `member_availability_history`, **`registry_audit`** *(moved here from P4f)* | 8 |
 | **P4b** — interventions ✅ **done, `202609250027`–`202609250029`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)*; **and the read side of all ten tables below, which its commands write** *(see "What P4b's commands write")* | 8 + 13 |
-| **P4c** — responses and journey | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` already service-scoped by P4b; left: `submit_response`, which is DVD-blind and fails closed* | 7 |
+| **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command already service-scoped by P4b; left: the correction-request INSERT policy (DVD-only, fails closed) and crediting* | 8 |
 | **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; left: the worker's service-role queries and `register_web_push_subscription` (DVD-only)* | 3 + 1 function |
 | **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 17 |
@@ -624,9 +624,10 @@ their rows with a service. It closed:
   service.
 
 `organisation_interventions.test.ts` re-derives the same list from the catalogue
-and asserts that exactly two DVD-only questions survive on it —
-`submit_response` (P4c) and the correction-request INSERT policy (P4d), both
-failing closed — so a table or command added later is caught by construction.
+and asserts which DVD-only questions survive on it — after P4b, `submit_response`
+(P4c) and the correction-request INSERT policy (P4d), both failing closed; after
+P4c, only the latter — so a table or command added later is caught by
+construction.
 A DVD-only check cannot see a function that asks *nothing*, which is what
 `is_eligible_recipient_in` was; so it also asserts, installation-wide, that
 every client-callable `security definer` function asks about its caller or is a
@@ -641,6 +642,18 @@ text" file — now has a **load-bearing position**, as `202609130006a` does: it
 re-creates `intervention_audit` at its DVD-only text, so replayed after 029 it
 would reopen that leak. `restore_exact_function_text.test.ts` asserts both the
 ordering and the consequence.
+
+**What P4c did, and why it is one function.** Of the four P4c tables, P4b had
+already scoped every read and `set_journey_progress`; the catalogue names only
+two functions that write them. `submit_response` resolved its caller through the
+DVD shim, so an SZS recipient was refused their own call-out and a dual-service
+one was checked as their DVD record. `202609250030` resolves the member in the
+service read from the stored call-out — an unknown id judged as DVD's, as
+before — and checks and writes that same member, keeping the inline recipient
+lookup that made the old version fail closed. For DVD the member resolved is
+the shim's, so every DVD refusal and its order is unchanged; section 13's gate
+re-measures that on the production copy. An answer writes its response and its
+revision and nothing else, so no further table became reachable.
 
 **A permission the owner loses, deliberately.** The installation owner could
 publish one call-out to members of both services. That is a joint intervention,
@@ -995,3 +1008,21 @@ covers the suffix, as a backstop), then `npm run gate:p4 -- <path>`. With the
 local server running (`npm run db:start`) it takes about ninety seconds. It
 exits `2`, not `0`, when it cannot run — no capture, no local server, or a copy
 that does not reproduce production — so a missing input never reads as a pass.
+
+### Re-run with P4c
+
+With `202609250030` added, the same capture and the same command: **passed**.
+Every DVD read and every DVD command on the production copy is unchanged —
+the same E1 and E2 and nothing else, across 621 facts, 378 probes and the live
+call-out in both passes, `submit_response` for every real account included.
+On the SZS side the steps the gate had already written down for P4c now hold:
+an SZS recipient answers, repeats without a new revision and revises; a
+dual-service recipient answers each call-out as that service's member; the
+stored answers and revisions carry the SZS member and the SZS label; a DVD-only
+account answering an SZS call-out gets `MEMBER_RECORD_REQUIRED`, and an SZS
+member it was not sent to gets `NOT_A_RECIPIENT`.
+
+What P4c does **not** reach is the screen. The client finds "my member" through
+`current_member_id()`, which is DVD's, so an SZS-only account is held at the
+operational gate and a dual-service account is not shown as a recipient of an
+SZS call-out. The database path is open; offering it in the interface is P6's.

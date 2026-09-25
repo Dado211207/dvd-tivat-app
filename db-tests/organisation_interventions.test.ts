@@ -1784,9 +1784,12 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
     ]);
   });
 
-  it('leaves one DVD-only function touching them - submit_response, which P4c makes service-aware', async () => {
+  it('leaves no DVD-only function touching them - P4c (202609250030) made submit_response service-aware', async () => {
     // Every function whose body names one of those tables: commands, readers,
-    // triggers. Both survivors fail closed; the tests above say how.
+    // triggers. `submit_response` was the one survivor after P4b, failing
+    // closed; db-tests/response_service.test.ts covers what replaced it. This
+    // block runs every migration that sorts after 029, so a later file that
+    // puts a DVD-only question back on any of these tables fails here.
     const { rows } = await db.query<{ proname: string }>(
       `with reachable as (${REACHABLE_TABLES})
        select distinct p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -1796,7 +1799,7 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
         order by 1`,
       [DVD_ONLY],
     );
-    expect(rows.map((row) => row.proname)).toEqual(['submit_response']);
+    expect(rows.map((row) => row.proname)).toEqual([]);
   });
 
   it('lets no client call a definer function that asks nothing about the caller', async () => {
