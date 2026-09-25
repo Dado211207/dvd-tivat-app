@@ -159,6 +159,26 @@ cascades. Lowest risk, no interventions involved.
 the owner registers his own phone, so the first real subscription is
 unambiguous.
 
+> **Conflicts with the retention rule (added 2026-09-25).** The owner has since
+> ruled that a published intervention and its response history stay in the
+> database: closed or cancelled, never deleted through ordinary operations.
+> All five interventions below were published. Migration `202609250034`, in
+> review and not deployed, enforces the rule. After it, Step 3 is refused
+> (`PUBLISHED_INTERVENTION_RETAINED`, and `AUDIT_APPEND_ONLY` on revisions
+> and journey history). Step 3 as written also deletes the 47 tied
+> `operational_audit` rows, which `202609250033` already refuses. Step 4
+> depends on Step 3 and itself deletes availability history, which
+> `202609250034` refuses; Step 5 depends on Step 4.
+>
+> Removing this data is therefore an **exceptional purge**, with its own
+> approval, done in one of two ways:
+>
+> - before `202609250033`/`202609250034` reach production; or
+> - afterwards, by a superuser who disables the named triggers for that one
+>   transaction.
+>
+> It is not something the application does. Nothing below has been run.
+
 **Step 3 - the five interventions and their 81 dependent rows.** Delete in
 dependency order: `notification_delivery_attempts`, `notification_outbox`,
 `operational_audit` (the 47 tied rows), `attendance_intervals`,

@@ -60,6 +60,10 @@ export const MIGRATIONS = [
   'supabase/migrations/202609250030_response_service.sql',
   'supabase/migrations/202609250031_attendance_service.sql',
   'supabase/migrations/202609250032_push_service.sql',
+  'supabase/migrations/202609250033_audit_history.sql',
+  'supabase/migrations/202609250034_history_retention.sql',
+  'supabase/migrations/202609250035_current_row_identity.sql',
+  'supabase/migrations/202609250036_current_row_grants.sql',
 ];
 
 export const DATABASE_URL =

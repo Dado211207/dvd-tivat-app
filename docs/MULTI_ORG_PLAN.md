@@ -514,7 +514,7 @@ its own without stranding the rest.
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
 | **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service — only for a recipient of a call-out still running — the worker sweeps `push_delivery_queue()`, which hands out only alerts that are due by the worker's clock, so neither an unwritable row nor one waiting out its repeat can block it, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
-| **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* | 16 |
+| **P4f** — accounts and audit ⏳ **in review, `202609250033`, with follow-ups `202609250034` (retention), `202609250035` (current-row identity) and `202609250036` (current-row grants)** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD: the abandoned DVD-only feature, an explicit exception to criterion 5 (owner, 2026-09-25)* | 16 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -797,6 +797,164 @@ are in `db-tests/push_service.test.ts`:
   millisecond. The repeat wait, the stale-claim wait, the two-attempt ceiling,
   oldest-first order, and every authorisation and service check are unchanged.
 
+**What P4f did, and what it left.** Catalogued at `202609250032` before any
+change:
+
+- **Reads needed nothing.** Every account-table policy that is not "your own
+  row" asks `is_dvd_owner()` or `current_dvd_role() = 'OWNER'`, and both are the
+  installation owner by definition: `current_role_in()` answers OWNER for the
+  owner in every service and for nobody else. `db-tests/audit_history.test.ts`
+  asserts the equivalence with the owner active, suspended, half-registered and
+  with DVD stood down, and that every account reads exactly what it read
+  before. An ADMIN of either service reads its own grant, profile and
+  memberships and nothing else — D9's ADMIN powers are the registry's, which
+  P4a scoped and `organisation_registry.test.ts` asserts in both directions.
+- **History was append-only by privilege only.** A superuser session or the
+  service role could rewrite who changed a role, why an account was suspended,
+  what a citizen-report review decided or which call-out an event was about, or
+  delete them; P4a's and P4d's append-only rules stopped at TRUNCATE, which
+  fires no row trigger (`202609240026` said so); and the service role could
+  write an `operational_audit` row with no call-out claiming either service —
+  the gap `organisation_columns.test.ts` pinned for P4 to close.
+  `202609250033` makes `role_audit`, `account_status_audit`,
+  `organization_membership_audit`, `report_status_audit` and
+  `operational_audit` refuse UPDATE and DELETE (`AUDIT_APPEND_ONLY`), refuses
+  TRUNCATE on those and on `registry_audit` and `attendance_corrections`, and
+  withdraws every service-role write on all seven — nothing the service role
+  runs writes history. The one change `operational_audit` still accepts is its
+  own foreign keys' `ON DELETE SET NULL` when a call-out or account is deleted:
+  it arrives nested inside the referential trigger and only clears links, so the
+  row keeps its service, wording and time. A superuser can still disable a
+  trigger; rewriting history is now a deliberate act, as `202609220017` said of
+  its own step.
+- **Citizen reports stay with DVD: the owner's explicit exception to
+  criterion 5 (decided 2026-09-25).** Citizen reports remain the abandoned
+  DVD-only research feature that section 10 describes. It is not part of
+  either service's workflow, it is not activated, and SZS is given no access
+  to it.
+
+  `citizen_reports`, `report_media`, `report_status_audit` and
+  `review_report()` keep answering DVD staff and DVD command, and their rows
+  carry no service. Nothing crosses a service boundary: an SZS-only account
+  reads none of them, and they hold no SZS data. In the client, the
+  `dojava` screen stays a local simulation that is not offered in navigation.
+
+  `is_dvd_staff()` and a `current_dvd_role()` check therefore survive in
+  exactly those four places, by decision rather than as unfinished work. The
+  catalogue test in `audit_history.test.ts` pins them, alongside the shims
+  themselves, the owner-level functions and policies, and `serves_with()`
+  (which has had no caller since P4b).
+
+  The broader product question, whether DVD Tivat wants citizen intake at
+  all (`docs/PRODUCTION_ARCHITECTURE.md` section 1, item 3), is not answered
+  by this. Reviving the feature would be a new, separately approved decision.
+  It would also have to answer which service reviews a report.
+- **Three more history tables, and published call-outs: `202609250034`, a
+  follow-up commit on the P4f PR, not to be deployed yet.** The owner settled
+  the deletion question on 2026-09-25: a published intervention and its
+  response history remain in the database. A published call-out is closed or
+  cancelled, never hard-deleted through ordinary database operations, and a
+  draft that was never published may still be deleted.
+
+  Measured first, on the P4f tree: `member_availability_history`,
+  `intervention_journey_history` and `intervention_response_revisions` are
+  written only by INSERT, by `set_own_availability_in`, `set_journey_progress`
+  and `submit_response`. Even so:
+
+  - the service role could rewrite, delete, truncate and forge their rows;
+  - deleting an answer erased its revisions (`ON DELETE CASCADE`);
+  - a published call-out with nothing under it that RESTRICTs could be
+    deleted, answers and all.
+
+  `202609250034` makes the three tables refuse UPDATE, DELETE and TRUNCATE with
+  P4f's strict functions. P2's organisation trigger on each is unchanged and
+  still answers first. The migration also:
+
+  - withdraws the service role's writes on all three (SELECT stays);
+  - makes the revisions' foreign key RESTRICT, so an answer with revisions,
+    which is every answer, cannot be deleted;
+  - refuses deleting (`PUBLISHED_INTERVENTION_RETAINED`) or truncating
+    `interventions` if any trace of publication exists: a status past
+    DRAFT/CANCELLED, a publisher, a recipient list, or the append-only
+    `INTERVENTION_PUBLISHED` audit row.
+
+  The publisher alone is not enough: the `202609150008` publish never recorded
+  one, and two of production's five call-outs have none. The audit row is what
+  the service role cannot undo. A draft, or a draft discarded before
+  publication, is still deleted, and its audit rows are detached by P4f's SET
+  NULL. No command deletes any of these rows. An exceptional purge, such as
+  removing demo data, is a superuser disabling named triggers: a separate,
+  deliberate decision, not application behaviour.
+
+  Evidence: `db-tests/history_retention.test.ts`, where 10 of 17 tests fail
+  without the migration. Twelve negative controls, one per clause, are each
+  caught; one of them drops P2's organisation trigger from a history table.
+  The whole suite passes with no existing test changed. Every earlier test that
+  deletes a published call-out builds only to a migration before 034. On the
+  production copy, all 5 real call-outs and all 4 real answers are refused
+  deletion.
+
+  This conflicts with Step 3 of the unapproved
+  `docs/DEMO_DATA_INVENTORY.md`, which deletes those five published demo
+  call-outs; see that file.
+- **An answer, the current journey step and the current availability stay
+  whose they are: `202609250035`, a further follow-up commit on the P4f PR,
+  not to be deployed yet.** It was found in review at 034. The revisions of an
+  answer were append-only, but the answer they hang from was not. Reproduced
+  on the 034 schema, with the stored rows and what each account reads:
+
+  - an answer and its revisions could be re-attributed to another member of
+    the same service;
+  - an answer could be moved onto the other service's call-out and member,
+    its label moved too. P2 accepts that, and the revisions kept the old
+    label, so each service's command read half of the answer;
+  - an answer written without a revision, which the service role can do,
+    could be deleted from a published call-out;
+  - the current journey step and the current availability could be
+    re-attributed the same way.
+
+  What 035 does:
+
+  - An answer's id, call-out, member, service and first-answered time are
+    fixed. `submit_response()` still revises its answer, ETA, direct-travel
+    flag, `updated_at` and revision number.
+  - An answer is removed only with its call-out, so a published call-out
+    keeps every answer, with or without a revision. A never-published draft
+    still goes, taking any answer written to it outside the commands.
+  - The current journey step keeps its call-out, member and service; the
+    current availability its member and service.
+  - Every rule runs after P2's label check.
+
+  Evidence: `db-tests/current_row_identity.test.ts` fails 6 of 12 without
+  the migration and passes all 12 with it. Thirteen negative controls are
+  each caught. One sabotage is not caught: dropping the service from the
+  fixed columns is redundant, because the call-out, or the member, is fixed
+  and P2 ties the label to it. No DVD behaviour changes through the
+  application.
+- **Only the commands write the current answer, journey step and
+  availability: `202609250036`, a further follow-up commit on the P4f PR, not
+  to be deployed yet.** Found in review at 035. The service role could still
+  write what those rows say:
+
+  - an answer's content, without the revision that records it;
+  - an answer's revision number, rewound so the member's next real answer was
+    refused;
+  - journey and availability rows, set, changed, removed or truncated
+    without their commands or history.
+
+  Nothing needs those privileges. The three commands that write the tables
+  are `security definer` and owned by postgres. No trigger writes them.
+  `send-web-push`, the only service-role caller, never touches them. The
+  cascade from a deleted call-out runs as the table's owner.
+
+  The service role loses INSERT, UPDATE, DELETE and TRUNCATE on the three
+  tables and keeps SELECT. Evidence: `db-tests/current_row_grants.test.ts`
+  fails 3 of 9 without the migration and passes all 9 with it; eight negative
+  controls are each caught. No DVD behaviour changes. Still undecided: the
+  service role's TRIGGER (and REFERENCES) privilege on these and the history
+  and audit tables, with which it can attach an existing trigger function to
+  a table.
+
 **Not decided by P4e:** delivering one service's call-out to another service's
 member (a joint call-out) and one alert per person across services — Q1–Q5,
 P7. Until then a member of another service on a call-out is a mismatch; P7 has
@@ -825,6 +983,12 @@ the screen that does it.
 5. `grep` asserts zero remaining references to
    `is_dvd_staff|is_dvd_command|is_dvd_admin` in `supabase/migrations/` beyond
    the historical files.
+   **Explicit exception (owner, 2026-09-25):** the abandoned citizen-report
+   feature (section 10) keeps its DVD-only checks: `reports_staff_read`,
+   `media_owner_or_staff_read`, `report_audit_leader_read` and
+   `review_report()`. They are pinned by name in the catalogue check of
+   `audit_history.test.ts`, which fails on any other DVD-only check present
+   at `202609250033`. `202609250034` adds none.
 6. A test asserts a DVD `ADMIN` still holds every registry power it holds today,
    scoped to DVD (D9), and holds none over SZS.
 7. Full browser suite green; no screen loses data for a DVD user.
@@ -1221,3 +1385,43 @@ a suspended or half-registered account still cannot register; a device another
 account registered cannot be claimed; and a member of both services withdrawn
 from SZS after publication is refused their SZS alert and still sent their DVD
 one.
+
+### Re-run with P4f
+
+With `202609250033` added: **passed**, identical to the P4e run — E1, E2 and E4
+in reads and commands and nothing else, the push comparison showing E5 exactly
+as P4e's own run does since its review follow-up (re-run on the merged trees
+`a50cfe7` and, after the due-sweep follow-up, `0049bd5` — identical output),
+every SZS step as before.
+The commands that write audit history (`owner_set_role`,
+`owner_set_account_active`, `owner_set_organization_membership` and every
+call-out command) do exactly what they did, for every real account; P2's
+backfill, which rewrites `operational_audit` rows, runs before the new rule
+exists, as it always will.
+
+With `202609250034` added as well: **passed**, identical to the run on
+`0049bd5` apart from the line naming the new migration. It shows E1, E2 and E4
+in reads and commands, E5 in the push comparison, and every SZS step as before.
+The commands that write history (`set_own_availability`, `set_journey_progress`,
+`submit_response`) do exactly what they did for every real account, on the
+copy as production is and with every profile completed. The gate deletes
+nothing, so its verdict says nothing about deletion. Deletion was checked on
+the same copy separately: each of the 5 real call-outs, all published and all
+CLOSED, is refused (`PUBLISHED_INTERVENTION_RETAINED`), and so is each of the
+4 real answers, which are held by their revisions.
+
+With `202609250035` added as well: **passed**, identical to the 034 run apart
+from the line naming the new migration. Every DVD read, command, live call-out
+step and push outcome is unchanged. The only writes 035 refuses are made
+outside the commands, and the gate makes none. Checked on the same copy
+separately:
+
+- deleting each of the 4 real answers is refused (`RESPONSE_RETAINED`);
+- re-attributing each answer, the 3 journey steps and the 1 availability is
+  refused (`*_IDENTITY_FIXED`);
+- no real answer carries another service than its revisions.
+
+With `202609250036` added as well: **passed**, identical to the 035 run apart
+from the line naming the new migration. The gate's probes run as the real
+accounts, which write through the commands; the service role's direct writes
+it refuses are exercised by `current_row_grants.test.ts`, not the gate.

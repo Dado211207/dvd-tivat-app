@@ -724,6 +724,78 @@ interventions. It is a SELECT policy only: no client holds INSERT, UPDATE or
 DELETE on that table through any policy in any role, and the actor on every row
 is `auth.uid()` recorded by the command that did the work.
 
+Since `202609250033` audit history is append-only **as a rule**, not only by
+privilege. `operational_audit`, `role_audit`, `account_status_audit`,
+`organization_membership_audit` and `report_status_audit` refuse UPDATE and
+DELETE (`AUDIT_APPEND_ONLY`), as `registry_audit` has since `202609240026`; and
+none of them, nor `attendance_corrections`, can be truncated — TRUNCATE fires no
+row trigger, which is where the earlier rules stopped. The one change an
+`operational_audit` row still accepts is its own foreign keys' `ON DELETE SET
+NULL` when a call-out or an account is deleted: recognised because it arrives
+nested inside the referential action and only clears links. The row keeps its
+service, wording and time. The service role reads these tables and writes none
+of them; the `security definer` commands write every row. None of this binds the
+superuser, which can disable a trigger — it makes rewriting history deliberate.
+
+**A published call-out, and the history under it, stay** (`202609250034`, the
+owner's rule of 2026-09-25; in review, not deployed). A published call-out is
+closed or cancelled, never deleted. The migration does four things:
+
+- `member_availability_history`, `intervention_journey_history` and
+  `intervention_response_revisions` are append-only by the same functions:
+  UPDATE, DELETE and TRUNCATE are refused. P2's organisation trigger on each
+  still refuses a contradicting label first. The service role reads them and
+  writes none of them; `set_own_availability_in`, `set_journey_progress` and
+  `submit_response` write every row.
+- An answer's revisions RESTRICT its deletion. The current answer in
+  `intervention_responses` still changes, but the answer row itself cannot be
+  deleted once it has a revision, and every answer has one.
+- `interventions` refuses DELETE (`PUBLISHED_INTERVENTION_RETAINED`) for any
+  call-out showing a trace of publication: a status past DRAFT/CANCELLED, a
+  publisher, a recipient list, or the `INTERVENTION_PUBLISHED` audit row. It
+  also refuses TRUNCATE.
+- A draft, or a draft discarded before anybody was sent it, is still deleted.
+  Its audit rows stay, detached by the SET NULL above.
+
+No command deletes a call-out, an answer or any history. Removing such rows,
+for example demo data, is an exceptional purge by a superuser, outside the
+application and decided separately.
+
+**What an answer, a journey step and an availability are about is settled
+when they are written** (`202609250035`; in review, not deployed). The
+current answer, journey step and availability are state whose history is
+append-only. They now keep what they are about:
+
+- An answer keeps its id, call-out, member, service and first-answered time
+  (`RESPONSE_IDENTITY_FIXED`). `submit_response()` revises only the answer,
+  ETA, direct-travel flag, `updated_at` and revision number. The answer's
+  service is fixed and each revision is checked against it when written, so
+  an answer and its revisions never carry different services.
+- The current journey step keeps its call-out, member and service
+  (`JOURNEY_IDENTITY_FIXED`). The current availability keeps its member and
+  service (`AVAILABILITY_IDENTITY_FIXED`).
+- An answer is removed only with its call-out (`RESPONSE_RETAINED`; no
+  TRUNCATE). A published call-out therefore keeps every answer, including one
+  that has no revision; an answer is only ever written that way from outside
+  `submit_response()`.
+
+Each rule runs after P2's label check, which still refuses a contradicting
+label first.
+
+**Only the commands write them** (`202609250036`; in review, not deployed).
+The service role reads the three tables and no longer inserts into, updates,
+deletes from or truncates them:
+
+- an answer's content changes only through `submit_response()`, which records
+  every change as a revision;
+- the journey step and availability change only through their commands,
+  which record their history.
+
+Nothing the service role runs needs those writes. `send-web-push` touches none
+of these tables, and the commands are `security definer`, so they write as the
+table's owner. The cascade from a deleted call-out into its answers also runs
+as the table's owner.
+
 ## 11. Realtime
 
 `202609150009` adds eight operational tables to the `supabase_realtime`
