@@ -610,14 +610,23 @@ conditions of `is_eligible_recipient_in`, which the tests hold it to. The worker
 holds the service role, which bypasses row-level security, so nothing else bounds
 what it sends.
 
-What the worker sweeps is `push_delivery_queue()`: the open Web Push alerts,
-less any whose stored service contradicts its call-out's. Such a row cannot be
-written by anybody but a superuser with the triggers off, so the worker could
-neither send it nor set it aside, and fifty of them at the front of the queue
-used to be every sweep there was. It is left exactly as it is and counted
-instead — `push_delivery_mislabelled(call-out)`, reported by the worker on every
-run (`mislabelled`, and a warning in the function's log) until somebody repairs
-it. The rest of what it applies — how long before a repeat, how many
+What the worker sweeps is `push_delivery_queue(accepted_before, claimed_before)`:
+the open Web Push alerts that are **due** by the worker's clock — queued or
+refused at once, accepted once its ninety-second repeat wait is over, claimed
+once its worker is presumed dead after thirty — less any whose stored service
+contradicts its call-out's. Both exclusions come before the worker's
+fifty-alert limit: fifty alerts waiting out their repeat used to fill the sweep
+and delay a call-out queued behind them by two scheduler runs. The worker passes
+both instants from its own clock (policy.ts `dueCutoffs`, the same waits as
+`holdForNow`); the database compares the stored time truncated to the
+millisecond, as the worker reads it, so the two never disagree about a row. A
+row whose label contradicts its call-out cannot be written by anybody but a
+superuser with the triggers off, so the worker could neither send it nor set it
+aside, and fifty of them at the front of the queue used to be every sweep there
+was. It is left exactly as it is and counted instead —
+`push_delivery_mislabelled(call-out)`, reported by the worker on every run
+(`mislabelled`, and a warning in the function's log) until somebody repairs it.
+The rest of what it applies — how long before a repeat, how many
 attempts exist at all, what it does with each verdict, and exactly which three
 fields may reach a locked screen — lives in
 `supabase/functions/send-web-push/policy.ts` as pure functions, and its queries in

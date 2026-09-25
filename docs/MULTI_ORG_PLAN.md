@@ -513,7 +513,7 @@ its own without stranding the rest.
 | **P4b** — interventions ✅ **done, `202609250027`–`202609250029`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)*; **and the read side of all ten tables below, which its commands write** *(see "What P4b's commands write")* | 8 + 13 |
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
-| **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service — only for a recipient of a call-out still running — the worker sweeps `push_delivery_queue()`, which no unwritable row can block, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
+| **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service — only for a recipient of a call-out still running — the worker sweeps `push_delivery_queue()`, which hands out only alerts that are due by the worker's clock, so neither an unwritable row nor one waiting out its repeat can block it, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
 | **P4f** — accounts and audit ⏳ **in review, `202609250033`** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD pending an owner decision* | 16 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
@@ -780,6 +780,22 @@ are in `db-tests/push_service.test.ts`:
   are, unsent, and `push_delivery_mislabelled()` counts them so the worker
   reports them on every run (`mislabelled` in its reply, a warning in its log).
   P2's rule is untouched: the rows still refuse every update.
+- *Alerts not yet due* (found in review of the next draft, `9bd7fac`). The sweep
+  asked whether an alert was due — ninety seconds before a repeat, thirty
+  before a stale claim is taken over — only of the fifty rows it had already
+  read. Fifty accepted alerts waiting for their repeat filled it: on the local
+  database, through the service-role stand-in and the recording fake, a
+  call-out queued behind them was sent nothing on the first scheduler run,
+  nothing on the second (the fifty repeats took every place) and only on the
+  third; a commander's wake-up of a call-out with fifty of its own waiting sent
+  nothing. `push_delivery_queue(accepted_before, claimed_before)` now returns
+  only alerts that are due, so the limit applies to those. Both instants come
+  from the worker's own clock (`dueCutoffs`, the same waits as `holdForNow`,
+  which the worker still asks of each row), and the database compares stored
+  times truncated to the millisecond as the worker reads them, so a test that
+  sets the worker's clock sets the cutoff too and the two agree to the
+  millisecond. The repeat wait, the stale-claim wait, the two-attempt ceiling,
+  oldest-first order, and every authorisation and service check are unchanged.
 
 **What P4f did, and what it left.** Catalogued at `202609250032` before any
 change:

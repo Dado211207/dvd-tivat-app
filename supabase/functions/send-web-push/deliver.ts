@@ -13,7 +13,8 @@
  * the stored rows - may this member still be alerted about this call-out - is
  * put to the database as `push_delivery_verdict()`, answered from the alert,
  * its call-out and recipient list, and the member. What the worker sweeps is
- * `push_delivery_queue()`, which never hands out a row nobody can write.
+ * `push_delivery_queue()`: only alerts that are due by the worker's clock, and
+ * never a row nobody can write.
  * Nothing a request carries names a service or decides a verdict.
  */
 
@@ -22,6 +23,7 @@ import {
   attemptStatus,
   attemptsRemain,
   deliveryAction,
+  dueCutoffs,
   holdForNow,
   isRepeat,
   mapWithConcurrency,
@@ -161,12 +163,15 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
   const now = worker.now ?? Date.now;
   const stamp = () => new Date(now()).toISOString();
 
-  // `push_delivery_queue()` is the open Web Push alerts, less any whose stored
-  // service contradicts its call-out's: those can never be written, so the
-  // worker could neither send nor set one aside, and fifty of them at the front
-  // used to be every sweep there was. They are counted below instead.
+  // `push_delivery_queue()` is the open Web Push alerts that are DUE by this
+  // worker's clock, less any whose stored service contradicts its call-out's.
+  // Both exclusions happen before the limit below: fifty alerts nobody can
+  // write, or fifty waiting out their repeat, used to be the whole sweep, and
+  // whatever was queued behind them waited. The unwritable ones are counted
+  // below instead.
+  const { acceptedBefore, claimedBefore } = dueCutoffs(now());
   let outboxQuery = service
-    .rpc('push_delivery_queue')
+    .rpc('push_delivery_queue', { accepted_before: acceptedBefore, claimed_before: claimedBefore })
     .select('id, intervention_id, member_id, state, attempt_count, created_at, updated_at')
     .in('state', ['QUEUED', 'SENT_TO_PROVIDER', 'PROVIDER_ACCEPTED', 'PROVIDER_REJECTED'])
     .lt('attempt_count', MAX_ATTEMPTS)
@@ -189,7 +194,9 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
     const state = String(row.state);
     const repeat = isRepeat(state);
     // Both waits, and the attempt ceiling, live in `policy.ts` where they are
-    // tested. The filter above narrows the read; this is the real decision.
+    // tested. The sweep already asked them, in SQL, with this worker's clock;
+    // asked again here of the row as read, they are the last word before a
+    // claim.
     if (holdForNow(state, row.updated_at as string | null, now())) {
       return 'SKIPPED';
     }

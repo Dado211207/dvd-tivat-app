@@ -102,6 +102,19 @@ describe('what the worker sweeps', () => {
     }
   });
 
+  it('asks the sweep for what is due by ITS clock - the one a test sets - never the database\'s', async () => {
+    const now = Date.parse('2026-09-25T03:00:00.000Z');
+    for (const woken of [undefined, CALLOUT]) {
+      const db = queue({ data: null, error: null });
+      await deliverQueued({ service: db, send: neverSend, scheduler: true, now: () => now }, woken);
+      expect(db.ops.find((op) => op.kind === 'rpc' && op.table === 'push_delivery_queue')?.payload, String(woken)).toEqual({
+        // Ninety seconds for a repeat, thirty for a stale claim: policy.ts's waits.
+        accepted_before: '2026-09-25T02:58:30.000Z',
+        claimed_before: '2026-09-25T02:59:30.000Z',
+      });
+    }
+  });
+
   it('fails the run, and sends nothing, when the sweep cannot be read', async () => {
     const db = queue({ data: null, error: null }, undefined, undefined, { data: null, error: { message: 'timeout' } });
     await expect(deliverQueued({ service: db, send: neverSend, scheduler: true })).rejects.toThrow('OUTBOX_READ_FAILED');

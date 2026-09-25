@@ -70,6 +70,30 @@ export function holdForNow(
   return false;
 }
 
+/**
+ * The same two waits, as the instants the database compares against when it
+ * picks the alerts that are due - BEFORE the sweep's limit, which is where the
+ * question has to be asked.
+ *
+ * The sweep used to read the oldest open alerts and only then ask
+ * `holdForNow` of each: fifty accepted alerts still waiting for their repeat
+ * filled the sweep, and a call-out queued behind them waited until they had
+ * been repeated - two scheduler runs.
+ *
+ * `holdForNow` holds while `now - since < wait`; so an alert is due when
+ * `since <= now - wait`. Both instants come from the worker's own clock, never
+ * the database's, and `since` is read to the millisecond as `Date.parse` reads
+ * it: the database compares the stored time truncated to the millisecond. The
+ * two answers are the same for every row, which policy.test.ts asserts at the
+ * edges.
+ */
+export function dueCutoffs(now: number): { readonly acceptedBefore: string; readonly claimedBefore: string } {
+  return {
+    acceptedBefore: new Date(now - REPEAT_AFTER_MS).toISOString(),
+    claimedBefore: new Date(now - CLAIM_STALE_AFTER_MS).toISOString(),
+  };
+}
+
 /** Whether another attempt is allowed at all. */
 export function attemptsRemain(attemptCount: number): boolean {
   return Number.isFinite(attemptCount) && attemptCount < MAX_ATTEMPTS;

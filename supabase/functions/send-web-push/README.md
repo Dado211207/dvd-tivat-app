@@ -43,6 +43,12 @@ policy bounds what it reads or sends, so:
 - an alert whose call-out or member is not in its service, or whose member was
   never sent the call-out, is set aside unsent (`SERVICE_MISMATCH`,
   `NOT_A_RECIPIENT`) - no command writes either;
+- the sweep takes only alerts that are due by the worker's own clock - queued,
+  refused, accepted and past the 90-second repeat wait, or claimed and past the
+  30-second stale-claim wait - before its 50-alert limit, so alerts that are
+  still waiting cannot keep a newly queued one out of the sweep. The worker
+  passes both instants to `push_delivery_queue()`; the database never uses a
+  clock of its own for this;
 - an alert whose stored service contradicts its call-out's cannot be written by
   anybody but a superuser, so `push_delivery_queue()` never hands it out and it
   cannot hold up the alerts behind it. The worker reports how many there are on
