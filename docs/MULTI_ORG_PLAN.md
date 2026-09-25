@@ -514,7 +514,7 @@ its own without stranding the rest.
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
 | **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service — only for a recipient of a call-out still running — the worker sweeps `push_delivery_queue()`, which hands out only alerts that are due by the worker's clock, so neither an unwritable row nor one waiting out its repeat can block it, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
-| **P4f** — accounts and audit ⏳ **in review, `202609250033`, with follow-ups `202609250034` (retention) and `202609250035` (current-row identity)** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD: the abandoned DVD-only feature, an explicit exception to criterion 5 (owner, 2026-09-25)* | 16 |
+| **P4f** — accounts and audit ⏳ **in review, `202609250033`, with follow-ups `202609250034` (retention), `202609250035` (current-row identity) and `202609250036` (current-row grants)** | ~~`operational_audit`~~ *(moved to P4b; its history rule is P4f's)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* — *reads needed no change (owner-level checks are the installation owner); audit history made append-only, truncate included, and the service role's writes on it withdrawn; citizen reports left with DVD: the abandoned DVD-only feature, an explicit exception to criterion 5 (owner, 2026-09-25)* | 16 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -930,8 +930,30 @@ change:
   each caught. One sabotage is not caught: dropping the service from the
   fixed columns is redundant, because the call-out, or the member, is fixed
   and P2 ties the label to it. No DVD behaviour changes through the
-  application. The service role keeps its privileges on the three tables, a
-  separate decision.
+  application.
+- **Only the commands write the current answer, journey step and
+  availability: `202609250036`, a further follow-up commit on the P4f PR, not
+  to be deployed yet.** Found in review at 035. The service role could still
+  write what those rows say:
+
+  - an answer's content, without the revision that records it;
+  - an answer's revision number, rewound so the member's next real answer was
+    refused;
+  - journey and availability rows, set, changed, removed or truncated
+    without their commands or history.
+
+  Nothing needs those privileges. The three commands that write the tables
+  are `security definer` and owned by postgres. No trigger writes them.
+  `send-web-push`, the only service-role caller, never touches them. The
+  cascade from a deleted call-out runs as the table's owner.
+
+  The service role loses INSERT, UPDATE, DELETE and TRUNCATE on the three
+  tables and keeps SELECT. Evidence: `db-tests/current_row_grants.test.ts`
+  fails 3 of 9 without the migration and passes all 9 with it; eight negative
+  controls are each caught. No DVD behaviour changes. Still undecided: the
+  service role's TRIGGER (and REFERENCES) privilege on these and the history
+  and audit tables, with which it can attach an existing trigger function to
+  a table.
 
 **Not decided by P4e:** delivering one service's call-out to another service's
 member (a joint call-out) and one alert per person across services — Q1–Q5,
@@ -1398,3 +1420,8 @@ separately:
 - re-attributing each answer, the 3 journey steps and the 1 availability is
   refused (`*_IDENTITY_FIXED`);
 - no real answer carries another service than its revisions.
+
+With `202609250036` added as well: **passed**, identical to the 035 run apart
+from the line naming the new migration. The gate's probes run as the real
+accounts, which write through the commands; the service role's direct writes
+it refuses are exercised by `current_row_grants.test.ts`, not the gate.

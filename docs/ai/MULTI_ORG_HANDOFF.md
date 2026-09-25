@@ -13,10 +13,10 @@ This is the current checkpoint for the DVD Tivat / Sluzba zastite i spasavanja T
 | P4c (responses and journey) | PR [#61](https://github.com/Dado211207/dvd-tivat-app/pull/61) merged into `main` as `471c5a969a150e75894ddee3531805c477405ddb` after independent review; CI passed on head `597f9726935ee733554a11c4a7efa6688b5f370b`. Migration `202609250030_response_service.sql` remains unapplied to production. |
 | P4d (attendance) | PR [#62](https://github.com/Dado211207/dvd-tivat-app/pull/62) merged into `main` as `33d60d0230f01c88544d9bce4112df8910ce446f` after independent review and green CI run `36145332057` on `a2e932295b3bd5915416531336f8c3a16cfe71a4`. Migration `202609250031_attendance_service.sql` remains unapplied to production. |
 | P4e (notifications and push) | PR [#63](https://github.com/Dado211207/dvd-tivat-app/pull/63) merged into `main` as `97f385337bea6c3928ce588fcfeeb31e1a32ba8a` after independent review and green CI run `36146640864` on `0c0a390dd32cf70d8c2c212d5cf1c553e528375e`. Migration `202609250032_push_service.sql` remains unapplied to production, and the `send-web-push` Edge Function in it is not deployed. |
-| P4f (accounts and audit) | **Draft PR [#64](https://github.com/Dado211207/dvd-tivat-app/pull/64)** from `claude/dvd-tivat-app-dev-n8wctb-p4f`, retargeted to `main` after #63 merged, which it has taken in by merge commit `61adab4` (a clean merge; no reviewed commit rewritten); not merged. Three migrations, each in its own commit: `202609250033_audit_history.sql` (the phase, `67d15b7`); `202609250034_history_retention.sql` (the owner's retention rule, `5743443`); `202609250035_current_row_identity.sql` (found in review of 034, `1011e32`). 034 and 035 are not to be deployed yet. CI run `36147627306` passed on `17ed78e`, before 035; the head carrying 035 needs its own green CI - see the PR. |
+| P4f (accounts and audit) | **Draft PR [#64](https://github.com/Dado211207/dvd-tivat-app/pull/64)** from `claude/dvd-tivat-app-dev-n8wctb-p4f`, retargeted to `main` after #63 merged, which it has taken in by merge commit `61adab4` (a clean merge; no reviewed commit rewritten); not merged. Four migrations, each in its own commit: `202609250033_audit_history.sql` (the phase, `67d15b7`); `202609250034_history_retention.sql` (the owner's retention rule, `5743443`); `202609250035_current_row_identity.sql` (found in review of 034, `1011e32`); `202609250036_current_row_grants.sql` (found in review of 035, `a651bb5`). 034, 035 and 036 are not to be deployed yet. CI run `36158698603` passed on `4763175`, before 036; the head carrying 036 needs its own green CI - see the PR. |
 | P5–P8 | Not started. P5 (retire the mirror) is next once the P4 stack is reviewed; P6 and P7 wait on Q1–Q8. |
 
-**Production gate:** None of the organization rewrite migrations `202609240022` through `202609250035` has been applied to the hosted project (rechecked read-only on 2026-09-25: 22 migrations, through `202609230021`), and the `send-web-push` function in these branches has not been deployed — the deployed worker is the one on `main`. A green local or PR test does not imply production deployment. Do not apply these migrations as a side effect of merging a PR. The plan requires separate approval per production phase. **Deploy order for P4e, when approved:** migration `202609250032` first, then the function — the new worker sweeps `push_delivery_queue()` and asks `push_delivery_verdict()`; without them its first read fails, it answers 503 and sends nothing. P4e changes one DVD behaviour on purpose (gate E5): an alert still queued when its call-out is closed or cancelled is no longer sent. Do not invent or delete member accounts or demo records.
+**Production gate:** None of the organization rewrite migrations `202609240022` through `202609250036` has been applied to the hosted project (rechecked read-only on 2026-09-25: 22 migrations, through `202609230021`), and the `send-web-push` function in these branches has not been deployed — the deployed worker is the one on `main`. A green local or PR test does not imply production deployment. Do not apply these migrations as a side effect of merging a PR. The plan requires separate approval per production phase. **Deploy order for P4e, when approved:** migration `202609250032` first, then the function — the new worker sweeps `push_delivery_queue()` and asks `push_delivery_verdict()`; without them its first read fails, it answers 503 and sends nothing. P4e changes one DVD behaviour on purpose (gate E5): an alert still queued when its call-out is closed or cancelled is no longer sent. Do not invent or delete member accounts or demo records.
 
 ## P4c: what changed and what it proves
 
@@ -188,14 +188,49 @@ One sabotage is not caught, and that result is accurate. Dropping the answer's s
 
 **Not changed by 035:**
 
-- The service role keeps its privileges on the three tables (the open decision above).
+- The service role kept its privileges on the three tables; `202609250036` withdraws its writes (below).
 - The current journey step and availability can still be deleted. They are state, and their history is kept.
+
+## Follow-up `202609250036`: the service role reads the current rows; only their commands write them
+
+Found in review of #64 at 035. It is a separate commit (`a651bb5`), leaves 033–035 untouched, and is **not to be deployed yet**.
+
+**Reproduced first**, on the 035 schema (`db-tests/current_row_grants.test.ts`, first describe). 035 had settled what the current answer, journey step and availability are about, but the service role still held every privilege on `intervention_responses`, `intervention_journey` and `member_availability`. The tests show that it could:
+
+- change an answer's content without `submit_response()`, so without the revision that records it. DVD command then read an answer the member never gave, with a history that does not explain it.
+- rewind an answer's revision number, after which the member's next real answer was refused as a duplicate revision.
+- write an answer with no revision.
+- set, change and remove a journey step or an availability without their commands or history. The board then showed a member on scene whose history says they only set out.
+- truncate the journey and availability tables.
+
+**Inspected before changing privileges: nothing needs them.**
+
+- Exactly three functions write the three tables: `submit_response()`, `set_journey_progress()` and `set_own_availability_in()`. `set_own_availability()` is DVD's wrapper around the last. Each is `security definer` and owned by postgres, so it writes with the owner's privileges whoever calls it.
+- No trigger writes these tables.
+- `send-web-push` is the only Edge Function and the only service-role caller in the repository. It writes only `notification_outbox`, `notification_delivery_attempts` and `web_push_subscriptions`, and calls read-only functions.
+- No script uses the service role on these tables. The client reads them as the signed-in account and writes only through the three commands.
+- The one cascade into them runs as the table's owner. That is deleting a call-out, which takes its answers.
+
+**What 036 does.** The service role loses INSERT, UPDATE, DELETE and TRUNCATE on the three tables. It keeps SELECT, and also REFERENCES and TRIGGER, as 033 left the audit tables and 034 the history tables. Clients keep SELECT.
+
+**Evidence.**
+
+- On `4763175` without 036, the new file fails 3 of 9 and passes 6. The 6 that pass are the four reproductions and two preservation checks. With 036, all 9 pass.
+- The preservation checks cover the commands for their real callers in both DVD and SZS: answer revisions (a changed answer, a first answer), journey steps with history, and availability through `set_own_availability()` and `set_own_availability_in()`. They also cover the service role deleting a never-published draft, which still takes an out-of-band answer with it, and the foreign keys, listed by name and unchanged.
+- The full suite gives 851 passed, 12 skipped (842 plus 9), with no existing test changed.
+- Eight negative controls are each caught: INSERT, UPDATE or DELETE kept on answers; DELETE kept on journey steps; TRUNCATE kept on availability; the journey revoke dropped entirely; SELECT revoked from the service role too; clients' reads revoked. One overlaps with 035: with DELETE kept on answers, 035's rule still refuses (`RESPONSE_RETAINED`), and only the privilege assertion tells the two apart.
+
+**Gate:** passed, identical to the 035 run apart from the line naming 036. **Replay:** re-applying 036 (and 035–032) is a no-op.
+
+**DVD behaviour.** Nothing changes through the application. The only thing refused is a direct write by the service role.
+
+**At deployment,** check `has_table_privilege('service_role', …)` for INSERT, UPDATE, DELETE and TRUNCATE on all three tables. A privilege granted through another role would survive the revoke.
 
 ## P4b review resolved; next boundary
 
 At head `ccc59a8`, DVD-only command/staff policies exposed SZS rows created by publication, journey, attendance and vehicle departure. The final `202609250029` migration closed reads on ten output tables, scoped the attendance and vehicle lifecycle commands, fixed a definer-read leak in `intervention_audit()`, restored the caller check in `is_eligible_recipient_in()`, and labelled parentless vehicle audit events with the vehicle's service. It also refuses an attendance check-in naming a vehicle from the other service. The database suite reported **700 passed, 12 skipped**; disabling that last migration fails 26 new tests. Independent review found no remaining P4b blocker, and CI passed on its exact SHA.
 
-**P4f is done for its own tables; the P4 group is not complete.** #61, #62 and #63 are merged; #64 is in review. Open, in order of consequence: the cross-cutting existence question (whether another service's call-out id should be indistinguishable from an unknown one, plan P4 section); before `202609250034` is deployed, what happens to the published demo call-outs (the conflict with `docs/DEMO_DATA_INVENTORY.md` above). Settled since: the three history tables are append-only, and a published call-out and its answer history stay (`202609250034`, the owner's rule, in review on #64 and not deployed). Citizen reports stay DVD-only as the abandoned feature, an explicit exception to criterion 5 (owner, 2026-09-25). An answer, the current journey step and the current availability can no longer be re-attributed, and a published call-out keeps every answer (`202609250035`, in review on #64). Not decided, and not changed by 035: whether the service role should keep INSERT, UPDATE and DELETE on those three tables. Nothing it runs writes them; while it keeps them, it can write such a row outside the commands and change an answer's content without a revision, though no longer move or delete one. P5 (retire the mirror) must not start before the stack is reviewed.
+**P4f is done for its own tables; the P4 group is not complete.** #61, #62 and #63 are merged; #64 is in review. Open, in order of consequence: the cross-cutting existence question (whether another service's call-out id should be indistinguishable from an unknown one, plan P4 section); before `202609250034` is deployed, what happens to the published demo call-outs (the conflict with `docs/DEMO_DATA_INVENTORY.md` above). Settled since: the three history tables are append-only, and a published call-out and its answer history stay (`202609250034`, the owner's rule, in review on #64 and not deployed). Citizen reports stay DVD-only as the abandoned feature, an explicit exception to criterion 5 (owner, 2026-09-25). An answer, the current journey step and the current availability can no longer be re-attributed, and a published call-out keeps every answer (`202609250035`, in review on #64). The service role reads those three tables and no longer writes them (`202609250036`, in review on #64). Not decided: whether it should also lose TRIGGER (and REFERENCES), which it keeps on every table P4f, 034 and 036 touched. It can create no function anywhere, but with TRIGGER it can attach an existing trigger function to a table - verified locally on the answers table - enough to obstruct a command, not to rewrite a row. P5 (retire the mirror) must not start before the stack is reviewed.
 
 **Who is watching:** the working session that opened these PRs was subscribed to all four; the three merged ones unsubscribed themselves, and it stays subscribed to #64. It receives CI failures and review comments while it lives. It could not schedule a timed check-in (the call asked for an approval nobody was present to give), so events webhooks miss must be noticed by whoever acts on the PR.
 
@@ -208,7 +243,7 @@ Unanswered product questions Q1–Q8 in the plan block the SZS user interface (P
 ## How to resume
 
 1. Read this file, `docs/MULTI_ORG_PLAN.md`, and the current GitHub PR head before acting; this checkpoint can become stale.
-2. Review P4f at PR #64's current head - migrations 033, 034 and 035 - and require full CI on that exact SHA before merging. Production migration and push-worker deployment have separate gates. Each later phase requires failing-before/passing-after database evidence, preserved DVD behavior (re-run `npm run gate:p4` against a fresh read-only capture) and CI success on the exact final SHA.
+2. Review P4f at PR #64's current head - migrations 033, 034, 035 and 036 - and require full CI on that exact SHA before merging. Production migration and push-worker deployment have separate gates. Each later phase requires failing-before/passing-after database evidence, preserved DVD behavior (re-run `npm run gate:p4` against a fresh read-only capture) and CI success on the exact final SHA.
 3. Run the unit suite on COMMITTED files: `src/config/accountReadiness.test.ts` scans `git ls-files` only, so a new file passes it until it is tracked. Build service-role claims in tests with `JSON.stringify`, never as a literal.
 4. Keep the next phase's own boundary closed. Audit all security-definer commands and every table they populate, including history, audit, notifications and service-role workers. Keep one reviewable phase per PR.
 5. Record the reviewed SHA, CI run, production migration state, open decisions and next blocker here after each phase. Production deployment and user acceptance testing are separate milestones.

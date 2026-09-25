@@ -782,6 +782,20 @@ append-only. They now keep what they are about:
 Each rule runs after P2's label check, which still refuses a contradicting
 label first.
 
+**Only the commands write them** (`202609250036`; in review, not deployed).
+The service role reads the three tables and no longer inserts into, updates,
+deletes from or truncates them:
+
+- an answer's content changes only through `submit_response()`, which records
+  every change as a revision;
+- the journey step and availability change only through their commands,
+  which record their history.
+
+Nothing the service role runs needs those writes. `send-web-push` touches none
+of these tables, and the commands are `security definer`, so they write as the
+table's owner. The cascade from a deleted call-out into its answers also runs
+as the table's owner.
+
 ## 11. Realtime
 
 `202609150009` adds eight operational tables to the `supabase_realtime`
