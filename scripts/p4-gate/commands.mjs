@@ -40,6 +40,11 @@ export async function findTargets(client) {
       (select id::text from public.attendance_intervals where verified order by id limit 1) as verified_interval,
       (select id::text from public.vehicle_movements where returned_at is not null order by id limit 1) as returned_movement,
       (select endpoint from public.web_push_subscriptions where revoked_at is null order by id limit 1) as live_endpoint,
+      (select a.id::text from public.attendance_intervals a join public.members m on m.id = a.member_id
+         join public.profiles p on p.user_id = m.user_id and p.profile_complete
+         join public.access_grants g on g.user_id = m.user_id and g.active
+                                     and g.role in ('OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER')
+        where m.active order by m.id, a.id limit 1) as recipient_interval,
       -- The member a call-out can be sent to: what P0's eligibility asks, as
       -- postgres, so it does not depend on who is asking.
       (select row(m.id::text, m.user_id::text)::text from public.members m
@@ -66,6 +71,7 @@ export async function findTargets(client) {
     verifiedInterval: t.verified_interval,
     returnedMovement: t.returned_movement,
     liveEndpoint: t.live_endpoint,
+    recipientInterval: t.recipient_interval,
     recipientMember,
     recipientAccount,
   };
@@ -120,6 +126,13 @@ function cases(t) {
     ['revoke_web_push_subscription', `select public.revoke_web_push_subscription($1)`, need(t.liveEndpoint)],
     ['complete_own_profile', `select public.complete_own_profile('Gate Ime Prezime', '+38267555111', date '1980-02-03')`, []],
     ['review_report_missing', `select public.review_report($1, 'REVIEWED', 'Gate')`, [MISSING]],
+    // the one direct write a member may make: asking for their own attendance
+    // to be corrected - as a client sends it, and arriving already decided
+    ['correction_request', `insert into public.attendance_correction_requests(interval_id, requested_by, message)
+       values ($1, auth.uid(), 'Gate ispravka') returning id`, need(t.recipientInterval)],
+    ['correction_request_prefilled', `insert into public.attendance_correction_requests(
+       interval_id, requested_by, message, resolved_by, resolved_at, resolution_note)
+       values ($1, auth.uid(), 'Gate ispravka', auth.uid(), now(), 'Gate odluka') returning id`, need(t.recipientInterval)],
     // account administration (P4f's, but decided by the same authority shim)
     ['owner_set_role', `select public.owner_set_role($1, 'FIREFIGHTER')`, need(t.citizen)],
     ['owner_set_account_active', `select public.owner_set_account_active($1, false, 'Gate razlog')`, need(t.nonOwner)],
@@ -262,6 +275,10 @@ export async function commandMatrix(client, { columns, accounts, targets }) {
           if (out.value) await client.query('update public.vehicle_movements set departed_at = $2 where id = $1', [out.value, T0]);
           state.snapshot = (await client.query(snapshotSql)).rows[0].s;
           await run('check-out-self', recipient, `select public.attendance_check_out($1)`, [id]);
+          if (checkIn.value) {
+            await run('request-correction', recipient, `insert into public.attendance_correction_requests(interval_id, requested_by, message)
+              values ($1, auth.uid(), 'Gate ispravka') returning id`, [checkIn.value]);
+          }
           if (checkIn.value) {
             await run('confirm', commander, `select public.attendance_confirm($1, null)`, [checkIn.value]);
             await run('unconfirm', commander, `select public.attendance_unconfirm($1, 'Gate')`, [checkIn.value]);

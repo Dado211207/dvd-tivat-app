@@ -1770,7 +1770,10 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
     );
   });
 
-  it('leaves one DVD-only policy on those tables - the correction request P4d opens', async () => {
+  it('leaves no DVD-only policy on those tables - P4d (202609250031) opened the correction request', async () => {
+    // The correction-request INSERT policy was the one survivor after P4b,
+    // failing closed; db-tests/attendance_service.test.ts covers what replaced
+    // it. Every migration sorting after 029 has been applied by this point.
     const { rows } = await db.query<{ policy: string }>(
       `select tablename || '.' || policyname as policy from pg_policies
         where schemaname = 'public'
@@ -1779,9 +1782,7 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
         order by 1`,
       [DVD_ONLY],
     );
-    expect(rows.map((row) => row.policy)).toEqual([
-      'attendance_correction_requests.correction_requests_self_create',
-    ]);
+    expect(rows.map((row) => row.policy)).toEqual([]);
   });
 
   it('leaves no DVD-only function touching them - P4c (202609250030) made submit_response service-aware', async () => {

@@ -14,6 +14,7 @@ import { DVD, SZS } from './database.mjs';
 
 /** The migration that deliberately changes an outcome, and what it becomes. */
 export const P4C = 'supabase/migrations/202609250030_response_service.sql';
+export const P4D = 'supabase/migrations/202609250031_attendance_service.sql';
 
 /**
  * [label, who, sql, params(ctx), expected, { after: [[migration, expected]] }]
@@ -67,7 +68,16 @@ function steps() {
 
     ['szsFirefighter reports a journey', 'szsFirefighter', `select public.set_journey_progress($1, 'KRECEM')`, (c) => [c.saved.szsCallout], 'OK'],
     ['the DVD firefighter reports a journey on the SZS call-out', 'dvdFirefighter', `select public.set_journey_progress($1, 'KRECEM')`, (c) => [c.saved.szsCallout], 'ERR STAFF_REQUIRED'],
-    ['szsFirefighter checks in', 'szsFirefighter', `select public.attendance_check_in($1)`, (c) => [c.saved.szsCallout], 'OK'],
+    ['szsFirefighter checks in', 'szsFirefighter', `select public.attendance_check_in($1)`, (c) => [c.saved.szsCallout], 'OK', { save: 'szsInterval' }],
+    ['szsFirefighter asks for a correction to their own SZS attendance', 'szsFirefighter',
+      `insert into public.attendance_correction_requests(interval_id, requested_by, message) values ($1, auth.uid(), 'SZS ispravka')`,
+      (c) => [c.saved.szsInterval], 'ERR RLS', { after: [[P4D, 'OK']] }],
+    ['the DVD firefighter asks for a correction to that SZS attendance', 'dvdFirefighter',
+      `insert into public.attendance_correction_requests(interval_id, requested_by, message) values ($1, auth.uid(), 'Tudja ispravka')`,
+      (c) => [c.saved.szsInterval], 'ERR RLS'],
+    ['szsCommander files a correction for the SZS firefighter', 'szsCommander',
+      `insert into public.attendance_correction_requests(interval_id, requested_by, message) values ($1, auth.uid(), 'Komandir ispravka')`,
+      (c) => [c.saved.szsInterval], 'ERR RLS'],
     ['szsCommander checks dual in with a DVD vehicle', 'szsCommander', `select public.attendance_check_in($1, $2, null, null, $3)`, (c) => [c.saved.szsCallout, c.saved.dualSzs, c.dvdVehicle], 'ERR ORGANIZATION_MISMATCH'],
     ['szsCommander sends a DVD vehicle', 'szsCommander', `select public.record_vehicle_departure($1, $2, null)`, (c) => [c.dvdVehicle, c.saved.szsCallout], 'ERR STAFF_REQUIRED'],
     ['szsCommander sends the SZS vehicle', 'szsCommander', `select public.record_vehicle_departure($1, $2, null)`, (c) => [c.saved.szsVehicle, c.saved.szsCallout], 'OK'],
@@ -151,7 +161,9 @@ export async function runExtension(client, { applied, owner, dvdFirefighter, dvd
       actual = 'OK';
     } catch (error) {
       await client.query('rollback');
-      actual = `ERR ${error.message.replace(/^.*?([A-Z][A-Z_]{4,})\b.*$/s, '$1')}`;
+      actual = /row-level security/.test(error.message)
+        ? 'ERR RLS'
+        : `ERR ${error.message.replace(/^.*?([A-Z][A-Z_]{4,})\b.*$/s, '$1')}`;
     }
     report.push({ label, expected, actual });
   }
