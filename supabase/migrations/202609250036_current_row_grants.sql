@@ -1,0 +1,73 @@
+-- ===========================================================================
+-- 202609250036 - the service role reads the current answer, journey step and
+--                availability; only their commands write them
+--
+-- A follow-up to 202609250035, which it does not change. 033-035 are
+-- unchanged.
+--
+-- ---------------------------------------------------------------------------
+-- What was left, measured on a schema at 202609250035
+-- (db-tests/current_row_grants.test.ts, first describe)
+-- ---------------------------------------------------------------------------
+--
+-- 035 settled what an answer, a journey step and an availability are ABOUT.
+-- What they SAY could still be written directly by the service role, which
+-- held every privilege on intervention_responses, intervention_journey and
+-- member_availability:
+--
+--   an answer        its answer, ETA or direct-travel flag changed without
+--                    submit_response(), so without the revision that records
+--                    it - DVD command read an answer the member never gave,
+--                    with a history that does not explain it; its revision
+--                    number rewound, after which the member's next real
+--                    answer was refused (a duplicate revision); an answer
+--                    written with no revision at all;
+--   a journey step   set, changed or removed without set_journey_progress(),
+--                    so without a history row - the board showing a member on
+--                    scene whose history says they only set out;
+--   an availability  the same, without set_own_availability_in();
+--   either table     truncated.
+--
+-- ---------------------------------------------------------------------------
+-- Why nothing needs those privileges (inspected before changing them)
+-- ---------------------------------------------------------------------------
+--
+--   - The three tables are written by exactly three functions:
+--     submit_response(), set_journey_progress() and set_own_availability_in()
+--     (set_own_availability() is DVD's wrapper around the last). Each is
+--     `security definer` and owned by postgres, so it writes with the owner's
+--     privileges whoever calls it. No trigger writes these tables.
+--   - send-web-push, the only Edge Function and the only service-role caller
+--     in the repository, never touches them: it writes notification_outbox,
+--     notification_delivery_attempts and web_push_subscriptions, and calls
+--     read-only functions. No script uses the service role on them; the
+--     client reads them as the signed-in account and writes only through the
+--     three commands.
+--   - The one referential action into them - deleting a call-out takes its
+--     answers (ON DELETE CASCADE) - runs as the table's owner, so the service
+--     role deleting a never-published draft still removes an answer written
+--     to it.
+--
+-- ---------------------------------------------------------------------------
+-- The change
+-- ---------------------------------------------------------------------------
+--
+-- The service role loses INSERT, UPDATE, DELETE and TRUNCATE on the three
+-- tables. It keeps SELECT (and REFERENCES and TRIGGER), as 202609250033 left
+-- it on the audit tables and 202609250034 on the history tables. Clients keep
+-- SELECT; their writes were only ever the commands.
+--
+-- Not changed: the commands, their callers and what they write; the rules of
+-- 035 (identity) and 034 (retention); the foreign keys. A superuser session is
+-- not bound by privileges: an exceptional correction stays a deliberate act
+-- outside the application.
+--
+-- On the hosted project, check after applying that has_table_privilege(
+-- 'service_role', <table>, 'INSERT' / 'UPDATE' / 'DELETE' / 'TRUNCATE') is
+-- false for all three: privileges granted through another role would survive
+-- a revoke.
+-- ===========================================================================
+
+revoke insert, update, delete, truncate on public.intervention_responses from service_role;
+revoke insert, update, delete, truncate on public.intervention_journey from service_role;
+revoke insert, update, delete, truncate on public.member_availability from service_role;
