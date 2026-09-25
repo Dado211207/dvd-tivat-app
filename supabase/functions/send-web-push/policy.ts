@@ -2,7 +2,7 @@
  * The sending policy, as pure functions.
  *
  * Everything here decides WHETHER and WHAT, never HOW - no network, no Deno
- * API, no clock of its own. `index.ts` owns the I/O and calls these; the test
+ * API, no clock of its own. `deliver.ts` owns the I/O and calls these; the test
  * beside this file calls them directly.
  *
  * That split exists because the rules in here are the ones that wake somebody
@@ -75,37 +75,44 @@ export function attemptsRemain(attemptCount: number): boolean {
   return Number.isFinite(attemptCount) && attemptCount < MAX_ATTEMPTS;
 }
 
-export interface EligibilityInput {
-  readonly memberActive: unknown;
-  readonly userId: unknown;
-  readonly profileComplete: unknown;
-  readonly grantActive: unknown;
-  readonly grantRole: unknown;
-}
-
-export const OPERATIONAL_ROLES = ['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER'] as const;
-
 /**
- * The same five conditions `is_eligible_recipient()` applies in the database,
- * re-checked immediately before delivery.
+ * What to do with a queued alert, given the database's verdict on it.
  *
- * It is deliberately a duplicate. Publishing decided who was eligible at the
- * moment of publication; a queued alert can sit for minutes, and in that time
- * an account can be suspended, a member deactivated, a grant withdrawn. The
- * alert must reflect the answer NOW, not the answer then.
+ * Eligibility is re-decided immediately before delivery: publishing decided it
+ * at the moment of publication, a queued alert can sit for minutes, and in that
+ * time an account can be suspended, a member deactivated, a membership
+ * withdrawn. The alert must reflect the answer NOW.
  *
- * Written against `unknown` because every value arrives from a network read
- * that may be null or missing: anything that is not explicitly true fails.
+ * The answer comes from `push_delivery_verdict()`, not from here. It used to be
+ * five facts about the ACCOUNT checked in this file - and the account's grant
+ * carries DVD's role, so an SZS member was never alerted and a member withdrawn
+ * from SZS still was. Whether somebody may be alerted depends on the service of
+ * the call-out, which only the stored rows can say; the worker holds the service
+ * role and bypasses row-level security, so it must not work that out from
+ * anything else.
+ *
+ * Written against `unknown` because the verdict arrives from a network read:
+ * anything not explicitly recognised is left alone - not claimed, not sent.
  */
-export function stillEligible(input: EligibilityInput): boolean {
-  return (
-    typeof input.userId === 'string' &&
-    input.userId.length > 0 &&
-    input.memberActive === true &&
-    input.profileComplete === true &&
-    input.grantActive === true &&
-    (OPERATIONAL_ROLES as readonly string[]).includes(String(input.grantRole))
-  );
+export type DeliveryAction =
+  | { readonly kind: 'SEND'; readonly userId: string; readonly publishedAt: string | null }
+  | { readonly kind: 'REFUSE' }
+  | { readonly kind: 'CLOSE'; readonly reason: 'MEMBER_OPENED' | 'SERVICE_MISMATCH' }
+  | { readonly kind: 'LEAVE' };
+
+export function deliveryAction(verdict: unknown): DeliveryAction {
+  if (verdict === null || typeof verdict !== 'object') return { kind: 'LEAVE' };
+  const { verdict: answer, user_id: userId, published_at: publishedAt } = verdict as Record<string, unknown>;
+  if (answer === 'SERVICE_MISMATCH') return { kind: 'CLOSE', reason: 'SERVICE_MISMATCH' };
+  if (answer === 'OPENED') return { kind: 'CLOSE', reason: 'MEMBER_OPENED' };
+  if (answer === 'INELIGIBLE') return { kind: 'REFUSE' };
+  if (answer === 'DELIVER') {
+    // A deliverable alert names the account whose devices to use. Without one it
+    // cannot be delivered, and is refused as the old account check refused it.
+    if (typeof userId !== 'string' || userId.length === 0) return { kind: 'REFUSE' };
+    return { kind: 'SEND', userId, publishedAt: typeof publishedAt === 'string' ? publishedAt : null };
+  }
+  return { kind: 'LEAVE' };
 }
 
 /** A subscription that is still usable: not revoked, and not past its expiry. */

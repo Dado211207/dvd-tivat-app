@@ -17,13 +17,13 @@ import {
   attemptStatus,
   attemptsRemain,
   CLAIM_STALE_AFTER_MS,
+  deliveryAction,
   holdForNow,
   isRepeat,
   mapWithConcurrency,
   MAX_ATTEMPTS,
   REPEAT_AFTER_MS,
   SEND_CONCURRENCY,
-  stillEligible,
   subscriptionUsable,
 } from './policy';
 
@@ -87,42 +87,39 @@ describe('at most one repeat, and only after the member has had time', () => {
   });
 });
 
-describe('eligibility is re-checked at the moment of sending', () => {
-  const eligible = {
-    memberActive: true,
-    userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    profileComplete: true,
-    grantActive: true,
-    grantRole: 'FIREFIGHTER',
-  };
+describe('the database\'s verdict decides what happens to an alert', () => {
+  // Who is still eligible is decided by push_delivery_verdict() from the stored
+  // alert, call-out and member - db-tests/push_service.test.ts covers that
+  // against real rows. This is what the worker does with the answer.
+  const account = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const published = '2026-09-14T10:00:00.123456+00:00';
 
-  it('accepts an account that still satisfies all five conditions', () => {
-    expect(stillEligible(eligible)).toBe(true);
-    for (const role of ['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER']) {
-      expect(stillEligible({ ...eligible, grantRole: role }), role).toBe(true);
+  it('sends a deliverable alert to the account the database named', () => {
+    expect(deliveryAction({ verdict: 'DELIVER', user_id: account, published_at: published })).toEqual({
+      kind: 'SEND', userId: account, publishedAt: published,
+    });
+    expect(deliveryAction({ verdict: 'DELIVER', user_id: account, published_at: null })).toEqual({
+      kind: 'SEND', userId: account, publishedAt: null,
+    });
+  });
+
+  it('refuses an alert the member may no longer receive - or one that names nobody to send it to', () => {
+    expect(deliveryAction({ verdict: 'INELIGIBLE', user_id: null, published_at: null })).toEqual({ kind: 'REFUSE' });
+    for (const nobody of [null, undefined, '', 1, {}]) {
+      expect(deliveryAction({ verdict: 'DELIVER', user_id: nobody }), String(nobody)).toEqual({ kind: 'REFUSE' });
     }
   });
 
-  it.each([
-    ['a deactivated member', { memberActive: false }],
-    ['an unlinked member', { userId: null }],
-    ['an empty user id', { userId: '' }],
-    ['an incomplete profile', { profileComplete: false }],
-    ['a withdrawn grant', { grantActive: false }],
-    ['a citizen role', { grantRole: 'CITIZEN' }],
-    ['no role at all', { grantRole: null }],
-  ])('refuses %s', (_name, change) => {
-    expect(stillEligible({ ...eligible, ...change })).toBe(false);
+  it('closes an opened alert, and sets aside one whose rows disagree about the service', () => {
+    expect(deliveryAction({ verdict: 'OPENED' })).toEqual({ kind: 'CLOSE', reason: 'MEMBER_OPENED' });
+    expect(deliveryAction({ verdict: 'SERVICE_MISMATCH' })).toEqual({ kind: 'CLOSE', reason: 'SERVICE_MISMATCH' });
   });
 
-  it('refuses anything that is merely truthy rather than true', () => {
-    // Every one of these arrives from a network read. `1`, `'true'` and a
-    // missing key are all "we did not get an answer", and an alarm must not be
-    // sent on a value nobody confirmed.
-    for (const value of [1, 'true', 'yes', {}, undefined, null]) {
-      expect(stillEligible({ ...eligible, grantActive: value }), String(value)).toBe(false);
-      expect(stillEligible({ ...eligible, memberActive: value }), String(value)).toBe(false);
-      expect(stillEligible({ ...eligible, profileComplete: value }), String(value)).toBe(false);
+  it('leaves alone anything it does not recognise, rather than send on it', () => {
+    // No row (not a queued Web Push alert), or an answer this build does not
+    // know. Neither is a reason to wake somebody, nor to spend their one repeat.
+    for (const unknown of [null, undefined, 'DELIVER', 1, { verdict: 'deliver' }, { verdict: 'MAYBE' }, { verdict: true }, {}]) {
+      expect(deliveryAction(unknown), JSON.stringify(unknown)).toEqual({ kind: 'LEAVE' });
     }
   });
 });

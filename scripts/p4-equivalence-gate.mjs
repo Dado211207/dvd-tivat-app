@@ -26,6 +26,9 @@
  *   8    the same with every profile completed: production has two accounts
  *        that can act today, and authority that comes from a membership needs
  *        the others to be exercised
+ *   8b   the push worker's decision on every queued alert, and on a new one for
+ *        every member: the rule it applied in TypeScript before P4e against the
+ *        verdict the database gives since
  *   9    SZS-only and dual-service accounts, which production does not contain
  *        yet, added through the real commands to the migrated copy
  *   10   negative controls: break the data, a read and a command on purpose
@@ -49,6 +52,7 @@ import {
   exportDigestOf, loadExport, localAdminUrl, migrationsFromHarness, productionBoundary,
 } from './p4-gate/database.mjs';
 import { accountsOf, commandMatrix, compareMatrices, findTargets, publicColumns } from './p4-gate/commands.mjs';
+import { P4E, pushDecisions } from './p4-gate/push.mjs';
 import { runExtension, serviceVisibility, visibilityExpectation } from './p4-gate/szs.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -270,6 +274,25 @@ async function main() {
     printDifferences('command', commandsFull);
     report.completed = { profiles: completed, reads: readsFull, commands: commandsFull };
 
+    console.log('\n=== 8b. the push worker\'s decision, before and after P4e ===');
+    if (!applied.has(P4E)) {
+      console.log(`  skipped: ${P4E} is not under test`);
+    } else {
+      report.push = {};
+      for (const [label, base] of [['as production is', post], ['every profile completed', postFull]]) {
+        client = await databases.connect(base);
+        const push = await pushDecisions(client);
+        await client.end();
+        for (const [what, result] of [['every queued alert', push.existing], ['a new DVD alert for every member', push.everyMember]]) {
+          check(`${label}, ${what}: the verdict decides as the old worker did`,
+            result.differing.length === 0 && result.answered === result.compared,
+            `${result.compared} alerts (${Object.entries(result.tally).map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}), ${result.differing.length} differ`);
+          for (const d of result.differing) console.log(`       DIVERGENCE ${JSON.stringify(d)}`);
+        }
+        report.push[label] = push;
+      }
+    }
+
     console.log('\n=== 9. SZS-only and dual-service accounts ===');
     if (!applied.has(LAST_P4B)) {
       console.log(`  skipped: ${LAST_P4B} is not under test, so no SZS call-out can exist`);
@@ -382,6 +405,19 @@ async function main() {
     const commandControl = compareMatrices(preFullMatrix.results, brokenMatrix.results, EXPECTED_COMMANDS.map((r) => ({ ...r, matches: (x) => r.matches({ ...x, applied }) })));
     check('submit_response() accepting somebody it was not sent to: the command comparison reports it', commandControl.unexpected.length > 0,
       `${commandControl.unexpected.length} steps diverge`);
+
+    if (applied.has(P4E)) {
+      const breakPush = await databases.create('neg_push', postFull);
+      client = await databases.connect(breakPush);
+      const { rows: verdictFn } = await client.query(`select pg_get_functiondef('public.push_delivery_verdict(uuid)'::regprocedure) as def`);
+      const refusing = verdictFn[0].def.replace(/then 'DELIVER'/, `then 'INELIGIBLE'`);
+      if (refusing === verdictFn[0].def) throw new Unrunnable('push_delivery_verdict no longer answers DELIVER where the control expects it');
+      await client.query(refusing);
+      const brokenPush = await pushDecisions(client);
+      await client.end();
+      check('push_delivery_verdict() refusing everybody: the push comparison reports it', brokenPush.everyMember.differing.length > 0,
+        `${brokenPush.everyMember.differing.length} alerts differ`);
+    }
   } finally {
     if (keep) console.log(`\n  kept: ${databases.created.join(', ')}`);
     else await databases.dropAll();

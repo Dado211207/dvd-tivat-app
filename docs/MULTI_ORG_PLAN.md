@@ -513,8 +513,8 @@ its own without stranding the rest.
 | **P4b** — interventions ✅ **done, `202609250027`–`202609250029`** | `interventions`, `intervention_recipients`, `intervention_updates`, `intervention_acknowledgements`, **`operational_audit`** *(moved here from P4f)*; **and the read side of all ten tables below, which its commands write** *(see "What P4b's commands write")* | 8 + 13 |
 | **P4c** — responses and journey ⏳ **in review, `202609250030`** | `intervention_responses`, `intervention_response_revisions`, `intervention_journey`, `intervention_journey_history` — *reads and `set_journey_progress` service-scoped by P4b; `submit_response` now resolves its member in the call-out's service* | 7 |
 | **P4d** — attendance ⏳ **in review, `202609250031`** | `attendance_intervals`, `attendance_corrections`, `attendance_correction_requests`, `vehicle_movements`, and `attendance_totals()` — *reads and every attendance/vehicle command service-scoped by P4b; the correction-request INSERT policy now asks the interval's own service, and what each row is about is settled at insert. Crediting across services stays Q5's* | 8 |
-| **P4e** — notifications | `notification_outbox`, `notification_delivery_attempts`, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; left: the worker's service-role queries and `register_web_push_subscription` (DVD-only)* | 3 + 1 function |
-| **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, `web_push_subscriptions` | 17 |
+| **P4e** — notifications ⏳ **in review, `202609250032`** | `notification_outbox`, `notification_delivery_attempts`, **`web_push_subscriptions`'s self-read policy** *(moved here from P4f)*, **and the `send-web-push` Edge Function** — *reads already service-scoped by P4b; registration now asks any service, the worker's eligibility question is answered by `push_delivery_verdict()` in the call-out's service, the wake-up asks command in the stored call-out's service, and what an alert is about is settled at insert* | 3 + 1 function |
+| **P4f** — accounts and audit | ~~`operational_audit`~~ *(moved to P4b)*, ~~`registry_audit`~~ *(moved to P4a)*, `role_audit`, `account_status_audit`, `organization_membership_audit`, `organization_memberships`, `organizations`, `access_grants`, `profiles`, `citizen_reports`, `report_media`, `report_status_audit`, ~~`web_push_subscriptions`~~ *(its one policy moved to P4e)* | 16 |
 
 **What P4a established, and the later five inherit.** Rewriting the policies
 closes only the READ path. Every one of these tables is `enable row level
@@ -708,6 +708,60 @@ client, which bypasses RLS entirely**. It inherits nothing from P4a–d: the
 organisation filter has to be written into those queries by hand, or the worker
 keeps delivering across services after every policy above it is correct.
 
+**What P4e did.** Measured on a schema at `202609250031` and the worker at
+`58e2776`: an SZS-only member who may be called out could not register a device
+(`register_web_push_subscription` asked `current_dvd_role()`) nor read their own
+device list; the worker decided "still eligible" from the account's grant —
+DVD's role — so an SZS-only member was refused every alert, a member withdrawn
+from SZS but still in DVD was alerted for SZS, and a queued row naming another
+service's member was sent like any other; the immediate wake-up asked
+`current_dvd_role()` and never looked at the call-out, so a DVD commander could
+wake an SZS call-out's delivery and an SZS commander not their own.
+`202609250032` and the worker change:
+
+- registration asks for standing in any service, then for a member record the
+  account may be called out as **in that record's own service**
+  (`is_eligible_recipient_in`). A device belongs to the account — one device for
+  somebody serving in both, reached as whichever member each call-out was sent
+  to. The self-read policy asks `is_staff_anywhere()`. DVD's answers are the
+  same by construction and measured unchanged on the production copy;
+- the worker puts one question to the database per queued alert,
+  `push_delivery_verdict(outbox)` — service role only, caller-rights — answered
+  from the STORED alert, call-out and member: `SERVICE_MISMATCH` unless all
+  three are in one service, `OPENED`, `INELIGIBLE`, or `DELIVER` with the
+  account whose devices to use. Eligibility is `is_eligible_recipient_in`'s
+  conditions for the call-out's service, repeated because the service role has
+  no user for that function's caller bound; the tests hold the two to agree. A
+  mismatched alert is set aside (`delivery_close_reason = 'SERVICE_MISMATCH'`),
+  unsent and without an attempt;
+- the wake-up reads the call-out's service from the stored call-out with the
+  service client and asks the caller `is_command_in()` for it; an id that
+  matches nothing is refused exactly like another service's;
+- what an alert is about — call-out, member, channel, dedupe key, time queued —
+  is fixed once written (`OUTBOX_IDENTITY_FIXED`), and a delivery attempt is
+  never updated (`DELIVERY_HISTORY_APPEND_ONLY`); deleting a call-out still takes
+  both with it.
+
+The worker's queries moved from `index.ts` into `deliver.ts` so they can be run
+as written: `db-tests/push_service.test.ts` drives them as the service role
+against real rows through a PostgREST stand-in, with a push service that records
+and sends nothing — delivery, the one repeat, the claim race between two
+workers, device revocation and the locked-screen payload included. Two things
+it found that no policy test could: a row whose stored label contradicts its
+call-out cannot be updated at all (P2's trigger refuses any UPDATE of it), so the
+worker cannot set it aside — it refuses it on every run and reports it as
+failed; and P4d's own replay check ordered its hash by a constant, which a later
+migration's triggers reordered — fixed.
+
+**Not decided by P4e:** delivering one service's call-out to another service's
+member (a joint call-out) and one alert per person across services — Q1–Q5,
+P7. Until then a member of another service on a call-out is a mismatch; P7 has
+to replace that rule, not work around it. Two call-outs, one per service, are two
+alerts to the same device. The `dvd-` push topic prefix is P8's. The interface is
+P6's: the client still gates operational screens on `current_dvd_role()`, so an
+SZS-only account can register a device at the database but is not yet offered
+the screen that does it.
+
 **Blocked on:** nothing — D9 settles it.
 
 **Acceptance criteria, per PR**
@@ -776,6 +830,8 @@ answered, record attendance and close — with no reference to DVD.
    same fixture.
 4. A test asserts an SZS-only account can read its own `web_push_subscriptions`
    row and register a subscription — the specific thing that is impossible today.
+   *The database half is P4e's and done (`db-tests/push_service.test.ts`); what
+   remains here is the screen that offers it.*
 
 ---
 
@@ -1042,7 +1098,9 @@ same run grades P4c when it lands.
   commands, by the real owner.
 - **Delivery is not exercised**: the push worker runs with the service role and
   bypasses RLS (P4e's hazard above), and Realtime is not driven. Both read
-  tables whose policies this gate did compare.
+  tables whose policies this gate did compare. Since P4e the worker's DECISION
+  is compared (step 8b) — nothing is sent, and the worker's own queries are
+  exercised by `db-tests/push_service.test.ts`, not here.
 
 ### Re-running it
 
@@ -1082,3 +1140,20 @@ for the one account with attendance (the real firefighter): the pre-filled
 request is now refused, the client-shaped one still accepted. On the SZS side an
 SZS member now files a correction to their own attendance; a DVD member and the
 SZS commander still cannot file one for it.
+
+### Re-run with P4e
+
+With `202609250032` added: **passed**, with the same E1, E2 and E4 and no new
+difference — registering, re-registering and revoking a device answer every
+real account exactly as before (no production account holds operational
+standing outside DVD). A new step, 8b, compares the push worker's decision: the
+rule it applied in TypeScript before P4e, as SQL, against
+`push_delivery_verdict()`, for every queued alert on the copy and for a new DVD
+alert to every one of its members — 9 alerts as production is (2 deliverable),
+9 with profiles completed (5 deliverable), 0 differences; a verdict sabotaged to
+refuse everybody is reported. On the SZS side, an SZS-only member registers a
+device and is queued an alert (before: `OPERATIONAL_ACCESS_REQUIRED`, no alert);
+a suspended or half-registered account still cannot register; a device another
+account registered cannot be claimed; and a member of both services withdrawn
+from SZS after publication is refused their SZS alert and still sent their DVD
+one.
