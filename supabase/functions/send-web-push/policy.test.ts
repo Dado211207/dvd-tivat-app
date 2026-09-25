@@ -17,13 +17,15 @@ import {
   attemptStatus,
   attemptsRemain,
   CLAIM_STALE_AFTER_MS,
+  deliveryAction,
+  dueCutoffs,
   holdForNow,
   isRepeat,
   mapWithConcurrency,
   MAX_ATTEMPTS,
+  QUARANTINE,
   REPEAT_AFTER_MS,
   SEND_CONCURRENCY,
-  stillEligible,
   subscriptionUsable,
 } from './policy';
 
@@ -79,6 +81,29 @@ describe('at most one repeat, and only after the member has had time', () => {
     }
   });
 
+  it('gives the sweep the same answer, as two instants on the worker\'s clock', () => {
+    expect(dueCutoffs(NOW)).toEqual({ acceptedBefore: ago(REPEAT_AFTER_MS), claimedBefore: ago(CLAIM_STALE_AFTER_MS) });
+    // The database's side of it, as push_delivery_queue() asks it: the stored
+    // time, truncated to the millisecond, at or before the instant. Asked at
+    // the edge of each wait, a millisecond either side, with and without
+    // microseconds the worker's clock cannot see - never a different answer.
+    const { acceptedBefore, claimedBefore } = dueCutoffs(NOW);
+    const sweepTakes = (stored: string, before: string) => Date.parse(stored) <= Date.parse(before);
+    for (const [state, before, wait] of [
+      ['PROVIDER_ACCEPTED', acceptedBefore, REPEAT_AFTER_MS],
+      ['SENT_TO_PROVIDER', claimedBefore, CLAIM_STALE_AFTER_MS],
+    ] as const) {
+      for (const offset of [-1, 0, 1]) {
+        for (const micros of ['', '999']) {
+          const stored = ago(wait + offset).replace('Z', `${micros}Z`);
+          expect(sweepTakes(stored, before), `${state} ${stored}`).toBe(!holdForNow(state, stored, NOW));
+        }
+      }
+    }
+    // Queued and refused alerts are never held, and the sweep never holds them.
+    for (const state of ['QUEUED', 'PROVIDER_REJECTED']) expect(holdForNow(state, ago(0), NOW), state).toBe(false);
+  });
+
   it('knows which state means "this would be the repeat"', () => {
     expect(isRepeat('PROVIDER_ACCEPTED')).toBe(true);
     for (const state of ['QUEUED', 'SENT_TO_PROVIDER', 'PROVIDER_REJECTED', 'FAILED']) {
@@ -87,42 +112,49 @@ describe('at most one repeat, and only after the member has had time', () => {
   });
 });
 
-describe('eligibility is re-checked at the moment of sending', () => {
-  const eligible = {
-    memberActive: true,
-    userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    profileComplete: true,
-    grantActive: true,
-    grantRole: 'FIREFIGHTER',
-  };
+describe('the database\'s verdict decides what happens to an alert', () => {
+  // Who is still eligible is decided by push_delivery_verdict() from the stored
+  // alert, call-out and member - db-tests/push_service.test.ts covers that
+  // against real rows. This is what the worker does with the answer.
+  const account = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const published = '2026-09-14T10:00:00.123456+00:00';
 
-  it('accepts an account that still satisfies all five conditions', () => {
-    expect(stillEligible(eligible)).toBe(true);
-    for (const role of ['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER']) {
-      expect(stillEligible({ ...eligible, grantRole: role }), role).toBe(true);
+  it('sends a deliverable alert to the account the database named', () => {
+    expect(deliveryAction({ verdict: 'DELIVER', user_id: account, published_at: published })).toEqual({
+      kind: 'SEND', userId: account, publishedAt: published,
+    });
+    expect(deliveryAction({ verdict: 'DELIVER', user_id: account, published_at: null })).toEqual({
+      kind: 'SEND', userId: account, publishedAt: null,
+    });
+  });
+
+  it('refuses an alert the member may no longer receive - or one that names nobody to send it to', () => {
+    expect(deliveryAction({ verdict: 'INELIGIBLE', user_id: null, published_at: null })).toEqual({ kind: 'REFUSE' });
+    for (const nobody of [null, undefined, '', 1, {}]) {
+      expect(deliveryAction({ verdict: 'DELIVER', user_id: nobody }), String(nobody)).toEqual({ kind: 'REFUSE' });
     }
   });
 
-  it.each([
-    ['a deactivated member', { memberActive: false }],
-    ['an unlinked member', { userId: null }],
-    ['an empty user id', { userId: '' }],
-    ['an incomplete profile', { profileComplete: false }],
-    ['a withdrawn grant', { grantActive: false }],
-    ['a citizen role', { grantRole: 'CITIZEN' }],
-    ['no role at all', { grantRole: null }],
-  ])('refuses %s', (_name, change) => {
-    expect(stillEligible({ ...eligible, ...change })).toBe(false);
+  it('closes an opened alert and one whose call-out has ended, and sets aside a row no command writes', () => {
+    expect(deliveryAction({ verdict: 'OPENED' })).toEqual({ kind: 'CLOSE', reason: 'MEMBER_OPENED' });
+    expect(deliveryAction({ verdict: 'CALLOUT_NOT_OPEN' })).toEqual({ kind: 'CLOSE', reason: 'CALLOUT_NOT_OPEN' });
+    expect(deliveryAction({ verdict: 'SERVICE_MISMATCH' })).toEqual({ kind: 'CLOSE', reason: 'SERVICE_MISMATCH' });
+    expect(deliveryAction({ verdict: 'NOT_A_RECIPIENT' })).toEqual({ kind: 'CLOSE', reason: 'NOT_A_RECIPIENT' });
+    // Whatever else it carries, a closing verdict never sends.
+    expect(deliveryAction({ verdict: 'CALLOUT_NOT_OPEN', user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' })).toEqual({
+      kind: 'CLOSE', reason: 'CALLOUT_NOT_OPEN',
+    });
   });
 
-  it('refuses anything that is merely truthy rather than true', () => {
-    // Every one of these arrives from a network read. `1`, `'true'` and a
-    // missing key are all "we did not get an answer", and an alarm must not be
-    // sent on a value nobody confirmed.
-    for (const value of [1, 'true', 'yes', {}, undefined, null]) {
-      expect(stillEligible({ ...eligible, grantActive: value }), String(value)).toBe(false);
-      expect(stillEligible({ ...eligible, memberActive: value }), String(value)).toBe(false);
-      expect(stillEligible({ ...eligible, profileComplete: value }), String(value)).toBe(false);
+  it('treats only a row that should not exist as an integrity problem', () => {
+    expect([...QUARANTINE].sort()).toEqual(['NOT_A_RECIPIENT', 'SERVICE_MISMATCH']);
+  });
+
+  it('leaves alone anything it does not recognise, rather than send on it', () => {
+    // No row (not a queued Web Push alert), or an answer this build does not
+    // know. Neither is a reason to wake somebody, nor to spend their one repeat.
+    for (const unknown of [null, undefined, 'DELIVER', 1, { verdict: 'deliver' }, { verdict: 'MAYBE' }, { verdict: true }, {}]) {
+      expect(deliveryAction(unknown), JSON.stringify(unknown)).toEqual({ kind: 'LEAVE' });
     }
   });
 });

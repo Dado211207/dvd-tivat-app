@@ -311,10 +311,20 @@ describe('a single-service installation sees no change at all', () => {
     // their DVD membership down, so they hold no DVD authority and are not
     // somebody a DVD call-out may reach. Asking themselves does not change that.
     //
-    // Nothing reachable regresses: `register_web_push_subscription` already
-    // refuses this account at its own `current_dvd_role()` gate, several checks
-    // earlier, so the caller never arrives here.
+    // Nothing reachable regresses. Since P4e (202609250032)
+    // `register_web_push_subscription` no longer asks DVD: it looks for a record
+    // the caller may be called out as, in that record's own service, through
+    // `is_eligible_recipient_in` - which refuses this DVD record for exactly
+    // this reason, so this account is told ELIGIBLE_MEMBER_REQUIRED.
     expect(await eligible(cast.szsOnly.userId, cast.szsOnly.memberId)).toBe(false);
+    const refused = await expectRefused(db, cast.szsOnly.userId, (client) =>
+      client.query('select public.register_web_push_subscription($1, $2, $3)', [
+        'https://push.example.test/subscriptions/szs-only',
+        'A'.repeat(65),
+        'B'.repeat(24),
+      ]),
+    );
+    expect(refused).toContain('ELIGIBLE_MEMBER_REQUIRED');
   });
 });
 

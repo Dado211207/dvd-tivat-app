@@ -20,8 +20,47 @@ Also set:
 
 Deploy `send-web-push` with the repository's `supabase/config.toml`. JWT
 verification is disabled at the gateway because a scheduled invocation has no
-user JWT; the function itself requires either a valid signed-in command role or
-the server-only `x-push-worker-secret` header.
+user JWT; the function itself requires either the server-only
+`x-push-worker-secret` header or a signed-in account with command in the
+service of the call-out the request names, read from the stored call-out.
+
+Deploy it only after migration `202609250032` (or later) is applied: the worker
+sweeps `push_delivery_queue()` and asks `push_delivery_verdict()` about every
+alert. Without them its first read fails, it answers 503 and sends nothing.
+
+## Where the service boundary is
+
+The worker holds the service-role key, which bypasses row-level security. No
+policy bounds what it reads or sends, so:
+
+- whether an alert may still be sent is answered by `push_delivery_verdict()`
+  from the stored alert, call-out, recipient list and member, in the service of
+  the call-out - never from anything a request carries;
+- an alert is sent only to somebody on the call-out's recipient list, and only
+  while the call-out is `PUBLISHED`, `ASSEMBLING`, `DEPLOYED` or `CONTAINED`.
+  Closing or cancelling a call-out leaves its queued alerts in place; the worker
+  sets them aside unsent (`CALLOUT_NOT_OPEN`), the repeat included;
+- an alert whose call-out or member is not in its service, or whose member was
+  never sent the call-out, is set aside unsent (`SERVICE_MISMATCH`,
+  `NOT_A_RECIPIENT`) - no command writes either;
+- the sweep takes only alerts that are due by the worker's own clock - queued,
+  refused, accepted and past the 90-second repeat wait, or claimed and past the
+  30-second stale-claim wait - before its 50-alert limit, so alerts that are
+  still waiting cannot keep a newly queued one out of the sweep. The worker
+  passes both instants to `push_delivery_queue()`; the database never uses a
+  clock of its own for this;
+- an alert whose stored service contradicts its call-out's cannot be written by
+  anybody but a superuser, so `push_delivery_queue()` never hands it out and it
+  cannot hold up the alerts behind it. The worker reports how many there are on
+  every run - `mislabelled` in its reply, and a `PUSH_ALERTS_MISLABELLED`
+  warning with the count in the function's log - and leaves them untouched for
+  whoever investigates;
+- a device belongs to the account, so somebody serving in two services has one
+  device, reached as whichever member each call-out was sent to.
+
+`deliver.ts` holds the queries and the wake-up check; `index.ts` only builds the
+clients. `db-tests/push_service.test.ts` runs `deliver.ts` as the service role
+against the test database, with a push service that records and sends nothing.
 
 ## Public build configuration
 

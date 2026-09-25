@@ -11,10 +11,17 @@
  */
 
 import { DVD, SZS } from './database.mjs';
+import { P4E } from './push.mjs';
 
 /** The migration that deliberately changes an outcome, and what it becomes. */
 export const P4C = 'supabase/migrations/202609250030_response_service.sql';
 export const P4D = 'supabase/migrations/202609250031_attendance_service.sql';
+
+/** Somebody in both services who is withdrawn from SZS once both call-outs are out. */
+const SYNTHETIC = ['szsCommander', 'szsFirefighter', 'dual', 'dualWithdrawn', 'szsSuspended', 'szsIncomplete'];
+
+const register = `select public.register_web_push_subscription($1, $2, 'gate-auth-secret-1', null, 'Gate agent')`;
+const device = (who) => () => [`https://push.example.invalid/gate/${who}`, 'B'.repeat(65)];
 
 /**
  * [label, who, sql, params(ctx), expected, { after: [[migration, expected]] }]
@@ -25,23 +32,36 @@ function steps() {
   return [
     // accounts: sign-up exactly as the auth trigger sees it, then the person's
     // own profile completion, then the owner's grants
-    ...['szsCommander', 'szsFirefighter', 'dual', 'szsSuspended'].map((who) =>
+    ...['szsCommander', 'szsFirefighter', 'dual', 'dualWithdrawn', 'szsSuspended'].map((who) =>
       [`${who} completes their profile`, who, `select public.complete_own_profile($1, '+38267000999', date '1990-01-01')`, () => [`${who} Test`], 'OK']),
     // SZS-only accounts hold CITIZEN on the grant: an operational grant role
     // would mirror into an active DVD membership (sync_dvd_membership_from_grant).
     ...['szsCommander', 'szsFirefighter', 'szsSuspended', 'szsIncomplete'].map((who) =>
       [`owner grants ${who} CITIZEN`, 'owner', `select public.owner_set_role($1, 'CITIZEN')`, (c) => [c.users[who]], 'OK']),
-    ['owner grants dual FIREFIGHTER (their DVD service)', 'owner', `select public.owner_set_role($1, 'FIREFIGHTER')`, (c) => [c.users.dual], 'OK'],
-    ...[['szsCommander', 'COMMANDER'], ['szsFirefighter', 'FIREFIGHTER'], ['dual', 'COMMANDER'], ['szsSuspended', 'FIREFIGHTER'], ['szsIncomplete', 'FIREFIGHTER']].map(([who, role]) =>
+    ...['dual', 'dualWithdrawn'].map((who) =>
+      [`owner grants ${who} FIREFIGHTER (their DVD service)`, 'owner', `select public.owner_set_role($1, 'FIREFIGHTER')`, (c) => [c.users[who]], 'OK']),
+    ...[['szsCommander', 'COMMANDER'], ['szsFirefighter', 'FIREFIGHTER'], ['dual', 'COMMANDER'], ['dualWithdrawn', 'FIREFIGHTER'], ['szsSuspended', 'FIREFIGHTER'], ['szsIncomplete', 'FIREFIGHTER']].map(([who, role]) =>
       [`owner makes ${who} SZS ${role}`, 'owner', `select public.owner_set_organization_membership($1, 'SZS', $2)`, (c) => [c.users[who], role], 'OK']),
     // the SZS registry, built by the owner through the service-aware creates
-    ...['szsCommander', 'szsFirefighter', 'dual', 'szsSuspended', 'szsIncomplete'].flatMap((who) => [
+    ...['szsCommander', 'szsFirefighter', 'dual', 'dualWithdrawn', 'szsSuspended', 'szsIncomplete'].flatMap((who) => [
       [`owner creates the SZS member for ${who}`, 'owner', `select public.admin_create_member_in($1, $2, array['spasilac'])`, () => [SZS, `SZS ${who}`], 'OK', { save: `${who}Szs` }],
       [`owner links the SZS member to ${who}`, 'owner', `select public.admin_link_member_account($1, $2)`, (c) => [c.saved[`${who}Szs`], c.users[who]], 'OK'],
     ]),
-    ['owner creates the DVD member for dual', 'owner', `select public.admin_create_member('DVD dual', array['vozac'])`, () => [], 'OK', { save: 'dualDvd' }],
-    ['owner links the DVD member to dual', 'owner', `select public.admin_link_member_account($1, $2)`, (c) => [c.saved.dualDvd, c.users.dual], 'OK'],
+    ...['dual', 'dualWithdrawn'].flatMap((who) => [
+      [`owner creates the DVD member for ${who}`, 'owner', `select public.admin_create_member($1, array['vozac'])`, () => [`DVD ${who}`], 'OK', { save: `${who}Dvd` }],
+      [`owner links the DVD member to ${who}`, 'owner', `select public.admin_link_member_account($1, $2)`, (c) => [c.saved[`${who}Dvd`], c.users[who]], 'OK'],
+    ]),
     ['owner suspends szsSuspended', 'owner', `select public.owner_set_account_active($1, false, 'Gate')`, (c) => [c.users.szsSuspended], 'OK'],
+
+    // devices: one per account, whichever service it serves in (P4e)
+    ['szsFirefighter registers a device', 'szsFirefighter', register, device('szsFirefighter'), 'ERR OPERATIONAL_ACCESS_REQUIRED', { after: [[P4E, 'OK']] }],
+    ['szsCommander registers a device', 'szsCommander', register, device('szsCommander'), 'ERR OPERATIONAL_ACCESS_REQUIRED', { after: [[P4E, 'OK']] }],
+    ['dual registers one device for both services', 'dual', register, device('dual'), 'OK'],
+    ['dualWithdrawn registers one device for both services', 'dualWithdrawn', register, device('dualWithdrawn'), 'OK'],
+    ['szsSuspended registers a device', 'szsSuspended', register, device('szsSuspended'), 'ERR OPERATIONAL_ACCESS_REQUIRED'],
+    ['szsIncomplete registers a device', 'szsIncomplete', register, device('szsIncomplete'), 'ERR OPERATIONAL_ACCESS_REQUIRED'],
+    ['szsFirefighter claims the device dual registered', 'szsFirefighter', register, device('dual'), 'ERR OPERATIONAL_ACCESS_REQUIRED',
+      { after: [[P4E, 'ERR PUSH_SUBSCRIPTION_OWNED_BY_ANOTHER_ACCOUNT']] }],
     ['owner creates an SZS group', 'owner', `select public.admin_create_group_in($1, 'SZS smjena')`, () => [SZS], 'OK', { save: 'szsGroup' }],
     ['owner fills the SZS group', 'owner', `select public.admin_set_group_members($1, $2)`, (c) => [c.saved.szsGroup, [c.saved.szsCommanderSzs, c.saved.szsFirefighterSzs]], 'OK'],
     ['owner puts a DVD member in the SZS group', 'owner', `select public.admin_set_group_members($1, $2)`, (c) => [c.saved.szsGroup, [c.saved.szsCommanderSzs, c.dvdMember]], 'ERR ORGANIZATION_MISMATCH'],
@@ -53,7 +73,7 @@ function steps() {
     ['szsCommander drafts through the DVD wrapper', 'szsCommander', `select public.create_intervention_draft('POZAR', 'SZS u DVD', 'upute', 'mjesto', 'szs-gate-dvd')`, () => [], 'ERR COMMAND_REQUIRED'],
     // E3: the deliberate prohibition on mixing services in one call-out.
     ['szsCommander publishes to an SZS and a DVD member (MIXED)', 'szsCommander', `select public.publish_intervention($1, $2)`, (c) => [c.saved.szsCallout, [c.saved.szsFirefighterSzs, c.dvdMember]], 'ERR ORGANIZATION_MISMATCH'],
-    ['szsCommander publishes to SZS members', 'szsCommander', `select public.publish_intervention($1, $2)`, (c) => [c.saved.szsCallout, [c.saved.szsFirefighterSzs, c.saved.dualSzs]], 'OK'],
+    ['szsCommander publishes to SZS members', 'szsCommander', `select public.publish_intervention($1, $2)`, (c) => [c.saved.szsCallout, [c.saved.szsFirefighterSzs, c.saved.dualSzs, c.saved.dualWithdrawnSzs]], 'OK'],
     ['szsFirefighter acknowledges', 'szsFirefighter', `select public.acknowledge_intervention($1)`, (c) => [c.saved.szsCallout], 'OK'],
 
     // answering it: the functional gap P4c closes
@@ -86,12 +106,24 @@ function steps() {
     // the owner's own DVD call-out, offered to both services and then to DVD
     ['owner drafts a DVD call-out', 'owner', `select public.create_intervention_draft('POZAR', 'DVD poziv', 'upute', 'mjesto', 'dvd-gate-1')`, () => [], 'OK', { save: 'dvdCallout' }],
     ['owner publishes it to a DVD and an SZS member (MIXED)', 'owner', `select public.publish_intervention($1, $2)`, (c) => [c.saved.dvdCallout, [c.dvdMember, c.saved.szsFirefighterSzs]], 'ERR ORGANIZATION_MISMATCH'],
-    ['owner publishes it to DVD members, dual included', 'owner', `select public.publish_intervention($1, $2)`, (c) => [c.saved.dvdCallout, [c.dvdMember, c.saved.dualDvd]], 'OK'],
+    ['owner publishes it to DVD members, dual included', 'owner', `select public.publish_intervention($1, $2)`, (c) => [c.saved.dvdCallout, [c.dvdMember, c.saved.dualDvd, c.saved.dualWithdrawnDvd]], 'OK'],
     ['dual answers the DVD call-out', 'dual', `select public.submit_response($1, 'DOLAZIM', null, false)`, (c) => [c.saved.dvdCallout], 'OK'],
     ['the DVD firefighter answers the DVD call-out', 'dvdFirefighter', `select public.submit_response($1, 'DOLAZIM_KASNIJE', 15, false)`, (c) => [c.saved.dvdCallout], 'OK'],
     ['szsFirefighter answers the DVD call-out', 'szsFirefighter', `select public.submit_response($1, 'DOLAZIM', null, true)`, (c) => [c.saved.dvdCallout], 'ERR MEMBER_RECORD_REQUIRED'],
+
+    // Both alerts are queued; only now does this person stop serving in SZS.
+    // Their SZS alert must not be sent on the strength of their DVD role.
+    ['owner withdraws dualWithdrawn from SZS', 'owner', `select public.owner_set_organization_membership($1, 'SZS', 'NONE')`, (c) => [c.users.dualWithdrawn], 'OK'],
   ];
 }
+
+/** Web Push alerts on the two gate call-outs, labelled by the synthetic member they are for. */
+const QUEUED_ALERTS = `
+  from public.notification_outbox o join public.organizations org on org.id = o.organization_id
+ where o.channel = 'WEB_PUSH' and o.intervention_id in ($1, $2)`;
+const ALERT_LABEL = `case o.member_id when $3 then 'szsFirefighterSzs' when $4 then 'dualSzs' when $5 then 'dualWithdrawnSzs'
+                                      when $6 then 'dualDvd' when $7 then 'dualWithdrawnDvd' end || '@' || org.code`;
+const alertMembers = (c) => [c.saved.szsFirefighterSzs, c.saved.dualSzs, c.saved.dualWithdrawnSzs, c.saved.dualDvd, c.saved.dualWithdrawnDvd];
 
 /**
  * What must be true of the stored rows afterwards: who each answer was written
@@ -125,6 +157,24 @@ function postconditions() {
           where r.intervention_id = $1) x`,
       (c) => [c.dvdMember, c.saved.dualDvd],
       'dualDvd:DOLAZIM:DVD,dvdMember:DOLAZIM_KASNIJE:DVD'],
+    // Who was queued a Web Push alert: everybody sent a call-out who holds a
+    // device - which an SZS-only member could not, before P4e.
+    ['Web Push alerts queued for the synthetic members', (c) => [c.saved.szsCallout, c.saved.dvdCallout],
+      `select coalesce(string_agg(line, ',' order by line), '') from (select ${ALERT_LABEL} as line ${QUEUED_ALERTS}) x where line is not null`,
+      alertMembers,
+      'dualDvd@DVD,dualSzs@SZS,dualWithdrawnDvd@DVD,dualWithdrawnSzs@SZS',
+      { after: [[P4E, 'dualDvd@DVD,dualSzs@SZS,dualWithdrawnDvd@DVD,dualWithdrawnSzs@SZS,szsFirefighterSzs@SZS']] }],
+    // What the push worker is told for each, asked in the service of its call-out:
+    // the SZS firefighter has opened theirs; the member withdrawn from SZS is
+    // refused their SZS alert and still sent their DVD one.
+    ['the push worker\'s verdict on each', (c) => [c.saved.szsCallout, c.saved.dvdCallout],
+      `select coalesce(string_agg(line, ',' order by line), '') from (
+         select ${ALERT_LABEL} || ':' || v.verdict as line
+         ${QUEUED_ALERTS.replace('from public.notification_outbox o', 'from public.notification_outbox o cross join lateral public.push_delivery_verdict(o.id) v')}) x
+        where line is not null`,
+      alertMembers,
+      'dualDvd@DVD:DELIVER,dualSzs@SZS:DELIVER,dualWithdrawnDvd@DVD:DELIVER,dualWithdrawnSzs@SZS:INELIGIBLE,szsFirefighterSzs@SZS:OPENED',
+      { requires: P4E }],
   ];
 }
 
@@ -141,7 +191,7 @@ export const expectedFor = (spec, base, applied) => {
  */
 export async function runExtension(client, { applied, owner, dvdFirefighter, dvdMember, dvdVehicle }) {
   const users = { owner, dvdFirefighter };
-  for (const who of ['szsCommander', 'szsFirefighter', 'dual', 'szsSuspended', 'szsIncomplete']) {
+  for (const who of SYNTHETIC) {
     const { rows } = await client.query(`insert into auth.users(email, email_confirmed_at) values ($1, now()) returning id::text`, [`${who.toLowerCase()}@example.invalid`]);
     users[who] = rows[0].id;
   }
@@ -168,6 +218,10 @@ export async function runExtension(client, { applied, owner, dvdFirefighter, dvd
     report.push({ label, expected, actual });
   }
   for (const [label, key, statement, params, base, spec] of postconditions()) {
+    if (spec?.requires && !applied.has(spec.requires)) {
+      report.push({ label, expected: 'n/a', actual: 'n/a' });
+      continue;
+    }
     const expected = expectedFor(spec, base, applied);
     const { rows } = await client.query(statement, [...key(ctx), ...params(ctx)]);
     report.push({ label, expected, actual: Object.values(rows[0])[0] });

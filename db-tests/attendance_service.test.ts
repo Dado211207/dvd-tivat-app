@@ -756,13 +756,19 @@ describe('after P4d: attendance is asked about, and stays, in the service that o
     });
 
     it('is a no-op to apply twice', async () => {
+      // Each list ordered by its own text: inside an aggregate `order by 1` is
+      // the constant 1, which left the order to the catalogue - and re-creating
+      // a trigger moves it to the end once a later migration has added any.
       const shape = async () =>
         (await db.query<{ h: string }>(
-          `select md5(coalesce((select string_agg(tablename || policyname || coalesce(qual, '') || coalesce(with_check, ''), '|' order by 1)
-                                  from pg_policies where schemaname = 'public'), '')
-                      || coalesce((select string_agg(tgname || pg_get_triggerdef(oid), '|' order by 1) from pg_trigger where not tgisinternal), '')
-                      || coalesce((select string_agg(proname || md5(prosrc), '|' order by 1) from pg_proc
-                                    where pronamespace = 'public'::regnamespace), '')) as h`,
+          `select md5(coalesce((select string_agg(x, '|' order by x) from (
+                                  select tablename || policyname || coalesce(qual, '') || coalesce(with_check, '') as x
+                                    from pg_policies where schemaname = 'public') p), '')
+                      || coalesce((select string_agg(x, '|' order by x) from (
+                                    select tgname || pg_get_triggerdef(oid) as x from pg_trigger where not tgisinternal) t), '')
+                      || coalesce((select string_agg(x, '|' order by x) from (
+                                    select proname || md5(prosrc) as x from pg_proc
+                                     where pronamespace = 'public'::regnamespace) f), '')) as h`,
         )).rows[0]!.h;
       const before = await shape();
       await isolated(async () => {
