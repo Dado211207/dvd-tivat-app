@@ -15,7 +15,7 @@
 
 import type { AccountRole, AccountStatus } from '@/access/policy';
 import { activeText } from '@/i18n/useText';
-import { accountBackend, MULTI_SERVICE_ADMIN_AVAILABLE } from './supabaseClient';
+import { accountBackend } from './supabaseClient';
 
 export interface DirectoryAccount {
   readonly userId: string;
@@ -290,9 +290,16 @@ export async function loadOrganizationMembershipAudit(
  * That matters for the owner account, whose table policy can otherwise read the
  * whole directory. This call can therefore be reused by every account without
  * turning the personal account card into an owner-only data endpoint.
+ *
+ * Not gated by the multi-service flag. Since P5 (202609250038) a DVD role is a
+ * service membership, so a person's own DVD role is one of these rows; gating the
+ * read on the flag showed a DVD firefighter "no service" whenever the flag was
+ * off, even though the server gives them the FIREFIGHTER role. The flag gates
+ * whether SZS can be *assigned* (the write controls in AccountsView), not the
+ * truthful read of a caller's own memberships, which `current_organization_memberships()`
+ * already restricts to `auth.uid()`.
  */
 export async function loadOwnOrganizationMemberships(): Promise<OwnOrganizationMembership[]> {
-  if (!MULTI_SERVICE_ADMIN_AVAILABLE) return [];
   const { data, error } = await accountBackend().rpc('current_organization_memberships');
   if (error) throw error;
 

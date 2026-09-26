@@ -18,7 +18,6 @@ import {
   type OwnOrganizationMembership,
 } from '@/auth/directory';
 import {
-  MULTI_SERVICE_ADMIN_AVAILABLE,
   PASSWORD_RESET_AVAILABLE,
   completeOwnProfile,
   registerWithEmail,
@@ -50,9 +49,14 @@ export function AccountAccessSetup() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  // `null` = still reading, `undefined` = the read failed (fail closed, shown as
+  // unavailable), `[]` = read succeeded with no membership. Starts as "reading"
+  // and the effect below resolves it from the server for every signed-in account,
+  // regardless of the multi-service flag - a person's own DVD/SZS role is a
+  // truthful read, not a service-assignment control.
   const [ownMemberships, setOwnMemberships] = useState<
     readonly OwnOrganizationMembership[] | null | undefined
-  >(MULTI_SERVICE_ADMIN_AVAILABLE ? null : []);
+  >(null);
   /**
    * How many times in a row the server could not be reached.
    *
@@ -68,7 +72,7 @@ export function AccountAccessSetup() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!MULTI_SERVICE_ADMIN_AVAILABLE || signedInUserId === null) {
+    if (signedInUserId === null) {
       setOwnMemberships([]);
       return () => {
         cancelled = true;
