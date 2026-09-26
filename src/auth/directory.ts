@@ -85,6 +85,32 @@ export function statusOf(account: DirectoryAccount): AccountStatus {
   return 'ACTIVE';
 }
 
+/**
+ * The role labels an account should be found by in the directory search.
+ *
+ * Since P5 (202609250038) `access_grants.role` is an inert legacy value for the
+ * operational roles: a firefighter who has been stood down can still carry
+ * FIREFIGHTER in the grant while holding no active DVD membership. Searching for
+ * an operational role must therefore follow the active service memberships, not
+ * the grant, or the search would name people who no longer serve. The grant
+ * contributes only the roles P5 keeps authoritative there - OWNER (still read by
+ * `is_installation_owner()`), and the CITIZEN/PENDING baseline.
+ */
+export function roleSearchTerms(
+  account: DirectoryAccount,
+  roleLabel: Record<AccountRole, string>,
+): string[] {
+  const terms: string[] = [];
+  if (!MEMBERSHIP_ROLES.includes(account.role as MembershipRole)) {
+    terms.push(roleLabel[account.role]);
+  }
+  for (const code of ORGANIZATION_CODES) {
+    const role = account.memberships[code];
+    if (role) terms.push(roleLabel[role]);
+  }
+  return terms;
+}
+
 interface ProfileRow {
   user_id: string;
   email: string;
@@ -212,7 +238,14 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
 export async function loadOrganizationMembershipAudit(
   limit = 40,
 ): Promise<OrganizationMembershipAuditEntry[]> {
-  if (!MULTI_SERVICE_ADMIN_AVAILABLE) return [];
+  // Not gated by the multi-service flag. Since P5 (202609250038) a DVD role is a
+  // service membership, so a DVD assignment made on the Accounts screen is
+  // recorded in `organization_membership_audit`, not `role_audit`. Gating this
+  // read on the flag hid the owner's own DVD role changes from the audit list
+  // whenever the flag was off - a client-only blind spot, since the server's
+  // `membership_audit_owner_read` policy lets the owner read the table
+  // regardless. The flag still gates whether SZS can be *assigned* (the write
+  // control in AccountsView); it never governed what the owner may see here.
   const backend = accountBackend();
   const [audit, organizations] = await Promise.all([
     backend

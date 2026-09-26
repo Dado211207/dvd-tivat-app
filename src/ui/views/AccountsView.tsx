@@ -20,6 +20,7 @@ import {
   loadOrganizationMembershipAudit,
   loadRoleAudit,
   loadStatusAudit,
+  roleSearchTerms,
   setAccountActive,
   setOrganizationMembership,
   statusOf,
@@ -119,9 +120,10 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle || accounts === null) return accounts ?? [];
     return accounts.filter((account) =>
-      `${account.fullName ?? ''} ${account.email} ${account.phone ?? ''} ${account.dateOfBirth ?? ''} ${t.accounts.roleLabel[account.role]} ${
-        account.memberships.DVD ? t.accounts.roleLabel[account.memberships.DVD] : ''
-      } ${account.memberships.SZS ? t.accounts.roleLabel[account.memberships.SZS] : ''} ${
+      `${account.fullName ?? ''} ${account.email} ${account.phone ?? ''} ${account.dateOfBirth ?? ''} ${roleSearchTerms(
+        account,
+        t.accounts.roleLabel,
+      ).join(' ')} ${
         t.accounts.statusLabel[statusOf(account)]
       } ${t.accounts.organizationLabel.DVD} ${t.accounts.organizationLabel.SZS} DVD SZS`
         .toLocaleLowerCase()
