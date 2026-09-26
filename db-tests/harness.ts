@@ -64,6 +64,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609250034_history_retention.sql',
   'supabase/migrations/202609250035_current_row_identity.sql',
   'supabase/migrations/202609250036_current_row_grants.sql',
+  'supabase/migrations/202609250037_service_role_trigger_grants.sql',
   'supabase/migrations/202609250038_retire_dvd_role_mirror.sql',
 ];
 
