@@ -109,8 +109,15 @@ describe('neither restore file changes anything on a replay', () => {
     expect(after.hash, 'and rewrites nothing').toBe(before.hash);
   });
 
-  it('020 is a no-op applied on top of the whole list', async () => {
-    await applyAll(db, MIGRATIONS);
+  it('020 is a no-op applied where it sits', async () => {
+    // This used to be asserted on top of the WHOLE list, which held only while
+    // nothing after 020 changed a function 020 restores. 202609250038 (P5)
+    // rewrites `owner_set_role` and `owner_set_organization_membership` to retire
+    // the DVD role mirror, so re-applying 020 at the end would now undo P5 - the
+    // same situation the 021 block below already handles for `intervention_audit`.
+    // So 020 is asserted where it sits, and the block below asserts what it would
+    // undo later.
+    await applyAll(db, MIGRATIONS.slice(0, MIGRATIONS.indexOf(RESTORE_020) + 1));
     const before = await functionText(db);
 
     await db.query(sql(RESTORE_020));
@@ -118,6 +125,18 @@ describe('neither restore file changes anything on a replay', () => {
 
     expect(after.count).toBe(before.count);
     expect(after.hash).toBe(before.hash);
+  });
+
+  it('what 020 would undo if it ran after P5: the mirror comes back', async () => {
+    // The counterpart to the "where it sits" assertion: 020 re-creates the
+    // pre-P5 text of the two owner functions, so replaying it on the full list
+    // resurrects the compatibility-grant mirror block. This is why the migration
+    // order matters and why 020 is not re-run at the end.
+    await applyAll(db, MIGRATIONS);
+    const beforeReplay = await functionText(db);
+    await db.query(sql(RESTORE_020));
+    const afterReplay = await functionText(db);
+    expect(afterReplay.hash, '020 out of order rewrites the P5 functions').not.toBe(beforeReplay.hash);
   });
 
   it('021 is a no-op applied where it sits', async () => {

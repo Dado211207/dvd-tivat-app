@@ -77,7 +77,7 @@ describe('an account the server gives no DVD role', () => {
   it('signs a citizen account in without operational authority', async () => {
     const access = await load({ fetchRole: async () => null });
     expect(hasOperationalAccess(access)).toBe(false);
-    expect(accessObstacle(access)).toBe('NO_DVD_ROLE');
+    expect(accessObstacle(access)).toBe('NO_SERVICE_ROLE');
   });
 
   it('tells a SUSPENDED account it is suspended, not merely without a DVD role', async () => {
@@ -105,7 +105,7 @@ describe('an account the server gives no DVD role', () => {
     // treated as authority. Failing towards "no access" is the safe direction.
     const access = await load({ fetchRole: async () => 'SUPERUSER' });
     expect(hasOperationalAccess(access)).toBe(false);
-    expect(accessObstacle(access)).toBe('NO_DVD_ROLE');
+    expect(accessObstacle(access)).toBe('NO_SERVICE_ROLE');
   });
 
   it('still refuses a stale role when the account has since been suspended', async () => {

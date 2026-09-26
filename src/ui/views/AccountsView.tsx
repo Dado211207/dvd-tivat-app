@@ -13,7 +13,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AccountRole } from '@/access/policy';
 import { useAccess } from '@/auth/AccessProvider';
 import {
   MEMBERSHIP_ROLES,
@@ -22,7 +21,6 @@ import {
   loadRoleAudit,
   loadStatusAudit,
   setAccountActive,
-  setAccountRole,
   setOrganizationMembership,
   statusOf,
   type DirectoryAccount,
@@ -146,11 +144,14 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     setBusyUserId(account.userId);
     setError('');
     try {
-      const outcome = MULTI_SERVICE_ADMIN_AVAILABLE
-        ? await setOrganizationMembership(account.userId, organization, nextRole)
-        : organization === 'DVD'
-          ? await setAccountRole(account.userId, (nextRole ?? 'CITIZEN') as AccountRole)
-          : { ok: false, message: t.accounts.multiServicePending };
+      // Since P5 (202609250038) an operational role is a service membership, so
+      // DVD is assigned through owner_set_organization_membership like SZS - the
+      // old owner_set_role/grant path is gone. SZS assignment stays gated by the
+      // flag (that control is disabled) until P6 opens its interface.
+      const outcome =
+        organization === 'SZS' && !MULTI_SERVICE_ADMIN_AVAILABLE
+          ? { ok: false, message: t.accounts.multiServicePending }
+          : await setOrganizationMembership(account.userId, organization, nextRole);
       if (!outcome.ok) {
         const message = outcome.message ?? t.accounts.changeFailed;
         setError(message);

@@ -176,9 +176,12 @@ describe('role elevation is refused', () => {
   });
 
   it('refuses the owner changing their own role or access', async () => {
+    // A baseline role, so the self-guard is what refuses: post-P5 owner_set_role
+    // is baseline-only and would reject an operational role (ADMIN) earlier, on
+    // role validation, before ever reaching the self-check under test here.
     expect(
       await expectRefused(db, cast.owner!.userId, (client) =>
-        client.query('select public.owner_set_role($1, $2)', [cast.owner!.userId, 'ADMIN']),
+        client.query('select public.owner_set_role($1, $2)', [cast.owner!.userId, 'CITIZEN']),
       ),
     ).toContain('CANNOT_CHANGE_OWN_ROLE');
 
@@ -205,8 +208,13 @@ describe('role elevation is refused', () => {
     const target = await createAccount(db, `promote-${Date.now()}@example.invalid`);
     await completeProfile(db, target.userId, 'Ime Kandidat');
 
+    // Post-P5 (202609250038) owner_set_role is baseline-only: the assignable
+    // grant role is PENDING or CITIZEN, and an operational role is assigned
+    // through owner_set_organization_membership (audited in
+    // organization_membership_audit; see multi_service_accounts.test.ts). This
+    // still proves owner_set_role writes the grant and it is audited.
     await asUserCommitted(db, cast.owner!.userId, (client) =>
-      client.query('select public.owner_set_role($1, $2)', [target.userId, 'FIREFIGHTER']),
+      client.query('select public.owner_set_role($1, $2)', [target.userId, 'PENDING']),
     );
 
     const { rows } = await db.query(
@@ -235,7 +243,7 @@ describe('role elevation is refused', () => {
     });
     expect(rows[1], 'and the assignment the owner made').toMatchObject({
       previous_role: 'CITIZEN',
-      next_role: 'FIREFIGHTER',
+      next_role: 'PENDING',
       changed_by: cast.owner!.userId,
     });
   });

@@ -155,7 +155,12 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
     string,
     Partial<Record<OrganizationCode, MembershipRole>>
   >();
-  if (MULTI_SERVICE_ADMIN_AVAILABLE) {
+  // Since P5 (202609250038) membership is the only statement of operational
+  // authority, so the directory reads it directly for every service - the DVD
+  // column no longer derives from the compatibility grant. This does not depend
+  // on the multi-service flag; the flag gates only whether SZS can be *assigned*
+  // (the write control in AccountsView), which stays P6's to open.
+  {
     const [organizations, memberships] = await Promise.all([
       backend.from('organizations').select('id, code'),
       backend
@@ -177,15 +182,6 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
       const current = membershipsByUser.get(membership.user_id) ?? {};
       current[code] = membership.role;
       membershipsByUser.set(membership.user_id, current);
-    }
-  } else {
-    // Safe rollout fallback: before migration 013 is enabled, preserve the
-    // existing DVD controls and derive their display from the compatibility
-    // grant without touching a table that does not exist yet.
-    for (const grant of (grants.data ?? []) as GrantRow[]) {
-      if (MEMBERSHIP_ROLES.includes(grant.role as MembershipRole)) {
-        membershipsByUser.set(grant.user_id, { DVD: grant.role as MembershipRole });
-      }
     }
   }
 
@@ -364,20 +360,10 @@ export async function setOrganizationMembership(
   }
 }
 
-export async function setAccountRole(
-  targetUserId: string,
-  nextRole: AccountRole,
-): Promise<CommandOutcome> {
-  try {
-    const { error } = await accountBackend().rpc('owner_set_role', {
-      target_user: targetUserId,
-      requested_role: nextRole,
-    });
-    return error ? { ok: false, message: explainCommandError(error.message) } : { ok: true };
-  } catch (error) {
-    return { ok: false, message: explainCommandError(String(error)) };
-  }
-}
+// setAccountRole (owner_set_role) is no longer called from the client: since P5
+// (202609250038) an operational role is a service membership, assigned through
+// setOrganizationMembership, and owner_set_role is a baseline-only server command
+// with no interface. It is left in the database, not wrapped here.
 
 export async function setAccountActive(
   targetUserId: string,

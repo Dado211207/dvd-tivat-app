@@ -499,7 +499,7 @@ export function AccountAccessSetup() {
         </>
       ) : null}
 
-      {obstacle === 'NO_DVD_ROLE' ? (
+      {obstacle === 'NO_SERVICE_ROLE' ? (
         <>
           {ownMemberships === null ? (
             <p role="status">{t.accountAccess.checkingServices}</p>

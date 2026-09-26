@@ -64,6 +64,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609250034_history_retention.sql',
   'supabase/migrations/202609250035_current_row_identity.sql',
   'supabase/migrations/202609250036_current_row_grants.sql',
+  'supabase/migrations/202609250038_retire_dvd_role_mirror.sql',
 ];
 
 export const DATABASE_URL =
@@ -133,7 +134,18 @@ export async function completeProfile(
   );
 }
 
-/** Assigns a role directly, bypassing the owner check. Setup only, never a test subject. */
+/**
+ * Assigns a role directly, bypassing the owner check. Setup only, never a test
+ * subject.
+ *
+ * Until 202609250038 a trigger (`sync_dvd_membership_after_grant`) turned this
+ * grant write into a DVD `organization_memberships` row, and authority resolves
+ * from that membership. 038 retires the mirror, so the helper now writes the
+ * membership itself - the same row, with the same audit side-effects the trigger
+ * produced - so a fixture that grants an operational role still establishes the
+ * authority (and audit history) it always did. OWNER keeps its grant and no
+ * membership, exactly as the mirror left it.
+ */
 export async function grantRole(
   client: Client,
   userId: string,
@@ -145,6 +157,23 @@ export async function grantRole(
     role,
     active,
   ]);
+  const DVD = '00000000-0000-4000-8000-000000000001';
+  if (role === 'OWNER') return;
+  if (role === 'ADMIN' || role === 'COMMANDER' || role === 'FIREFIGHTER') {
+    await client.query(
+      `insert into public.organization_memberships(organization_id, user_id, role, active, granted_by, granted_at)
+       values ($1, $2, $3, true, $2, now())
+       on conflict (organization_id, user_id) do update
+         set role = excluded.role, active = true, granted_by = excluded.granted_by, granted_at = excluded.granted_at`,
+      [DVD, userId, role],
+    );
+  } else {
+    await client.query(
+      `update public.organization_memberships set active = false, granted_at = now()
+        where organization_id = $1 and user_id = $2`,
+      [DVD, userId],
+    );
+  }
 }
 
 /** Creates the operational member record and links it to an account. */
