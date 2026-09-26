@@ -197,8 +197,11 @@ describe('the owner bootstrap, run from the runbook', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ email: secondEmail });
 
-    // The previous owner keeps administrative access, as the block's comment says.
-    expect(await roleOf(ownerId)).toBe('ADMIN');
+    // The previous owner is demoted to the CITIZEN baseline. Post-P5 that grant
+    // carries no operational authority (an operational role is a service
+    // membership now), so current_dvd_role() is null until the new owner grants
+    // them one from the Accounts screen.
+    expect(await roleOf(ownerId)).toBeNull();
     expect(await roleOf(secondId)).toBe('OWNER');
 
     // Put the first account back in charge for the rest of the file. Split
@@ -231,8 +234,10 @@ describe('a role change changes what the server actually allows', () => {
         'Ime Za Napredovanje', '067123458', '1992-03-03',
       ]),
     );
+    // Post-P5 an operational role is a service membership, assigned through
+    // owner_set_organization_membership (owner_set_role is baseline-only now).
     await asUserCommitted(db, ownerId, (client) =>
-      client.query('select public.owner_set_role($1, $2)', [memberId, 'FIREFIGHTER']),
+      client.query('select public.owner_set_organization_membership($1, $2, $3)', [memberId, 'DVD', 'FIREFIGHTER']),
     );
     draftId = await createDraft(db, ownerId, { title: 'Nacrt za provjeru prava' });
   });
@@ -252,7 +257,7 @@ describe('a role change changes what the server actually allows', () => {
     // No new session, no new token, no client co-operation: the next request
     // simply gets a different answer because the server decides.
     await asUserCommitted(db, ownerId, (client) =>
-      client.query('select public.owner_set_role($1, $2)', [memberId, 'COMMANDER']),
+      client.query('select public.owner_set_organization_membership($1, $2, $3)', [memberId, 'DVD', 'COMMANDER']),
     );
     expect(await roleOf(memberId)).toBe('COMMANDER');
 
@@ -267,7 +272,7 @@ describe('a role change changes what the server actually allows', () => {
 
   it('hides it again the moment the role is taken back', async () => {
     await asUserCommitted(db, ownerId, (client) =>
-      client.query('select public.owner_set_role($1, $2)', [memberId, 'PENDING']),
+      client.query('select public.owner_set_organization_membership($1, $2, $3)', [memberId, 'DVD', 'NONE']),
     );
     expect(await roleOf(memberId)).toBeNull();
 
@@ -300,7 +305,7 @@ describe('a suspension takes effect on the very next request', () => {
       ]),
     );
     await asUserCommitted(db, ownerId, (client) =>
-      client.query('select public.owner_set_role($1, $2)', [memberId, 'COMMANDER']),
+      client.query('select public.owner_set_organization_membership($1, $2, $3)', [memberId, 'DVD', 'COMMANDER']),
     );
   });
 

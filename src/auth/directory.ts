@@ -15,7 +15,7 @@
 
 import type { AccountRole, AccountStatus } from '@/access/policy';
 import { activeText } from '@/i18n/useText';
-import { accountBackend, MULTI_SERVICE_ADMIN_AVAILABLE } from './supabaseClient';
+import { accountBackend } from './supabaseClient';
 
 export interface DirectoryAccount {
   readonly userId: string;
@@ -83,6 +83,32 @@ export function statusOf(account: DirectoryAccount): AccountStatus {
   if (!account.active) return 'SUSPENDED';
   if (!account.profileComplete) return 'PROFILE_REQUIRED';
   return 'ACTIVE';
+}
+
+/**
+ * The role labels an account should be found by in the directory search.
+ *
+ * Since P5 (202609250038) `access_grants.role` is an inert legacy value for the
+ * operational roles: a firefighter who has been stood down can still carry
+ * FIREFIGHTER in the grant while holding no active DVD membership. Searching for
+ * an operational role must therefore follow the active service memberships, not
+ * the grant, or the search would name people who no longer serve. The grant
+ * contributes only the roles P5 keeps authoritative there - OWNER (still read by
+ * `is_installation_owner()`), and the CITIZEN/PENDING baseline.
+ */
+export function roleSearchTerms(
+  account: DirectoryAccount,
+  roleLabel: Record<AccountRole, string>,
+): string[] {
+  const terms: string[] = [];
+  if (!MEMBERSHIP_ROLES.includes(account.role as MembershipRole)) {
+    terms.push(roleLabel[account.role]);
+  }
+  for (const code of ORGANIZATION_CODES) {
+    const role = account.memberships[code];
+    if (role) terms.push(roleLabel[role]);
+  }
+  return terms;
 }
 
 interface ProfileRow {
@@ -155,7 +181,12 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
     string,
     Partial<Record<OrganizationCode, MembershipRole>>
   >();
-  if (MULTI_SERVICE_ADMIN_AVAILABLE) {
+  // Since P5 (202609250038) membership is the only statement of operational
+  // authority, so the directory reads it directly for every service - the DVD
+  // column no longer derives from the compatibility grant. This does not depend
+  // on the multi-service flag; the flag gates only whether SZS can be *assigned*
+  // (the write control in AccountsView), which stays P6's to open.
+  {
     const [organizations, memberships] = await Promise.all([
       backend.from('organizations').select('id, code'),
       backend
@@ -177,15 +208,6 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
       const current = membershipsByUser.get(membership.user_id) ?? {};
       current[code] = membership.role;
       membershipsByUser.set(membership.user_id, current);
-    }
-  } else {
-    // Safe rollout fallback: before migration 013 is enabled, preserve the
-    // existing DVD controls and derive their display from the compatibility
-    // grant without touching a table that does not exist yet.
-    for (const grant of (grants.data ?? []) as GrantRow[]) {
-      if (MEMBERSHIP_ROLES.includes(grant.role as MembershipRole)) {
-        membershipsByUser.set(grant.user_id, { DVD: grant.role as MembershipRole });
-      }
     }
   }
 
@@ -216,7 +238,14 @@ export async function loadDirectory(): Promise<DirectoryAccount[]> {
 export async function loadOrganizationMembershipAudit(
   limit = 40,
 ): Promise<OrganizationMembershipAuditEntry[]> {
-  if (!MULTI_SERVICE_ADMIN_AVAILABLE) return [];
+  // Not gated by the multi-service flag. Since P5 (202609250038) a DVD role is a
+  // service membership, so a DVD assignment made on the Accounts screen is
+  // recorded in `organization_membership_audit`, not `role_audit`. Gating this
+  // read on the flag hid the owner's own DVD role changes from the audit list
+  // whenever the flag was off - a client-only blind spot, since the server's
+  // `membership_audit_owner_read` policy lets the owner read the table
+  // regardless. The flag still gates whether SZS can be *assigned* (the write
+  // control in AccountsView); it never governed what the owner may see here.
   const backend = accountBackend();
   const [audit, organizations] = await Promise.all([
     backend
@@ -261,9 +290,16 @@ export async function loadOrganizationMembershipAudit(
  * That matters for the owner account, whose table policy can otherwise read the
  * whole directory. This call can therefore be reused by every account without
  * turning the personal account card into an owner-only data endpoint.
+ *
+ * Not gated by the multi-service flag. Since P5 (202609250038) a DVD role is a
+ * service membership, so a person's own DVD role is one of these rows; gating the
+ * read on the flag showed a DVD firefighter "no service" whenever the flag was
+ * off, even though the server gives them the FIREFIGHTER role. The flag gates
+ * whether SZS can be *assigned* (the write controls in AccountsView), not the
+ * truthful read of a caller's own memberships, which `current_organization_memberships()`
+ * already restricts to `auth.uid()`.
  */
 export async function loadOwnOrganizationMemberships(): Promise<OwnOrganizationMembership[]> {
-  if (!MULTI_SERVICE_ADMIN_AVAILABLE) return [];
   const { data, error } = await accountBackend().rpc('current_organization_memberships');
   if (error) throw error;
 
@@ -364,20 +400,10 @@ export async function setOrganizationMembership(
   }
 }
 
-export async function setAccountRole(
-  targetUserId: string,
-  nextRole: AccountRole,
-): Promise<CommandOutcome> {
-  try {
-    const { error } = await accountBackend().rpc('owner_set_role', {
-      target_user: targetUserId,
-      requested_role: nextRole,
-    });
-    return error ? { ok: false, message: explainCommandError(error.message) } : { ok: true };
-  } catch (error) {
-    return { ok: false, message: explainCommandError(String(error)) };
-  }
-}
+// setAccountRole (owner_set_role) is no longer called from the client: since P5
+// (202609250038) an operational role is a service membership, assigned through
+// setOrganizationMembership, and owner_set_role is a baseline-only server command
+// with no interface. It is left in the database, not wrapped here.
 
 export async function setAccountActive(
   targetUserId: string,

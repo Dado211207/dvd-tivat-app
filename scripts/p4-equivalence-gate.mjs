@@ -60,6 +60,7 @@ import { runExtension, serviceVisibility, visibilityExpectation } from './p4-gat
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CAPTURE_SQL = readFileSync(resolve(REPO, 'scripts/p4-equivalence-production.sql'), 'utf8');
 const LAST_P4B = 'supabase/migrations/202609250029_intervention_outputs.sql';
+const P5_MIGRATION = 'supabase/migrations/202609250038_retire_dvd_role_mirror.sql';
 
 /**
  * Differences the phases set out to make. Anything else is a divergence.
@@ -103,6 +104,27 @@ EXPECTED_COMMANDS.push({
 // outcome of step 9 (scripts/p4-gate/szs.mjs), in both directions.
 // E5, no alert about a call-out that has ended, is a push-worker decision and
 // is classified in step 8b (scripts/p4-gate/push.mjs, PUSH_EXPECTED).
+EXPECTED_COMMANDS.push({
+  id: 'E6',
+  migration: P5_MIGRATION,
+  what: 'owner_set_role became baseline-only (P5): it assigns PENDING or CITIZEN and refuses an operational role, '
+    + 'which is now a service membership assigned through owner_set_organization_membership. Before P5 the owner set an '
+    + 'operational role here and the mirror turned it into a DVD membership. No client calls owner_set_role after P5.',
+  matches: ({ name, pre, post, applied }) => applied.has(P5_MIGRATION)
+    && name === 'owner_set_role' && pre.outcome.startsWith('OK')
+    && post.outcome.includes('ROLE_NOT_ASSIGNABLE'),
+});
+EXPECTED_COMMANDS.push({
+  id: 'E7',
+  migration: P5_MIGRATION,
+  what: 'owner_set_organization_membership no longer mirrors the DVD role into access_grants (P5): it writes only the '
+    + 'membership. Same OK outcome; the effect differs by the access_grants row the mirror used to also change. Authority '
+    + 'is the membership, so no operational access changes.',
+  matches: ({ name, pre, post, applied }) => applied.has(P5_MIGRATION)
+    && name === 'owner_set_organization_membership'
+    && pre.outcome.startsWith('OK') && post.outcome.startsWith('OK')
+    && JSON.stringify(pre.effect) !== JSON.stringify(post.effect),
+});
 
 let failures = 0;
 function check(label, ok, detail = '') {

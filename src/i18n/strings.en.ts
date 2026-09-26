@@ -352,8 +352,8 @@ export const en: Strings = {
     suspendedText:
       'The operational screens are closed and the server refuses every action. The reason and the time are recorded; contact the account owner.',
 
-    noDvdRoleTitle: 'This account has no DVD operational role.',
-    noDvdRoleText: 'The account and settings remain available. The owner can assign DVD, SZS or both services; SZS membership alone does not open DVD operational data.',
+    noServiceRoleTitle: 'This account has no DVD operational role.',
+    noServiceRoleText: 'The account and settings remain available. The owner can assign DVD, SZS or both services; SZS membership alone does not open DVD operational data.',
 
     noMemberTitle: 'Your account is not linked to a member of the society.',
     noMemberText:

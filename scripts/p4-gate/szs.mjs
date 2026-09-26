@@ -34,12 +34,14 @@ function steps() {
     // own profile completion, then the owner's grants
     ...['szsCommander', 'szsFirefighter', 'dual', 'dualWithdrawn', 'szsSuspended'].map((who) =>
       [`${who} completes their profile`, who, `select public.complete_own_profile($1, '+38267000999', date '1990-01-01')`, () => [`${who} Test`], 'OK']),
-    // SZS-only accounts hold CITIZEN on the grant: an operational grant role
-    // would mirror into an active DVD membership (sync_dvd_membership_from_grant).
+    // SZS-only accounts stay on the CITIZEN baseline grant. Since P5
+    // (202609250038) an operational role is a service membership, not the grant,
+    // so the DVD service for the dual accounts is assigned through
+    // owner_set_organization_membership, exactly like SZS below.
     ...['szsCommander', 'szsFirefighter', 'szsSuspended', 'szsIncomplete'].map((who) =>
       [`owner grants ${who} CITIZEN`, 'owner', `select public.owner_set_role($1, 'CITIZEN')`, (c) => [c.users[who]], 'OK']),
     ...['dual', 'dualWithdrawn'].map((who) =>
-      [`owner grants ${who} FIREFIGHTER (their DVD service)`, 'owner', `select public.owner_set_role($1, 'FIREFIGHTER')`, (c) => [c.users[who]], 'OK']),
+      [`owner grants ${who} FIREFIGHTER (their DVD service)`, 'owner', `select public.owner_set_organization_membership($1, 'DVD', 'FIREFIGHTER')`, (c) => [c.users[who]], 'OK']),
     ...[['szsCommander', 'COMMANDER'], ['szsFirefighter', 'FIREFIGHTER'], ['dual', 'COMMANDER'], ['dualWithdrawn', 'FIREFIGHTER'], ['szsSuspended', 'FIREFIGHTER'], ['szsIncomplete', 'FIREFIGHTER']].map(([who, role]) =>
       [`owner makes ${who} SZS ${role}`, 'owner', `select public.owner_set_organization_membership($1, 'SZS', $2)`, (c) => [c.users[who], role], 'OK']),
     // the SZS registry, built by the owner through the service-aware creates

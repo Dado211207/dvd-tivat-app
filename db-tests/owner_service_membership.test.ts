@@ -124,9 +124,12 @@ describe('The owner holds a service membership without losing the system', () =>
     expect(await globalRole(owner)).toBe('OWNER');
   });
 
-  it('still mirrors an ordinary member DVD change to the compatibility grant', async () => {
-    // The exemption is for OWNER only. Everyone else keeps the old behaviour,
-    // including losing the operational grant when stood down.
+  it('no longer mirrors an ordinary member DVD change to the compatibility grant (P5)', async () => {
+    // 202609250038 retired the mirror. A service assignment writes only the
+    // membership; the compatibility grant is left exactly as it was. Authority is
+    // the membership now, so the two no longer need to be kept in step.
+    const before = await globalRole(firefighter);
+
     await asUserCommitted(db, owner.userId, (client) =>
       client.query(`select public.owner_set_organization_membership($1, $2, $3)`, [
         firefighter.userId,
@@ -134,7 +137,8 @@ describe('The owner holds a service membership without losing the system', () =>
         'COMMANDER',
       ]),
     );
-    expect(await globalRole(firefighter)).toBe('COMMANDER');
+    expect(await membership(firefighter)).toEqual({ role: 'COMMANDER', active: true });
+    expect(await globalRole(firefighter), 'the grant is untouched by the membership command').toBe(before);
 
     await asUserCommitted(db, owner.userId, (client) =>
       client.query(`select public.owner_set_organization_membership($1, $2, $3)`, [
@@ -143,7 +147,8 @@ describe('The owner holds a service membership without losing the system', () =>
         'NONE',
       ]),
     );
-    expect(await globalRole(firefighter)).toBe('CITIZEN');
+    expect(await membership(firefighter)).toEqual({ role: 'COMMANDER', active: false });
+    expect(await globalRole(firefighter), 'still untouched on stand-down').toBe(before);
   });
 
   it('is still the only role that may assign a service at all', async () => {

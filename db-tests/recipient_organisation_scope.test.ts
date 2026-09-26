@@ -7,24 +7,21 @@
  * which SERVICE they serve in. `organizations` has held two rows since
  * 202609200013, so that omission is real.
  *
- * WHAT IS NOT TRUE, and was claimed before this file was written: that the
- * omission is reachable today. It is not, and the first section below proves
- * why. `sync_dvd_membership_from_grant` mirrors every operational grant into
- * an active DVD membership and mirrors a DVD stand-down back to CITIZEN, so
- * "holds an operational grant" and "is an active DVD member" are currently the
- * same set of people, the owner aside. Every command-layer route to an
- * SZS-only account leaves it with a CITIZEN grant, which the fifth question
- * already refuses.
+ * When P0 landed the omission was not reachable: `sync_dvd_membership_from_grant`
+ * mirrored every operational grant into an active DVD membership and mirrored a
+ * DVD stand-down back to CITIZEN, so "holds an operational grant" and "is an
+ * active DVD member" were the same set, the owner aside, and every command-layer
+ * route to an SZS-only account left it with a CITIZEN grant that the fifth
+ * question refused. P0 was the removal of a trap that springs at P5.
  *
- * So this is not a live-bug fix. It is the removal of a trap that springs at
- * P5, when the mirror is retired and that invariant disappears - at the point
- * in the rewrite where the schema is at its most disturbed and this would be
- * one defect among fifty. Closing it now costs one function and is provable
- * against a fixture; closing it then is guesswork.
- *
- * The second section therefore builds the post-P5 state deliberately, with
- * superuser SQL, the way `createDraftAsSuperuser` exists to test a constraint
- * with the command layer skipped: the backstop, not the door.
+ * P5 (202609250038) has now retired that mirror, so the trap has sprung: the
+ * masking invariant is gone, and P0's service predicate is what keeps an
+ * SZS-only account out of a DVD call-out. The first section below shows the
+ * masking route is closed by construction (owner_set_role is baseline-only and
+ * no trigger turns a grant into a membership); the second builds the
+ * now-reachable state with superuser SQL - the way `createDraftAsSuperuser`
+ * exists to test a constraint with the command layer skipped, the backstop, not
+ * the door - and proves the predicate refuses it.
  */
 
 import type { Client } from 'pg';
@@ -133,12 +130,14 @@ beforeAll(async () => {
 
 afterAll(async () => db.end());
 
-describe('today the command layer masks the missing predicate', () => {
+describe('P5 retired the mirror: an operational grant no longer implies a DVD membership', () => {
   /*
-   * These four run in order and leave the SZS account in the state the rest of
-   * the file needs. They are the evidence for the claim in this file's header,
-   * and they are worth keeping afterwards: if the mirror's behaviour ever
-   * changes, this is where it shows up as a decision rather than a surprise.
+   * Before 202609250038 the mirror made "holds an operational grant" and "is an
+   * active DVD member" the same set, so the SZS-only-with-operational-grant state
+   * was unreachable through the command layer. P5 retired the mirror, so that
+   * masking is gone - which is exactly why P0 closed the predicate first. These
+   * assert the masking route is now closed by construction; the next describe
+   * builds the newly-reachable state and proves P0's predicate refuses it.
    */
 
   it('gives a fresh SZS assignment no operational grant, so it is not callable', async () => {
@@ -150,67 +149,48 @@ describe('today the command layer masks the missing predicate', () => {
 
     expect(await memberships(cast.szsOnly.userId)).toBe('SZS=COMMANDER');
     expect(await grantOf(cast.szsOnly.userId), 'SZS never touches the grant').toBe('CITIZEN');
-    // Refused by the FIFTH question - the operational-role one - not by the
-    // service question this migration adds. Both before and after the fix.
+    // Refused by the operational-role question: the person is not in DVD at all.
     expect(await eligible(cast.dvdCommander.userId, cast.szsOnly.memberId)).toBe(false);
   });
 
-  it('mirrors any operational grant straight back into an active DVD membership', async () => {
-    await asUserCommitted(db, cast.owner.userId, (client) =>
+  it('owner_set_role no longer grants an operational role, so it cannot recreate the DVD mirror', async () => {
+    // Pre-P5 this call mirrored an operational grant into an active DVD
+    // membership - the masking invariant. Post-P5 owner_set_role is baseline-only
+    // and refuses an operational role outright, and there is no trigger to turn a
+    // grant into a membership, so the SZS-only account stays exactly as it was.
+    const message = await expectRefused(db, cast.owner.userId, (client) =>
       client.query(`select public.owner_set_role($1, 'COMMANDER')`, [cast.szsOnly.userId]),
     );
+    expect(message).toContain('ROLE_NOT_ASSIGNABLE');
 
-    // This is the masking invariant, stated: you cannot hold an operational
-    // grant and not be in DVD. The person is now genuinely in both services,
-    // so a DVD commander seeing them is correct, not a leak.
-    expect(await memberships(cast.szsOnly.userId)).toBe('DVD=COMMANDER,SZS=COMMANDER');
-    expect(await eligible(cast.dvdCommander.userId, cast.szsOnly.memberId)).toBe(true);
-  });
-
-  it('mirrors a DVD stand-down back to CITIZEN, closing the route again', async () => {
-    await asUserCommitted(db, cast.owner.userId, (client) =>
-      client.query(`select public.owner_set_organization_membership($1, 'DVD', 'NONE')`, [
-        cast.szsOnly.userId,
-      ]),
-    );
-
-    expect(await memberships(cast.szsOnly.userId)).toBe('DVD=COMMANDER(off),SZS=COMMANDER');
-    expect(await grantOf(cast.szsOnly.userId), 'the stand-down costs the grant').toBe('CITIZEN');
+    expect(await memberships(cast.szsOnly.userId)).toBe('SZS=COMMANDER');
+    expect(await grantOf(cast.szsOnly.userId)).toBe('CITIZEN');
     expect(await eligible(cast.dvdCommander.userId, cast.szsOnly.memberId)).toBe(false);
-  });
-
-  it('leaves no command-layer route to an SZS-only account that is still callable', async () => {
-    // The conclusion of the three above, asserted as one statement so it reads
-    // as the finding it is rather than as a side effect of the sequence.
-    const grant = await grantOf(cast.szsOnly.userId);
-    const services = await memberships(cast.szsOnly.userId);
-    expect(
-      grant === 'CITIZEN' || services.includes('DVD=') === false || services.includes('(off)'),
-      'an operational grant always carries an active DVD membership',
-    ).toBe(true);
   });
 });
 
 describe('after the mirror is retired, the service question is the one that refuses', () => {
   /*
-   * The P5 state, built with superuser SQL because no command produces it:
-   * an operational grant, an active SZS membership, and NO active DVD one.
-   * `createDraftAsSuperuser` exists for exactly this - proving a rule holds
-   * when the command layer is skipped entirely.
+   * The P5 state, built with superuser SQL because no command produces it: an
+   * operational grant, an active SZS membership, and an inactive DVD one. Built
+   * self-containedly here rather than leaning on a mirror side-effect, since the
+   * mirror is gone. `createDraftAsSuperuser` exists for the same reason - proving
+   * a rule holds when the command layer is skipped entirely.
    */
   beforeAll(async () => {
+    const DVD = '00000000-0000-4000-8000-000000000001';
+    const SZS = '00000000-0000-4000-8000-000000000002';
     await db.query(`update public.access_grants set role = 'COMMANDER' where user_id = $1`, [
       cast.szsOnly.userId,
     ]);
-    // Straight at the table, so the grant is NOT mirrored back to CITIZEN.
+    // Straight at the table (no command mirrors a grant into a membership now):
+    // an active SZS membership and an inactive DVD one.
     await db.query(
-      `update public.organization_memberships membership
-          set active = false
-         from public.organizations service
-        where service.id = membership.organization_id
-          and service.code = 'DVD'
-          and membership.user_id = $1`,
-      [cast.szsOnly.userId],
+      `insert into public.organization_memberships(organization_id, user_id, role, active, granted_by, granted_at)
+       values ($1, $2, 'COMMANDER', true, $2, now()), ($3, $2, 'COMMANDER', false, $2, now())
+       on conflict (organization_id, user_id) do update
+         set role = excluded.role, active = excluded.active`,
+      [SZS, cast.szsOnly.userId, DVD],
     );
   });
 

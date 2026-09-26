@@ -367,8 +367,8 @@ export const me = {
     suspendedText:
       'Operativni ekrani su zatvoreni, a server odbija svaku radnju. Razlog i vrijeme su zabiljezeni; javite se vlasniku naloga.',
 
-    noDvdRoleTitle: 'Ovaj nalog nema DVD operativnu ulogu.',
-    noDvdRoleText: 'Dostupni su nalog i podesavanja. Vlasnik moze dodijeliti DVD, SZS ili obje sluzbe; samo SZS clanstvo ne otvara DVD operativne podatke.',
+    noServiceRoleTitle: 'Ovaj nalog nema DVD operativnu ulogu.',
+    noServiceRoleText: 'Dostupni su nalog i podesavanja. Vlasnik moze dodijeliti DVD, SZS ili obje sluzbe; samo SZS clanstvo ne otvara DVD operativne podatke.',
 
     noMemberTitle: 'Vas nalog nije povezan sa clanom drustva.',
     noMemberText:

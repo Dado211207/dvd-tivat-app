@@ -997,6 +997,16 @@ the screen that does it.
 
 ### P5 — Retire the mirror
 
+**Status (2026-09-26): implemented as migration `202609250038_retire_dvd_role_mirror.sql`
+in a draft PR (Stage B), not deployed.** The owner chose the end-state route
+(membership is the only authority; the client's DVD path moves to
+`owner_set_organization_membership`, made correct under both `VITE_MULTI_SERVICE_ADMIN_ENABLED`
+states). Acceptance criteria 1–4 below are asserted in `db-tests/retire_role_mirror.test.ts`;
+the production-copy gate passes with the two intended command changes classified
+as expected differences E6/E7. `owner_set_role` is reduced to baseline-only
+(PENDING/CITIZEN); existing `access_grants` rows are left inert rather than
+rewritten, since nothing reads the operational value for authority.
+
 Drop `sync_dvd_membership_after_grant` and `sync_dvd_membership_from_grant()`.
 Reduce `access_grants` to `active` + `OWNER`. Remove the DVD mirror block from
 `owner_set_organization_membership`. Rename `NO_DVD_ROLE` → `NO_SERVICE_ROLE`

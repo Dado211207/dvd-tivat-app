@@ -168,15 +168,17 @@ describe('Every role change writes its own audit row, including raw SQL', () => 
     await completeProfile(db, subject.userId, 'Clan Audit Dva');
 
     const before = (await roleAudit(subject)).length;
+    // Post-P5 owner_set_role is baseline-only; the grant change it still makes
+    // (a baseline transition) is what must audit exactly once.
     await asUserCommitted(db, member.userId, (client) =>
-      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'FIREFIGHTER']),
+      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'PENDING']),
     );
 
     const rows = await roleAudit(subject);
     expect(rows.length, 'one change, one row').toBe(before + 1);
 
     const written = rows[rows.length - 1]!;
-    expect(written.next_role).toBe('FIREFIGHTER');
+    expect(written.next_role).toBe('PENDING');
     // Through the application there IS a session, so the actor is recorded.
     expect(written.changed_by, 'and the application records who did it').toBe(member.userId);
   });
@@ -251,8 +253,10 @@ describe('Every role change writes its own audit row, including raw SQL', () => 
     );
     let message = '';
     try {
+      // A baseline transition (CITIZEN -> PENDING): the grant change owner_set_role
+      // still makes post-P5, and the one whose audit the tripwire guards.
       await asUserCommitted(db, member.userId, (client) =>
-        client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'FIREFIGHTER']),
+        client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'PENDING']),
       );
     } catch (error) {
       message = (error as Error).message;
@@ -313,18 +317,19 @@ describe('Every role change writes its own audit row, including raw SQL', () => 
     expect(rows, 'the membership was rolled back, not left behind').toHaveLength(0);
   });
 
-  it('refuses when the MIRRORED grant change is the one that went unrecorded', async () => {
+  it('no longer writes access_grants when assigning a service (P5 retired the mirror)', async () => {
     /*
-     * The service assignment audits two separate facts for an ordinary member:
-     * the membership, and the global role it mirrors into `access_grants`.
-     * Asserting only the first would let the more consequential half - who may
-     * open an operational screen - change with nothing recorded.
-     *
-     * So this disables the ACCESS_GRANTS trigger while leaving the membership
-     * trigger working: the first assertion passes, and the second must catch it.
+     * Pre-P5 the service assignment audited two facts: the membership, and the
+     * global role it mirrored into `access_grants`. 202609250038 retired that
+     * mirror, so a service assignment touches only the membership. Proven the
+     * strong way: with the ACCESS_GRANTS audit trigger disabled - the condition
+     * that used to make the mirror's second write fail closed - the call now
+     * SUCCEEDS (there is no grant write to audit), the grant stays at its
+     * baseline, and the membership and its audit are written as before.
      */
-    const subject = await createAccount(db, 'clan-mirror-failclosed@example.invalid');
+    const subject = await createAccount(db, 'clan-mirror-retired@example.invalid');
     await completeProfile(db, subject.userId, 'Clan Mirror');
+    const before = (await membershipAudit(subject)).length;
 
     await db.query(
       `alter table public.access_grants disable trigger audit_access_grant_role_change`,
@@ -346,12 +351,15 @@ describe('Every role change writes its own audit row, including raw SQL', () => 
       );
     }
 
-    expect(message, 'the mirrored grant change is asserted on too').toMatch(/AUDIT_NOT_WRITTEN/);
+    expect(message, 'the assignment no longer writes access_grants, so nothing fails closed there').toBe('');
     const { rows } = await db.query<{ role: string }>(
       `select role from public.access_grants where user_id = $1`,
       [subject.userId],
     );
-    expect(rows[0]!.role, 'and the whole call rolled back').toBe('CITIZEN');
+    expect(rows[0]!.role, 'the grant is left at its baseline, unmirrored').toBe('CITIZEN');
+    expect(await membershipAudit(subject), 'and the membership itself is audited as before').toHaveLength(
+      before + 1,
+    );
   });
 
   it('lets a service no-op through, and a stand-down with nothing to stand down', async () => {
@@ -400,14 +408,14 @@ describe('Every role change writes its own audit row, including raw SQL', () => 
     const subject = await createAccount(db, 'clan-noop@example.invalid');
     await completeProfile(db, subject.userId, 'Clan No Op');
     await asUserCommitted(db, member.userId, (client) =>
-      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'FIREFIGHTER']),
+      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'PENDING']),
     );
     const before = await roleAudit(subject);
 
     // Same value again: the trigger writes nothing and the function must not
     // complain about it.
     await asUserCommitted(db, member.userId, (client) =>
-      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'FIREFIGHTER']),
+      client.query(`select public.owner_set_role($1, $2)`, [subject.userId, 'PENDING']),
     );
 
     expect(await roleAudit(subject)).toHaveLength(before.length);
