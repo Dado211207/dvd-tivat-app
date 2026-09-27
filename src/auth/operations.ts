@@ -733,8 +733,11 @@ const count = (value: number | string | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export async function fetchParticipationTotals(): Promise<ReadResult<readonly ParticipationTotal[]>> {
-  const { data, error } = await accountBackend().rpc('attendance_totals', {});
+/** Narrow the all-time totals at PostgREST before they reach a dual-service client. */
+export async function fetchParticipationTotals(memberIds?: readonly string[]): Promise<ReadResult<readonly ParticipationTotal[]>> {
+  if (memberIds?.length === 0) return ok([]);
+  const query = accountBackend().rpc('attendance_totals', {});
+  const { data, error } = await (memberIds === undefined ? query : query.in('member_id', [...memberIds]));
   if (error || !data) return readFailure(error);
   return ok((data as unknown as TotalsRow[]).map((row) => ({
     memberId: row.member_id,

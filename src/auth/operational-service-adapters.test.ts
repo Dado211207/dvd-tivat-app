@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const recorded = vi.hoisted(() => ({
   reads: [] as { table: string; filters: Record<string, unknown> }[],
   rpcs: [] as { name: string; args: Record<string, unknown> | undefined }[],
+  totalsFilter: [] as { column: string; values: readonly string[] }[],
 }));
 
 vi.mock('./supabaseClient', async (importOriginal) => ({
@@ -24,6 +25,12 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
     },
     rpc: (name: string, args?: Record<string, unknown>) => {
       recorded.rpcs.push({ name, args });
+      if (name === 'attendance_totals') return {
+        in: (column: string, values: readonly string[]) => {
+          recorded.totalsFilter.push({ column, values });
+          return Promise.resolve({ data: [], error: null });
+        },
+      };
       return Promise.resolve({ data: name.startsWith('eligible_') ? [] : 'id', error: null });
     },
   }),
@@ -31,15 +38,26 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
 
 import {
   createDraft, fetchAvailability, fetchEligibleRecipients, fetchInterventions,
-  fetchVehicleMovements, setOwnAvailability,
+  fetchParticipationTotals, fetchVehicleMovements, setOwnAvailability,
 } from './operations';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
 
-beforeEach(() => { recorded.reads.length = 0; recorded.rpcs.length = 0; });
+beforeEach(() => { recorded.reads.length = 0; recorded.rpcs.length = 0; recorded.totalsFilter.length = 0; });
 
 describe('operational data asks for the selected service', () => {
+  it('restricts participation totals at the RPC to the selected roster, including for dual-service command', async () => {
+    const memberIds = ['00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000102'];
+    await fetchParticipationTotals(memberIds);
+    expect(recorded.totalsFilter).toEqual([{ column: 'member_id', values: memberIds }]);
+    expect(recorded.rpcs).toEqual([{ name: 'attendance_totals', args: {} }]);
+  });
+
+  it('does not request totals from other services when the selected roster is empty', async () => {
+    expect(await fetchParticipationTotals([])).toEqual({ ok: true, value: [] });
+    expect(recorded.rpcs).toEqual([]);
+  });
   it('filters every call-out, availability and vehicle read before data returns', async () => {
     await Promise.all([fetchInterventions(SZS), fetchAvailability(SZS), fetchVehicleMovements(SZS)]);
     expect(recorded.reads.map(({ table }) => table).sort()).toEqual([

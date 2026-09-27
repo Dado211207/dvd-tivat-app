@@ -114,12 +114,15 @@ function Archive({ organizationId }: { organizationId: string }) {
     setLoading(true);
     setLoadError(null);
     try {
-      const [listRead, movesRead, sumsRead, roster] = await Promise.all([
+      const [listRead, movesRead, roster] = await Promise.all([
         fetchInterventions(organizationId),
         fetchVehicleMovements(organizationId),
-        fetchParticipationTotals(),
         loadRoster(organizationId),
       ]);
+      // The owner and a dual-service commander can read both services under
+      // RLS. Fetch the selected roster first so the totals RPC only returns
+      // those members, never the other service's names or participation.
+      const sumsRead = await fetchParticipationTotals(roster.map((member) => member.id));
       /*
        * An archive that could not be read is not an empty archive.
        *
