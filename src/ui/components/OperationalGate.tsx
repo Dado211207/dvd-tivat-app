@@ -60,10 +60,14 @@ export interface OperationalContext {
  * from the person: an outage is waited out, a refusal never resolves on its own
  * and has to be fixed with access rights on the server.
  */
+// `service` is the acting-service id the answer was read FOR. It is what makes a
+// service switch an identity boundary: an answer read for one service is not the
+// answer for another, so on a switch the previous service's member is never shown
+// under the new one - not while it loads, not if the new read fails.
 type MemberLoad =
   | { readonly kind: 'LOADING' }
-  | { readonly kind: 'READY'; readonly memberId: string | null }
-  | { readonly kind: 'FAILED'; readonly reason: ReadFailure };
+  | { readonly kind: 'READY'; readonly memberId: string | null; readonly service: string }
+  | { readonly kind: 'FAILED'; readonly reason: ReadFailure; readonly service: string };
 
 export interface OperationalGateProps {
   /** Roles allowed to see this screen. The server still decides every command. */
@@ -91,24 +95,28 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
 
   const loadMember = useCallback(async (organizationId: string) => {
     const ticket = ++generation.current;
-    // Only the FIRST read may show a spinner. Once this gate has an answer it
-    // keeps rendering `children` while it re-reads, because replacing them with
-    // a spinner unmounts the whole screen underneath - and every `useState` in
-    // it: the active tab, the selected intervention, half-typed text. That is
-    // what made the application look like it reloaded on returning to the tab.
-    setMember((current) => (current.kind === 'READY' ? current : { kind: 'LOADING' }));
-    // A failed BACKGROUND re-read keeps the last known answer. The screens
-    // below report their own server errors; tearing the gate down over a
-    // refresh that failed would lose the person's place for nothing.
+    // Keep the last answer on screen while re-reading ONLY when it is for the same
+    // service. A SAME-service refresh (a token refresh, a tab regaining focus) then
+    // shows no spinner and keeps the screen's state. A SERVICE SWITCH does not
+    // match, so the previous service's member is dropped to LOADING at once and is
+    // never handed to `children` under the new service.
+    setMember((current) =>
+      current.kind === 'READY' && current.service === organizationId ? current : { kind: 'LOADING' },
+    );
+    // A failed BACKGROUND re-read of the SAME service keeps the last known answer.
+    // A failed read of a DIFFERENT service is that service's failure - it must not
+    // fall back to the previous service's member.
     const keepOrFail = (reason: ReadFailure) => (current: MemberLoad): MemberLoad =>
-      current.kind === 'READY' ? current : { kind: 'FAILED', reason };
+      current.kind === 'READY' && current.service === organizationId
+        ? current
+        : { kind: 'FAILED', reason, service: organizationId };
     try {
       // The member record is read FOR THE ACTING SERVICE. Switching service
       // re-runs this with the other service's id, so the gate resolves the member
       // that belongs to the service now on screen - never the previous one's.
       const result = await fetchOwnMemberId(organizationId);
       if (!mounted.current || ticket !== generation.current) return;
-      if (result.ok) setMember({ kind: 'READY', memberId: result.value });
+      if (result.ok) setMember({ kind: 'READY', memberId: result.value, service: organizationId });
       else setMember(keepOrFail(result.reason));
     } catch {
       // The read reports refusals and outages in its result now, so reaching
@@ -188,10 +196,17 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     );
   }
 
-  if (member.kind === 'LOADING') {
+  // The member answer counts only when it was read FOR THE SERVICE now on screen.
+  // Between a switch and the new service's read resolving, the previous service's
+  // answer reads as "still loading" here, so its memberId is never rendered - nor
+  // acted on by the screen below - under the service now being acted as.
+  const memberHere: MemberLoad =
+    member.kind !== 'LOADING' && member.service !== actingOrgId ? { kind: 'LOADING' } : member;
+
+  if (memberHere.kind === 'LOADING') {
     return <p role="status">{t.gate.loadingOperational}</p>;
   }
-  if (member.kind === 'FAILED') {
+  if (memberHere.kind === 'FAILED') {
     /*
      * Both reasons get a way out of this screen, and they say different things.
      *
@@ -213,7 +228,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
      * labelled "check again" rather than "try again", because what changes is
      * the access rights, not the attempt.
      */
-    const refused = member.reason === 'REFUSED';
+    const refused = memberHere.reason === 'REFUSED';
     return (
       <Notice tone="error" testId="member-check-failed">
         <strong>
@@ -227,7 +242,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     );
   }
 
-  if (requiresMember && member.memberId === null) {
+  if (requiresMember && memberHere.memberId === null) {
     return (
       <Notice tone="warn">
         <strong>{t.gate.noMemberTitle}</strong> {t.gate.noMemberText} {t.gate.noMemberUntilThen}{' '}
@@ -245,7 +260,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
         userId: access.userId,
         fullName: access.fullName ?? access.email,
         service,
-        memberId: member.memberId,
+        memberId: memberHere.memberId,
       })}
     </>
   );

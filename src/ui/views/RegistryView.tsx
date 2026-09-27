@@ -49,6 +49,13 @@ type Tab = 'clanovi' | 'grupe' | 'vozila';
 export function RegistryView() {
   const t = useText();
   const { access } = useAccess();
+  // The acting service is an identity boundary: a different service is a different
+  // registry. Keying the panel on it remounts it on a switch, so the previous
+  // service's rows and half-typed forms never carry over, and a read still in
+  // flight for the previous service resolves onto an unmounted panel rather than
+  // overwriting the new service's rows. A same-service refresh keeps the key, and
+  // so keeps the panel's state exactly as before.
+  const actingService = access.kind === 'SIGNED_IN' ? access.service : null;
 
   return (
     <>
@@ -71,7 +78,7 @@ export function RegistryView() {
           </section>
         }
       >
-        <RegistryPanel />
+        <RegistryPanel key={actingService ?? 'none'} />
       </RequireRole>
     </>
   );
