@@ -169,9 +169,12 @@ Change the email on the marked line and run the whole block at once:
 ```sql
 begin;
 
--- The current owner keeps administrative access but is no longer the owner.
--- Change 'ADMIN' to 'CITIZEN' instead if they should keep no operational role.
-update public.access_grants set role = 'ADMIN' where role = 'OWNER';
+-- The current owner is demoted to the CITIZEN baseline and is no longer the
+-- owner. Since P5 (202609250038) an operational role is a service membership,
+-- not this grant, so if the outgoing owner should keep an operational role the
+-- new owner assigns it from the Accounts screen afterward - this block only
+-- moves who owns the system.
+update public.access_grants set role = 'CITIZEN' where role = 'OWNER';
 
 update public.access_grants
 set role = 'OWNER'
@@ -191,8 +194,9 @@ Then run the check in step 5.
 
 ### This block leaves no audit row, and that is a real gap
 
-`owner_set_role` — the function the owner panel calls for every other role
-change — **cannot** perform this transfer, by three separate guards:
+`owner_set_role` — the function that sets an account's baseline grant (since P5
+it assigns only `PENDING`/`CITIZEN`; operational roles are service memberships) —
+**cannot** perform this transfer, by three separate guards:
 
 1. `OWNER` is not in its list of assignable roles (`ROLE_NOT_ASSIGNABLE`).
 2. It refuses to change the caller's own role (`CANNOT_CHANGE_OWN_ROLE`).

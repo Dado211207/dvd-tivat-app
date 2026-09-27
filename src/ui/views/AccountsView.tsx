@@ -13,7 +13,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AccountRole } from '@/access/policy';
 import { useAccess } from '@/auth/AccessProvider';
 import {
   MEMBERSHIP_ROLES,
@@ -21,8 +20,8 @@ import {
   loadOrganizationMembershipAudit,
   loadRoleAudit,
   loadStatusAudit,
+  roleSearchTerms,
   setAccountActive,
-  setAccountRole,
   setOrganizationMembership,
   statusOf,
   type DirectoryAccount,
@@ -121,9 +120,10 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle || accounts === null) return accounts ?? [];
     return accounts.filter((account) =>
-      `${account.fullName ?? ''} ${account.email} ${account.phone ?? ''} ${account.dateOfBirth ?? ''} ${t.accounts.roleLabel[account.role]} ${
-        account.memberships.DVD ? t.accounts.roleLabel[account.memberships.DVD] : ''
-      } ${account.memberships.SZS ? t.accounts.roleLabel[account.memberships.SZS] : ''} ${
+      `${account.fullName ?? ''} ${account.email} ${account.phone ?? ''} ${account.dateOfBirth ?? ''} ${roleSearchTerms(
+        account,
+        t.accounts.roleLabel,
+      ).join(' ')} ${
         t.accounts.statusLabel[statusOf(account)]
       } ${t.accounts.organizationLabel.DVD} ${t.accounts.organizationLabel.SZS} DVD SZS`
         .toLocaleLowerCase()
@@ -146,11 +146,14 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
     setBusyUserId(account.userId);
     setError('');
     try {
-      const outcome = MULTI_SERVICE_ADMIN_AVAILABLE
-        ? await setOrganizationMembership(account.userId, organization, nextRole)
-        : organization === 'DVD'
-          ? await setAccountRole(account.userId, (nextRole ?? 'CITIZEN') as AccountRole)
-          : { ok: false, message: t.accounts.multiServicePending };
+      // Since P5 (202609250038) an operational role is a service membership, so
+      // DVD is assigned through owner_set_organization_membership like SZS - the
+      // old owner_set_role/grant path is gone. SZS assignment stays gated by the
+      // flag (that control is disabled) until P6 opens its interface.
+      const outcome =
+        organization === 'SZS' && !MULTI_SERVICE_ADMIN_AVAILABLE
+          ? { ok: false, message: t.accounts.multiServicePending }
+          : await setOrganizationMembership(account.userId, organization, nextRole);
       if (!outcome.ok) {
         const message = outcome.message ?? t.accounts.changeFailed;
         setError(message);

@@ -183,7 +183,7 @@ export type AccessObstacle =
   | 'ACCOUNT_BROKEN'
   | 'PROFILE_REQUIRED'
   | 'SUSPENDED'
-  | 'NO_DVD_ROLE'
+  | 'NO_SERVICE_ROLE'
   | null;
 
 /**
@@ -208,7 +208,7 @@ export function accessObstacle(access: Access): AccessObstacle {
       if (access.accountStatus === 'PROFILE_REQUIRED' || !access.profileComplete) {
         return 'PROFILE_REQUIRED';
       }
-      if (access.role === null) return 'NO_DVD_ROLE';
+      if (access.role === null) return 'NO_SERVICE_ROLE';
       return null;
   }
 }

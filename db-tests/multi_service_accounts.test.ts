@@ -72,8 +72,12 @@ describe('owner multi-service account administration', () => {
       { code: 'DVD', role: 'FIREFIGHTER', active: true },
       { code: 'SZS', role: 'COMMANDER', active: true },
     ]);
+    // Post-P5 (202609250038) the membership command no longer mirrors into the
+    // compatibility grant, so it stays at the CITIZEN baseline it started with -
+    // the DVD authority is the membership above, and the SZS assignment did not
+    // touch it. Before P5 the DVD assignment had written FIREFIGHTER here.
     const { rows } = await db.query('select role from public.access_grants where user_id = $1', [target]);
-    expect(rows[0]!.role).toBe('FIREFIGHTER');
+    expect(rows[0]!.role).toBe('CITIZEN');
   });
 
   it('moves a citizen directly into SZS without creating DVD authority', async () => {
