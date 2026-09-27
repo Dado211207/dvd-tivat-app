@@ -100,6 +100,19 @@ UNIQUE (callsign)` (globally unique across both services).
 
 **Still OPEN: Q1–Q8.** All eight block P6 or P7 only, so P1–P5 can now run to completion without another answer.
 
+### Answered 2026-09-27, closing the P6-blocking questions (Q5 schema, Q6, Q7, Q8 interface)
+
+The owner answered the four questions that block **P6**. Q1–Q4, and the joint-intervention *behaviour* half of Q5 and Q8, stay OPEN and block **P7** only.
+
+| # | Decision |
+|---|---|
+| **D14** *(Q8, interface)* | A person serving in both services uses an explicit **"acting as DVD / acting as SZS"** choice in the operational interface. The selected service determines the list, member record, role, availability, draft, command controls, attendance and archive being viewed or changed. It must be unmistakable on a phone, and the app never switches services silently during an operation. (One *merged* screen is rejected.) |
+| **D15** *(Q5, schema)* | Attendance is credited to the participant's **own service**, taken from the stored member/service relationship — never the publishing service, and never twice. The additive schema for this (`attendance_intervals.credited_organization_id`, §6.3) already exists from `202609240022`; `202609270039` makes the derivation read the member's service and enforces it as an invariant, before any cross-service history exists. Joint-intervention crediting *behaviour* is P7. |
+| **D16** *(Q8/dedupe)* | On a future joint call-out a dual-service person receives **one** notification and gives **one** response, recording which service/member record represents that participation. The outbox `user_id` dedupe (§6.2) is the floor. Joint call-outs themselves are **P7**; not built in P6. |
+| **D17** *(Q6, Q7)* | SZS uses the **existing DVD response options, ETA bands and intervention kinds** as owner-approved **P6 defaults**. Cheap to change later. This does **not** answer P7's Q1–Q4. |
+
+**Still OPEN after 2026-09-27: Q1, Q2, Q3, Q4** (all P7), plus the joint-intervention behaviour that Q5/Q8 defer to P7. P6 is now unblocked and in progress.
+
 ---
 
 ## 4. Data model
@@ -1036,7 +1049,10 @@ Per-organisation registry admin (members, groups, vehicles), an organisation
 context in the client, SZS command console and SZS archive. SZS can publish, be
 answered, record attendance and close — with no reference to DVD.
 
-**Blocked on:** Q5, Q6, Q7, Q8.
+**Unblocked 2026-09-27** by D14–D17 (Q5 schema, Q6, Q7, Q8 interface). **In progress**, in reviewable stages from `main`:
+- **Stage A — attendance credit (done, draft PR).** `202609270039_attendance_credit_service.sql`: attendance credited to the participant's own service, read from the member record and enforced as an invariant (D15). The additive column existed since 022 (§6.3); this fixes the derivation before any cross-service history exists. A no-op for every existing DVD row; gate PASSED with no new expected difference.
+- **Stage B — service context + service-aware registry/member/role/Settings.** The acting-as switch (D14), owner authority in both services without a membership, SZS-only reaching SZS screens without a DVD membership, DVD-only never seeing SZS data, no draft/cache bleed across services, SZS assignment flag-gated while own-service info is truthful under both flag states.
+- **Stage C — the isolated SZS operational workflow** end to end with SZS accounts alone, DVD behaviour unchanged.
 
 **Acceptance criteria**
 
