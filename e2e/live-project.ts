@@ -632,9 +632,23 @@ export function createLiveProject(): LiveProject {
     switch (name) {
       case 'current_dvd_role':
         return who.role;
+      // P6: the service-aware client resolves the role and member for the acting
+      // service through the `*_in` functions, and the services on offer through
+      // `is_installation_owner` + `current_organization_memberships`. These tests
+      // operate in DVD only, so each answers as the DVD shim does.
+      case 'current_role_in':
+        return who.role;
+      case 'is_installation_owner':
+        return who.role === 'OWNER';
+      case 'current_organization_memberships':
+        return who.role === 'OWNER'
+          ? []
+          : [{ organization_code: 'DVD', organization_name: 'DVD Tivat', membership_role: who.role }];
       case 'current_account_status':
         return 'ACTIVE';
       case 'current_member_id':
+        return who.memberId;
+      case 'current_member_id_in':
         return who.memberId;
       case 'eligible_recipients':
         return store.members

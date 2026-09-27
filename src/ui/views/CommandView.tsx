@@ -64,6 +64,7 @@ import { recipientTimings, summarise } from '@/auth/metrics';
 import { OperationalSummary, ResponseTimings } from '../components/timings';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
+import { organizationIdOf } from '@/auth/serviceContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IncidentCard } from '../components/IncidentCard';
 import {
@@ -118,7 +119,7 @@ function composeStepLabel(id: ComposeStep | PublishStep, t: Strings): string {
 export function CommandView() {
   return (
     <OperationalGate allow={['OWNER', 'ADMIN', 'COMMANDER']}>
-      {(context) => <CommandConsole context={context} />}
+      {(context) => <CommandConsole key={context.service} context={context} />}
     </OperationalGate>
   );
 }
@@ -173,6 +174,7 @@ const EMPTY: ConsoleData = {
 
 function CommandConsole({ context }: { context: OperationalContext }) {
   const t = useText();
+  const organizationId = organizationIdOf(context.service);
   const [tab, setTab] = useState<Tab>('poziv');
   const [data, setData] = useState<ConsoleData>(EMPTY);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -218,12 +220,12 @@ function CommandConsole({ context }: { context: OperationalContext }) {
       try {
         const [interventionsRead, members, eligible, vehicles, availabilityRead, movementsRead] =
           await Promise.all([
-            fetchInterventions(),
-            loadRoster(),
-            fetchEligibleRecipients(),
-            loadVehicles(),
-            fetchAvailability(),
-            fetchVehicleMovements(),
+            fetchInterventions(organizationId),
+            loadRoster(organizationId),
+            fetchEligibleRecipients(organizationId),
+            loadVehicles(organizationId),
+            fetchAvailability(organizationId),
+            fetchVehicleMovements(organizationId),
           ]);
         /*
          * The console says no if any of the three refused.
@@ -294,7 +296,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
-    [],
+    [organizationId],
   );
 
   /**
@@ -393,6 +395,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         >
           {id === 'poziv' ? (
             <CallOutTab
+              organizationId={organizationId}
               data={data}
               selected={selected}
               onDone={after}
@@ -477,11 +480,13 @@ function InterventionPicker({
 // ---------------------------------------------------------------------------
 
 function CallOutTab({
+  organizationId,
   data,
   selected,
   onDone,
   onRefresh,
 }: {
+  organizationId: string;
   data: ConsoleData;
   selected: Intervention | null;
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
@@ -502,8 +507,8 @@ function CallOutTab({
    * initialiser runs once; doing it in an effect would flash an empty form and
    * then overwrite whatever the commander had already started typing.
    */
-  const [draft, setDraft] = useState<CallOutDraft>(() => readStoredDraft() ?? EMPTY_DRAFT);
-  const [restored] = useState(() => readStoredDraft() !== null);
+  const [draft, setDraft] = useState<CallOutDraft>(() => readStoredDraft(organizationId) ?? EMPTY_DRAFT);
+  const [restored] = useState(() => readStoredDraft(organizationId) !== null);
   const field = <K extends keyof CallOutDraft>(key: K, value: CallOutDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
@@ -517,8 +522,8 @@ function CallOutTab({
    * save, which is always the moment before the one where the page went away.
    */
   useEffect(() => {
-    storeDraft(draft);
-  }, [draft]);
+    storeDraft(draft, organizationId);
+  }, [draft, organizationId]);
 
   // One key per compose session. A retried tap after a dropped connection must
   // return the SAME draft, never create a second call-out for one incident.
@@ -551,6 +556,7 @@ function CallOutTab({
     setBusy(true);
     try {
       const result = await createDraft({
+        organizationId,
         kind: draft.kind as InterventionKind,
         title: draft.title.trim(),
         instructions: draft.instructions.trim(),
@@ -568,7 +574,7 @@ function CallOutTab({
       // Left behind it would reappear in the form the next time the console
       // opened, as a second call-out for an incident already recorded.
       setDraft(EMPTY_DRAFT);
-      clearDraft();
+      clearDraft(organizationId);
       setComposeStep('DETAILS');
       idempotencyKey.current = `ui-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     } finally {

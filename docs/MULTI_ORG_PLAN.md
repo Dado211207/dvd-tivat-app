@@ -13,13 +13,6 @@ flagged assumptions, which unblocks P1 through P5 end to end. Q1–Q8 remain ope
 and block P6 and P7 only. No migration from this plan has been applied to
 production.
 
-**Progress, 2026-09-27:** P1–P5 are merged into `main` (`63e62d5`). D14–D17
-answered the **P6-blocking** questions (Q5 schema, Q6, Q7, Q8 interface); **P6 is
-unblocked and in progress**. **Q1–Q4 remain open and block P7 only** (joint
-call-outs), together with the joint-intervention *behaviour* that Q5/Q8 defer to
-P7. Still no migration from this plan applied to production (22 migrations, through
-`202609230021`).
-
 The audit this is built on ran read-only against the hosted project
 `yskhdzrdbywrpfowckpn` on 2026-09-23, with code read at `2e66ace`. Counts quoted
 below are live production values from that audit.
@@ -103,22 +96,18 @@ UNIQUE (callsign)` (globally unique across both services).
 | **D10** *(was Q10)* | **Every vehicle is owned by exactly one service.** No sharing. `vehicles.organization_id` is non-null with no exception, and `UNIQUE (callsign)` becomes `UNIQUE (organization_id, callsign)` as §4.1 assumed. |
 | **D11** *(was Q11)* | The demo-data cleanup is **sequenced with this rewrite** rather than deferred. **It does not authorise any deletion.** Nothing is deleted in any phase of this plan without the full row-level inventory and a separate explicit sign-off, exactly as already agreed for `docs/DEMO_DATA_INVENTORY.md`. A phase that would benefit from cleaner data waits for that sign-off or proceeds with the data as it stands; it never deletes to make itself easier. |
 | **D12** | **The rename moves the registry side** (§5): `OrganisationView.tsx` → `RegistryView.tsx`, `organisation_audit` → `registry_audit`, `t.organisation.*` → `t.registry.*`. The tenant vocabulary — `organizations`, `organization_memberships`, `organization_id` — is **untouched**. |
-| **D13** | **A person serving in both services gets two member records**, one per service (§4.1), with `UNIQUE (user_id)` becoming `UNIQUE (organization_id, user_id)`. Accepted as designed, with its costs: two availability rows, two attendance histories, two roster entries. The interface consequence remains OPEN (Q8). |
+| **D13** | **A person serving in both services gets two member records**, one per service (§4.1), with `UNIQUE (user_id)` becoming `UNIQUE (organization_id, user_id)`. Accepted as designed, with its costs: two availability rows, two attendance histories, two roster entries. The interface consequence was Q8, now answered by D14. |
 
-**Still OPEN as of 2026-09-23: Q1–Q8.** All eight block P6 or P7 only, so P1–P5 can now run to completion without another answer. *(Superseded 2026-09-27: D14–D17 below answer the P6-blocking questions; only Q1–Q4 remain, blocking P7.)*
-
-### Answered 2026-09-27, closing the P6-blocking questions (Q5 schema, Q6, Q7, Q8 interface)
-
-The owner answered the four questions that block **P6**. Q1–Q4, and the joint-intervention *behaviour* half of Q5 and Q8, stay OPEN and block **P7** only.
+### Answered 2026-09-27, unblocking P6 (Q5 schema, Q6, Q7, Q8)
 
 | # | Decision |
 |---|---|
-| **D14** *(Q8, interface)* | A person serving in both services uses an explicit **"acting as DVD / acting as SZS"** choice in the operational interface. The selected service determines the list, member record, role, availability, draft, command controls, attendance and archive being viewed or changed. It must be unmistakable on a phone, and the app never switches services silently during an operation. (One *merged* screen is rejected.) |
-| **D15** *(Q5, schema)* | Attendance is credited to the participant's **own service**, taken from the stored member/service relationship — never the publishing service, and never twice. The additive schema for this (`attendance_intervals.credited_organization_id`, §6.3) already exists from `202609240022`; `202609270039` makes the derivation read the member's service and enforces it as an invariant, before any cross-service history exists. Joint-intervention crediting *behaviour* is P7. |
-| **D16** *(Q8/dedupe)* | On a future joint call-out a dual-service person receives **one** notification and gives **one** response, recording which service/member record represents that participation. The outbox `user_id` dedupe (§6.2) is the floor. Joint call-outs themselves are **P7**; not built in P6. |
-| **D17** *(Q6, Q7)* | SZS uses the **existing DVD response options, ETA bands and intervention kinds** as owner-approved **P6 defaults**. Cheap to change later. This does **not** answer P7's Q1–Q4. |
+| **D14** *(Q8, interface)* | **An explicit "acting as DVD / acting as SZS" switch**, never a silent switch, unmistakable on a phone. A dual-service person acts in one service at a time; the selected service determines their operational role, member record, own availability, registry and the lists a screen shows. No silent switch during an active operation. *(Implemented client-side in P6 Stage B.)* |
+| **D15** *(Q5, schema)* | **Attendance is credited to the participant's own service**, derived from the stored member relationship — never the publisher, never twice. The joint-intervention *behaviour* of Q5 stays P7; the irreversible schema rule is fixed now, while member-service and call-out-service coincide. *(Implemented in P6 Stage A, migration `202609270039`.)* |
+| **D16** *(Q8, joint dedupe)* | On a future joint call-out, a dual-service person gets **one notification and makes one response**, recording which service represents it. Joint call-outs themselves are **P7**; this only fixes the intended dedupe so P6 does not build the opposite. |
+| **D17** *(Q6, Q7)* | The **existing DVD response options, ETA bands and intervention kinds are the P6 defaults** for SZS. Cheap to diverge later if SZS asks. |
 
-**Still OPEN after 2026-09-27: Q1, Q2, Q3, Q4** (all P7), plus the joint-intervention behaviour that Q5/Q8 defer to P7. P6 is now unblocked and in progress.
+**Still OPEN: Q1–Q4** (and the joint-intervention behaviour of Q5/Q8). They block **P7** (joint call-outs / cross-service alerting) only; P6 can now run to completion.
 
 ---
 
@@ -348,8 +337,7 @@ migrating live history.
 **Every remaining open question blocks P6 or P7 only.** P1 through P5 — the
 rename, the columns, the authority functions, the policy rewrite and retiring
 the mirror — are fully specified and can run to completion without another
-answer. *(Update 2026-09-27: D14–D17 answered the P6-blocking questions; the only
-questions still open are Q1–Q4, which block P7.)*
+answer.
 
 ---
 
@@ -373,8 +361,8 @@ tests must fail against the code as it was before that phase.
 | **P3** | new authority functions + DVD shim | none (functions only) | ready; unblocked by D9 |
 | **P4a–f** | the 51 policies, six PRs | none (policies only) | ready; unblocked by D9 |
 | **P5** | drop the mirror, reduce `access_grants` | destructive | ready; unblocked by D9 |
-| **P6** | SZS runs its own workflow | additive | blocked on Q5, Q6, Q7, Q8 |
-| **P7** | cross-service alerting | additive | blocked on Q1–Q5, Q8 |
+| **P6** | SZS runs its own workflow | additive | **in progress** — unblocked by D14–D17; Stage A (#67, `202609270039`), Stage B (acting-service context, this PR), Stage C (SZS call-out lifecycle) to come |
+| **P7** | cross-service alerting | additive | blocked on Q1–Q4 (joint-intervention behaviour of Q5/Q8) |
 | **P8** | branding and storage keys | none | ready |
 
 P1 through P5 can now run end to end without another answer. **P4 is split into
@@ -1057,10 +1045,7 @@ Per-organisation registry admin (members, groups, vehicles), an organisation
 context in the client, SZS command console and SZS archive. SZS can publish, be
 answered, record attendance and close — with no reference to DVD.
 
-**Unblocked 2026-09-27** by D14–D17 (Q5 schema, Q6, Q7, Q8 interface). **In progress**, in reviewable stages from `main`:
-- **Stage A — attendance credit (done, draft PR).** `202609270039_attendance_credit_service.sql`: attendance credited to the participant's own service, read from the member record and enforced as an invariant (D15). The additive column existed since 022 (§6.3); this fixes the derivation before any cross-service history exists. A no-op for every existing DVD row; gate PASSED with no new expected difference.
-- **Stage B — service context + service-aware registry/member/role/Settings.** The acting-as switch (D14), owner authority in both services without a membership, SZS-only reaching SZS screens without a DVD membership, DVD-only never seeing SZS data, no draft/cache bleed across services, SZS assignment flag-gated while own-service info is truthful under both flag states.
-- **Stage C — the isolated SZS operational workflow** end to end with SZS accounts alone, DVD behaviour unchanged.
+**Blocked on:** Q5, Q6, Q7, Q8.
 
 **Acceptance criteria**
 
@@ -1168,9 +1153,7 @@ push topic prefix. Applied migration **filenames** are never renamed.
 ## 11. What has to happen before implementation starts
 
 1. ~~The owner answers Q9, Q10 and Q11.~~ **Done, 2026-09-23 — D9, D10, D11.**
-   As of then Q1–Q8 remained open, blocking P6 and P7 only. **Updated 2026-09-27:
-   D14–D17 answered the P6 questions (Q5 schema, Q6, Q7, Q8 interface); only Q1–Q4
-   remain, blocking P7.**
+   Q1–Q8 remain open and block P6 and P7 only.
 2. ~~P0 ships on its own, ahead of the schema phases.~~ **Done — merged as #47,
    migration `202609230018`.** Not applied to production.
 3. ~~P3's equivalence test is run against a **restored copy of production**,

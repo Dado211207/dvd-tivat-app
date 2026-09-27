@@ -37,6 +37,11 @@
  */
 
 export const DRAFT_STORAGE_KEY = 'dvd-tivat.callout-draft';
+const DVD_ID = '00000000-0000-4000-8000-000000000001';
+function storageKey(organizationId?: string): string {
+  return organizationId === undefined || organizationId === DVD_ID
+    ? DRAFT_STORAGE_KEY : `${DRAFT_STORAGE_KEY}:${organizationId}`;
+}
 
 export interface CallOutDraft {
   readonly kind: string;
@@ -80,9 +85,9 @@ function asString(value: unknown): string {
  * empty form rather than putting `undefined` into a text input and detaching it
  * from React's control.
  */
-export function readStoredDraft(): CallOutDraft | null {
+export function readStoredDraft(organizationId?: string): CallOutDraft | null {
   try {
-    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey(organizationId));
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return null;
@@ -104,22 +109,22 @@ export function readStoredDraft(): CallOutDraft | null {
 }
 
 /** Returns whether it will survive a reload, so the screen can say so honestly. */
-export function storeDraft(draft: CallOutDraft): boolean {
+export function storeDraft(draft: CallOutDraft, organizationId?: string): boolean {
   try {
     if (!draftHasContent(draft)) {
-      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      window.localStorage.removeItem(storageKey(organizationId));
       return true;
     }
-    window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    window.localStorage.setItem(storageKey(organizationId), JSON.stringify(draft));
     return true;
   } catch {
     return false;
   }
 }
 
-export function clearDraft(): void {
+export function clearDraft(organizationId?: string): void {
   try {
-    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    window.localStorage.removeItem(storageKey(organizationId));
   } catch {
     // Nothing to do and nothing to report: the draft is already on the server
     // by the time this runs, so a browser that refuses to forget costs nothing.

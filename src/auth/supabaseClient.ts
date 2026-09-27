@@ -332,6 +332,38 @@ export const supabaseAccessGateway: AccessGateway = {
     if (error) throw error;
     return (data as string | null) ?? null;
   },
+
+  // P6: the caller's role in ONE service. `current_dvd_role()` is exactly
+  // `current_role_in(DVD)` (202609240023), so passing the DVD uuid here gives the
+  // identical DVD answer `fetchRole()` returns - the acting service just chooses
+  // which uuid is passed. The server still derives the role from stored rows and
+  // refuses a service the caller holds nothing in, so this argument opens nothing.
+  async fetchRoleIn(organizationId: string) {
+    const { data, error } = await accountBackend().rpc('current_role_in', {
+      target_organization: organizationId,
+    });
+    if (error) throw error;
+    return (data as string | null) ?? null;
+  },
+
+  // P6: which services this account may act in. The memberships are the caller's
+  // own (`current_organization_memberships()` filters to `auth.uid()`), and the
+  // owner flag is read from `is_installation_owner()` - both server-side. This
+  // decides only the CHOICES the switch offers; it grants nothing, because the
+  // role for whichever service is chosen is read separately by `fetchRoleIn`.
+  async fetchServiceContext() {
+    const backend = accountBackend();
+    const [memberships, owner] = await Promise.all([
+      backend.rpc('current_organization_memberships'),
+      backend.rpc('is_installation_owner'),
+    ]);
+    if (memberships.error) throw memberships.error;
+    if (owner.error) throw owner.error;
+    const codes = ((memberships.data ?? []) as { organization_code?: string }[])
+      .map((row) => row.organization_code)
+      .filter((code): code is string => typeof code === 'string');
+    return { memberships: codes, isOwner: owner.data === true };
+  },
 };
 
 function isMissingSession(error: { name?: string; message?: string }): boolean {

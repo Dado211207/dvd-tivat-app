@@ -206,6 +206,7 @@ export const en: Strings = {
     pageTitle: 'Organisation records', adminOnly: 'Administrator or owner only',
     signInFirst: 'Sign in to view these records.',
     denied: 'Administrators and owners maintain these records. Commanders manage interventions but do not change the organisation roster.',
+    actingService: 'Service',
     serverData: 'Server records', tabs: 'Records section', members: 'Members', groups: 'Groups', vehicles: 'Vehicles',
     loading: 'Loading records...', loadFailed: 'Records could not be loaded from the server.',
     changeFailed: 'The change was not saved.', unreadyOne: 'One member cannot receive a call-out.', unreadyMany: '{count} members cannot receive a call-out.',
@@ -295,6 +296,15 @@ export const en: Strings = {
       'The language has changed, but this browser cannot remember it. Reloading will return to Crnogorski.',
     contentNotTranslated:
       'Intervention titles, member names, instructions and notes are shown exactly as they were written, in the language they were written in.',
+
+    actingServiceTitle: 'Service you are acting in',
+    actingServiceLead:
+      'You serve in more than one service. Choose which one you are acting in now - your role, member record and lists are all for that service.',
+    actingServiceLegend: 'Choose a service',
+    actingServiceCurrent: 'Acting as: {service}.',
+    actingServiceSwitching: 'Switching service...',
+    actingServiceHint:
+      'The choice is remembered on this device. It does not change your rights - the server decides those separately for each service.',
 
     notificationsTitle: 'Notifications on this device',
     displayTitle: 'Time and display',

@@ -42,6 +42,7 @@ import { formatDurationMs } from '@/auth/duration';
 import { recipientTimings, summarise } from '@/auth/metrics';
 import { loadRoster } from '@/auth/roster';
 import { OperationalGate } from '../components/OperationalGate';
+import { organizationIdOf } from '@/auth/serviceContext';
 import { Chip, EmptyState, Notice, ScrollRegion } from '../components/primitives';
 import {
   InterventionDurationPanel,
@@ -64,7 +65,7 @@ import { isPermissionDenied } from '@/auth/supabaseClient';
 export function ArchiveView() {
   return (
     <OperationalGate allow={['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER']}>
-      {() => <Archive />}
+      {(context) => <Archive key={context.service} organizationId={organizationIdOf(context.service)} />}
     </OperationalGate>
   );
 }
@@ -84,7 +85,7 @@ interface Detail {
 
 const NO_DETAIL: Detail = { recipients: [], attendance: [], audit: null };
 
-function Archive() {
+function Archive({ organizationId }: { organizationId: string }) {
   const t = useText();
   const [interventions, setInterventions] = useState<readonly Intervention[]>([]);
   const [movements, setMovements] = useState<readonly VehicleMovement[]>([]);
@@ -114,10 +115,10 @@ function Archive() {
     setLoadError(null);
     try {
       const [listRead, movesRead, sumsRead, roster] = await Promise.all([
-        fetchInterventions(),
-        fetchVehicleMovements(),
+        fetchInterventions(organizationId),
+        fetchVehicleMovements(organizationId),
         fetchParticipationTotals(),
-        loadRoster(),
+        loadRoster(organizationId),
       ]);
       /*
        * An archive that could not be read is not an empty archive.
@@ -138,7 +139,8 @@ function Archive() {
       if (!mounted.current || ticket !== generation.current) return;
       setInterventions(list);
       setMovements(movesRead.value);
-      setTotals(sumsRead.value);
+      const membersHere = new Set(roster.map((member) => member.id));
+      setTotals(sumsRead.value.filter((total) => membersHere.has(total.memberId)));
       setNames(new Map(roster.map((member) => [member.id, member.fullName])));
       setSelectedId((current) => {
         if (current !== null && list.some((i) => i.id === current)) return current;
@@ -151,7 +153,7 @@ function Archive() {
     } finally {
       if (mounted.current && ticket === generation.current) setLoading(false);
     }
-  }, []);
+  }, [organizationId]);
 
   useEffect(() => {
     void load();
