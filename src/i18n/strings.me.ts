@@ -213,6 +213,7 @@ export const me = {
     pageTitle: 'Evidencija drustva', adminOnly: 'Samo administrator ili vlasnik',
     signInFirst: 'Prijavite se da biste vidjeli evidenciju.',
     denied: 'Evidenciju odrzava administrator ili vlasnik. Komandir vodi intervencije, ali ne mijenja sastav drustva.',
+    actingService: 'Sluzba',
     serverData: 'Podaci sa servera', tabs: 'Dio evidencije', members: 'Clanovi', groups: 'Grupe', vehicles: 'Vozila',
     loading: 'Ucitavanje evidencije...', loadFailed: 'Evidencija nije mogla biti ucitana sa servera.',
     changeFailed: 'Promjena nije sacuvana.', unreadyOne: 'Jedan clan ne moze primiti poziv.', unreadyMany: '{count} clanova ne moze primiti poziv.',
@@ -310,6 +311,15 @@ export const me = {
       'Jezik je promijenjen, ali ga ovaj pregledac ne moze zapamtiti. Ponovnim ucitavanjem vraca se na Crnogorski.',
     contentNotTranslated:
       'Naslovi intervencija, imena clanova, uputstva i biljeske prikazuju se onako kako su upisani, na jeziku na kojem su napisani.',
+
+    actingServiceTitle: 'Sluzba u kojoj djelujete',
+    actingServiceLead:
+      'Sluzite u vise sluzbi. Izaberite u ime koje sada djelujete - vasa uloga, clanska evidencija i spiskovi odnose se na tu sluzbu.',
+    actingServiceLegend: 'Izaberite sluzbu',
+    actingServiceCurrent: 'Sada djelujete kao: {service}.',
+    actingServiceSwitching: 'Mijenjam sluzbu...',
+    actingServiceHint:
+      'Izbor se pamti na ovom uredjaju. Ne mijenja vasa prava - njih server odredjuje za svaku sluzbu posebno.',
 
     notificationsTitle: 'Obavjestenja na ovom uredjaju',
     displayTitle: 'Vrijeme i prikaz',

@@ -469,10 +469,17 @@ export async function installFixtureProject(
         return json(route, { code: '42501', message: 'permission denied for function ' + name }, 403);
       }
 
-      if (name === 'current_dvd_role') return json(route, role ?? null);
+      // P6: the client resolves the role and member for the ACTING service through
+      // `current_role_in` / `current_member_id_in`; `is_installation_owner` and
+      // `current_organization_memberships` decide which services are on offer.
+      // These answer exactly as the DVD shims do, so a fixture written for the
+      // DVD-only client keeps meaning the same thing for the service-aware one.
+      if (name === 'current_dvd_role' || name === 'current_role_in') return json(route, role ?? null);
+      if (name === 'is_installation_owner') return json(route, role === 'OWNER');
       if (name === 'current_account_status') return json(route, accountStatus);
-      if (name === 'current_member_id' && 'memberId' in options) {
-        return json(route, options.memberId ?? null);
+      if (name === 'current_member_id' || name === 'current_member_id_in') {
+        if ('memberId' in options) return json(route, options.memberId ?? null);
+        return json(route, RPC.current_member_id);
       }
       // Any command not named here answers "fine" - these tests are about what
       // the screens SHOW, and the commands themselves are proven against a real

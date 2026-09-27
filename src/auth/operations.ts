@@ -488,9 +488,21 @@ export async function fetchInterventionAudit(
  *
  * Three answers, because there are three situations, and the third one is not
  * the roster's fault.
+ *
+ * P6: the member record is per service (202609240022 made `members` unique per
+ * service). Passing an `organizationId` asks `current_member_id_in(service)` for
+ * the record in the ACTING service; omitting it keeps the DVD-only shim
+ * `current_member_id()`, which is itself `current_member_id_in(DVD)` (…0023), so
+ * the DVD answer is identical either way. The service only selects which record is
+ * asked for - the server still refuses one in a service the caller does not serve.
  */
-export async function fetchOwnMemberId(): Promise<ReadResult<string | null>> {
-  const { data, error } = await accountBackend().rpc('current_member_id');
+export async function fetchOwnMemberId(
+  organizationId?: string,
+): Promise<ReadResult<string | null>> {
+  const { data, error } =
+    organizationId === undefined
+      ? await accountBackend().rpc('current_member_id')
+      : await accountBackend().rpc('current_member_id_in', { target_organization: organizationId });
   if (error) return readFailure(error);
   return ok((data as string | null) ?? null);
 }

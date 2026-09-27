@@ -21,6 +21,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { accessObstacle, hasOperationalAccess, type OperationalRole } from '@/auth/access';
+import type { OrganizationCode } from '@/auth/directory';
+import { organizationIdOf } from '@/auth/serviceContext';
 import type { Strings } from '@/i18n/strings.me';
 import { useText } from '@/i18n/useText';
 import { useAccess } from '@/auth/AccessProvider';
@@ -32,7 +34,16 @@ export interface OperationalContext {
   readonly role: OperationalRole;
   readonly userId: string;
   readonly fullName: string;
-  /** Null when the account is approved but not linked to a member record. */
+  /**
+   * The service this screen is operating in (P6). Every screen below the gate is
+   * for exactly one service - the one the person is acting as - and the member
+   * record and role above are that service's.
+   */
+  readonly service: OrganizationCode;
+  /**
+   * The member record in the acting service, or null when the account is approved
+   * but not linked to a member of THAT service. Read from `current_member_id_in`.
+   */
   readonly memberId: string | null;
 }
 
@@ -78,7 +89,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     };
   }, []);
 
-  const loadMember = useCallback(async () => {
+  const loadMember = useCallback(async (organizationId: string) => {
     const ticket = ++generation.current;
     // Only the FIRST read may show a spinner. Once this gate has an answer it
     // keeps rendering `children` while it re-reads, because replacing them with
@@ -92,7 +103,10 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     const keepOrFail = (reason: ReadFailure) => (current: MemberLoad): MemberLoad =>
       current.kind === 'READY' ? current : { kind: 'FAILED', reason };
     try {
-      const result = await fetchOwnMemberId();
+      // The member record is read FOR THE ACTING SERVICE. Switching service
+      // re-runs this with the other service's id, so the gate resolves the member
+      // that belongs to the service now on screen - never the previous one's.
+      const result = await fetchOwnMemberId(organizationId);
       if (!mounted.current || ticket !== generation.current) return;
       if (result.ok) setMember({ kind: 'READY', memberId: result.value });
       else setMember(keepOrFail(result.reason));
@@ -111,9 +125,11 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   const signedInUserId = access.kind === 'SIGNED_IN' ? access.userId : null;
   const signedInRole = access.kind === 'SIGNED_IN' ? access.role : null;
   const signedInStatus = access.kind === 'SIGNED_IN' ? access.accountStatus : null;
+  const signedInService = access.kind === 'SIGNED_IN' ? access.service : null;
+  const actingOrgId = signedInService === null ? null : organizationIdOf(signedInService);
   const operational = hasOperationalAccess(access);
   useEffect(() => {
-    if (!operational) {
+    if (!operational || actingOrgId === null) {
       // NOT `READY` with a null member. `READY` means the server answered about
       // this account, and nobody has asked it yet - an account still being
       // checked, or one with no operational role at all, is simply unread.
@@ -127,12 +143,14 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
       setMember({ kind: 'LOADING' });
       return;
     }
-    void loadMember();
-  }, [operational, signedInUserId, signedInRole, signedInStatus, loadMember]);
+    // Re-runs when the acting service changes (actingOrgId), so a switch reloads
+    // the member for the service now on screen.
+    void loadMember(actingOrgId);
+  }, [operational, signedInUserId, signedInRole, signedInStatus, actingOrgId, loadMember]);
 
   const retry = () => {
     void reload();
-    void loadMember();
+    if (actingOrgId !== null) void loadMember(actingOrgId);
   };
 
   if (obstacle !== null) {
@@ -150,6 +168,10 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   // here would be asserting the exact thing this screen must not assume.
   const role = access.role;
   if (role === null) return <Blocked obstacle="NO_SERVICE_ROLE" onRetry={retry} t={t} />;
+  // A role always comes with the service it was resolved in; this guard makes that
+  // explicit and fail-closed rather than asserting it with a cast.
+  const service = access.service;
+  if (service === null) return <Blocked obstacle="NO_SERVICE_ROLE" onRetry={retry} t={t} />;
 
   if (!allow.includes(role)) {
     // Named with the server's own meaning in both languages. "Komandir" is the
@@ -222,6 +244,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
         role,
         userId: access.userId,
         fullName: access.fullName ?? access.email,
+        service,
         memberId: member.memberId,
       })}
     </>

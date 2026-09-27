@@ -96,9 +96,18 @@ UNIQUE (callsign)` (globally unique across both services).
 | **D10** *(was Q10)* | **Every vehicle is owned by exactly one service.** No sharing. `vehicles.organization_id` is non-null with no exception, and `UNIQUE (callsign)` becomes `UNIQUE (organization_id, callsign)` as §4.1 assumed. |
 | **D11** *(was Q11)* | The demo-data cleanup is **sequenced with this rewrite** rather than deferred. **It does not authorise any deletion.** Nothing is deleted in any phase of this plan without the full row-level inventory and a separate explicit sign-off, exactly as already agreed for `docs/DEMO_DATA_INVENTORY.md`. A phase that would benefit from cleaner data waits for that sign-off or proceeds with the data as it stands; it never deletes to make itself easier. |
 | **D12** | **The rename moves the registry side** (§5): `OrganisationView.tsx` → `RegistryView.tsx`, `organisation_audit` → `registry_audit`, `t.organisation.*` → `t.registry.*`. The tenant vocabulary — `organizations`, `organization_memberships`, `organization_id` — is **untouched**. |
-| **D13** | **A person serving in both services gets two member records**, one per service (§4.1), with `UNIQUE (user_id)` becoming `UNIQUE (organization_id, user_id)`. Accepted as designed, with its costs: two availability rows, two attendance histories, two roster entries. The interface consequence remains OPEN (Q8). |
+| **D13** | **A person serving in both services gets two member records**, one per service (§4.1), with `UNIQUE (user_id)` becoming `UNIQUE (organization_id, user_id)`. Accepted as designed, with its costs: two availability rows, two attendance histories, two roster entries. The interface consequence was Q8, now answered by D14. |
 
-**Still OPEN: Q1–Q8.** All eight block P6 or P7 only, so P1–P5 can now run to completion without another answer.
+### Answered 2026-09-27, unblocking P6 (Q5 schema, Q6, Q7, Q8)
+
+| # | Decision |
+|---|---|
+| **D14** *(Q8, interface)* | **An explicit "acting as DVD / acting as SZS" switch**, never a silent switch, unmistakable on a phone. A dual-service person acts in one service at a time; the selected service determines their operational role, member record, own availability, registry and the lists a screen shows. No silent switch during an active operation. *(Implemented client-side in P6 Stage B.)* |
+| **D15** *(Q5, schema)* | **Attendance is credited to the participant's own service**, derived from the stored member relationship — never the publisher, never twice. The joint-intervention *behaviour* of Q5 stays P7; the irreversible schema rule is fixed now, while member-service and call-out-service coincide. *(Implemented in P6 Stage A, migration `202609270039`.)* |
+| **D16** *(Q8, joint dedupe)* | On a future joint call-out, a dual-service person gets **one notification and makes one response**, recording which service represents it. Joint call-outs themselves are **P7**; this only fixes the intended dedupe so P6 does not build the opposite. |
+| **D17** *(Q6, Q7)* | The **existing DVD response options, ETA bands and intervention kinds are the P6 defaults** for SZS. Cheap to diverge later if SZS asks. |
+
+**Still OPEN: Q1–Q4** (and the joint-intervention behaviour of Q5/Q8). They block **P7** (joint call-outs / cross-service alerting) only; P6 can now run to completion.
 
 ---
 
@@ -352,8 +361,8 @@ tests must fail against the code as it was before that phase.
 | **P3** | new authority functions + DVD shim | none (functions only) | ready; unblocked by D9 |
 | **P4a–f** | the 51 policies, six PRs | none (policies only) | ready; unblocked by D9 |
 | **P5** | drop the mirror, reduce `access_grants` | destructive | ready; unblocked by D9 |
-| **P6** | SZS runs its own workflow | additive | blocked on Q5, Q6, Q7, Q8 |
-| **P7** | cross-service alerting | additive | blocked on Q1–Q5, Q8 |
+| **P6** | SZS runs its own workflow | additive | **in progress** — unblocked by D14–D17; Stage A (#67, `202609270039`), Stage B (acting-service context, this PR), Stage C (SZS call-out lifecycle) to come |
+| **P7** | cross-service alerting | additive | blocked on Q1–Q4 (joint-intervention behaviour of Q5/Q8) |
 | **P8** | branding and storage keys | none | ready |
 
 P1 through P5 can now run end to end without another answer. **P4 is split into

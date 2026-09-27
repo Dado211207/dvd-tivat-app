@@ -284,7 +284,9 @@ test.describe('a refused member check is never shown as "you are not in the soci
     const text = await openWithRefusal(
       page,
       'mobilizacija',
-      { role: 'FIREFIGHTER', refuseRpcs: ['current_member_id'] },
+      // P6: the gate reads the member for the acting service through
+      // `current_member_id_in`, so that is the grant a revoked `execute` refuses.
+      { role: 'FIREFIGHTER', refuseRpcs: ['current_member_id_in'] },
       CHECK_FAILED_WORDING,
     );
 
@@ -312,7 +314,7 @@ test.describe('a refused member check is never shown as "you are not in the soci
     await openWithRefusal(
       page,
       'mobilizacija',
-      { role: 'FIREFIGHTER', refuseRpcs: ['current_member_id'] },
+      { role: 'FIREFIGHTER', refuseRpcs: ['current_member_id_in'] },
       CHECK_FAILED_WORDING,
     );
 

@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAccess } from '@/auth/AccessProvider';
 import { accessObstacle } from '@/auth/access';
 import { loadDirectory, type DirectoryAccount } from '@/auth/directory';
+import { organizationIdOf } from '@/auth/serviceContext';
 import {
   createGroup,
   createMember,
@@ -79,6 +80,11 @@ export function RegistryView() {
 function RegistryPanel() {
   const t = useText();
   const { announce } = useApp();
+  // The registry is read and written FOR THE ACTING SERVICE. A dual-service admin
+  // or the owner sees exactly one service's roster here - the one they are acting
+  // as - and creating a member adds it to that service, never the other.
+  const { actingService } = useAccess();
+  const organizationId = actingService === null ? null : organizationIdOf(actingService);
   const [tab, setTab] = useState<Tab>('clanovi');
   const [members, setMembers] = useState<RosterMember[] | null>(null);
   const [groups, setGroups] = useState<RosterGroup[]>([]);
@@ -89,12 +95,13 @@ function RegistryPanel() {
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
+    if (organizationId === null) return;
     setLoading(true);
     try {
       const [roster, groupRows, vehicleRows] = await Promise.all([
-        loadRoster(),
-        loadGroups(),
-        loadVehicles(),
+        loadRoster(organizationId),
+        loadGroups(organizationId),
+        loadVehicles(organizationId),
       ]);
       setMembers(roster);
       setGroups(groupRows);
@@ -112,8 +119,10 @@ function RegistryPanel() {
     } finally {
       setLoading(false);
     }
-  }, [t.registry.loadFailed]);
+  }, [organizationId, t.registry.loadFailed]);
 
+  // Re-reads whenever the acting service changes, so switching service replaces
+  // the roster on screen rather than leaving the previous service's on it.
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -150,7 +159,7 @@ function RegistryPanel() {
     );
   }
 
-  if (members === null) {
+  if (members === null || organizationId === null) {
     return (
       <section className="card">
         <p className="muted" role="status">{t.registry.loading}</p>
@@ -164,6 +173,13 @@ function RegistryPanel() {
         <div>
           <p className="card__kicker">{t.registry.serverData}</p>
           <h2 id="registry-h">{t.registry.pageTitle}</h2>
+          {/* Which service's registry this is - said plainly, because a
+              dual-service admin needs to know which roster they are editing. */}
+          {actingService !== null ? (
+            <p className="muted small" data-testid="registry-acting-service">
+              {t.registry.actingService}: <strong>{t.accounts.organizationLabel[actingService]}</strong>
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -187,12 +203,26 @@ function RegistryPanel() {
       </div>
 
       {tab === 'clanovi' ? (
-        <MembersPanel members={members} accounts={accounts} busy={busy || loading} run={run} />
+        <MembersPanel
+          organizationId={organizationId}
+          members={members}
+          accounts={accounts}
+          busy={busy || loading}
+          run={run}
+        />
       ) : null}
       {tab === 'grupe' ? (
-        <GroupsPanel groups={groups} members={members} busy={busy || loading} run={run} />
+        <GroupsPanel
+          organizationId={organizationId}
+          groups={groups}
+          members={members}
+          busy={busy || loading}
+          run={run}
+        />
       ) : null}
-      {tab === 'vozila' ? <VehiclesPanel vehicles={vehicles} busy={busy || loading} run={run} /> : null}
+      {tab === 'vozila' ? (
+        <VehiclesPanel organizationId={organizationId} vehicles={vehicles} busy={busy || loading} run={run} />
+      ) : null}
     </section>
   );
 }
@@ -203,11 +233,13 @@ type Run = (
 ) => Promise<void>;
 
 function MembersPanel({
+  organizationId,
   members,
   accounts,
   busy,
   run,
 }: {
+  readonly organizationId: string;
   readonly members: readonly RosterMember[];
   readonly accounts: readonly DirectoryAccount[];
   readonly busy: boolean;
@@ -236,7 +268,9 @@ function MembersPanel({
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim().length < 2) return;
-          void run(() => createMember(name.trim(), []), t.registry.memberAdded).then(() => setName(''));
+          void run(() => createMember(organizationId, name.trim(), []), t.registry.memberAdded).then(() =>
+            setName(''),
+          );
         }}
       >
         <Field label={t.registry.newMember} required>
@@ -413,11 +447,13 @@ function ReasonAction({
 }
 
 function GroupsPanel({
+  organizationId,
   groups,
   members,
   busy,
   run,
 }: {
+  readonly organizationId: string;
   readonly groups: readonly RosterGroup[];
   readonly members: readonly RosterMember[];
   readonly busy: boolean;
@@ -433,7 +469,9 @@ function GroupsPanel({
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim().length < 2) return;
-          void run(() => createGroup(name.trim()), t.registry.groupAdded).then(() => setName(''));
+          void run(() => createGroup(organizationId, name.trim()), t.registry.groupAdded).then(() =>
+            setName(''),
+          );
         }}
       >
         <Field label={t.registry.newGroup} required>
@@ -496,10 +534,12 @@ function GroupsPanel({
 }
 
 function VehiclesPanel({
+  organizationId,
   vehicles,
   busy,
   run,
 }: {
+  readonly organizationId: string;
   readonly vehicles: readonly RosterVehicle[];
   readonly busy: boolean;
   readonly run: Run;
@@ -523,7 +563,7 @@ function VehiclesPanel({
           event.preventDefault();
           if (!ready) return;
           void run(
-            () => createVehicle(callsign.trim(), name.trim(), kind.trim()),
+            () => createVehicle(organizationId, callsign.trim(), name.trim(), kind.trim()),
             t.registry.vehicleAdded,
           ).then(() => {
             setCallsign('');

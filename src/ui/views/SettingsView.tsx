@@ -19,6 +19,7 @@ import { timeZoneIsSupported } from '@/i18n/time';
 import { useLanguage, useText } from '@/i18n/useText';
 import { useState } from 'react';
 import { PushNotificationPanel } from '../components/PushNotificationPanel';
+import { ServiceSwitcher } from '../components/ServiceSwitcher';
 import { Notice } from '../components/primitives';
 import { hrefFor, type Route } from '../router';
 
@@ -53,6 +54,12 @@ export function SettingsView() {
 
   return (
     <div className="stack">
+      {/* First, and only for a person who serves in more than one service: which
+          service everything operational is for. Placed at the top so the choice
+          is the first thing a dual-service member sees, and rendered as nothing at
+          all for everyone else. */}
+      <ServiceSwitcher />
+
       <section className="panel" aria-labelledby="settings-language">
         <h2 className="panel__title" id="settings-language">{t.settings.languageTitle}</h2>
         <p className="muted small">{t.settings.lead}</p>
