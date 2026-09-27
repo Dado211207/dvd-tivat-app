@@ -39,8 +39,20 @@ let szsMember: string;
 let dvdCallOut: string;
 let szsCallOut: string;
 
-/** Rebuilds the schema applying every migration EXCEPT the one under test. */
-async function buildThrough038(client: Client): Promise<void> {
+/**
+ * Rebuilds the schema applying every migration strictly BEFORE 039.
+ *
+ * Sliced by 039's index, not filtered by name: a name filter that only drops 039
+ * would still apply every FUTURE migration (040+) to the "before" stage, so the
+ * pre-039 state would silently include later schema changes - the staging bug
+ * found before in other tests. The "before" stage is exactly "main as it was one
+ * migration ago".
+ */
+async function buildBeforeCredit(client: Client): Promise<void> {
+  const creditIndex = MIGRATIONS.indexOf(CREDIT);
+  if (creditIndex === -1) {
+    throw new Error(`${CREDIT} not found in MIGRATIONS - update this test`);
+  }
   await client.query(`
     drop schema if exists public cascade;
     drop schema if exists auth cascade;
@@ -48,7 +60,7 @@ async function buildThrough038(client: Client): Promise<void> {
     create schema public;
     grant all on schema public to postgres;
   `);
-  for (const file of MIGRATIONS.filter((f) => !f.endsWith('202609270039_attendance_credit_service.sql'))) {
+  for (const file of MIGRATIONS.slice(0, creditIndex)) {
     await client.query(sql(file));
   }
 }
@@ -112,7 +124,7 @@ async function creditedFor(
 
 beforeAll(async () => {
   db = await connect();
-  await buildThrough038(db);
+  await buildBeforeCredit(db);
   const account = await createAccount(db, 'recorder@example.invalid');
   recordedBy = account.userId;
   dvdMember = await createMember(db, 'DVD Clan');

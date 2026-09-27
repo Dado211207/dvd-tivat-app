@@ -283,7 +283,7 @@ At head `ccc59a8`, DVD-only command/staff policies exposed SZS rows created by p
 
 One account starts as a limited citizen. The installation owner assigns DVD, SZS or both; membership in one service must not grant access to the other's operations. A person serving in both has **two service-specific member records** (D13), with separate availability, group membership and attendance. The owner administers both services and can have no membership row; firefighting participation still requires a linked member record in the relevant service. No fictional members are to be added for testing the live installation.
 
-Unanswered product questions Q1–Q8 in the plan block the SZS user interface (P6) and/or joint call-outs (P7), especially dual-service response behavior, command, archives and attendance credit. P4b deliberately excludes joint call-outs. Do not silently turn a security fix into an answer to those product questions.
+The **P6** product questions were answered on 2026-09-27 (plan D14–D17: Q5 schema, Q6, Q7, Q8 interface), so P6 is unblocked and in progress. The still-open questions are **Q1–Q4** (and the joint-intervention *behaviour* Q5/Q8 defer), which block **P7** (joint call-outs) only — dual-service cross-service alerting, command, archives and cross-service attendance credit. P4b deliberately excludes joint call-outs. Do not silently turn a P6 slice into an answer to those P7 questions.
 
 ## How to resume
 

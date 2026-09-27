@@ -13,6 +13,13 @@ flagged assumptions, which unblocks P1 through P5 end to end. Q1–Q8 remain ope
 and block P6 and P7 only. No migration from this plan has been applied to
 production.
 
+**Progress, 2026-09-27:** P1–P5 are merged into `main` (`63e62d5`). D14–D17
+answered the **P6-blocking** questions (Q5 schema, Q6, Q7, Q8 interface); **P6 is
+unblocked and in progress**. **Q1–Q4 remain open and block P7 only** (joint
+call-outs), together with the joint-intervention *behaviour* that Q5/Q8 defer to
+P7. Still no migration from this plan applied to production (22 migrations, through
+`202609230021`).
+
 The audit this is built on ran read-only against the hosted project
 `yskhdzrdbywrpfowckpn` on 2026-09-23, with code read at `2e66ace`. Counts quoted
 below are live production values from that audit.
@@ -98,7 +105,7 @@ UNIQUE (callsign)` (globally unique across both services).
 | **D12** | **The rename moves the registry side** (§5): `OrganisationView.tsx` → `RegistryView.tsx`, `organisation_audit` → `registry_audit`, `t.organisation.*` → `t.registry.*`. The tenant vocabulary — `organizations`, `organization_memberships`, `organization_id` — is **untouched**. |
 | **D13** | **A person serving in both services gets two member records**, one per service (§4.1), with `UNIQUE (user_id)` becoming `UNIQUE (organization_id, user_id)`. Accepted as designed, with its costs: two availability rows, two attendance histories, two roster entries. The interface consequence remains OPEN (Q8). |
 
-**Still OPEN: Q1–Q8.** All eight block P6 or P7 only, so P1–P5 can now run to completion without another answer.
+**Still OPEN as of 2026-09-23: Q1–Q8.** All eight block P6 or P7 only, so P1–P5 can now run to completion without another answer. *(Superseded 2026-09-27: D14–D17 below answer the P6-blocking questions; only Q1–Q4 remain, blocking P7.)*
 
 ### Answered 2026-09-27, closing the P6-blocking questions (Q5 schema, Q6, Q7, Q8 interface)
 
@@ -341,7 +348,8 @@ migrating live history.
 **Every remaining open question blocks P6 or P7 only.** P1 through P5 — the
 rename, the columns, the authority functions, the policy rewrite and retiring
 the mirror — are fully specified and can run to completion without another
-answer.
+answer. *(Update 2026-09-27: D14–D17 answered the P6-blocking questions; the only
+questions still open are Q1–Q4, which block P7.)*
 
 ---
 
@@ -1160,7 +1168,9 @@ push topic prefix. Applied migration **filenames** are never renamed.
 ## 11. What has to happen before implementation starts
 
 1. ~~The owner answers Q9, Q10 and Q11.~~ **Done, 2026-09-23 — D9, D10, D11.**
-   Q1–Q8 remain open and block P6 and P7 only.
+   As of then Q1–Q8 remained open, blocking P6 and P7 only. **Updated 2026-09-27:
+   D14–D17 answered the P6 questions (Q5 schema, Q6, Q7, Q8 interface); only Q1–Q4
+   remain, blocking P7.**
 2. ~~P0 ships on its own, ahead of the schema phases.~~ **Done — merged as #47,
    migration `202609230018`.** Not applied to production.
 3. ~~P3's equivalence test is run against a **restored copy of production**,
