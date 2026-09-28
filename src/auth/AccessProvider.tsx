@@ -180,9 +180,18 @@ export function AccessProvider({ children, gateway, configured, storage }: Acces
   }, [gateway, isConfigured, reload]);
 
   const signOut = useCallback(async () => {
+    // Invalidate an access read already in flight before the sign-out request
+    // begins. Otherwise its old signed-in answer can restore protected screens
+    // while the server is still processing sign-out.
+    generation.current += 1;
     setAccess({ kind: 'LOADING' });
-    await backendSignOut();
-    await reload();
+    try {
+      await backendSignOut();
+    } finally {
+      // A failed sign-out may leave the session valid. Re-ask the server rather
+      // than leave the screen stuck in LOADING or assume the account signed out.
+      await reload();
+    }
   }, [reload]);
 
   const actingService = access.kind === 'SIGNED_IN' ? access.service : null;
