@@ -9,7 +9,7 @@
  * that appears AFTER that baseline sounds.
  *
  * The set of ids is passed in already scoped by the caller - it is the open
- * call-outs the server returned for this member in the service they are acting as -
+ * call-outs the server returned for this member in every service they belong to -
  * so this hook makes no authority decision and reaches no other service. It plays
  * whatever the person chose; `off` (the default) plays nothing.
  *
@@ -25,6 +25,7 @@ export function useCallOutAlarm(
   soundId: string,
   play: (id: string) => void | Promise<boolean | void> = playAlarmSound,
   ready = true,
+  baselineToken = 0,
 ): void {
   // A stable key so the effect runs when the SET of open ids changes, not on
   // every render that happens to rebuild the array.
@@ -32,6 +33,7 @@ export function useCallOutAlarm(
   // Null until the first list arrives: that first list is the baseline and must
   // never sound, however many call-outs are already open in it.
   const known = useRef<Set<string> | null>(null);
+  const lastBaselineToken = useRef(baselineToken);
 
   useEffect(() => {
     // The screen starts with an empty local placeholder before its first
@@ -39,6 +41,13 @@ export function useCallOutAlarm(
     // sounds every already-running call-out when the page first loads.
     if (!ready) return;
     const ids = new Set(key === '' ? [] : key.split('|'));
+    if (lastBaselineToken.current !== baselineToken) {
+      // Returning to a hidden tab is a catch-up read. Treat its successful
+      // snapshot as the new baseline; only later arrivals may sound.
+      lastBaselineToken.current = baselineToken;
+      known.current = ids;
+      return;
+    }
     const previous = known.current;
     known.current = ids;
     if (previous === null) return; // baseline only
@@ -49,5 +58,5 @@ export function useCallOutAlarm(
         return; // one sound per change, however many arrived at once
       }
     }
-  }, [key, soundId, play, ready]);
+  }, [key, soundId, play, ready, baselineToken]);
 }

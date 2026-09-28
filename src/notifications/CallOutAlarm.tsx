@@ -91,7 +91,7 @@ function ActiveAlarm({
   availableServices: readonly OrganizationCode[];
   soundId: string;
 }) {
-  const { openIds, ready, watchedCount } = useAddressedOpenCallOuts(availableServices);
+  const { openIds, ready, watchedCount, baselineToken } = useAddressedOpenCallOuts(availableServices);
   const [plays, setPlays] = useState(0);
 
   const play = useCallback((id: string) => {
@@ -103,7 +103,7 @@ function ActiveAlarm({
     void playAlarmSound(id);
   }, []);
 
-  useCallOutAlarm(openIds, soundId, play, ready);
+  useCallOutAlarm(openIds, soundId, play, ready, baselineToken);
 
   // A hidden, honest signal: it states real listener state (armed, how many
   // services it watches, how many alarms have fired) so a browser test can see
@@ -123,6 +123,7 @@ function ActiveAlarm({
 interface AddressedState {
   readonly openIds: readonly string[];
   readonly ready: boolean;
+  readonly baselineToken: number;
 }
 
 /**
@@ -141,18 +142,31 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
   openIds: readonly string[];
   ready: boolean;
   watchedCount: number;
+  baselineToken: number;
 } {
   const [members, setMembers] = useState<readonly { org: string; memberId: string }[] | null>(null);
-  const [state, setState] = useState<AddressedState>({ openIds: [], ready: false });
+  const [state, setState] = useState<AddressedState>({ openIds: [], ready: false, baselineToken: 0 });
 
   const mounted = useRef(true);
   const generation = useRef(0);
   const readSequence = useRef(0);
   const resolving = useRef(false);
+  const resumePending = useRef(false);
+  const visibilityEpoch = useRef(0);
+  const baselineToken = useRef(0);
   useEffect(() => {
     mounted.current = true;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        resumePending.current = true;
+      } else if (resumePending.current) {
+        visibilityEpoch.current += 1;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       mounted.current = false;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, []);
 
@@ -201,6 +215,8 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
       return;
     }
     const ticket = generation.current;
+    const startedEpoch = visibilityEpoch.current;
+    const startedVisible = document.visibilityState === 'visible';
     // Realtime, a reconnect and the initial read can overlap. Only the most
     // recently requested snapshot may replace the baseline; an older response
     // arriving last would otherwise make the same call-out sound twice.
@@ -208,7 +224,7 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
     if (current.length === 0) {
       // A member of no watched service (owner): a real, successful "nothing
       // addressed to me" - a baseline that can never produce a new id.
-      if (mounted.current) setState({ openIds: [], ready: true });
+      if (mounted.current) setState({ openIds: [], ready: true, baselineToken: baselineToken.current });
       return;
     }
     const reads = await Promise.all(
@@ -217,8 +233,20 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
     if (!mounted.current || ticket !== generation.current || sequence !== readSequence.current) return;
     // A refusal or outage is not an empty archive: keep the last good baseline.
     if (reads.some((result) => !result.ok)) return;
+    const resumed =
+      resumePending.current &&
+      startedVisible &&
+      startedEpoch === visibilityEpoch.current &&
+      document.visibilityState === 'visible';
+    // A read begun before the tab resumed can finish after it becomes visible.
+    // It cannot be the catch-up baseline, and must not sound a hidden arrival.
+    if (resumePending.current && document.visibilityState === 'visible' && !resumed) return;
+    if (resumed) {
+      resumePending.current = false;
+      baselineToken.current += 1;
+    }
     const union = [...new Set(reads.flatMap((result) => (result.ok ? [...result.value] : [])))];
-    setState({ openIds: union, ready: true });
+    setState({ openIds: union, ready: true, baselineToken: baselineToken.current });
   }, [resolveMembers]);
 
   // Read once members are known, then on every realtime notice.
@@ -233,5 +261,10 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
     onChange: () => void read(),
   });
 
-  return { openIds: state.openIds, ready: state.ready, watchedCount: members?.length ?? 0 };
+  return {
+    openIds: state.openIds,
+    ready: state.ready,
+    watchedCount: members?.length ?? 0,
+    baselineToken: state.baselineToken,
+  };
 }

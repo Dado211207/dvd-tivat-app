@@ -171,6 +171,89 @@ describe('the app-level call-out alarm', () => {
     expect(plays()).toBe(1);
   });
 
+  it('quietly catches up after a hidden tab becomes visible, then sounds later arrivals', async () => {
+    writeAlarmSound(window.localStorage, 'u1', 'siren');
+    memberByOrg.set(DVD, 'dvd-member');
+    addressedByMember.set('dvd-member', { ok: true, value: [] });
+    await renderFor(gateway({ userId: 'u1', memberships: ['DVD'] }));
+
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+      // Realtime was unavailable while hidden; the call-out is already open
+      // when the person returns. Their device's push notification handled it.
+      addressedByMember.set('dvd-member', { ok: true, value: ['while-hidden'] });
+      visibility.mockReturnValue('visible');
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+      await notice();
+      expect(plays()).toBe(0);
+
+      addressedByMember.set('dvd-member', { ok: true, value: ['while-hidden', 'while-visible'] });
+      await notice();
+      expect(plays()).toBe(1);
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
+  it('keeps the resume baseline pending through a refused read', async () => {
+    writeAlarmSound(window.localStorage, 'u1', 'siren');
+    memberByOrg.set(DVD, 'dvd-member');
+    addressedByMember.set('dvd-member', { ok: true, value: [] });
+    await renderFor(gateway({ userId: 'u1', memberships: ['DVD'] }));
+
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+      visibility.mockReturnValue('visible');
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+      addressedByMember.set('dvd-member', { ok: false, reason: 'UNAVAILABLE' });
+      await notice();
+      expect(plays()).toBe(0);
+
+      addressedByMember.set('dvd-member', { ok: true, value: ['during-outage'] });
+      await notice();
+      expect(plays()).toBe(0);
+
+      addressedByMember.set('dvd-member', { ok: true, value: ['during-outage', 'fresh'] });
+      await notice();
+      expect(plays()).toBe(1);
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
+  it('ignores a hidden-tab read that finishes after the tab becomes visible', async () => {
+    writeAlarmSound(window.localStorage, 'u1', 'siren');
+    memberByOrg.set(DVD, 'dvd-member');
+    addressedByMember.set('dvd-member', { ok: true, value: [] });
+    await renderFor(gateway({ userId: 'u1', memberships: ['DVD'] }));
+
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+      let finishHidden!: (value: ReadResult<readonly string[]>) => void;
+      addressedByMember.set('dvd-member', new Promise((resolve) => { finishHidden = resolve; }));
+      await notice(); // starts while hidden, finishes later
+
+      visibility.mockReturnValue('visible');
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+      await act(async () => finishHidden({ ok: true, value: ['while-hidden'] }));
+      await flush();
+      expect(plays()).toBe(0);
+
+      addressedByMember.set('dvd-member', { ok: true, value: ['while-hidden'] });
+      await notice(); // first successful visible snapshot becomes the baseline
+      expect(plays()).toBe(0);
+
+      addressedByMember.set('dvd-member', { ok: true, value: ['while-hidden', 'later'] });
+      await notice();
+      expect(plays()).toBe(1);
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
   it('ignores an older read that finishes after a newer arrival read', async () => {
     writeAlarmSound(window.localStorage, 'u1', 'siren');
     memberByOrg.set(DVD, 'dvd-member');
