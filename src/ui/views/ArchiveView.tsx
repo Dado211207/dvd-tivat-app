@@ -65,7 +65,7 @@ import { isPermissionDenied } from '@/auth/supabaseClient';
 export function ArchiveView() {
   return (
     <OperationalGate allow={['OWNER', 'ADMIN', 'COMMANDER', 'FIREFIGHTER']}>
-      {(context) => <Archive key={context.service} organizationId={organizationIdOf(context.service)} />}
+      {(context) => <Archive key={`${context.userId}:${context.service}`} organizationId={organizationIdOf(context.service)} />}
     </OperationalGate>
   );
 }
