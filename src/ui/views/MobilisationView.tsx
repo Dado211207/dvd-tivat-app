@@ -48,6 +48,10 @@ import { formatDurationMs } from '@/auth/duration';
 import { loadRoster } from '@/auth/roster';
 import { readRouteParam } from '../router';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
+import { ActingServiceBadge } from '../components/ActingServiceBadge';
+import { useAccess } from '@/auth/AccessProvider';
+import type { OrganizationCode } from '@/auth/directory';
+import { organizationIdOf } from '@/auth/serviceContext';
 import {
   factStates,
   nextStep,
@@ -79,7 +83,7 @@ export function MobilisationView() {
             <strong>{t.mobilisation.noMemberTitle}</strong> {t.mobilisation.noMemberText}
           </Notice>
         ) : (
-          <Mobilisation context={context} memberId={context.memberId} />
+          <Mobilisation key={`${context.userId}:${context.service}`} context={context} memberId={context.memberId} />
         )
       }
     </OperationalGate>
@@ -124,14 +128,22 @@ function requestedInterventionId(): string | null {
     : null;
 }
 
-function Mobilisation({ memberId }: { context: OperationalContext; memberId: string }) {
+function Mobilisation({ context, memberId }: { context: OperationalContext; memberId: string }) {
   const t = useText();
+  const { availableServices, setActingService } = useAccess();
+  const organizationId = organizationIdOf(context.service);
   const [data, setData] = useState<MyData>(EMPTY);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<'REFUSED_READ' | 'UNAVAILABLE' | null>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * The other service a tapped notification's call-out turned out to belong to,
+   * or null. A push carries only the id, so a dual-service member woken for the
+   * service they are NOT acting as would otherwise land here on a dead end.
+   */
+  const [crossServiceLink, setCrossServiceLink] = useState<OrganizationCode | null>(null);
 
   const generation = useRef(0);
   const mounted = useRef(true);
@@ -161,9 +173,9 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
       };
       try {
         const [interventionsRead, availabilityRead, members] = await Promise.all([
-          fetchInterventions(),
-          fetchAvailability(),
-          loadRoster(),
+          fetchInterventions(organizationId),
+          fetchAvailability(organizationId),
+          loadRoster(organizationId),
         ]);
         /*
          * Stop here rather than carrying on with nothing.
@@ -220,12 +232,59 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
-    [memberId],
+    [memberId, organizationId],
   );
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /**
+   * Where a tapped notification actually leads, when it does not lead here.
+   *
+   * The service worker's push carries only the call-out id - deliberately, so a
+   * locked phone shows no incident detail - and this screen resolves that id
+   * against the CURRENT service only. A person who serves in two services and is
+   * woken for the one they are not acting as would tap the alarm and find nothing,
+   * with no hint why. So once the current service's list has settled without the
+   * id in it, the other services this person may act in are checked - reads they
+   * are entitled to under the same policies - and, if one holds the call-out, an
+   * explicit switch is offered. It NEVER switches on its own: D14 requires the
+   * acting service to change only by a deliberate act, and a check that read the
+   * other service's list is not authority to act there.
+   */
+  useEffect(() => {
+    // Wait for the current service's own read to settle first, so a call-out that
+    // is simply still loading here is never mistaken for one in another service.
+    if (loading) return;
+    const requested = requestedInterventionId();
+    if (requested === null || data.interventions.some((item) => item.id === requested)) {
+      setCrossServiceLink(null);
+      return;
+    }
+    const others = availableServices.filter((code) => code !== context.service);
+    if (others.length === 0) {
+      setCrossServiceLink(null);
+      return;
+    }
+    let live = true;
+    void (async () => {
+      for (const other of others) {
+        const read = await fetchInterventions(organizationIdOf(other));
+        if (!live) return;
+        // Only a call-out the person is genuinely a recipient of in that service
+        // comes back (RLS narrows it); anything else leaves the prompt unshown.
+        if (read.ok && read.value.some((item) => item.id === requested)) {
+          setCrossServiceLink(other);
+          return;
+        }
+      }
+      if (live) setCrossServiceLink(null);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [loading, data.interventions, availableServices, context.service]);
 
   /**
    * A call-out that arrives while this screen is open should appear on it.
@@ -241,6 +300,10 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
     interventionId: activeId,
     onChange: () => void refresh(activeId, { silent: true }),
   });
+
+  // The call-out sound is no longer sounded here: a single app-level listener
+  // (`CallOutAlarm`, mounted above the router) sounds a newly-arrived call-out on
+  // any route, so one arrival makes one sound whichever screen is open.
 
   const active = useMemo(
     () => data.interventions.find((i) => i.id === activeId) ?? null,
@@ -301,11 +364,13 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
   const callOutIsOpen = active !== null && isOpenStatus(active.status);
 
   const availability = (
-    <AvailabilityPanel data={data} busy={busy} onAct={act} collapsed={callOutIsOpen} />
+    <AvailabilityPanel data={data} busy={busy} onAct={act} collapsed={callOutIsOpen} organizationId={organizationId} />
   );
 
   return (
     <div className="stack">
+      {/* Which service's call-outs these are, for a dual-service member. */}
+      <ActingServiceBadge />
       {loadError ? (
         <Notice tone="error">
           {loadError === 'REFUSED_READ' ? t.mobilisation.refusedRead : (
@@ -313,6 +378,29 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
           )}{' '}
           <button type="button" className="btn btn--ghost" onClick={() => void refresh(activeId)}>
             {t.gate.retry}
+          </button>
+        </Notice>
+      ) : null}
+      {/* The tapped notification led to a call-out in the person's OTHER service.
+          Say where it is and offer an explicit switch - never a silent one. */}
+      {crossServiceLink !== null ? (
+        <Notice tone="warn" testId="cross-service-callout">
+          <strong>{t.mobilisation.otherServiceCallOutTitle}</strong>{' '}
+          {t.mobilisation.otherServiceCallOutText.replace(
+            '{service}',
+            t.accounts.organizationLabel[crossServiceLink],
+          )}{' '}
+          <button
+            type="button"
+            className="btn btn--primary"
+            data-testid="switch-to-other-service"
+            disabled={busy}
+            onClick={() => void setActingService(crossServiceLink)}
+          >
+            {t.mobilisation.otherServiceCallOutSwitch.replace(
+              '{service}',
+              t.accounts.organizationLabel[crossServiceLink],
+            )}
           </button>
         </Notice>
       ) : null}
@@ -391,12 +479,14 @@ function AvailabilityPanel({
   busy,
   onAct,
   collapsed,
+  organizationId,
 }: {
   data: MyData;
   busy: boolean;
   onAct: (run: () => Promise<{ ok: boolean; message?: string }>, text: string) => Promise<void>;
   /** True while a call-out is open: this is about next week, that is about now. */
   collapsed: boolean;
+  organizationId: string;
 }) {
   const t = useText();
   const [note, setNote] = useState('');
@@ -417,7 +507,7 @@ function AvailabilityPanel({
           disabled={busy}
           onClick={() =>
             void onAct(
-              () => setOwnAvailability(true, note.trim() === '' ? null : note.trim()),
+              () => setOwnAvailability(true, note.trim() === '' ? null : note.trim(), organizationId),
               t.mobilisation.availableSavedYes,
             )
           }
@@ -432,7 +522,7 @@ function AvailabilityPanel({
           disabled={busy}
           onClick={() =>
             void onAct(
-              () => setOwnAvailability(false, note.trim() === '' ? null : note.trim()),
+              () => setOwnAvailability(false, note.trim() === '' ? null : note.trim(), organizationId),
               t.mobilisation.availableSavedNo,
             )
           }

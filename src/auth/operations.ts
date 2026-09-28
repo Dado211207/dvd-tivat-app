@@ -427,9 +427,11 @@ async function commandReturning<T>(
  * reads answer questions this one cannot, and a commander can still see a
  * running intervention while the picker says it is unavailable.
  */
-export async function fetchEligibleRecipients(): Promise<readonly EligibleRecipient[] | null> {
+export async function fetchEligibleRecipients(organizationId?: string): Promise<readonly EligibleRecipient[] | null> {
   try {
-    const { data, error } = await accountBackend().rpc('eligible_recipients');
+    const { data, error } = organizationId === undefined
+      ? await accountBackend().rpc('eligible_recipients')
+      : await accountBackend().rpc('eligible_recipients_in', { target_organization: organizationId });
     if (error || !data) return null;
     return (data as unknown as EligibleRecipientRow[]).map((row) => ({
       memberId: row.member_id,
@@ -488,23 +490,35 @@ export async function fetchInterventionAudit(
  *
  * Three answers, because there are three situations, and the third one is not
  * the roster's fault.
+ *
+ * P6: the member record is per service (202609240022 made `members` unique per
+ * service). Passing an `organizationId` asks `current_member_id_in(service)` for
+ * the record in the ACTING service; omitting it keeps the DVD-only shim
+ * `current_member_id()`, which is itself `current_member_id_in(DVD)` (…0023), so
+ * the DVD answer is identical either way. The service only selects which record is
+ * asked for - the server still refuses one in a service the caller does not serve.
  */
-export async function fetchOwnMemberId(): Promise<ReadResult<string | null>> {
-  const { data, error } = await accountBackend().rpc('current_member_id');
+export async function fetchOwnMemberId(
+  organizationId?: string,
+): Promise<ReadResult<string | null>> {
+  const { data, error } =
+    organizationId === undefined
+      ? await accountBackend().rpc('current_member_id')
+      : await accountBackend().rpc('current_member_id_in', { target_organization: organizationId });
   if (error) return readFailure(error);
   return ok((data as string | null) ?? null);
 }
 
 /** Only a successful empty read means there are no visible interventions. */
-export async function fetchInterventions(): Promise<ReadResult<readonly Intervention[]>> {
-  const { data, error } = await accountBackend()
+export async function fetchInterventions(organizationId?: string): Promise<ReadResult<readonly Intervention[]>> {
+  let query = accountBackend()
     .from('interventions')
     .select(
       'id, kind, other_kind_note, title, instructions, incident_location, assembly_point,' +
         ' latitude, longitude, status, version, published_at, closed_at, close_reason, created_at',
-    )
-    .order('created_at', { ascending: false })
-    .limit(100);
+    );
+  if (organizationId !== undefined) query = query.eq('organization_id', organizationId);
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
   if (error || !Array.isArray(data)) return readFailure(error);
   return ok((data as unknown as InterventionRow[]).map((row) => ({
     id: row.id,
@@ -523,6 +537,53 @@ export async function fetchInterventions(): Promise<ReadResult<readonly Interven
     closeReason: (row.close_reason as string | null) ?? null,
     createdAt: row.created_at as string,
   })));
+}
+
+/**
+ * The OPEN call-outs a given member was actually sent, in one service.
+ *
+ * This is the recipient signal the app-level call-out alarm needs, and it is
+ * deliberately NOT `fetchInterventions`: that returns everything a COMMANDER may
+ * see (all of their service's call-outs), so it cannot tell "addressed to me"
+ * from "visible to me as staff". This reads the member's OWN recipient rows -
+ * `recipients_self_read` allows exactly `member_id = current_member_id_in(org)` -
+ * and keeps the ones whose intervention is still open. So it answers, for any
+ * role, only "call-outs this member was paged for and that are still running".
+ *
+ * The `memberId` must be the caller's own member in `organizationId` (from
+ * `current_member_id_in`); row level security returns nothing for any other, so
+ * this can never read another member's pages, and an account with no member in
+ * the service (an owner) has no id to pass and is never called here.
+ */
+export async function fetchAddressedOpenInterventionIds(
+  organizationId: string,
+  memberId: string,
+): Promise<ReadResult<readonly string[]>> {
+  const { data, error } = await accountBackend()
+    .from('intervention_recipients')
+    // Filter through the parent BEFORE the REST row cap. Filtering closed
+    // history in JavaScript could hide a newly published call-out after a
+    // member has accumulated enough old recipient rows.
+    .select('intervention_id, interventions!inner(status)')
+    .eq('organization_id', organizationId)
+    .eq('member_id', memberId)
+    .in('interventions.status', [...SETTABLE_STATUSES]);
+  if (error || !Array.isArray(data)) return readFailure(error);
+  const rows = data as unknown as {
+    intervention_id: string;
+    interventions: { status: string } | { status: string }[] | null;
+  }[];
+  const ids: string[] = [];
+  for (const row of rows) {
+    // PostgREST returns the embedded parent as an object for a to-one relation;
+    // tolerate an array shape too rather than trust one representation.
+    const embedded = Array.isArray(row.interventions) ? row.interventions[0] : row.interventions;
+    const status = embedded?.status;
+    if (status !== undefined && isOpenStatus(status as InterventionStatus)) {
+      ids.push(row.intervention_id);
+    }
+  }
+  return ok(ids);
 }
 
 /**
@@ -625,15 +686,18 @@ export async function fetchAttendance(
   })));
 }
 
-export async function fetchVehicleMovements(): Promise<ReadResult<readonly VehicleMovement[]>> {
+export async function fetchVehicleMovements(organizationId?: string): Promise<ReadResult<readonly VehicleMovement[]>> {
   const backend = accountBackend();
+  let movementQuery = backend.from('vehicle_movements')
+    .select('id, vehicle_id, intervention_id, purpose, departed_at, returned_at');
+  let vehicleQuery = backend.from('vehicles').select('id, callsign, name');
+  if (organizationId !== undefined) {
+    movementQuery = movementQuery.eq('organization_id', organizationId);
+    vehicleQuery = vehicleQuery.eq('organization_id', organizationId);
+  }
   const [movements, vehicles] = await Promise.all([
-    backend
-      .from('vehicle_movements')
-      .select('id, vehicle_id, intervention_id, purpose, departed_at, returned_at')
-      .order('departed_at', { ascending: false })
-      .limit(100),
-    backend.from('vehicles').select('id, callsign, name'),
+    movementQuery.order('departed_at', { ascending: false }).limit(100),
+    vehicleQuery,
   ]);
   const failed = [movements, vehicles].find((r) => r.error);
   if (failed) return readFailure(failed.error);
@@ -656,10 +720,12 @@ export async function fetchVehicleMovements(): Promise<ReadResult<readonly Vehic
   }));
 }
 
-export async function fetchAvailability(): Promise<ReadResult<readonly AvailabilityRow[]>> {
-  const { data, error } = await accountBackend()
+export async function fetchAvailability(organizationId?: string): Promise<ReadResult<readonly AvailabilityRow[]>> {
+  let query = accountBackend()
     .from('member_availability')
     .select('member_id, available, note, changed_at');
+  if (organizationId !== undefined) query = query.eq('organization_id', organizationId);
+  const { data, error } = await query;
   if (error || !data) return readFailure(error);
   return ok((data as unknown as AvailabilityWireRow[]).map((row) => ({
     memberId: row.member_id,
@@ -714,8 +780,11 @@ const count = (value: number | string | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export async function fetchParticipationTotals(): Promise<ReadResult<readonly ParticipationTotal[]>> {
-  const { data, error } = await accountBackend().rpc('attendance_totals', {});
+/** Narrow the all-time totals at PostgREST before they reach a dual-service client. */
+export async function fetchParticipationTotals(memberIds?: readonly string[]): Promise<ReadResult<readonly ParticipationTotal[]>> {
+  if (memberIds?.length === 0) return ok([]);
+  const query = accountBackend().rpc('attendance_totals', {});
+  const { data, error } = await (memberIds === undefined ? query : query.in('member_id', [...memberIds]));
   if (error || !data) return readFailure(error);
   return ok((data as unknown as TotalsRow[]).map((row) => ({
     memberId: row.member_id,
@@ -732,6 +801,7 @@ export async function fetchParticipationTotals(): Promise<ReadResult<readonly Pa
 // --- Commands -------------------------------------------------------------
 
 export const createDraft = (input: {
+  organizationId?: string;
   kind: InterventionKind;
   title: string;
   instructions: string;
@@ -743,7 +813,8 @@ export const createDraft = (input: {
   longitude?: number | null;
   coordinateSource?: 'MAP_PIN' | 'TYPED' | 'DEVICE' | null;
 }) =>
-  commandReturning<string>('create_intervention_draft', {
+  commandReturning<string>(input.organizationId === undefined ? 'create_intervention_draft' : 'create_intervention_draft_in', {
+    ...(input.organizationId === undefined ? {} : { target_organization: input.organizationId }),
     requested_kind: input.kind,
     requested_title: input.title,
     requested_instructions: input.instructions,
@@ -837,8 +908,9 @@ export const setJourneyProgress = (interventionId: string, progress: JourneyStep
     requested_progress: progress,
   });
 
-export const setOwnAvailability = (available: boolean, note: string | null) =>
-  command('set_own_availability', {
+export const setOwnAvailability = (available: boolean, note: string | null, organizationId?: string) =>
+  command(organizationId === undefined ? 'set_own_availability' : 'set_own_availability_in', {
+    ...(organizationId === undefined ? {} : { target_organization: organizationId }),
     requested_available: available,
     requested_note: note,
   });

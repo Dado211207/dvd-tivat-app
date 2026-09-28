@@ -213,6 +213,7 @@ export const me = {
     pageTitle: 'Evidencija drustva', adminOnly: 'Samo administrator ili vlasnik',
     signInFirst: 'Prijavite se da biste vidjeli evidenciju.',
     denied: 'Evidenciju odrzava administrator ili vlasnik. Komandir vodi intervencije, ali ne mijenja sastav drustva.',
+    actingService: 'Sluzba',
     serverData: 'Podaci sa servera', tabs: 'Dio evidencije', members: 'Clanovi', groups: 'Grupe', vehicles: 'Vozila',
     loading: 'Ucitavanje evidencije...', loadFailed: 'Evidencija nije mogla biti ucitana sa servera.',
     changeFailed: 'Promjena nije sacuvana.', unreadyOne: 'Jedan clan ne moze primiti poziv.', unreadyMany: '{count} clanova ne moze primiti poziv.',
@@ -310,6 +311,39 @@ export const me = {
       'Jezik je promijenjen, ali ga ovaj pregledac ne moze zapamtiti. Ponovnim ucitavanjem vraca se na Crnogorski.',
     contentNotTranslated:
       'Naslovi intervencija, imena clanova, uputstva i biljeske prikazuju se onako kako su upisani, na jeziku na kojem su napisani.',
+
+    actingServiceTitle: 'Sluzba u kojoj djelujete',
+    actingServiceLead:
+      'Sluzite u vise sluzbi. Izaberite u ime koje sada djelujete - vasa uloga, clanska evidencija i spiskovi odnose se na tu sluzbu.',
+    actingServiceLegend: 'Izaberite sluzbu',
+    actingServiceCurrent: 'Sada djelujete kao: {service}.',
+    actingServiceSwitching: 'Mijenjam sluzbu...',
+    actingServiceHint:
+      'Izbor se pamti na ovom uredjaju. Ne mijenja vasa prava - njih server odredjuje za svaku sluzbu posebno.',
+    // The badge shown on the operational screens links here, to the one place a
+    // switch is made. An explicit act on a deliberate screen, never a silent flip.
+    actingServiceChange: 'Promijeni sluzbu',
+
+    alarm: {
+      title: 'Zvuk poziva na ovom uredjaju',
+      lead: 'Zvuk koji se cuje kada stigne novi poziv dok je aplikacija otvorena, na bilo kom ekranu. Bira se ovdje i pamti se na ovom uredjaju.',
+      legend: 'Izaberite zvuk',
+      off: 'Bez zvuka',
+      preview: 'Preslusaj',
+      groupOrdinary: 'Obicni',
+      groupAlarm: 'Alarmni',
+      // The one thing people get wrong about web notifications.
+      foregroundNote:
+        'Ovaj zvuk se cuje dok je aplikacija otvorena, na svakom ekranu. Kada obavjestenje stigne dok je aplikacija zatvorena ili u pozadini, telefon koristi svoj zvuk obavjestenja - njega mijenjate u podesavanjima telefona, ne ovdje.',
+      names: {
+        chime: 'Zvono',
+        twotone: 'Dva tona',
+        softarp: 'Blagi niz',
+        pulse: 'Puls',
+        siren: 'Sirena',
+        urgent: 'Hitno',
+      },
+    },
 
     notificationsTitle: 'Obavjestenja na ovom uredjaju',
     displayTitle: 'Vrijeme i prikaz',
@@ -549,6 +583,16 @@ export const me = {
     noCallOutTitle: 'Nema poziva za vas',
     noCallOutText:
       'Kada vas komandir pozove na intervenciju, pojavice se ovdje. Ovaj spisak pokazuje samo pozive na kojima ste vi na spisku.',
+
+    // A push notification carries only the call-out id, never its service. If the
+    // opened call-out belongs to the OTHER service this person serves in, this
+    // screen (acting as the current service) has nothing to show for it - so it
+    // says where it is and offers an explicit switch, rather than a silent
+    // dead-end on the alarm somebody just tapped.
+    otherServiceCallOutTitle: 'Poziv je u drugoj sluzbi.',
+    otherServiceCallOutText:
+      'Poziv koji ste otvorili vodi se u sluzbi {service}. Sada djelujete u drugoj sluzbi, pa se ovdje ne prikazuje.',
+    otherServiceCallOutSwitch: 'Predji na {service}',
 
     availabilityTitle: 'Moja opsta dostupnost',
     availabilityNote:

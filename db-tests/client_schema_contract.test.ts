@@ -68,6 +68,30 @@ function balanced(text: string, start: number, open: string, close: string): str
   return null;
 }
 
+/**
+ * Split a PostgREST select list on its TOP-LEVEL commas, keeping an embedded
+ * resource whole: `intervention_id, interventions(status, title)` becomes
+ * `['intervention_id', 'interventions(status, title)']`, not four fragments. A
+ * naive `split(',')` would tear the embed's own column list apart.
+ */
+function splitSelectList(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of text) {
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  parts.push(current);
+  return parts;
+}
+
 function readDataLayer(): { selects: SelectSite[]; rpcs: RpcSite[] } {
   const selects: SelectSite[] = [];
   const rpcs: RpcSite[] = [];
@@ -85,8 +109,7 @@ function readDataLayer(): { selects: SelectSite[]; rpcs: RpcSite[] } {
       selects.push({
         file,
         table: match[1] as string,
-        columns: joined
-          .split(',')
+        columns: splitSelectList(joined)
           .map((c) => c.trim())
           .filter((c) => c.length > 0),
       });
@@ -121,7 +144,12 @@ describe('the client names things the database has', () => {
   let client: Client;
   let columns: Map<string, Set<string>>;
   let functions: Map<string, Set<string>[]>;
+  // Unordered `a\u0000b` keys for each foreign-key edge, so an embed can be
+  // validated as a real relationship in either direction (to-one or to-many).
+  let relationships: Set<string>;
   const { selects, rpcs } = readDataLayer();
+
+  const fkKey = (a: string, b: string): string => [a, b].sort().join('\u0000');
 
   beforeAll(async () => {
     client = await connect();
@@ -153,26 +181,74 @@ describe('the client names things the database has', () => {
       list.push(new Set(row.args ?? []));
       functions.set(row.proname, list);
     }
+
+    relationships = new Set();
+    const fkRows = await client.query<{ child: string; parent: string }>(
+      `select rel.relname as child, frel.relname as parent
+         from pg_constraint c
+         join pg_class rel on rel.oid = c.conrelid
+         join pg_class frel on frel.oid = c.confrelid
+         join pg_namespace n on n.oid = c.connamespace
+        where c.contype = 'f' and n.nspname = 'public'`,
+    );
+    for (const row of fkRows.rows) {
+      relationships.add(fkKey(row.child, row.parent));
+    }
   }, 120_000);
 
   afterAll(async () => {
     await client?.end();
   });
 
+  /**
+   * Check one select token against a table. A plain token is a column (possibly
+   * `alias:column`); a token of the shape `[alias:]relation(inner, …)` is a
+   * PostgREST embedded resource, valid only when `relation` is a real table
+   * joined to `table` by a foreign key, and its inner tokens are then checked
+   * against that relation (recursively, since embeds can nest).
+   */
+  function checkToken(table: string, token: string, file: string, faults: string[]): void {
+    const trimmed = token.trim();
+    if (trimmed === '') return;
+
+    const embed = /^(?:[a-z_0-9]+:)?([a-z_0-9]+)(?:!inner)?\((.*)\)$/is.exec(trimmed);
+    if (embed) {
+      const relation = embed[1] as string;
+      if (!columns.has(relation)) {
+        faults.push(`${file}: no embedded table public.${relation}`);
+        return;
+      }
+      if (!relationships.has(fkKey(table, relation))) {
+        faults.push(`${file}: no foreign key joins public.${table} to public.${relation}`);
+        return;
+      }
+      for (const inner of splitSelectList(embed[2] as string)) {
+        checkToken(relation, inner, file, faults);
+      }
+      return;
+    }
+
+    const known = columns.get(table);
+    if (known === undefined) {
+      faults.push(`${file}: no table public.${table}`);
+      return;
+    }
+    // PostgREST allows `alias:column`; the real name is after the colon.
+    const real = (trimmed.includes(':') ? trimmed.split(':')[1] : trimmed)?.trim() ?? trimmed;
+    if (real !== '*' && !known.has(real)) {
+      faults.push(`${file}: public.${table} has no column "${real}"`);
+    }
+  }
+
   it('reads only columns that exist', () => {
     const faults: string[] = [];
     for (const site of selects) {
-      const known = columns.get(site.table);
-      if (known === undefined) {
+      if (!columns.has(site.table)) {
         faults.push(`${site.file}: no table public.${site.table}`);
         continue;
       }
       for (const column of site.columns) {
-        // PostgREST allows `alias:column`; the real name is after the colon.
-        const real = (column.includes(':') ? column.split(':')[1] : column)?.trim() ?? column;
-        if (real !== '*' && !known.has(real)) {
-          faults.push(`${site.file}: public.${site.table} has no column "${real}"`);
-        }
+        checkToken(site.table, column, site.file, faults);
       }
     }
     expect(faults).toEqual([]);

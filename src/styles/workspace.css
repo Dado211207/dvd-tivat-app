@@ -2531,6 +2531,39 @@ dialog {
 .live-dot--connecting { background: var(--c-unknown); }
 .live-dot--off { background: var(--c-line-strong); }
 
+/*
+ * "Acting as DVD / SZS", at the top of an operational screen.
+ *
+ * Shown only to somebody who serves in more than one service, so it must read as
+ * a quiet, persistent label rather than a notice - it is not something that has
+ * just happened, it is which service everything below belongs to. The change link
+ * goes to Settings, where the switch is actually made.
+ */
+.acting-service-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  margin: 0 0 var(--sp-3);
+}
+
+.acting-service-badge__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--c-accent);
+  border-radius: 50%;
+}
+
+/* The call-out sound picker groups its options under "ordinary" and "alarm". */
+.alarm-group {
+  margin-top: var(--sp-3);
+}
+
+.alarm-group__label {
+  margin: 0 0 var(--sp-1);
+}
+
 /* ------------------------------------------------- timings and milestones */
 
 /*

@@ -206,6 +206,7 @@ export const en: Strings = {
     pageTitle: 'Organisation records', adminOnly: 'Administrator or owner only',
     signInFirst: 'Sign in to view these records.',
     denied: 'Administrators and owners maintain these records. Commanders manage interventions but do not change the organisation roster.',
+    actingService: 'Service',
     serverData: 'Server records', tabs: 'Records section', members: 'Members', groups: 'Groups', vehicles: 'Vehicles',
     loading: 'Loading records...', loadFailed: 'Records could not be loaded from the server.',
     changeFailed: 'The change was not saved.', unreadyOne: 'One member cannot receive a call-out.', unreadyMany: '{count} members cannot receive a call-out.',
@@ -295,6 +296,36 @@ export const en: Strings = {
       'The language has changed, but this browser cannot remember it. Reloading will return to Crnogorski.',
     contentNotTranslated:
       'Intervention titles, member names, instructions and notes are shown exactly as they were written, in the language they were written in.',
+
+    actingServiceTitle: 'Service you are acting in',
+    actingServiceLead:
+      'You serve in more than one service. Choose which one you are acting in now - your role, member record and lists are all for that service.',
+    actingServiceLegend: 'Choose a service',
+    actingServiceCurrent: 'Acting as: {service}.',
+    actingServiceSwitching: 'Switching service...',
+    actingServiceHint:
+      'The choice is remembered on this device. It does not change your rights - the server decides those separately for each service.',
+    actingServiceChange: 'Change service',
+
+    alarm: {
+      title: 'Call-out sound on this device',
+      lead: 'The sound played when a new call-out arrives while the app is open, on any screen. Chosen here and remembered on this device.',
+      legend: 'Choose a sound',
+      off: 'No sound',
+      preview: 'Preview',
+      groupOrdinary: 'Ordinary',
+      groupAlarm: 'Alarm',
+      foregroundNote:
+        'This sound plays while the app is open, on any screen. When a notification arrives with the app closed or in the background, the phone uses its own notification sound - you change that in the phone settings, not here.',
+      names: {
+        chime: 'Chime',
+        twotone: 'Two-tone',
+        softarp: 'Soft sequence',
+        pulse: 'Pulse',
+        siren: 'Siren',
+        urgent: 'Urgent',
+      },
+    },
 
     notificationsTitle: 'Notifications on this device',
     displayTitle: 'Time and display',
@@ -506,6 +537,11 @@ export const en: Strings = {
     noCallOutTitle: 'There is no call-out for you',
     noCallOutText:
       'When your commander calls you out to an intervention it will appear here. This list shows only the call-outs you are on.',
+
+    otherServiceCallOutTitle: 'This call-out is in your other service.',
+    otherServiceCallOutText:
+      'The call-out you opened is in {service}. You are acting as a different service, so it is not shown here.',
+    otherServiceCallOutSwitch: 'Switch to {service}',
 
     availabilityTitle: 'My general availability',
     availabilityNote:

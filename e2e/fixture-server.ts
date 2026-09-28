@@ -26,7 +26,28 @@ const SECOND_USER_ID = '55555555-5555-4555-8555-555555555555';
 const DVD_ID = '00000000-0000-4000-8000-000000000001';
 const SZS_ID = '00000000-0000-4000-8000-000000000002';
 
+// P6 multi-service seed: distinct member ids, call-outs and rosters per service,
+// so a dual-service or owner session proves the CLIENT scopes everything to the
+// acting service (isolation itself is RLS, proven in db-tests/).
+export const DUAL_DVD_MEMBER = 'aaaa0d13-0000-4000-8000-000000000001';
+export const DUAL_SZS_MEMBER = 'bbbb0d13-0000-4000-8000-000000000002';
+const DVD_ORG_CALLOUT = 'aaaa0001-0000-4000-8000-000000000011';
+const SZS_ORG_CALLOUT = 'bbbb0002-0000-4000-8000-000000000022';
+export const DVD_CALLOUT_TITLE = 'DVD poziv (izmišljeni podaci)';
+export const SZS_CALLOUT_TITLE = 'SZS poziv (izmišljeni podaci)';
+export const DVD_ROSTER_NAME = 'Marko DVD (izmišljeno)';
+export const SZS_ROSTER_NAME = 'Ana SZS (izmišljeno)';
+
 export type FixtureRole = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
+
+/** One service a multi-service account belongs to, as the server would report it. */
+export interface FixtureMembership {
+  readonly service: 'DVD' | 'SZS';
+  /** What `current_role_in(this service)` returns. */
+  readonly role: FixtureRole;
+  /** What `current_member_id_in(this service)` returns; null = no member record. */
+  readonly memberId: string | null;
+}
 
 /**
  * The situations the screens have to be legible in, not just the happy one.
@@ -40,6 +61,10 @@ export type FixtureRole = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
  * far easier to ship without noticing.
  */
 export interface FixtureOptions {
+  /** P6: run the browser fixture as an SZS-only member, without a DVD role. */
+  readonly service?: 'DVD' | 'SZS';
+  /** A small mutable fake for one isolated call-out lifecycle. */
+  readonly lifecycle?: boolean;
   /**
    * What `current_dvd_role()` answers.
    *
@@ -135,6 +160,19 @@ export interface FixtureOptions {
    * express it - both produced the same screen.
    */
   readonly memberId?: string | null;
+  /**
+   * P6: a multi-service account - a dual-service member (two member records), or
+   * the installation owner who administers both. When set, it drives the identity
+   * RPCs (`current_organization_memberships`, `current_role_in`,
+   * `current_member_id_in`, `is_installation_owner`) for BOTH services and seeds a
+   * distinct call-out and roster per service, so a browser test can switch the
+   * acting service and prove the client re-scopes every read. It overrides the
+   * single-service `service`/`role`/`memberId` shims. `owner` forces
+   * `is_installation_owner` true even when no membership is OWNER (the owner who
+   * administers a service they are not a member of).
+   */
+  readonly memberships?: readonly FixtureMembership[];
+  readonly owner?: boolean;
 }
 
 const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
@@ -398,6 +436,88 @@ function json(route: Route, body: unknown, status = 200): Promise<void> {
 }
 
 /**
+ * A two-service store for a multi-service account.
+ *
+ * Every operational read the client makes is scoped by `organization_id`
+ * (`operations.ts`/`roster.ts` add `?organization_id=eq.<org>`), and the fixture
+ * already honours equality filters, so labelling each row with its service is all
+ * it takes for a switch to re-scope: the DVD read returns the DVD call-out and
+ * roster, the SZS read the SZS ones, with nothing to compute here. The real
+ * isolation is the database's RLS, proven in `db-tests/`; this proves the client
+ * asks the right, service-scoped questions and shows only their answers.
+ */
+function multiServiceStore(memberships: readonly FixtureMembership[], isOwner: boolean): {
+  interventions: Record<string, unknown>[];
+  tables: Record<string, unknown[]>;
+  eligibleByOrg: Record<string, unknown[]>;
+} {
+  const spec = {
+    DVD: { org: DVD_ID, callout: DVD_ORG_CALLOUT, title: DVD_CALLOUT_TITLE, member: DUAL_DVD_MEMBER, memberName: DVD_ROSTER_NAME },
+    SZS: { org: SZS_ID, callout: SZS_ORG_CALLOUT, title: SZS_CALLOUT_TITLE, member: DUAL_SZS_MEMBER, memberName: SZS_ROSTER_NAME },
+  } as const;
+  const interventions: Record<string, unknown>[] = [];
+  const members: Record<string, unknown>[] = [];
+  const recipients: Record<string, unknown>[] = [];
+  const vehicles: Record<string, unknown>[] = [];
+  const eligibleByOrg: Record<string, unknown[]> = {};
+  for (const svc of ['DVD', 'SZS'] as const) {
+    const s = spec[svc];
+    const membership = memberships.find((m) => m.service === svc);
+    interventions.push({
+      id: s.callout, organization_id: s.org, kind: 'VJEZBA', other_kind_note: null,
+      title: s.title, instructions: 'Okupljanje (izmišljeni podaci).',
+      incident_location: `${svc} lokacija (izmišljeno)`, assembly_point: null,
+      latitude: null, longitude: null, status: 'PUBLISHED', version: 2,
+      published_at: '2026-09-13T08:00:00.000Z', closed_at: null, close_reason: null,
+      created_at: '2026-09-13T07:55:00.000Z',
+    });
+    // The roster row exists per service; a service where the account has a member
+    // record links to this user, otherwise it belongs to somebody else entirely.
+    members.push({
+      id: s.member, organization_id: s.org, full_name: s.memberName, specialties: [],
+      active: true, user_id: membership?.memberId ? USER_ID : null,
+    });
+    recipients.push({
+      intervention_id: s.callout, organization_id: s.org, member_id: s.member,
+      member_name_at_publication: s.memberName,
+    });
+    vehicles.push({
+      id: svc === 'DVD' ? 'aaaa0000-0000-4000-8000-0000000000a1' : 'bbbb0000-0000-4000-8000-0000000000b2',
+      organization_id: s.org, callsign: svc === 'DVD' ? 'NV-1' : 'SC-1',
+      name: `${svc} vozilo (izmišljeno)`, kind: svc === 'DVD' ? 'Navalno' : 'Cisterna', active: true,
+    });
+    eligibleByOrg[s.org] = [{ member_id: s.member, full_name: s.memberName, role: 'FIREFIGHTER', specialties: [] }];
+  }
+  // The account directory reads `access_grants` (the base role) and
+  // `organization_memberships` (the per-service columns) for EVERY account, so
+  // they must match the chosen identity, not the single-service defaults. The
+  // owner has an OWNER base grant and ZERO memberships (their OWNER-in-each-
+  // service comes from ownership, not a membership row); a member has a CITIZEN
+  // base grant and one membership per service. This is the P5+ model proven in
+  // `db-tests/retire_role_mirror.test.ts`.
+  const accessGrants = [
+    { user_id: USER_ID, role: isOwner ? 'OWNER' : 'CITIZEN', active: true, granted_at: '2026-09-12T21:00:00.000Z' },
+  ];
+  const organizationMemberships = memberships.map((m) => ({
+    organization_id: m.service === 'SZS' ? SZS_ID : DVD_ID,
+    user_id: USER_ID, role: m.role, active: true,
+  }));
+  return {
+    interventions,
+    eligibleByOrg,
+    tables: {
+      ...TABLES,
+      interventions, members, vehicles,
+      access_grants: accessGrants,
+      organization_memberships: organizationMemberships,
+      intervention_recipients: recipients,
+      intervention_acknowledgements: [], intervention_responses: [],
+      intervention_journey: [], attendance_intervals: [], vehicle_movements: [],
+    },
+  };
+}
+
+/**
  * Installs the fake project and a signed-in session.
  *
  * `role` changes only what `current_dvd_role()` answers, which is exactly how
@@ -413,7 +533,32 @@ export async function installFixtureProject(
   // so the default is applied only when the key is genuinely absent.
   const role = 'role' in options ? options.role : 'COMMANDER';
   const accountStatus = options.accountStatus ?? 'ACTIVE';
-  const interventions = interventionRows(options.interventions ?? 'PUBLISHED');
+  const orgId = options.service === 'SZS' ? SZS_ID : DVD_ID;
+  // A multi-service account (dual member or owner) overrides the single-service
+  // seed with a per-service store the acting-service switch re-scopes across.
+  const multi = options.memberships
+    ? multiServiceStore(options.memberships, options.owner ?? false)
+    : null;
+  const interventions = multi
+    ? multi.interventions
+    : options.lifecycle
+      ? [{ ...interventionRows('PUBLISHED')[0] as Record<string, unknown>,
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', organization_id: DVD_ID,
+        title: 'DVD poziv koji SZS ne smije vidjeti' }]
+      : interventionRows(options.interventions ?? 'PUBLISHED');
+  const tables: Record<string, unknown[]> = multi
+    ? multi.tables
+    : options.lifecycle
+      ? {
+        ...TABLES,
+        members: (TABLES.members ?? []).map((row) => ({ ...row as object, organization_id: orgId })),
+        vehicles: [], vehicle_movements: [],
+        intervention_recipients: [], intervention_acknowledgements: [],
+        intervention_responses: [], intervention_journey: [], attendance_intervals: [],
+      }
+      : TABLES;
+  const draftId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const intervalId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
   if (options.language) {
     await page.addInitScript((language) => {
@@ -469,10 +614,122 @@ export async function installFixtureProject(
         return json(route, { code: '42501', message: 'permission denied for function ' + name }, 403);
       }
 
-      if (name === 'current_dvd_role') return json(route, role ?? null);
+      // A multi-service account answers the identity RPCs for BOTH services from
+      // its membership list, so switching the acting service resolves a real role
+      // and member (or, for the owner, a role but no member) in the chosen one.
+      if (multi) {
+        const memberships = options.memberships!;
+        const isOwner = options.owner ?? false;
+        const orgService = (org: string | undefined): 'DVD' | 'SZS' | null =>
+          org === DVD_ID ? 'DVD' : org === SZS_ID ? 'SZS' : null;
+        const target = () =>
+          (route.request().postDataJSON() as { target_organization?: string } | null)?.target_organization;
+        // The owner holds OWNER in EVERY service through ownership, with no
+        // membership row and no member id - the contract in
+        // `db-tests/retire_role_mirror.test.ts`. A member's role and id come from
+        // their membership; a service they are not a member of answers null.
+        const roleIn = (svc: 'DVD' | 'SZS' | null): string | null =>
+          memberships.find((m) => m.service === svc)?.role ?? (isOwner ? 'OWNER' : null);
+        if (name === 'current_account_status') return json(route, accountStatus);
+        if (name === 'is_installation_owner') return json(route, isOwner);
+        if (name === 'current_organization_memberships') {
+          // The caller's OWN membership rows: an owner with zero memberships
+          // answers an empty list, exactly as the server does.
+          return json(route, memberships.map((m) => ({
+            organization_code: m.service,
+            organization_name: m.service === 'SZS' ? 'SZS Tivat' : 'DVD Tivat',
+            membership_role: m.role,
+          })));
+        }
+        if (name === 'current_dvd_role') return json(route, roleIn('DVD'));
+        if (name === 'current_role_in') return json(route, roleIn(orgService(target())));
+        if (name === 'current_member_id_in') {
+          const svc = orgService(target());
+          return json(route, memberships.find((m) => m.service === svc)?.memberId ?? null);
+        }
+        if (name === 'current_member_id') {
+          return json(route, memberships.find((m) => m.memberId)?.memberId ?? null);
+        }
+        if (name === 'eligible_recipients_in') {
+          return json(route, multi.eligibleByOrg[target() ?? ''] ?? []);
+        }
+      }
+
+      // P6: the client resolves the role and member for the ACTING service through
+      // `current_role_in` / `current_member_id_in`; `is_installation_owner` and
+      // `current_organization_memberships` decide which services are on offer.
+      // These answer exactly as the DVD shims do, so a fixture written for the
+      // DVD-only client keeps meaning the same thing for the service-aware one.
+      if (name === 'current_dvd_role') return json(route, options.service === 'SZS' ? null : role ?? null);
+      if (name === 'current_role_in') {
+        const body = route.request().postDataJSON() as { target_organization?: string };
+        return json(route, body.target_organization === orgId ? role ?? null : null);
+      }
+      if (name === 'is_installation_owner') return json(route, role === 'OWNER');
       if (name === 'current_account_status') return json(route, accountStatus);
-      if (name === 'current_member_id' && 'memberId' in options) {
-        return json(route, options.memberId ?? null);
+      if (name === 'current_member_id' || name === 'current_member_id_in') {
+        if (name === 'current_member_id_in' && options.service === 'SZS') {
+          const body = route.request().postDataJSON() as { target_organization?: string };
+          return json(route, body.target_organization === orgId ? MEMBER_ID : null);
+        }
+        if ('memberId' in options) return json(route, options.memberId ?? null);
+        return json(route, RPC.current_member_id);
+      }
+      if (options.service === 'SZS' && name === 'current_organization_memberships') {
+        return json(route, [{ organization_code: 'SZS', organization_name: 'SZS Tivat', membership_role: role }]);
+      }
+      if (name === 'eligible_recipients_in') return json(route, RPC.eligible_recipients);
+      if (options.lifecycle) {
+        const args = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+        const current = interventions.find((row) => (row as Record<string, unknown>).id === draftId) as Record<string, unknown> | undefined;
+        if (name === 'create_intervention_draft_in') {
+          if (args.target_organization !== orgId) return json(route, { message: 'COMMAND_REQUIRED' }, 400);
+          interventions.unshift({ id: draftId, organization_id: orgId,
+            kind: args.requested_kind, other_kind_note: null, title: args.requested_title,
+            instructions: args.requested_instructions, incident_location: args.requested_location,
+            assembly_point: args.requested_assembly_point, latitude: null, longitude: null,
+            status: 'DRAFT', version: 1, published_at: null, closed_at: null,
+            close_reason: null, created_at: new Date().toISOString() });
+          return json(route, draftId);
+        }
+        if (name === 'publish_intervention' && current) {
+          current.status = 'PUBLISHED'; current.version = 2; current.published_at = new Date().toISOString();
+          tables.intervention_recipients = (args.recipient_member_ids as string[]).map((member_id) => ({
+            intervention_id: draftId, member_id, member_name_at_publication: 'Ivo Vatrogasac',
+          }));
+          return json(route, draftId);
+        }
+        if (name === 'acknowledge_intervention') {
+          tables.intervention_acknowledgements!.push({ intervention_id: draftId, member_id: MEMBER_ID, opened_at: new Date().toISOString() });
+        }
+        if (name === 'submit_response') {
+          tables.intervention_responses!.push({ intervention_id: draftId, member_id: MEMBER_ID,
+            answer: args.requested_answer, eta_minutes: args.requested_eta,
+            updated_at: new Date().toISOString(), responded_at: new Date().toISOString() });
+        }
+        if (name === 'set_journey_progress') {
+          tables.intervention_journey = [{ intervention_id: draftId, member_id: MEMBER_ID,
+            progress: args.requested_progress, updated_at: new Date().toISOString() }];
+        }
+        if (name === 'attendance_check_in') {
+          tables.attendance_intervals!.push({ id: intervalId, intervention_id: draftId,
+            member_id: MEMBER_ID, started_at: new Date().toISOString(), ended_at: null,
+            source: 'SELF_DECLARED', verified: false, rejected_at: null, rejection_reason: null });
+          return json(route, intervalId);
+        }
+        if (name === 'attendance_check_out') {
+          (tables.attendance_intervals![0] as Record<string, unknown>).ended_at = new Date().toISOString();
+        }
+        if (name === 'attendance_confirm' || name === 'attendance_confirm_many') {
+          (tables.attendance_intervals![0] as Record<string, unknown>).verified = true;
+          if (name === 'attendance_confirm_many') return json(route, [{ interval_id: intervalId, outcome: 'CONFIRMED' }]);
+        }
+        if (name === 'close_intervention' && current) {
+          current.status = args.requested_status; current.closed_at = new Date().toISOString();
+          current.close_reason = args.requested_reason;
+        }
+        if (name === 'intervention_audit') return json(route, []);
+        if (name === 'attendance_totals') return json(route, []);
       }
       // Any command not named here answers "fine" - these tests are about what
       // the screens SHOW, and the commands themselves are proven against a real
@@ -517,7 +774,7 @@ export async function installFixtureProject(
           ? interventions
           : table === 'profiles' && options.longText
             ? LONG_TEXT_PROFILES
-            : (TABLES[table] ?? []);
+            : (tables[table] ?? []);
 
       /*
        * Apply `?column=eq.value`, because the real server does.

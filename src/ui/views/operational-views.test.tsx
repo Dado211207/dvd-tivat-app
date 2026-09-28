@@ -528,6 +528,14 @@ describe('the firefighter screen renders on real data', () => {
 });
 
 describe('the archive renders on real data', () => {
+  it('asks for totals only for the selected service roster before rendering the archive', async () => {
+    const operations = await import('@/auth/operations');
+    const roster = await import('@/auth/roster');
+    await show(<ArchiveView />, 'COMMANDER');
+    expect(roster.loadRoster).toHaveBeenCalledWith(expect.any(String));
+    expect(operations.fetchParticipationTotals).toHaveBeenCalledWith([MEMBER_ID, OTHER_ID]);
+  });
+
   it('shows the chronology with each fact on its own line', async () => {
     const text = await show(<ArchiveView />, 'COMMANDER');
     expect(text).not.toMatch(/Ova kopija nije povezana|Arhiva nije ucitana/);

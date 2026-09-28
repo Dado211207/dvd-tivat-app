@@ -60,6 +60,7 @@ import type { BrowserContext, Route } from '@playwright/test';
 
 export const PROJECT_HOST = 'fixture-not-a-real-project.supabase.co';
 const PROJECT_REF = 'fixture-not-a-real-project';
+const DVD_ORGANIZATION_ID = '00000000-0000-4000-8000-000000000001';
 
 export const COMMANDER_MEMBER = '11111111-1111-4111-8111-111111111111';
 export const FIREFIGHTER_MEMBER = '22222222-2222-4222-8222-222222222222';
@@ -177,6 +178,7 @@ export function createLiveProject(): LiveProject {
     interventions: [
       {
         id: PRIVATE_INTERVENTION,
+        organization_id: DVD_ORGANIZATION_ID,
         kind: 'TEHNICKA',
         other_kind_note: null,
         title: 'Interna priprema (izmisljeno)',
@@ -201,6 +203,7 @@ export function createLiveProject(): LiveProject {
         intervention_id: PRIVATE_INTERVENTION,
         member_id: COMMANDER_MEMBER,
         member_name_at_publication: 'Komandir Smjene',
+        organization_id: DVD_ORGANIZATION_ID,
       },
     ],
     intervention_acknowledgements: [],
@@ -209,13 +212,13 @@ export function createLiveProject(): LiveProject {
     attendance_intervals: [],
     vehicle_movements: [],
     vehicles: [
-      { id: VEHICLE_ID, callsign: 'NV-1', name: 'Navalno vozilo', kind: 'Navalno', active: true },
+      { id: VEHICLE_ID, organization_id: DVD_ORGANIZATION_ID, callsign: 'NV-1', name: 'Navalno vozilo', kind: 'Navalno', active: true },
     ],
     member_availability: [],
     members: [
-      { id: COMMANDER_MEMBER, full_name: 'Komandir Smjene', specialties: [], active: true, user_id: COMMANDER_USER },
-      { id: FIREFIGHTER_MEMBER, full_name: 'Ivo Vatrogasac', specialties: ['Nosilac IDA aparata'], active: true, user_id: FIREFIGHTER_USER },
-      { id: OUTSIDER_MEMBER, full_name: 'Pero Vatrogasac', specialties: [], active: true, user_id: null },
+      { id: COMMANDER_MEMBER, organization_id: DVD_ORGANIZATION_ID, full_name: 'Komandir Smjene', specialties: [], active: true, user_id: COMMANDER_USER },
+      { id: FIREFIGHTER_MEMBER, organization_id: DVD_ORGANIZATION_ID, full_name: 'Ivo Vatrogasac', specialties: ['Nosilac IDA aparata'], active: true, user_id: FIREFIGHTER_USER },
+      { id: OUTSIDER_MEMBER, organization_id: DVD_ORGANIZATION_ID, full_name: 'Pero Vatrogasac', specialties: [], active: true, user_id: null },
     ],
     groups: [],
     group_members: [],
@@ -316,6 +319,7 @@ export function createLiveProject(): LiveProject {
       const newId = id('11');
       store.interventions.push({
         id: newId,
+        organization_id: DVD_ORGANIZATION_ID,
         kind: args['requested_kind'],
         other_kind_note: args['requested_other_kind_note'] ?? null,
         title: args['requested_title'],
@@ -347,6 +351,7 @@ export function createLiveProject(): LiveProject {
         const member = store.members.find((m) => m['id'] === memberId);
         store.intervention_recipients.push({
           intervention_id: row['id'],
+          organization_id: row['organization_id'] ?? DVD_ORGANIZATION_ID,
           member_id: memberId,
           member_name_at_publication: member?.['full_name'] ?? 'Nepoznat clan',
         });
@@ -482,6 +487,7 @@ export function createLiveProject(): LiveProject {
       const movementId = id('66');
       store.vehicle_movements.push({
         id: movementId,
+        organization_id: DVD_ORGANIZATION_ID,
         vehicle_id: args['target_vehicle'],
         intervention_id: args['target_intervention'] ?? null,
         purpose: args['requested_purpose'] ?? null,
@@ -544,6 +550,7 @@ export function createLiveProject(): LiveProject {
       const existing = store.member_availability.find((r) => r['member_id'] === who.memberId);
       const next = {
         member_id: who.memberId,
+        organization_id: DVD_ORGANIZATION_ID,
         available: args['requested_available'],
         note: args['requested_note'] ?? null,
         changed_at: clock.now(),
@@ -554,6 +561,11 @@ export function createLiveProject(): LiveProject {
       return null;
     },
   };
+  // P6's explicit-service entry points execute the same DVD commands for this
+  // DVD-only realtime fixture. The stored rows above carry the DVD service, so
+  // the client's new service filter is exercised rather than ignored.
+  COMMANDS['create_intervention_draft_in'] = COMMANDS['create_intervention_draft']!;
+  COMMANDS['set_own_availability_in'] = COMMANDS['set_own_availability']!;
 
   // -------------------------------------------------------------------------
   // Reads
@@ -632,10 +644,25 @@ export function createLiveProject(): LiveProject {
     switch (name) {
       case 'current_dvd_role':
         return who.role;
+      // P6: the service-aware client resolves the role and member for the acting
+      // service through the `*_in` functions, and the services on offer through
+      // `is_installation_owner` + `current_organization_memberships`. These tests
+      // operate in DVD only, so each answers as the DVD shim does.
+      case 'current_role_in':
+        return who.role;
+      case 'is_installation_owner':
+        return who.role === 'OWNER';
+      case 'current_organization_memberships':
+        return who.role === 'OWNER'
+          ? []
+          : [{ organization_code: 'DVD', organization_name: 'DVD Tivat', membership_role: who.role }];
       case 'current_account_status':
         return 'ACTIVE';
       case 'current_member_id':
         return who.memberId;
+      case 'current_member_id_in':
+        return who.memberId;
+      case 'eligible_recipients_in':
       case 'eligible_recipients':
         return store.members
           .filter((m) => m['active'] === true && m['user_id'] !== null)
@@ -839,7 +866,25 @@ export function createLiveProject(): LiveProject {
         if (request.method() !== 'GET') return json(route, []);
         if (!(table in store)) return json(route, []);
 
-        const rows = applyQuery(visible(table, who), url.searchParams);
+        let rows = applyQuery(visible(table, who), url.searchParams);
+        // The app-level call-out alarm asks intervention_recipients for the
+        // embedded intervention status (`select=intervention_id,interventions(status)`).
+        // Build that embed the way PostgREST would, from the store.
+        const select = url.searchParams.get('select') ?? '';
+        if (table === 'intervention_recipients' && /interventions(?:!inner)?\(/.test(select)) {
+          rows = rows.map((row) => {
+            const intervention = store.interventions.find((i) => i['id'] === row['intervention_id']);
+            return { ...row, interventions: intervention ? { status: intervention['status'] } : null };
+          });
+          if (select.includes('interventions!inner(')) {
+            const raw = url.searchParams.get('interventions.status') ?? '';
+            const allowed = raw.startsWith('in.(') && raw.endsWith(')')
+              ? raw.slice(4, -1).split(',') : [];
+            rows = rows.filter((row) => allowed.includes(
+              ((row['interventions'] as { status?: string } | null)?.status) ?? '',
+            ));
+          }
+        }
         const wantsObject = (request.headers()['accept'] ?? '').includes(
           'application/vnd.pgrst.object+json',
         );

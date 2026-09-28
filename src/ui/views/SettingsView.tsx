@@ -19,6 +19,8 @@ import { timeZoneIsSupported } from '@/i18n/time';
 import { useLanguage, useText } from '@/i18n/useText';
 import { useState } from 'react';
 import { PushNotificationPanel } from '../components/PushNotificationPanel';
+import { AlarmSoundPicker } from '../components/AlarmSoundPicker';
+import { ServiceSwitcher } from '../components/ServiceSwitcher';
 import { Notice } from '../components/primitives';
 import { hrefFor, type Route } from '../router';
 
@@ -53,6 +55,12 @@ export function SettingsView() {
 
   return (
     <div className="stack">
+      {/* First, and only for a person who serves in more than one service: which
+          service everything operational is for. Placed at the top so the choice
+          is the first thing a dual-service member sees, and rendered as nothing at
+          all for everyone else. */}
+      <ServiceSwitcher />
+
       <section className="panel" aria-labelledby="settings-language">
         <h2 className="panel__title" id="settings-language">{t.settings.languageTitle}</h2>
         <p className="muted small">{t.settings.lead}</p>
@@ -110,6 +118,11 @@ export function SettingsView() {
       <div className="panel">
         <PushNotificationPanel variant="full" />
       </div>
+
+      {/* The in-app call-out sound sits beside the push panel: both are about
+          being alerted on this device, and this one says plainly which case it
+          covers (app open) versus the phone's own notification sound (app closed). */}
+      <AlarmSoundPicker />
 
       <section className="panel" aria-labelledby="settings-display">
         <h2 className="panel__title" id="settings-display">{t.settings.displayTitle}</h2>
