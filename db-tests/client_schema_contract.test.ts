@@ -211,7 +211,7 @@ describe('the client names things the database has', () => {
     const trimmed = token.trim();
     if (trimmed === '') return;
 
-    const embed = /^(?:[a-z_0-9]+:)?([a-z_0-9]+)\((.*)\)$/is.exec(trimmed);
+    const embed = /^(?:[a-z_0-9]+:)?([a-z_0-9]+)(?:!inner)?\((.*)\)$/is.exec(trimmed);
     if (embed) {
       const relation = embed[1] as string;
       if (!columns.has(relation)) {

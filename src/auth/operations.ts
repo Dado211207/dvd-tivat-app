@@ -561,9 +561,13 @@ export async function fetchAddressedOpenInterventionIds(
 ): Promise<ReadResult<readonly string[]>> {
   const { data, error } = await accountBackend()
     .from('intervention_recipients')
-    .select('intervention_id, interventions(status)')
+    // Filter through the parent BEFORE the REST row cap. Filtering closed
+    // history in JavaScript could hide a newly published call-out after a
+    // member has accumulated enough old recipient rows.
+    .select('intervention_id, interventions!inner(status)')
     .eq('organization_id', organizationId)
-    .eq('member_id', memberId);
+    .eq('member_id', memberId)
+    .in('interventions.status', [...SETTABLE_STATUSES]);
   if (error || !Array.isArray(data)) return readFailure(error);
   const rows = data as unknown as {
     intervention_id: string;

@@ -871,11 +871,19 @@ export function createLiveProject(): LiveProject {
         // embedded intervention status (`select=intervention_id,interventions(status)`).
         // Build that embed the way PostgREST would, from the store.
         const select = url.searchParams.get('select') ?? '';
-        if (table === 'intervention_recipients' && select.includes('interventions(')) {
+        if (table === 'intervention_recipients' && /interventions(?:!inner)?\(/.test(select)) {
           rows = rows.map((row) => {
             const intervention = store.interventions.find((i) => i['id'] === row['intervention_id']);
             return { ...row, interventions: intervention ? { status: intervention['status'] } : null };
           });
+          if (select.includes('interventions!inner(')) {
+            const raw = url.searchParams.get('interventions.status') ?? '';
+            const allowed = raw.startsWith('in.(') && raw.endsWith(')')
+              ? raw.slice(4, -1).split(',') : [];
+            rows = rows.filter((row) => allowed.includes(
+              ((row['interventions'] as { status?: string } | null)?.status) ?? '',
+            ));
+          }
         }
         const wantsObject = (request.headers()['accept'] ?? '').includes(
           'application/vnd.pgrst.object+json',
