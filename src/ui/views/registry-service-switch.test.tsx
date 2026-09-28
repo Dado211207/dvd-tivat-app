@@ -139,11 +139,11 @@ async function rejectRoster(org: string) {
   await flush();
 }
 
-async function render() {
+async function render(gateway: AccessGateway = ownerGateway()) {
   await act(async () => {
     root.render(
       <AppStateProvider>
-        <AccessProvider gateway={ownerGateway()} configured storage={window.localStorage}>
+        <AccessProvider gateway={gateway} configured storage={window.localStorage}>
           <Capture />
           <RegistryView />
         </AccessProvider>
@@ -177,6 +177,29 @@ describe('the registry never shows one service under another across a switch', (
     Array.from(container.querySelectorAll('button')).find(
       (b) => b.textContent === me.registry.addMember,
     );
+
+  it('drops the previous account roster and controls when a new account uses the same service', async () => {
+    let userId = 'user-1';
+    const gateway: AccessGateway = {
+      ...ownerGateway(),
+      currentUser: async () => ({ id: userId, email: `${userId}@example.invalid` }),
+    };
+    await render(gateway);
+    await resolveRoster(DVD, [member('First Account Member')]);
+    expect(text()).toContain('First Account Member');
+
+    userId = 'user-2';
+    await act(async () => {
+      await captured?.reload();
+    });
+    await flush();
+    expect(text()).not.toContain('First Account Member');
+    expect(addMemberButton()).toBeUndefined();
+
+    await resolveRoster(DVD, [member('Second Account Member')]);
+    expect(text()).toContain('Second Account Member');
+    expect(text()).not.toContain('First Account Member');
+  });
 
   it('hides the previous service roster while the new service read is pending', async () => {
     await render();

@@ -97,10 +97,10 @@ async function resolveMember(org: string, value: ReadResult<string | null>) {
   await flush();
 }
 
-async function render() {
+async function render(gateway: AccessGateway = dualGateway()) {
   await act(async () => {
     root.render(
-      <AccessProvider gateway={dualGateway()} configured storage={window.localStorage}>
+      <AccessProvider gateway={gateway} configured storage={window.localStorage}>
         <Capture />
         <OperationalGate allow={['FIREFIGHTER']} requiresMember>
           {(ctx) => <p data-testid="ctx">{`${ctx.service}:${ctx.memberId}`}</p>}
@@ -129,6 +129,28 @@ afterEach(async () => {
 });
 
 describe('the acting service is an identity boundary for the member record', () => {
+  it('never hands the previous account member to a new account in the same service', async () => {
+    let userId = 'user-1';
+    const gateway: AccessGateway = {
+      ...dualGateway(),
+      currentUser: async () => ({ id: userId, email: `${userId}@example.invalid` }),
+    };
+    await render(gateway);
+    await resolveMember(DVD, { ok: true, value: 'first-member' });
+    expect(text()).toContain('DVD:first-member');
+
+    userId = 'user-2';
+    await act(async () => {
+      await captured?.reload();
+    });
+    await flush();
+    expect(text()).not.toContain('first-member');
+    expect(container.querySelector('[data-testid="ctx"]')).toBeNull();
+
+    await resolveMember(DVD, { ok: true, value: 'second-member' });
+    expect(text()).toContain('DVD:second-member');
+  });
+
   it('never shows the previous service member while the new service read is pending', async () => {
     await render();
     await resolveMember(DVD, { ok: true, value: 'dvd-member' });
