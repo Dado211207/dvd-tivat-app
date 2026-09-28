@@ -102,12 +102,17 @@ test.describe('@screenshots P6 account shapes (mobile)', () => {
     const cells = page.locator('.account-service-cell');
     await expect(cells).toHaveCount(2);
     await expect(cells.nth(1)).toContainText('Vlasnik sistema');
-    // The directory is below the fold; capture the panel itself so the columns
-    // are shown in full. Hide the fixed bottom nav for this one shot so it does
-    // not cut across the tall panel (it is not the subject here).
-    await page.addStyleTag({ content: '.station-rail { display: none !important; }' });
-    await page.locator('.account-directory').scrollIntoViewIfNeeded();
-    await page.locator('.account-directory').screenshot({ path: `${DIR}/1d-owner-nalozi-both-columns.png` });
+    // The directory panel is taller than a phone and sits under a sticky top bar
+    // and a fixed bottom nav. To capture it whole - heading and card top included,
+    // nothing clipped - hide that fixed chrome and give the page a taller viewport
+    // at the SAME 390px phone width, so the panel fits in one shot with no
+    // scroll-into-view clipping. This is an intentional phone-width scroll panel.
+    await page.addStyleTag({ content: '.station-rail, .masthead { display: none !important; }' });
+    await page.setViewportSize({ width: PHONE.width, height: 2200 });
+    const directory = page.locator('.account-directory');
+    await directory.scrollIntoViewIfNeeded();
+    await expect(page.getByRole('heading', { name: 'Registrovani nalozi' })).toBeInViewport();
+    await directory.screenshot({ path: `${DIR}/1d-owner-nalozi-both-columns.png` });
   });
 
   test('owner - a member-only screen says so, not a blank', async ({ page }) => {
