@@ -119,7 +119,7 @@ function composeStepLabel(id: ComposeStep | PublishStep, t: Strings): string {
 export function CommandView() {
   return (
     <OperationalGate allow={['OWNER', 'ADMIN', 'COMMANDER']}>
-      {(context) => <CommandConsole key={context.service} context={context} />}
+      {(context) => <CommandConsole key={`${context.userId}:${context.service}`} context={context} />}
     </OperationalGate>
   );
 }

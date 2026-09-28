@@ -80,7 +80,7 @@ export function MobilisationView() {
             <strong>{t.mobilisation.noMemberTitle}</strong> {t.mobilisation.noMemberText}
           </Notice>
         ) : (
-          <Mobilisation key={context.service} context={context} memberId={context.memberId} />
+          <Mobilisation key={`${context.userId}:${context.service}`} context={context} memberId={context.memberId} />
         )
       }
     </OperationalGate>

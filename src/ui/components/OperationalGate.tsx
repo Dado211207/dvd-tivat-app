@@ -60,14 +60,12 @@ export interface OperationalContext {
  * from the person: an outage is waited out, a refusal never resolves on its own
  * and has to be fixed with access rights on the server.
  */
-// `service` is the acting-service id the answer was read FOR. It is what makes a
-// service switch an identity boundary: an answer read for one service is not the
-// answer for another, so on a switch the previous service's member is never shown
-// under the new one - not while it loads, not if the new read fails.
+// The member answer belongs to one account AND one acting service. A switch of
+// either is an identity boundary; a token refresh of the same identity is not.
 type MemberLoad =
   | { readonly kind: 'LOADING' }
-  | { readonly kind: 'READY'; readonly memberId: string | null; readonly service: string }
-  | { readonly kind: 'FAILED'; readonly reason: ReadFailure; readonly service: string };
+  | { readonly kind: 'READY'; readonly memberId: string | null; readonly service: string; readonly userId: string }
+  | { readonly kind: 'FAILED'; readonly reason: ReadFailure; readonly service: string; readonly userId: string };
 
 export interface OperationalGateProps {
   /** Roles allowed to see this screen. The server still decides every command. */
@@ -93,30 +91,28 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     };
   }, []);
 
-  const loadMember = useCallback(async (organizationId: string) => {
+  const loadMember = useCallback(async (organizationId: string, userId: string) => {
     const ticket = ++generation.current;
-    // Keep the last answer on screen while re-reading ONLY when it is for the same
-    // service. A SAME-service refresh (a token refresh, a tab regaining focus) then
-    // shows no spinner and keeps the screen's state. A SERVICE SWITCH does not
-    // match, so the previous service's member is dropped to LOADING at once and is
-    // never handed to `children` under the new service.
+    // Keep the last answer only for the same account and service. A token
+    // refresh then keeps the screen's state; either identity change starts fresh.
     setMember((current) =>
-      current.kind === 'READY' && current.service === organizationId ? current : { kind: 'LOADING' },
-    );
-    // A failed BACKGROUND re-read of the SAME service keeps the last known answer.
-    // A failed read of a DIFFERENT service is that service's failure - it must not
-    // fall back to the previous service's member.
-    const keepOrFail = (reason: ReadFailure) => (current: MemberLoad): MemberLoad =>
-      current.kind === 'READY' && current.service === organizationId
+      current.kind === 'READY' && current.service === organizationId && current.userId === userId
         ? current
-        : { kind: 'FAILED', reason, service: organizationId };
+        : { kind: 'LOADING' },
+    );
+    // A failed background re-read of the SAME identity keeps its last answer.
+    // A failed read for another account or service must never inherit it.
+    const keepOrFail = (reason: ReadFailure) => (current: MemberLoad): MemberLoad =>
+      current.kind === 'READY' && current.service === organizationId && current.userId === userId
+        ? current
+        : { kind: 'FAILED', reason, service: organizationId, userId };
     try {
       // The member record is read FOR THE ACTING SERVICE. Switching service
       // re-runs this with the other service's id, so the gate resolves the member
       // that belongs to the service now on screen - never the previous one's.
       const result = await fetchOwnMemberId(organizationId);
       if (!mounted.current || ticket !== generation.current) return;
-      if (result.ok) setMember({ kind: 'READY', memberId: result.value, service: organizationId });
+      if (result.ok) setMember({ kind: 'READY', memberId: result.value, service: organizationId, userId });
       else setMember(keepOrFail(result.reason));
     } catch {
       // The read reports refusals and outages in its result now, so reaching
@@ -137,7 +133,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   const actingOrgId = signedInService === null ? null : organizationIdOf(signedInService);
   const operational = hasOperationalAccess(access);
   useEffect(() => {
-    if (!operational || actingOrgId === null) {
+    if (!operational || actingOrgId === null || signedInUserId === null) {
       // NOT `READY` with a null member. `READY` means the server answered about
       // this account, and nobody has asked it yet - an account still being
       // checked, or one with no operational role at all, is simply unread.
@@ -153,12 +149,12 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     }
     // Re-runs when the acting service changes (actingOrgId), so a switch reloads
     // the member for the service now on screen.
-    void loadMember(actingOrgId);
+    void loadMember(actingOrgId, signedInUserId);
   }, [operational, signedInUserId, signedInRole, signedInStatus, actingOrgId, loadMember]);
 
   const retry = () => {
     void reload();
-    if (actingOrgId !== null) void loadMember(actingOrgId);
+    if (actingOrgId !== null && signedInUserId !== null) void loadMember(actingOrgId, signedInUserId);
   };
 
   if (obstacle !== null) {
@@ -196,12 +192,12 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     );
   }
 
-  // The member answer counts only when it was read FOR THE SERVICE now on screen.
-  // Between a switch and the new service's read resolving, the previous service's
-  // answer reads as "still loading" here, so its memberId is never rendered - nor
-  // acted on by the screen below - under the service now being acted as.
+  // The member answer counts only for the account and service now on screen.
+  // Before a new read resolves, the previous identity's member stays hidden.
   const memberHere: MemberLoad =
-    member.kind !== 'LOADING' && member.service !== actingOrgId ? { kind: 'LOADING' } : member;
+    member.kind !== 'LOADING' && (member.service !== actingOrgId || member.userId !== signedInUserId)
+      ? { kind: 'LOADING' }
+      : member;
 
   if (memberHere.kind === 'LOADING') {
     return <p role="status">{t.gate.loadingOperational}</p>;

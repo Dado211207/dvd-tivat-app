@@ -225,21 +225,10 @@ describe('returning to the application preserves where you were', () => {
     ).toBeGreaterThan(before);
   });
 
-  /*
-   * The rule this file exists for, applied to the FAILURE path - which was the
-   * untested half, and is the half the three-state gate rewrote.
-   *
-   * A commander with the console open, mid-call-out, must not lose it because
-   * one re-read did not come back. Tearing the gate down unmounts the screen
-   * and every `useState` in it: the selected intervention, the active tab,
-   * half-typed instructions. The screens underneath report their own server
-   * errors; the gate keeps the person's place.
-   *
-   * Both reasons are checked, because the gate now branches on them and a
-   * branch is exactly where a rule like this gets dropped by accident.
-   */
+  // These cases change the account, not merely refresh its token. A failed
+  // new-account member read must not keep the previous person's console open.
   for (const reason of ['REFUSED', 'UNAVAILABLE'] as const) {
-    it(`keeps the open console when a background re-read fails with ${reason}`, async () => {
+    it(`removes the previous account's console when the new member read fails with ${reason}`, async () => {
       await act(async () => {
         root.render(
           <AccessProvider gateway={steadyGateway()} configured>
@@ -266,12 +255,34 @@ describe('returning to the application preserves where you were', () => {
       });
       await settle();
 
-      expect(
-        container.querySelector('[data-testid="tab"]'),
-        'a failed re-read must not replace an already-open console',
-      ).not.toBeNull();
+      expect(container.querySelector('[data-testid="tab"]')).toBeNull();
+      expect(container.querySelector('[data-testid="member-check-failed"]')).not.toBeNull();
     });
   }
+
+  it('keeps the same account console on a failed member re-read', async () => {
+    await act(async () => {
+      root.render(
+        <AccessProvider gateway={steadyGateway()} configured>
+          <OperationalGate allow={['COMMANDER', 'ADMIN']}>{() => <Console />}</OperationalGate>
+        </AccessProvider>,
+      );
+    });
+    await settle();
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="to-prisustvo"]')!.click());
+
+    fetchOwnMemberId.mockResolvedValueOnce({ ok: false, reason: 'UNAVAILABLE' } as never);
+    const updatedRole: AccessGateway = { ...steadyGateway(), fetchRole: async () => 'ADMIN' };
+    await act(async () => {
+      root.render(
+        <AccessProvider gateway={updatedRole} configured>
+          <OperationalGate allow={['COMMANDER', 'ADMIN']}>{() => <Console />}</OperationalGate>
+        </AccessProvider>,
+      );
+    });
+    await settle();
+    expect(container.querySelector('[data-testid="tab"]')?.textContent).toBe('prisustvo');
+  });
 
   it('reports a refused FIRST read, rather than blaming the roster', async () => {
     /*
