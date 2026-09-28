@@ -30,6 +30,12 @@ as the first gate the release owner runs, with the real data, before anything el
   deployment, and turning on the SZS administration flag.
 - [ ] A current production backup / PITR recovery point is confirmed and its
   restore has been exercised on a separate target (see `RELEASE_ACCEPTANCE.md`).
+- [ ] [#75](https://github.com/Dado211207/dvd-tivat-app/pull/75), the Pages release
+  latch, has been independently reviewed and merged **before #70**. Keep the
+  repository Actions variable `P6_PAGES_RELEASE_READY` unset or false. Verify
+  the next successful `main` CI run leaves the Pages build skipped. Check that
+  `VITE_SUPABASE_URL` in repository Actions variables points to the intended
+  project; the public URL is a build-time choice, not inferred from migrations.
 
 ---
 
@@ -137,7 +143,13 @@ the migration/frontend/worker boundaries.
    project before any real member. Do not create a fictional production alert.
 3. **Frontend (static build).** Build and publish the new client (GitHub Pages or
    Netlify, per `docs/` recommendation) **after** the schema is in place, so the new
-   client never meets an old schema. Decide the SZS-admin flag first (next line).
+   client never meets an old schema. For Pages, confirm `main` is the reviewed
+   release SHA and the configured `VITE_SUPABASE_URL` is the intended project;
+   then set `P6_PAGES_RELEASE_READY=true` and manually dispatch **Deploy
+   demonstration build**. Setting the variable alone does not start a run.
+   Verify the published URL and the final migration version. Turn the latch off
+   again if further automatic releases must pause. Decide the SZS-admin flag
+   before building (next line).
    - **SZS administration flag:** the owner's SZS role-assignment controls in
      Accounts are gated by `VITE_MULTI_SERVICE_ADMIN_ENABLED`. To let the owner
      create SZS members (and thus make the SZS workflow reachable at all), build the
