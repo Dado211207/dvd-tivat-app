@@ -46,48 +46,65 @@ services from that list and seeds a distinct call-out and roster per service,
 each labelled with its `organization_id`. Because every operational read the
 client makes already carries `?organization_id=eq.<org>`, the fixture's existing
 equality filter re-scopes the screen on a switch with nothing extra to compute.
-The owner is `memberships` with `memberId: null` in each service and `owner: true`.
+The owner is modelled the way the database defines it (see
+`db-tests/retire_role_mirror.test.ts`): **zero** memberships and `owner: true`, so
+`is_installation_owner` is true, `current_role_in` derives **OWNER** for each
+service from ownership, `current_member_id_in` is null, and the directory's
+`access_grants`/`organization_memberships` rows carry an OWNER base grant with no
+membership — not the default COMMANDER rows.
 
 ---
 
 ## 2. Opening the mobile preview yourself
 
-The preview is the **real application** served from a local build, answering a
-**fake** Supabase project that lives entirely in the browser. It needs no
-credentials and reaches nothing.
+The four shapes are the **real application** rendered against a **fake** Supabase
+project. The catch a first reviewer needs to know: that fake project exists only
+*inside a Playwright run* — `e2e/fixture-server.ts` installs it with
+`page.route(...)`, a Node-side request interceptor. A plain browser has no such
+interceptor, so `npm run preview:fixture` opened by hand reaches the non-existent
+fixture host and stops at the gate ("this copy is not connected to a server").
+There is no console command or phone URL that installs a shape in an ordinary
+browser — `installFixtureProject` is Node test code, not something the page can
+call. (An earlier draft of this doc suggested a DevTools/phone path; that was
+wrong and is corrected here.)
+
+So there are two honest ways to see a shape, both in this repo:
+
+**1. Watch it live, headed.** Run the shape's spec with `--headed`; a real browser
+opens and the fixture answers it. `--project=mobile` gives the phone viewport, and
+Playwright builds and serves the fixture app for you (no manual build step).
 
 ```bash
-# from the repo root, on this PR's branch
-npm ci
-npm run build:fixture      # builds with the multi-service flag on, to dist-fixture
-npm run preview:fixture     # serves http://127.0.0.1:4174
-```
-
-Then, to see a given shape, open the browser dev tools to a phone size (or use a
-phone on the same network pointed at your machine's IP:4174) and, in the
-console, install the shape you want before loading a screen. The exact fixtures
-the tests use are in `e2e/fixture-server.ts` (`installFixtureProject`) and
-`e2e/*.spec.ts`; the tests are the runnable, always-current version of "open this
-shape and look". The simplest way to *watch* a shape end to end is to run its
-spec headed:
-
-```bash
-# one shape, in a visible browser, paused so you can look
 PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
   npx playwright test e2e/dual-service-switch.spec.ts --project=mobile --headed
+# also: owner-both-services.spec.ts, szs-lifecycle.spec.ts, callout-alarm-resume.spec.ts
 ```
 
-Ready-made mobile screenshots of all four shapes are in
-`docs/screenshots/p6/` (regenerate with
-`npx playwright test e2e/p6-shape-screenshots.spec.ts --project=desktop --grep @screenshots`;
-they render at a phone width via `test.use`):
+Add `--debug` to step through it. The specs in `e2e/*.spec.ts` are the runnable,
+always-current version of "open this shape and look".
+
+**2. The captured screenshots**, ready to look at now, in `docs/screenshots/p6/`.
+Each waits for the intended content (call-out, badge, switch, columns, the
+no-member notice) before shooting and captures the phone viewport (or, for the
+below-the-fold Accounts columns, the directory panel with the fixed nav hidden).
+Regenerate them with:
+
+```bash
+npx playwright test e2e/p6-shape-screenshots.spec.ts --project=desktop --grep @screenshots
+```
 
 - `1a-dvd-only-poziv.png` — DVD-only console, no service badge
 - `1b-szs-only-poziv.png` — SZS-only console
 - `1c-dual-poziv-badge.png` — dual-service, the "acting as" badge
 - `1c-dual-podesavanja-switch.png` — the explicit service switch on Settings
-- `1d-owner-nalozi-both-columns.png` — owner Accounts, both service columns
+- `1d-owner-nalozi-both-columns.png` — owner Accounts: **OWNER in both columns**, no membership
 - `1d-owner-no-member-record.png` — owner on a member-only screen, refused in words
+
+A genuine hand-driven preview on a phone is deliberately **not** offered: it would
+need an explicit, guarded, dev-only fixture chooser built into the fixture build,
+and shipping a data-injection path in a build that is one flag away from the real
+client is not worth it for a preview the headed run and the screenshots already
+give.
 
 ### What the preview proves — and what it does not
 
