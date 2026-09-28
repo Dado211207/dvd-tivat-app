@@ -1,6 +1,55 @@
-# Multi-organization handoff — 2026-09-25
+# Multi-organization handoff — 2026-09-28
 
 This is the current checkpoint for the DVD Tivat / Sluzba zastite i spasavanja Tivat (SZS) rewrite. Update it when a phase is reviewed or merged. The full design, open product questions and phase acceptance criteria live in [MULTI_ORG_PLAN.md](../MULTI_ORG_PLAN.md); this file records the *current state*, not a replacement for that plan.
+
+## P6 release candidate — 2026-09-28 (current state, read this first)
+
+**Exact heads, verified against GitHub this session. All draft, none merged; `main` at `63e62d53`.** The sign-out fix (#78) is now in **every source branch that enters the release**, not only the validation candidate #76.
+
+| PR | Branch | Base | Head | #78 in it | Contents |
+| --- | --- | --- | --- | --- | --- |
+| [#70](https://github.com/Dado211207/dvd-tivat-app/pull/70) | codex/p6-integration | main | `b8a8d30` | ✅ merged at source | P6 integration + migration 039; carries the former #67 (039) and #68 (Stage B) histories |
+| [#71](https://github.com/Dado211207/dvd-tivat-app/pull/71) | claude/p6-integration-audit | #70 @ `b8a8d30` | `c3e9568` | ✅ | acting-service audit; synced onto current #70 |
+| [#72](https://github.com/Dado211207/dvd-tivat-app/pull/72) | claude/notification-sounds | #71 @ `c3e9568` | `16099c6` | ✅ | in-app call-out sound (any route, honest background boundary); synced onto current #71 |
+| [#73](https://github.com/Dado211207/dvd-tivat-app/pull/73) | claude/p6-release-prep | #70 @ `b8a8d30` | `b5fd1e3` | ✅ | release-prep doc; **synced onto current #70 this session** (code tree == #70 b8a8d30) |
+| [#74](https://github.com/Dado211207/dvd-tivat-app/pull/74) | claude/p6-acceptance-preview | #72 @ `16099c6` | `0e37661` | ✅ | mobile acceptance preview (four shapes + sound-resume); **synced onto current #72 this session** |
+| [#75](https://github.com/Dado211207/dvd-tivat-app/pull/75) | codex/p6-pages-release-latch | main | `9f4f778` | n/a | Pages `P6_PAGES_RELEASE_READY` publish latch; own CI run 36433666049 green |
+| [#78](https://github.com/Dado211207/dvd-tivat-app/pull/78) | codex/p6-signout-race | #70 @ `f802f34` | (is the fix) | invalidates stale access reads and suppresses auth refreshes during pending sign-out; three deferred tests. **Its fix is already merged into #70 (`b8a8d30`) and propagated through #71/#72/#74 and #73.** |
+
+The client PRs are a **linear stack** (#70 → #71 → #72 → #74), so #74's head already contains #70+#71+#72 and now #78. #73 and #75 are siblings of #70; #78 is a focused fix branch off #70 whose change is already in the #70 head.
+
+**Sign-out fix propagation — verified by blob identity.** `src/auth/AccessProvider.tsx` is the identical git object `808712d` and `src/auth/AccessProvider.signout.test.tsx` the identical object `5ce5adc` at **all** of #70 `b8a8d30`, #71 `c3e9568`, #72 `16099c6`, #73 `b5fd1e3`, #74 `0e37661` and #76 `a7e94b9`. No merge anywhere in the stack reverted the AccessProvider flow or dropped the three regression tests.
+
+**#75 Pages guard — reviewed, correct, no change made.** `pages.yml`'s `build` job is gated `vars.P6_PAGES_RELEASE_READY == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')`. The parentheses stop a green `main` CI (`workflow_run`) from bypassing the variable; the `deploy` job (`needs: build`, no `if`) is skipped whenever `build` is skipped, so **neither the automatic nor the manual path publishes** while the variable is unset/false. Setting the variable does not itself trigger a run — it arms the automatic path, so the doc's "set it back to `false` to re-pause" guidance is correct.
+
+**Source-stack integrated CI — the real per-head evidence.** #70 targets `main`, so GitHub CI genuinely runs on it: head **`b8a8d30`** (with #78 merged in) passed [CI run 36445112327](https://github.com/Dado211207/dvd-tivat-app/actions/runs/36445112327), job conclusion `success` — lint, typecheck, production dependency audit, unit, migration consistency, database/RLS, build, bundle scan, browser/accessibility and screenshots; only the on-failure report upload was skipped. **This is the authoritative integrated result for the source stack.** #71/#72/#73/#74 do **not** receive GitHub CI (their bases are not `main`) and were verified locally on their exact synced heads (below). The validation-only [PR #76](https://github.com/Dado211207/dvd-tivat-app/pull/76) (`a7e94b9`, [CI run 36442634465](https://github.com/Dado211207/dvd-tivat-app/actions/runs/36442634465) green) is a convenience that exercises the whole combined tree under one `main`-based check; it is **not** the release merge path and its earlier green run is **not** a substitute for each source head's own verification. **Do not merge #76.**
+
+**Local battery on the exact synced heads (stacked PRs get no GitHub CI):**
+- **#74 `0e37661`** (merge of current #72 `16099c6`): typecheck ✓, lint ✓, unit **810 / 53 files** ✓, `check:migrations` **40/40** ✓, `test:db` **891 passed / 12 hosted-only skipped** ✓ (local PostgreSQL 16), build ✓, `verify:bundle` (26 files, no secret) ✓, `audit:production` 0 vulns ✓, `CI=true npm run e2e` **354 passed** ✓.
+- **#73 `b5fd1e3`** (merge of current #70 `b8a8d30`): its **code tree is byte-identical to #70 `b8a8d30`** (only added file is `docs/P6_RELEASE_PREP.md`), so its operational verification *is* #70's green CI above; locally typecheck ✓, lint ✓, unit **758** ✓ (includes #78's 3 sign-out tests), `check:migrations` 40/40 ✓, build ✓, `verify:bundle` ✓.
+
+**Independent review finding — fixed and now in every source branch.** A reload started before sign-out could return while `backendSignOut()` was pending and briefly restore the former account's protected screen. A further auth refresh started during pending sign-out could do the same. Both were reproduced with deferred reads that failed before the complete fix. #78 invalidates older reads immediately, ignores reloads during sign-out, and rechecks the server when sign-out finishes (including a failed sign-out). Three new tests pass; no schema or operational command changed. The fix is merged into #70 (`b8a8d30`) and carried through #71/#72/#73/#74 (blob identity above). The earlier "no finding" leak-audit claim was incorrect; that sign-out window is now closed and verified identical across all release heads.
+
+**039 production-copy equivalence gate — OPEN; could not be run in this environment.** The previous pass was through **038**; **039 must be included**, so it does not satisfy this gate. Exact blocker: the gate needs a pseudonymised capture from `scripts/p4-equivalence-production.sql` taken over a **read-only path** to the hosted DVD Postgres and kept **outside the repo, never logged**. This environment has **no** read-only production DB connection (no `DATABASE_URL`/`SUPABASE_*`/`PGPASSWORD`), and the only production-reachable path here (the Supabase MCP) returns query results into the assistant's context/logs — which the capture's confidentiality rule forbids. The gate tooling itself is intact and local-only (it drives `DVD_TEST_DATABASE_URL`; run with no capture it correctly prints `COULD NOT RUN: no capture given`).
+
+  **Owner procedure (smallest concrete steps):**
+  1. On a host with a **read-only** connection to the production DVD Postgres, capture one row to a file **outside the repo**:
+     `psql "$DVD_PROD_READONLY_URL" -X --single-transaction -tAf scripts/p4-equivalence-production.sql > /path/outside/repo/p4-capture.json`
+     Connect as a read-only role (or `SET default_transaction_read_only = on;`) so the capture's `read_only` field is `on` — the gate refuses otherwise. Confirm `applied_migrations` shows the 22 production migrations. Never commit, paste, attach or print this file.
+  2. With local PostgreSQL 16 up (`npm run db:start`) and the release-candidate tree checked out:
+     `export DVD_TEST_DATABASE_URL=postgresql://postgres@localhost:55432/postgres`
+     `node scripts/p4-equivalence-gate.mjs /path/outside/repo/p4-capture.json --report /path/outside/repo/p4-report.txt`
+     Exit 0 = the copy reproduced production **and** migrations 022→039 change only what the phases intended. Keep the capture and report outside the repo.
+
+**Safe merge / deployment order (substance unchanged; NOT executed here):**
+  1. Merge **#75** (Pages latch) to `main` **first**; confirm the next `main` CI leaves the Pages build skipped (variable unset).
+  2. **#78's fix is already merged into #70 (`b8a8d30`) and CI-green there**, so this step is now: review #78 (or review the fix directly in #70) and merge **#70 → #71 → #72** to `main` in order, with #73 (doc) and #74 (preview) following as supporting drafts. #78 as a separate PR can then be merged or closed, since its change is already in #70. PR #76 only validates the combined tree; it is not the release merge path.
+  3. Owner runs the **039 gate** (above) on an isolated copy and authorises; confirm a current backup / PITR point and that its restore was exercised on a separate target.
+  4. Apply migrations `202609240022` → `202609270039` in **filename order** (final `check:migrations` no drift, last applied `202609270039`).
+  5. Deploy the push worker **only after** `202609250032`.
+  6. Publish the frontend **only after** the schema is in place — verify `main` is the reviewed SHA and `VITE_SUPABASE_URL` is the intended project, set `P6_PAGES_RELEASE_READY=true`, manually dispatch **Deploy demonstration build**, verify URL/schema, then set the variable back to `false`. Frontend-after-schema + the Pages latch together ensure a new client **never meets the old (22-migration) hosted schema**.
+
+**Remaining blockers before the app can be tested on real phones:** the **039 equivalence gate** must pass on an authorised isolated copy (owner-run), and **device acceptance** of the four account shapes and SZS push delivery on real devices on a non-production preview (the browser fixture is not a hosted smoke test). Independent review of the P6 stack (including the #78 sign-out fix, now integrated into #70) is still expected before merging to `main`, but is no longer an integration task — the fix is in place and CI-green. **Production is untouched** — 22 migrations applied, 022–039 not applied, no Pages deploy, no worker, no data, no notifications. **Not release-ready while the gate or device acceptance remain open.**
 
 ## Delivery state
 
