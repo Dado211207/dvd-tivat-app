@@ -149,6 +149,24 @@ const STORAGE_PREFIX = 'dvd-tivat.alarm-sound:';
 
 type MaybeStorage = Pick<Storage, 'getItem' | 'setItem'> | null;
 
+/**
+ * Same-tab notification that the stored choice changed.
+ *
+ * `localStorage` only fires its `storage` event in OTHER tabs, never the one
+ * that wrote. The Settings picker and the app-level alarm listener live in the
+ * same tab, so the listener would otherwise keep the choice it read on mount
+ * until a reload. This lets it re-read the moment the choice is written here.
+ * Cross-tab changes are a separate concern the listener does not need.
+ */
+const changeListeners = new Set<() => void>();
+
+export function subscribeAlarmSoundChange(listener: () => void): () => void {
+  changeListeners.add(listener);
+  return () => {
+    changeListeners.delete(listener);
+  };
+}
+
 export function readAlarmSound(storage: MaybeStorage, userId: string): string {
   try {
     return asAlarmSoundId(storage?.getItem(STORAGE_PREFIX + userId));
@@ -163,6 +181,10 @@ export function writeAlarmSound(storage: MaybeStorage, userId: string, soundId: 
   } catch {
     /* Storage refused; the choice simply is not remembered on this device. */
   }
+  // Tell any in-tab listener (the app-level alarm) to re-read. Done outside the
+  // try so a blocked write still nudges a re-read - which reads back the value
+  // that is actually stored, so nothing claims a choice that was not saved.
+  for (const listener of [...changeListeners]) listener();
 }
 
 // ---------------------------------------------------------------------------

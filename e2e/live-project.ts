@@ -203,6 +203,7 @@ export function createLiveProject(): LiveProject {
         intervention_id: PRIVATE_INTERVENTION,
         member_id: COMMANDER_MEMBER,
         member_name_at_publication: 'Komandir Smjene',
+        organization_id: DVD_ORGANIZATION_ID,
       },
     ],
     intervention_acknowledgements: [],
@@ -350,6 +351,7 @@ export function createLiveProject(): LiveProject {
         const member = store.members.find((m) => m['id'] === memberId);
         store.intervention_recipients.push({
           intervention_id: row['id'],
+          organization_id: row['organization_id'] ?? DVD_ORGANIZATION_ID,
           member_id: memberId,
           member_name_at_publication: member?.['full_name'] ?? 'Nepoznat clan',
         });
@@ -864,7 +866,17 @@ export function createLiveProject(): LiveProject {
         if (request.method() !== 'GET') return json(route, []);
         if (!(table in store)) return json(route, []);
 
-        const rows = applyQuery(visible(table, who), url.searchParams);
+        let rows = applyQuery(visible(table, who), url.searchParams);
+        // The app-level call-out alarm asks intervention_recipients for the
+        // embedded intervention status (`select=intervention_id,interventions(status)`).
+        // Build that embed the way PostgREST would, from the store.
+        const select = url.searchParams.get('select') ?? '';
+        if (table === 'intervention_recipients' && select.includes('interventions(')) {
+          rows = rows.map((row) => {
+            const intervention = store.interventions.find((i) => i['id'] === row['intervention_id']);
+            return { ...row, interventions: intervention ? { status: intervention['status'] } : null };
+          });
+        }
         const wantsObject = (request.headers()['accept'] ?? '').includes(
           'application/vnd.pgrst.object+json',
         );

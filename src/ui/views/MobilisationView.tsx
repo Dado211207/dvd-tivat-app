@@ -52,8 +52,6 @@ import { ActingServiceBadge } from '../components/ActingServiceBadge';
 import { useAccess } from '@/auth/AccessProvider';
 import type { OrganizationCode } from '@/auth/directory';
 import { organizationIdOf } from '@/auth/serviceContext';
-import { useCallOutAlarm } from '@/notifications/useCallOutAlarm';
-import { readAlarmSound } from '@/notifications/alarmSounds';
 import {
   factStates,
   nextStep,
@@ -137,7 +135,6 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
   const [data, setData] = useState<MyData>(EMPTY);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState<'REFUSED_READ' | 'UNAVAILABLE' | null>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -228,7 +225,6 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         });
         setActiveId(focusId);
         setLoadError(null);
-        setHasLoaded(true);
       } catch (error) {
         if (!mounted.current || ticket !== generation.current) return;
         setLoadError(isPermissionDenied(error) ? 'REFUSED_READ' : 'UNAVAILABLE');
@@ -305,29 +301,9 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     onChange: () => void refresh(activeId, { silent: true }),
   });
 
-  /**
-   * Sound a new call-out, if this person chose one on this device.
-   *
-   * Read once on mount, per user id, so a shared phone never gives one firefighter
-   * another's alarm. The choice lives on the Settings screen; changing it there and
-   * returning here re-reads it on the next mount. The hook sounds only a call-out
-   * that appears AFTER this screen has loaded - never the ones already open - and
-   * `off` (the default) sounds nothing.
-   */
-  const [alarmSound] = useState(() => {
-    let storage: Pick<Storage, 'getItem' | 'setItem'> | null = null;
-    try {
-      storage = typeof window !== 'undefined' ? window.localStorage : null;
-    } catch {
-      storage = null;
-    }
-    return readAlarmSound(storage, context.userId);
-  });
-  const openInterventionIds = useMemo(
-    () => data.interventions.filter((i) => isOpenStatus(i.status)).map((i) => i.id),
-    [data.interventions],
-  );
-  useCallOutAlarm(openInterventionIds, alarmSound, undefined, hasLoaded);
+  // The call-out sound is no longer sounded here: a single app-level listener
+  // (`CallOutAlarm`, mounted above the router) sounds a newly-arrived call-out on
+  // any route, so one arrival makes one sound whichever screen is open.
 
   const active = useMemo(
     () => data.interventions.find((i) => i.id === activeId) ?? null,

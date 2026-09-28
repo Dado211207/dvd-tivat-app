@@ -309,14 +309,14 @@ export const en: Strings = {
 
     alarm: {
       title: 'Call-out sound on this device',
-      lead: 'The sound played when a new call-out arrives while My call-out is open on screen. Chosen here and remembered on this device.',
+      lead: 'The sound played when a new call-out arrives while the app is open, on any screen. Chosen here and remembered on this device.',
       legend: 'Choose a sound',
       off: 'No sound',
       preview: 'Preview',
       groupOrdinary: 'Ordinary',
       groupAlarm: 'Alarm',
       foregroundNote:
-        'This sound plays only while the My call-out screen is open. On other screens or with the app closed, push notifications use the phone’s own sound - you change that in the phone settings, not here.',
+        'This sound plays while the app is open, on any screen. When a notification arrives with the app closed or in the background, the phone uses its own notification sound - you change that in the phone settings, not here.',
       names: {
         chime: 'Chime',
         twotone: 'Two-tone',

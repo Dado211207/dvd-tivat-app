@@ -86,6 +86,14 @@ export interface LiveOptions {
   readonly interventionId: string | null;
   /** Re-read. Must go through the normal, policy-checked queries. */
   readonly onChange: () => void;
+  /**
+   * An explicit channel name, when a caller needs a scope that is deliberately
+   * NOT one of the per-intervention ones. The app-level call-out alarm uses this
+   * so its channel never collides with a screen's `ops:<id>`/`ops:all` - two
+   * consumers on the same scope would be the "second channel for the same scope"
+   * this module refuses. Defaults to the per-intervention scope.
+   */
+  readonly scope?: string;
 }
 
 /**
@@ -127,7 +135,7 @@ function backend(): LiveBackend | null {
  * Returns what it is currently doing, so a screen can tell a person whether it
  * is live or on a timer instead of leaving them to guess.
  */
-export function useLiveOperations({ enabled, interventionId, onChange }: LiveOptions): LiveStatus {
+export function useLiveOperations({ enabled, interventionId, onChange, scope }: LiveOptions): LiveStatus {
   const [status, setStatus] = useState<LiveStatus>('OFF');
 
   /*
@@ -190,8 +198,9 @@ export function useLiveOperations({ enabled, interventionId, onChange }: LiveOpt
       setStatus('CONNECTING');
       try {
         // Named for the scope, so switching intervention replaces the channel
-        // rather than adding one.
-        const next = api.channel(`ops:${interventionId ?? 'all'}`);
+        // rather than adding one. An explicit `scope` overrides this for a
+        // consumer (the call-out alarm) that must not share a screen's scope.
+        const next = api.channel(scope ?? `ops:${interventionId ?? 'all'}`);
         for (const table of WATCHED_TABLES) {
           next.on('postgres_changes', { event: '*', schema: 'public', table }, nudge);
         }
@@ -247,7 +256,7 @@ export function useLiveOperations({ enabled, interventionId, onChange }: LiveOpt
       channel = null;
     };
     // `onChange` is deliberately absent: see the ref above.
-  }, [enabled, interventionId]);
+  }, [enabled, interventionId, scope]);
 
   return status;
 }

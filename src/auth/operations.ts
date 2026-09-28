@@ -540,6 +540,49 @@ export async function fetchInterventions(organizationId?: string): Promise<ReadR
 }
 
 /**
+ * The OPEN call-outs a given member was actually sent, in one service.
+ *
+ * This is the recipient signal the app-level call-out alarm needs, and it is
+ * deliberately NOT `fetchInterventions`: that returns everything a COMMANDER may
+ * see (all of their service's call-outs), so it cannot tell "addressed to me"
+ * from "visible to me as staff". This reads the member's OWN recipient rows -
+ * `recipients_self_read` allows exactly `member_id = current_member_id_in(org)` -
+ * and keeps the ones whose intervention is still open. So it answers, for any
+ * role, only "call-outs this member was paged for and that are still running".
+ *
+ * The `memberId` must be the caller's own member in `organizationId` (from
+ * `current_member_id_in`); row level security returns nothing for any other, so
+ * this can never read another member's pages, and an account with no member in
+ * the service (an owner) has no id to pass and is never called here.
+ */
+export async function fetchAddressedOpenInterventionIds(
+  organizationId: string,
+  memberId: string,
+): Promise<ReadResult<readonly string[]>> {
+  const { data, error } = await accountBackend()
+    .from('intervention_recipients')
+    .select('intervention_id, interventions(status)')
+    .eq('organization_id', organizationId)
+    .eq('member_id', memberId);
+  if (error || !Array.isArray(data)) return readFailure(error);
+  const rows = data as unknown as {
+    intervention_id: string;
+    interventions: { status: string } | { status: string }[] | null;
+  }[];
+  const ids: string[] = [];
+  for (const row of rows) {
+    // PostgREST returns the embedded parent as an object for a to-one relation;
+    // tolerate an array shape too rather than trust one representation.
+    const embedded = Array.isArray(row.interventions) ? row.interventions[0] : row.interventions;
+    const status = embedded?.status;
+    if (status !== undefined && isOpenStatus(status as InterventionStatus)) {
+      ids.push(row.intervention_id);
+    }
+  }
+  return ok(ids);
+}
+
+/**
  * Every fact about every recipient of one intervention, kept apart.
  *
  * Four reads rather than one join, because row level security answers each of

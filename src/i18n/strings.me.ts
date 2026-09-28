@@ -326,7 +326,7 @@ export const me = {
 
     alarm: {
       title: 'Zvuk poziva na ovom uredjaju',
-      lead: 'Zvuk koji se cuje kada stigne novi poziv dok je otvoren ekran Moj poziv. Bira se ovdje i pamti se na ovom uredjaju.',
+      lead: 'Zvuk koji se cuje kada stigne novi poziv dok je aplikacija otvorena, na bilo kom ekranu. Bira se ovdje i pamti se na ovom uredjaju.',
       legend: 'Izaberite zvuk',
       off: 'Bez zvuka',
       preview: 'Preslusaj',
@@ -334,7 +334,7 @@ export const me = {
       groupAlarm: 'Alarmni',
       // The one thing people get wrong about web notifications.
       foregroundNote:
-        'Ovaj zvuk se cuje samo dok je otvoren ekran Moj poziv. Na drugim ekranima ili kada je aplikacija zatvorena, push obavjestenja koriste zvuk telefona - njega mijenjate u podesavanjima telefona, ne ovdje.',
+        'Ovaj zvuk se cuje dok je aplikacija otvorena, na svakom ekranu. Kada obavjestenje stigne dok je aplikacija zatvorena ili u pozadini, telefon koristi svoj zvuk obavjestenja - njega mijenjate u podesavanjima telefona, ne ovdje.',
       names: {
         chime: 'Zvono',
         twotone: 'Dva tona',
