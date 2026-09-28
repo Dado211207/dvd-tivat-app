@@ -105,13 +105,17 @@ export function AccessProvider({ children, gateway, configured, storage }: Acces
   // change identity on every reload.
   const accessRef = useRef(access);
   accessRef.current = access;
+  // A blocked localStorage write must not make an explicit switch bounce back to
+  // DVD on the following reload. Keep that person's choice for this mounted
+  // session as well; the server still checks whether it remains available.
+  const sessionChoices = useRef(new Map<string, OrganizationCode>());
 
   // The remembered acting service is looked up by user id, which loadAccess only
   // knows after it has read the session. Passing the lookup rather than a value
   // lets loadAccess resolve it against the services the person may actually act
   // in, so a stale or absent choice safely falls back to the default.
   const readPreferred = useCallback(
-    (userId: string) => readRememberedService(activeStorage, userId),
+    (userId: string) => sessionChoices.current.get(userId) ?? readRememberedService(activeStorage, userId),
     [activeStorage],
   );
 
@@ -136,6 +140,7 @@ export function AccessProvider({ children, gateway, configured, storage }: Acces
       if (current.kind !== 'SIGNED_IN') return;
       if (current.service === service) return;
       if (!current.availableServices.includes(service)) return;
+      sessionChoices.current.set(current.userId, service);
       writeRememberedService(activeStorage, current.userId, service);
       await reload();
     },
