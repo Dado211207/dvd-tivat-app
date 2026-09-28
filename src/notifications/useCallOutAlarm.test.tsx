@@ -18,12 +18,14 @@ function Harness({
   ids,
   sound,
   play,
+  ready = true,
 }: {
   ids: readonly string[];
   sound: string;
   play: (id: string) => void;
+  ready?: boolean;
 }) {
-  useCallOutAlarm(ids, sound, play);
+  useCallOutAlarm(ids, sound, play, ready);
   return null;
 }
 
@@ -41,13 +43,22 @@ afterEach(async () => {
   container.remove();
 });
 
-async function render(ids: readonly string[], sound: string, play: (id: string) => void) {
+async function render(ids: readonly string[], sound: string, play: (id: string) => void, ready = true) {
   await act(async () => {
-    root.render(<Harness ids={ids} sound={sound} play={play} />);
+    root.render(<Harness ids={ids} sound={sound} play={play} ready={ready} />);
   });
 }
 
 describe('the call-out alarm', () => {
+  it('does not mistake the screen’s initial empty loading state for a completed first read', async () => {
+    const play = vi.fn();
+    await render([], 'siren', play, false);
+    await render(['already-open'], 'siren', play, true);
+    expect(play).not.toHaveBeenCalled();
+    await render(['already-open', 'just-arrived'], 'siren', play, true);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
   it('does not sound the call-outs already open when the screen loads', async () => {
     const play = vi.fn();
     await render(['a', 'b'], 'chime', play);

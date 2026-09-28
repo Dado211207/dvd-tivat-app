@@ -137,6 +137,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
   const [data, setData] = useState<MyData>(EMPTY);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState<'REFUSED_READ' | 'UNAVAILABLE' | null>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -227,6 +228,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         });
         setActiveId(focusId);
         setLoadError(null);
+        setHasLoaded(true);
       } catch (error) {
         if (!mounted.current || ticket !== generation.current) return;
         setLoadError(isPermissionDenied(error) ? 'REFUSED_READ' : 'UNAVAILABLE');
@@ -325,7 +327,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     () => data.interventions.filter((i) => isOpenStatus(i.status)).map((i) => i.id),
     [data.interventions],
   );
-  useCallOutAlarm(openInterventionIds, alarmSound);
+  useCallOutAlarm(openInterventionIds, alarmSound, undefined, hasLoaded);
 
   const active = useMemo(
     () => data.interventions.find((i) => i.id === activeId) ?? null,

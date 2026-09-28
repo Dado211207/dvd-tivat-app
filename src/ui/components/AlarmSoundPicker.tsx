@@ -48,7 +48,7 @@ export function AlarmSoundPicker({ storage, play }: AlarmSoundPickerProps) {
   // Nothing to choose for somebody who is signed out: there is no operational
   // call-out to sound, and the choice is remembered against a user id.
   if (access.kind !== 'SIGNED_IN') return null;
-  return <Picker userId={access.userId} storage={storage ?? defaultStorage()} play={play ?? playAlarmSound} />;
+  return <Picker key={access.userId} userId={access.userId} storage={storage ?? defaultStorage()} play={play ?? playAlarmSound} />;
 }
 
 function Picker({

@@ -10,7 +10,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AccessProvider } from '@/auth/AccessProvider';
+import { AccessProvider, useAccess, type AccessContextValue } from '@/auth/AccessProvider';
 import type { AccessGateway } from '@/auth/access';
 import { resetLanguageForTests } from '@/i18n/language';
 import { readAlarmSound } from '@/notifications/alarmSounds';
@@ -136,5 +136,33 @@ describe('the alarm-sound picker', () => {
     expect(off()?.checked).toBe(true);
     expect(readAlarmSound(storage, 'user-1')).toBe('off');
     expect(play).not.toHaveBeenCalled();
+  });
+
+  it('shows the new account\'s own choice when the account changes in place', async () => {
+    const storage = memoryStorage();
+    storage.setItem('dvd-tivat.alarm-sound:user-1', 'siren');
+    let userId = 'user-1';
+    let context: AccessContextValue | undefined;
+    const gateway = signedInGateway();
+    gateway.currentUser = async () => ({ id: userId, email: 'clan@example.invalid' });
+    function Capture() {
+      context = useAccess();
+      return null;
+    }
+
+    await render(
+      <AccessProvider gateway={gateway} configured storage={window.localStorage}>
+        <Capture />
+        <AlarmSoundPicker storage={storage} play={vi.fn()} />
+      </AccessProvider>,
+    );
+    expect(sound('siren')?.checked).toBe(true);
+
+    userId = 'user-2';
+    await act(async () => {
+      await context!.reload();
+    });
+    expect(off()?.checked).toBe(true);
+    expect(sound('siren')?.checked).toBe(false);
   });
 });

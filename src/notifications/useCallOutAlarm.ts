@@ -24,6 +24,7 @@ export function useCallOutAlarm(
   openInterventionIds: readonly string[],
   soundId: string,
   play: (id: string) => void | Promise<boolean | void> = playAlarmSound,
+  ready = true,
 ): void {
   // A stable key so the effect runs when the SET of open ids changes, not on
   // every render that happens to rebuild the array.
@@ -33,6 +34,10 @@ export function useCallOutAlarm(
   const known = useRef<Set<string> | null>(null);
 
   useEffect(() => {
+    // The screen starts with an empty local placeholder before its first
+    // server read. That placeholder is not a baseline: treating it as one
+    // sounds every already-running call-out when the page first loads.
+    if (!ready) return;
     const ids = new Set(key === '' ? [] : key.split('|'));
     const previous = known.current;
     known.current = ids;
@@ -44,5 +49,5 @@ export function useCallOutAlarm(
         return; // one sound per change, however many arrived at once
       }
     }
-  }, [key, soundId, play]);
+  }, [key, soundId, play, ready]);
 }
