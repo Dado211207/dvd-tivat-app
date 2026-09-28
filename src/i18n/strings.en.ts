@@ -307,6 +307,26 @@ export const en: Strings = {
       'The choice is remembered on this device. It does not change your rights - the server decides those separately for each service.',
     actingServiceChange: 'Change service',
 
+    alarm: {
+      title: 'Call-out sound on this device',
+      lead: 'The sound played when a new call-out arrives while the app is open. Chosen here and remembered on this device.',
+      legend: 'Choose a sound',
+      off: 'No sound',
+      preview: 'Preview',
+      groupOrdinary: 'Ordinary',
+      groupAlarm: 'Alarm',
+      foregroundNote:
+        'This sound plays only while the app is open. When a notification arrives with the app closed, the phone uses its own notification sound - you change that in the phone settings, not here.',
+      names: {
+        chime: 'Chime',
+        twotone: 'Two-tone',
+        softarp: 'Soft sequence',
+        pulse: 'Pulse',
+        siren: 'Siren',
+        urgent: 'Urgent',
+      },
+    },
+
     notificationsTitle: 'Notifications on this device',
     displayTitle: 'Time and display',
     displayZone: 'All times are shown in Montenegro’s time, whatever this device is set to.',
