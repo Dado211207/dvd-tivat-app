@@ -253,7 +253,7 @@ describe('the acting service the provider exposes', () => {
 
   const shown = () => container.querySelector('[data-testid="ctx"]')?.textContent ?? '';
 
-  async function render(gateway: AccessGateway, storage: ReturnType<typeof fakeStorage>) {
+  async function render(gateway: AccessGateway, storage: Pick<Storage, 'getItem' | 'setItem'> | null) {
     await act(async () => {
       root.render(
         <AccessProvider gateway={gateway} configured storage={storage}>
@@ -289,6 +289,28 @@ describe('the acting service the provider exposes', () => {
     expect(shown()).toBe('SZS/COMMANDER');
     // The choice was written to this device, so a later reload keeps it.
     expect(storage.map.get(rememberedServiceKey('user-1'))).toBe('SZS');
+  });
+
+  it('keeps an explicit service switch for the session when device storage is blocked', async () => {
+    const blockedStorage = {
+      getItem: (): string | null => { throw new Error('storage blocked'); },
+      setItem: (): void => { throw new Error('storage blocked'); },
+    };
+    await render(
+      serviceGateway({ memberships: ['DVD', 'SZS'], roleByService: { DVD: 'ADMIN', SZS: 'COMMANDER' } }),
+      blockedStorage,
+    );
+    expect(shown()).toBe('DVD/ADMIN');
+
+    await act(async () => {
+      await captured?.setActingService('SZS');
+    });
+    expect(shown()).toBe('SZS/COMMANDER');
+
+    await act(async () => {
+      await captured?.reload();
+    });
+    expect(shown()).toBe('SZS/COMMANDER');
   });
 
   it('honours a remembered choice on load, without a silent reset on reload', async () => {
