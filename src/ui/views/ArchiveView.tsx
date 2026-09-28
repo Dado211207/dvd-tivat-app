@@ -42,6 +42,7 @@ import { formatDurationMs } from '@/auth/duration';
 import { recipientTimings, summarise } from '@/auth/metrics';
 import { loadRoster } from '@/auth/roster';
 import { OperationalGate } from '../components/OperationalGate';
+import { ActingServiceBadge } from '../components/ActingServiceBadge';
 import { organizationIdOf } from '@/auth/serviceContext';
 import { Chip, EmptyState, Notice, ScrollRegion } from '../components/primitives';
 import {
@@ -231,6 +232,8 @@ function Archive({ organizationId }: { organizationId: string }) {
 
   return (
     <div className="stack">
+      {/* Which service's record this is, for a dual-service reader. */}
+      <ActingServiceBadge />
       <section className="panel">
         <h2 className="panel__title">{t.archive.listTitle}</h2>
         {published.length === 0 ? (

@@ -64,6 +64,7 @@ import { recipientTimings, summarise } from '@/auth/metrics';
 import { OperationalSummary, ResponseTimings } from '../components/timings';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
+import { ActingServiceBadge } from '../components/ActingServiceBadge';
 import { organizationIdOf } from '@/auth/serviceContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IncidentCard } from '../components/IncidentCard';
@@ -328,6 +329,9 @@ function CommandConsole({ context }: { context: OperationalContext }) {
 
   return (
     <div className="stack">
+      {/* Which service this console is running - shown to a dual-service commander
+          so an SZS call-out is never published in the belief it is a DVD one. */}
+      <ActingServiceBadge />
       <div className="tabs" role="tablist" aria-label={t.command.tabsLabel}>
         {TAB_IDS.map((id) => (
           <button

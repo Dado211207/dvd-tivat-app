@@ -320,6 +320,9 @@ export const me = {
     actingServiceSwitching: 'Mijenjam sluzbu...',
     actingServiceHint:
       'Izbor se pamti na ovom uredjaju. Ne mijenja vasa prava - njih server odredjuje za svaku sluzbu posebno.',
+    // The badge shown on the operational screens links here, to the one place a
+    // switch is made. An explicit act on a deliberate screen, never a silent flip.
+    actingServiceChange: 'Promijeni sluzbu',
 
     notificationsTitle: 'Obavjestenja na ovom uredjaju',
     displayTitle: 'Vrijeme i prikaz',
@@ -559,6 +562,16 @@ export const me = {
     noCallOutTitle: 'Nema poziva za vas',
     noCallOutText:
       'Kada vas komandir pozove na intervenciju, pojavice se ovdje. Ovaj spisak pokazuje samo pozive na kojima ste vi na spisku.',
+
+    // A push notification carries only the call-out id, never its service. If the
+    // opened call-out belongs to the OTHER service this person serves in, this
+    // screen (acting as the current service) has nothing to show for it - so it
+    // says where it is and offers an explicit switch, rather than a silent
+    // dead-end on the alarm somebody just tapped.
+    otherServiceCallOutTitle: 'Poziv je u drugoj sluzbi.',
+    otherServiceCallOutText:
+      'Poziv koji ste otvorili vodi se u sluzbi {service}. Sada djelujete u drugoj sluzbi, pa se ovdje ne prikazuje.',
+    otherServiceCallOutSwitch: 'Predji na {service}',
 
     availabilityTitle: 'Moja opsta dostupnost',
     availabilityNote:
