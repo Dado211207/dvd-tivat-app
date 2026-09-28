@@ -446,7 +446,7 @@ function json(route: Route, body: unknown, status = 200): Promise<void> {
  * isolation is the database's RLS, proven in `db-tests/`; this proves the client
  * asks the right, service-scoped questions and shows only their answers.
  */
-function multiServiceStore(memberships: readonly FixtureMembership[]): {
+function multiServiceStore(memberships: readonly FixtureMembership[], isOwner: boolean): {
   interventions: Record<string, unknown>[];
   tables: Record<string, unknown[]>;
   eligibleByOrg: Record<string, unknown[]>;
@@ -488,12 +488,28 @@ function multiServiceStore(memberships: readonly FixtureMembership[]): {
     });
     eligibleByOrg[s.org] = [{ member_id: s.member, full_name: s.memberName, role: 'FIREFIGHTER', specialties: [] }];
   }
+  // The account directory reads `access_grants` (the base role) and
+  // `organization_memberships` (the per-service columns) for EVERY account, so
+  // they must match the chosen identity, not the single-service defaults. The
+  // owner has an OWNER base grant and ZERO memberships (their OWNER-in-each-
+  // service comes from ownership, not a membership row); a member has a CITIZEN
+  // base grant and one membership per service. This is the P5+ model proven in
+  // `db-tests/retire_role_mirror.test.ts`.
+  const accessGrants = [
+    { user_id: USER_ID, role: isOwner ? 'OWNER' : 'CITIZEN', active: true, granted_at: '2026-09-12T21:00:00.000Z' },
+  ];
+  const organizationMemberships = memberships.map((m) => ({
+    organization_id: m.service === 'SZS' ? SZS_ID : DVD_ID,
+    user_id: USER_ID, role: m.role, active: true,
+  }));
   return {
     interventions,
     eligibleByOrg,
     tables: {
       ...TABLES,
       interventions, members, vehicles,
+      access_grants: accessGrants,
+      organization_memberships: organizationMemberships,
       intervention_recipients: recipients,
       intervention_acknowledgements: [], intervention_responses: [],
       intervention_journey: [], attendance_intervals: [], vehicle_movements: [],
@@ -520,7 +536,9 @@ export async function installFixtureProject(
   const orgId = options.service === 'SZS' ? SZS_ID : DVD_ID;
   // A multi-service account (dual member or owner) overrides the single-service
   // seed with a per-service store the acting-service switch re-scopes across.
-  const multi = options.memberships ? multiServiceStore(options.memberships) : null;
+  const multi = options.memberships
+    ? multiServiceStore(options.memberships, options.owner ?? false)
+    : null;
   const interventions = multi
     ? multi.interventions
     : options.lifecycle
@@ -601,28 +619,30 @@ export async function installFixtureProject(
       // and member (or, for the owner, a role but no member) in the chosen one.
       if (multi) {
         const memberships = options.memberships!;
+        const isOwner = options.owner ?? false;
         const orgService = (org: string | undefined): 'DVD' | 'SZS' | null =>
           org === DVD_ID ? 'DVD' : org === SZS_ID ? 'SZS' : null;
         const target = () =>
           (route.request().postDataJSON() as { target_organization?: string } | null)?.target_organization;
+        // The owner holds OWNER in EVERY service through ownership, with no
+        // membership row and no member id - the contract in
+        // `db-tests/retire_role_mirror.test.ts`. A member's role and id come from
+        // their membership; a service they are not a member of answers null.
+        const roleIn = (svc: 'DVD' | 'SZS' | null): string | null =>
+          memberships.find((m) => m.service === svc)?.role ?? (isOwner ? 'OWNER' : null);
         if (name === 'current_account_status') return json(route, accountStatus);
-        if (name === 'is_installation_owner') {
-          return json(route, options.owner ?? memberships.some((m) => m.role === 'OWNER'));
-        }
+        if (name === 'is_installation_owner') return json(route, isOwner);
         if (name === 'current_organization_memberships') {
+          // The caller's OWN membership rows: an owner with zero memberships
+          // answers an empty list, exactly as the server does.
           return json(route, memberships.map((m) => ({
             organization_code: m.service,
             organization_name: m.service === 'SZS' ? 'SZS Tivat' : 'DVD Tivat',
             membership_role: m.role,
           })));
         }
-        if (name === 'current_dvd_role') {
-          return json(route, memberships.find((m) => m.service === 'DVD')?.role ?? null);
-        }
-        if (name === 'current_role_in') {
-          const svc = orgService(target());
-          return json(route, memberships.find((m) => m.service === svc)?.role ?? null);
-        }
+        if (name === 'current_dvd_role') return json(route, roleIn('DVD'));
+        if (name === 'current_role_in') return json(route, roleIn(orgService(target())));
         if (name === 'current_member_id_in') {
           const svc = orgService(target());
           return json(route, memberships.find((m) => m.service === svc)?.memberId ?? null);

@@ -17,14 +17,19 @@ import { DVD_CALLOUT_TITLE, installFixtureProject } from './fixture-server';
 
 const APP = 'http://127.0.0.1:4174';
 
-/** Owner of the installation, member of neither service, in Montenegrin. */
+/**
+ * Owner of the installation, member of neither service, in Montenegrin.
+ *
+ * ZERO memberships, by design: the owner is OWNER in every service through
+ * ownership (`is_installation_owner` → `current_role_in` = OWNER), not through a
+ * membership row, and holds no member id anywhere. This is the contract proven in
+ * `db-tests/retire_role_mirror.test.ts` ("the owner keeps OWNER and full access
+ * with zero memberships, and still needs a member record to act as a firefighter").
+ */
 const OWNER = {
   language: 'me' as const,
   owner: true,
-  memberships: [
-    { service: 'DVD' as const, role: 'OWNER' as const, memberId: null },
-    { service: 'SZS' as const, role: 'OWNER' as const, memberId: null },
-  ],
+  memberships: [] as const,
 };
 
 test('the owner can act as either service and read its operational screens', async ({ page }) => {
@@ -53,6 +58,16 @@ test('the owner sees both service columns in the accounts directory', async ({ p
   await expect(
     page.getByRole('columnheader', { name: 'Sluzba zastite i spasavanja Tivat' }),
   ).toBeVisible();
+
+  // The identity contract, made visible: the owner's own row shows OWNER in
+  // BOTH service cells (they own both), never a membership role like COMMANDER,
+  // and is not linked to a member record.
+  const serviceCells = page.locator('.account-service-cell');
+  await expect(serviceCells).toHaveCount(2);
+  await expect(serviceCells.nth(0)).toContainText('Vlasnik sistema');
+  await expect(serviceCells.nth(1)).toContainText('Vlasnik sistema');
+  await expect(page.getByText('Komandir')).toHaveCount(0);
+  await expect(page.getByText(/Nije povezan sa clanom/i)).toBeVisible();
 });
 
 test('a member-only screen refuses the owner with no member record, not a blank', async ({ page }) => {
