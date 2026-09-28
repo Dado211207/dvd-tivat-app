@@ -101,6 +101,7 @@ export function AccessProvider({ children, gateway, configured, storage }: Acces
   // setting state after unmount.
   const mounted = useRef(true);
   const generation = useRef(0);
+  const signingOut = useRef(false);
   // The latest snapshot, read inside setActingService without making that callback
   // change identity on every reload.
   const accessRef = useRef(access);
@@ -122,8 +123,11 @@ export function AccessProvider({ children, gateway, configured, storage }: Acces
   const reload = useCallback(async () => {
     if (!isConfigured) return;
     const ticket = ++generation.current;
+    // Auth events may fire while sign-out is still pending. A refresh during
+    // that window must not restore the old account's protected screens.
+    if (signingOut.current) return;
     const next = await loadAccess(activeGateway, { preferredService: readPreferred });
-    if (!mounted.current || ticket !== generation.current) return;
+    if (!mounted.current || signingOut.current || ticket !== generation.current) return;
     // Keep the previous object when the answer is unchanged. Every consumer
     // downstream is keyed on this value, and a token refresh or a tab regaining
     // focus must not look like "the account changed" to any of them.
@@ -184,12 +188,14 @@ export function AccessProvider({ children, gateway, configured, storage }: Acces
     // begins. Otherwise its old signed-in answer can restore protected screens
     // while the server is still processing sign-out.
     generation.current += 1;
+    signingOut.current = true;
     setAccess({ kind: 'LOADING' });
     try {
       await backendSignOut();
     } finally {
       // A failed sign-out may leave the session valid. Re-ask the server rather
       // than leave the screen stuck in LOADING or assume the account signed out.
+      signingOut.current = false;
       await reload();
     }
   }, [reload]);
