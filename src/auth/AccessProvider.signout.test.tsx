@@ -93,4 +93,32 @@ describe('sign-out while an earlier access read is in flight', () => {
     expect(reads).toBe(2);
     expect(container.textContent).toContain('PRIVATE');
   });
+
+  it('ignores an auth refresh arriving during sign-out', async () => {
+    let releaseSignOut!: () => void;
+    const signingOut = new Promise<void>((resolve) => { releaseSignOut = resolve; });
+    vi.mocked(backendSignOut).mockReturnValue(signingOut);
+    let signedOut = false;
+    const gateway: AccessGateway = {
+      currentUser: async () => signedOut ? null : { id: 'user-1', email: 'owner@example.invalid' },
+      fetchProfile: async () => ({ fullName: 'Owner', profileComplete: true }),
+      fetchRole: async () => 'OWNER',
+      fetchAccountStatus: async () => 'ACTIVE',
+    };
+    let access!: AccessContextValue;
+    function Capture() { access = useAccess(); return null; }
+    await act(async () => {
+      root.render(<AccessProvider gateway={gateway} configured><Capture />
+        <RequireRole allow={['OWNER']}><p>PRIVATE</p></RequireRole>
+      </AccessProvider>);
+    });
+    expect(container.textContent).toContain('PRIVATE');
+    await act(async () => { void access.signOut(); await Promise.resolve(); });
+    expect(container.textContent).not.toContain('PRIVATE');
+    await act(async () => { await access.reload(); });
+    expect(container.textContent).not.toContain('PRIVATE');
+    signedOut = true;
+    await act(async () => { releaseSignOut(); await signingOut; });
+    expect(container.textContent).not.toContain('PRIVATE');
+  });
 });
