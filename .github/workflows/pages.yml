@@ -35,7 +35,7 @@ name: Deploy demonstration build
 # P6_PAGES_RELEASE_READY unset (or false). Both automatic and manual runs skip
 # publishing. Set it to true only after the database is ready for the P6 client.
 # This is a human release latch, not a database-version check; follow
-# docs/P6_RELEASE_PREP.md before changing it.
+# the P6 release checklist before changing it.
 
 on:
   workflow_dispatch:
