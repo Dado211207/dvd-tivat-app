@@ -98,9 +98,20 @@ visible, and no action the server would refuse is offered.
 - [ ] Default is **off**; existing users hear nothing new until they choose.
 - [ ] Choosing a sound in Settings previews it; the choice is remembered on that
   device for that account and does not carry to another account on the same phone.
-- [ ] With a sound chosen and **My call-out open on screen**, a newly arriving
-  call-out sounds; call-outs already open on load do not. On other screens the
-  in-app sound does not run; decide whether that limited scope meets acceptance.
+- [ ] With a sound chosen and the **app open on any route** (My call-out,
+  Archive, Command, Registry or Settings), a newly arriving call-out **addressed
+  to this member** sounds; call-outs already open when the app loaded do not, and
+  one arrival makes exactly one sound. (The earlier revision sounded it only on
+  the My call-out screen; #72 now makes it app-level, so the "other screens are
+  silent" limitation is resolved rather than left as an open acceptance decision.)
+- [ ] It sounds only what the signed-in **member** was paged for, resolved per
+  service: a dual-service member hears either service even while acting in the
+  other; a single-service member never hears the other; an owner with no member
+  record hears nothing. Turning the choice on mid-session does not retroactively
+  sound an already-open call-out.
+- [ ] Foreground/visible only: with the tab **hidden or backgrounded** the in-app
+  sound stays silent (that case is the phone's push sound, below). Two side-by-side
+  **visible** tabs each play once — acceptable, since the choice is per-device.
 - [ ] Confirm the honest wording holds on device: a call-out arriving while the app
   is **closed/backgrounded** uses the **phone's own** notification sound (set in
   the phone), not the in-app choice. Record this for iOS installed PWA and Android.
