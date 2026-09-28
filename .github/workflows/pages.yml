@@ -29,6 +29,13 @@ name: Deploy demonstration build
 #
 # Deployment is manual (`workflow_dispatch`) or on a push to main that has
 # already passed CI. It never runs from a pull request, so a fork cannot publish.
+#
+# P6 release latch: until the production-copy gate, database migrations and
+# release approval are complete, leave the repository Actions variable
+# P6_PAGES_RELEASE_READY unset (or false). Both automatic and manual runs skip
+# publishing. Set it to true only after the database is ready for the P6 client.
+# This is a human release latch, not a database-version check; follow
+# docs/P6_RELEASE_PREP.md before changing it.
 
 on:
   workflow_dispatch:
@@ -53,10 +60,11 @@ jobs:
     name: Build the demonstration bundle
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # A red CI run must not be able to reach the demonstration URL.
+    # The P6 release latch also applies to manual dispatch.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      vars.P6_PAGES_RELEASE_READY == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
 
     steps:
       - uses: actions/checkout@v4
