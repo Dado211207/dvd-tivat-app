@@ -23,9 +23,16 @@ as the first gate the release owner runs, with the real data, before anything el
   expected-difference change. Do not substitute fixtures for the copy. Never commit
   the capture. *(This gate has been run before through 038; 039 must be included on
   a fresh copy — see the handoff. It was not run in the branch that wrote this doc.)*
-- [ ] Independent review of the P6 PRs at their exact final heads, each with green
-  CI: #70 (integration), #67 (039), #68 (Stage B), #71 (acting-service audit) and
-  #72 (in-app sound). Coordinate the stack's merge order (below).
+- [ ] Independent review of the P6 PRs at their exact final heads. #70
+  (integration) already carries the migration-039 and Stage-B client histories
+  (the former #67 and #68), so review those on #70 — not as separate PRs. The
+  client stack is #70 → #71 (acting-service audit) → #72 (in-app sound) → #74
+  (mobile acceptance preview), with this doc (#73) and the Pages latch (#75) as
+  siblings. Because #71/#72/#74 target their stacked bases rather than `main`,
+  GitHub CI does **not** run on them individually; the integrated tree's green CI
+  is proven by a combined release-candidate PR that targets `main` (its number
+  and CI run are recorded in `docs/ai/MULTI_ORG_HANDOFF.md`). Coordinate the
+  stack's merge order (below).
 - [ ] Owner has authorised: the production migration run, the push-worker
   deployment, and turning on the SZS administration flag.
 - [ ] A current production backup / PITR recovery point is confirmed and its
