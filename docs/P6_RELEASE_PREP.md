@@ -98,8 +98,9 @@ visible, and no action the server would refuse is offered.
 - [ ] Default is **off**; existing users hear nothing new until they choose.
 - [ ] Choosing a sound in Settings previews it; the choice is remembered on that
   device for that account and does not carry to another account on the same phone.
-- [ ] With a sound chosen and the app open, a **newly arriving** call-out sounds;
-  call-outs already open on load do not.
+- [ ] With a sound chosen and **My call-out open on screen**, a newly arriving
+  call-out sounds; call-outs already open on load do not. On other screens the
+  in-app sound does not run; decide whether that limited scope meets acceptance.
 - [ ] Confirm the honest wording holds on device: a call-out arriving while the app
   is **closed/backgrounded** uses the **phone's own** notification sound (set in
   the phone), not the in-app choice. Record this for iOS installed PWA and Android.
@@ -112,7 +113,7 @@ Apply in this order. Do each step, verify it, then proceed; do not batch across
 the migration/frontend/worker boundaries.
 
 1. **Database migrations.** Production is at migration `202609230021` (22 applied).
-   Apply every migration from `202609230022` through `202609270039` **in filename
+   Apply every migration from `202609240022` through `202609270039` **in filename
    order**, one at a time, verifying each. This set carries the P4 service
    isolation, P5 role-mirror retirement and P6 attendance-credit rule. Re-running
    is safe (idempotent) but apply the sequence once, in order. Confirm the final
@@ -121,7 +122,8 @@ the migration/frontend/worker boundaries.
 2. **Push worker (P4e).** Deploy the worker **only after** migration `202609250032`
    is applied — which it is, once step 1 completes through 039. Configure its VAPID
    / Web Push keys from the environment, never from the repo. Verify it can read the
-   push outbox and send to a **fictional** opted-in device before any real member.
+   push outbox and send to a fictional opted-in device on the isolated staging
+   project before any real member. Do not create a fictional production alert.
 3. **Frontend (static build).** Build and publish the new client (GitHub Pages or
    Netlify, per `docs/` recommendation) **after** the schema is in place, so the new
    client never meets an old schema. Decide the SZS-admin flag first (next line).
@@ -131,9 +133,12 @@ the migration/frontend/worker boundaries.
      production frontend with this set to `true`. Leaving it unset ships the P6 code
      but keeps SZS assignment dark. This is a deliberate release decision, not a
      default — confirm it with the owner.
-4. **Smoke check on production, fictional only.** One fictional DVD and one
-   fictional SZS exercise end to end, then remove the fictional rows. Do not write
-   real member rows until §1 acceptance is signed off.
+4. **Production smoke check, read-only.** Confirm schema version, service-scoped
+   reads, account access, and worker health without creating fictional members,
+   published call-outs or alerts. Run the DVD and SZS end-to-end exercises on
+   staging in §1. Migration 034 retains published call-outs and answer history;
+   ordinary cleanup cannot remove a published fictional call-out. Any production
+   write exercise needs its own explicit approval and a retention plan.
 
 ---
 
@@ -152,8 +157,8 @@ Rehearse each of these on a non-production target before the release (see
   RLS and definer functions, so there is no clean forward "undo" migration prepared
   here. A schema rollback is therefore a **restore to the pre-deployment PITR /
   backup point** confirmed in §0 — which loses any rows written after it, so it is a
-  last resort and the reason the fictional-only smoke check in §2.4 precedes any real
-  data. If only one late migration misbehaves, prefer a new forward fix migration
+  last resort and the reason the staging exercise in §1 precedes any production
+  change. If only one late migration misbehaves, prefer a new forward fix migration
   (reviewed, gated) over a full restore.
 
 ---
