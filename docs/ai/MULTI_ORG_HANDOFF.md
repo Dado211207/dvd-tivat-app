@@ -1,6 +1,50 @@
-# Multi-organization handoff — 2026-09-25
+# Multi-organization handoff — 2026-09-28
 
 This is the current checkpoint for the DVD Tivat / Sluzba zastite i spasavanja Tivat (SZS) rewrite. Update it when a phase is reviewed or merged. The full design, open product questions and phase acceptance criteria live in [MULTI_ORG_PLAN.md](../MULTI_ORG_PLAN.md); this file records the *current state*, not a replacement for that plan.
+
+## P6 release candidate — 2026-09-28 (current state, read this first)
+
+**Exact heads, verified against GitHub this session. All draft, none merged; `main` at `63e62d53`.**
+
+| PR | Branch | Base | Head | Contents |
+| --- | --- | --- | --- | --- |
+| [#70](https://github.com/Dado211207/dvd-tivat-app/pull/70) | codex/p6-integration | main | `f802f34` | P6 integration + migration 039; carries the former #67 (039) and #68 (Stage B) histories |
+| [#71](https://github.com/Dado211207/dvd-tivat-app/pull/71) | claude/p6-integration-audit | #70 | `d20dd29` | acting-service audit |
+| [#72](https://github.com/Dado211207/dvd-tivat-app/pull/72) | claude/notification-sounds | #71 | `2adeb9d` | in-app call-out sound (any route, honest background boundary) |
+| [#73](https://github.com/Dado211207/dvd-tivat-app/pull/73) | claude/p6-release-prep | #70 | `ee08422` | release-prep doc; this session corrected its CI-precondition line |
+| [#74](https://github.com/Dado211207/dvd-tivat-app/pull/74) | claude/p6-acceptance-preview | #72 | `177490a` | mobile acceptance preview (four shapes + sound-resume); reviewer-closed |
+| [#75](https://github.com/Dado211207/dvd-tivat-app/pull/75) | codex/p6-pages-release-latch | main | `9f4f778` | Pages `P6_PAGES_RELEASE_READY` publish latch; own CI run 36433666049 green |
+
+The client PRs are a **linear stack** (#70 → #71 → #72 → #74), so #74's head already contains #70+#71+#72. #73 and #75 are siblings.
+
+**#75 Pages guard — reviewed, correct, no change made.** `pages.yml`'s `build` job is gated `vars.P6_PAGES_RELEASE_READY == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')`. The parentheses stop a green `main` CI (`workflow_run`) from bypassing the variable; the `deploy` job (`needs: build`, no `if`) is skipped whenever `build` is skipped, so **neither the automatic nor the manual path publishes** while the variable is unset/false. Setting the variable does not itself trigger a run — it arms the automatic path, so the doc's "set it back to `false` to re-pause" guidance is correct.
+
+**Integrated-tree CI — the signal the stacked PRs cannot produce.** A validation-only candidate `claude/p6-release-candidate` (**[PR #76](https://github.com/Dado211207/dvd-tivat-app/pull/76) → `main`, draft — DO NOT MERGE, do not merge the stack out of order**) was built from `main` by merging #74 (whole client stack), then #73 (doc), then #75 (guard). **Zero merge conflicts** (linear stack; #73 docs-only; #75 touches only `pages.yml`). Candidate head `a376eac`. **GitHub CI run [36435882669](https://github.com/Dado211207/dvd-tivat-app/actions/runs/36435882669), job 108973563040 — conclusion `success`, every step green**: lint, typecheck, production audit, unit, migration-list consistency, database/RLS, build, bundle-secret, browser/accessibility, screenshots (on-failure report upload correctly skipped). This is the authoritative green CI for the integrated P6 tree; the stacked PRs #71/#72/#74 get none (their base is not `main`).
+
+**Local battery on `a376eac`:** typecheck ✓, lint ✓, `audit:production` 0 vulns ✓, unit **807 / 52 files** ✓, `check:migrations` **40/40 no drift** ✓, `test:db` **891 passed / 12 skipped** (hosted-only) ✓, build ✓, `verify:bundle` (26 files, no secret) ✓, `CI=true` browser/accessibility **354 passed** ✓ (incl. the four P6 shape tests, notification-sound tests, SZS lifecycle, realtime acceptance).
+
+**Independent leak audit — no finding.** No service or account identity leak in the combined client. Enforced by: per-`(userId:service)` remount keys on Command/Mobilisation/Archive/Registry; `OperationalGate` member resolution generation-guarded and identity-matched (never inherits another service's or account's member, even on an out-of-order read); every operational read carries the acting `organizationId` under server RLS; the cross-service link reads the *other* service only to test recipient membership (RLS-narrowed) and offers an explicit switch prompt, never rendering other-service content; per-service unsaved-draft storage keys; account switch tears down the alarm listener (keyed by user id) and the gate's member state; **no module-level caches** hold account/service data. All covered by the green unit/db/browser suites above.
+
+**039 production-copy equivalence gate — OPEN; could not be run in this environment.** The previous pass was through **038**; **039 must be included**, so it does not satisfy this gate. Exact blocker: the gate needs a pseudonymised capture from `scripts/p4-equivalence-production.sql` taken over a **read-only path** to the hosted DVD Postgres and kept **outside the repo, never logged**. This environment has **no** read-only production DB connection (no `DATABASE_URL`/`SUPABASE_*`/`PGPASSWORD`), and the only production-reachable path here (the Supabase MCP) returns query results into the assistant's context/logs — which the capture's confidentiality rule forbids. The gate tooling itself is intact and local-only (it drives `DVD_TEST_DATABASE_URL`; run with no capture it correctly prints `COULD NOT RUN: no capture given`).
+
+  **Owner procedure (smallest concrete steps):**
+  1. On a host with a **read-only** connection to the production DVD Postgres, capture one row to a file **outside the repo**:
+     `psql "$DVD_PROD_READONLY_URL" -X --single-transaction -tAf scripts/p4-equivalence-production.sql > /path/outside/repo/p4-capture.json`
+     Connect as a read-only role (or `SET default_transaction_read_only = on;`) so the capture's `read_only` field is `on` — the gate refuses otherwise. Confirm `applied_migrations` shows the 22 production migrations. Never commit, paste, attach or print this file.
+  2. With local PostgreSQL 16 up (`npm run db:start`) and the release-candidate tree checked out:
+     `export DVD_TEST_DATABASE_URL=postgresql://postgres@localhost:55432/postgres`
+     `node scripts/p4-equivalence-gate.mjs /path/outside/repo/p4-capture.json --report /path/outside/repo/p4-report.txt`
+     Exit 0 = the copy reproduced production **and** migrations 022→039 change only what the phases intended. Keep the capture and report outside the repo.
+
+**Safe merge / deployment order (substance unchanged; NOT executed here):**
+  1. Merge **#75** (Pages latch) to `main` **first**; confirm the next `main` CI leaves the Pages build skipped (variable unset).
+  2. Independent review + the integrated green CI (PR #76) for the client stack; then merge #70 → #71 → #72 in order (with #73 doc and #74 preview as supporting drafts).
+  3. Owner runs the **039 gate** (above) on an isolated copy and authorises; confirm a current backup / PITR point and that its restore was exercised on a separate target.
+  4. Apply migrations `202609240022` → `202609270039` in **filename order** (final `check:migrations` no drift, last applied `202609270039`).
+  5. Deploy the push worker **only after** `202609250032`.
+  6. Publish the frontend **only after** the schema is in place — verify `main` is the reviewed SHA and `VITE_SUPABASE_URL` is the intended project, set `P6_PAGES_RELEASE_READY=true`, manually dispatch **Deploy demonstration build**, verify URL/schema, then set the variable back to `false`. Frontend-after-schema + the Pages latch together ensure a new client **never meets the old (22-migration) hosted schema**.
+
+**Remaining blockers before the app can be tested on real phones:** the **039 equivalence gate** must pass on an authorised isolated copy (owner-run), and **device acceptance** of the four account shapes and SZS push delivery on real devices on a non-production preview (the browser fixture is not a hosted smoke test). **Production is untouched** — 22 migrations applied, 022–039 not applied, no Pages deploy, no worker, no data, no notifications. **Not release-ready while the gate or device acceptance remain open.**
 
 ## Delivery state
 
