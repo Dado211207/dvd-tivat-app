@@ -77,7 +77,11 @@ function AlarmGate({
   // Turning it on mounts a fresh listener, so the call-outs already open at that
   // moment become its baseline and do not sound.
   if (soundId === ALARM_SOUND_OFF) return null;
-  return <ActiveAlarm availableServices={availableServices} soundId={soundId} />;
+  // A grant or withdrawal changes which services are watched. Treat the new
+  // service set as a new listener: its already-open call-outs are a baseline,
+  // not arrivals, and old in-flight reads cannot update the new listener.
+  const servicesKey = [...availableServices].sort().join('|');
+  return <ActiveAlarm key={servicesKey} availableServices={availableServices} soundId={soundId} />;
 }
 
 function ActiveAlarm({
@@ -143,6 +147,8 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
 
   const mounted = useRef(true);
   const generation = useRef(0);
+  const readSequence = useRef(0);
+  const resolving = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -152,18 +158,23 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
 
   const svcKey = [...availableServices].join(',');
 
-  // Resolve the member id per available service. A new identity (svcKey change,
-  // or a remount on account switch) bumps the generation so a late answer from
-  // the previous resolution is ignored.
-  useEffect(() => {
+  const membersRef = useRef(members);
+  membersRef.current = members;
+
+  // A failed identity read is not proof that the account has no member record.
+  // Leave the listener unarmed and try again on the next realtime notice.
+  const resolveMembers = useCallback(async () => {
+    if (resolving.current || membersRef.current !== null) return;
+    resolving.current = true;
     const ticket = ++generation.current;
-    void (async () => {
+    try {
       const orgIds =
         svcKey === ''
           ? []
           : svcKey.split(',').map((code) => organizationIdOf(code as OrganizationCode));
       const answers = await Promise.all(orgIds.map((org) => fetchOwnMemberId(org)));
       if (!mounted.current || ticket !== generation.current) return;
+      if (answers.some((answer) => !answer.ok)) return;
       const watched: { org: string; memberId: string }[] = [];
       answers.forEach((answer, index) => {
         const org = orgIds[index];
@@ -172,16 +183,28 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
         }
       });
       setMembers(watched);
-    })();
+    } catch {
+      // Network failures are retryable; never turn one into an empty baseline.
+    } finally {
+      resolving.current = false;
+    }
   }, [svcKey]);
 
-  const membersRef = useRef(members);
-  membersRef.current = members;
+  useEffect(() => {
+    void resolveMembers();
+  }, [resolveMembers]);
 
   const read = useCallback(async () => {
     const current = membersRef.current;
-    if (current === null) return; // members not resolved yet
+    if (current === null) {
+      void resolveMembers();
+      return;
+    }
     const ticket = generation.current;
+    // Realtime, a reconnect and the initial read can overlap. Only the most
+    // recently requested snapshot may replace the baseline; an older response
+    // arriving last would otherwise make the same call-out sound twice.
+    const sequence = ++readSequence.current;
     if (current.length === 0) {
       // A member of no watched service (owner): a real, successful "nothing
       // addressed to me" - a baseline that can never produce a new id.
@@ -191,12 +214,12 @@ function useAddressedOpenCallOuts(availableServices: readonly OrganizationCode[]
     const reads = await Promise.all(
       current.map((watch) => fetchAddressedOpenInterventionIds(watch.org, watch.memberId)),
     );
-    if (!mounted.current || ticket !== generation.current) return;
+    if (!mounted.current || ticket !== generation.current || sequence !== readSequence.current) return;
     // A refusal or outage is not an empty archive: keep the last good baseline.
     if (reads.some((result) => !result.ok)) return;
     const union = [...new Set(reads.flatMap((result) => (result.ok ? [...result.value] : [])))];
     setState({ openIds: union, ready: true });
-  }, []);
+  }, [resolveMembers]);
 
   // Read once members are known, then on every realtime notice.
   useEffect(() => {

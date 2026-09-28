@@ -27,7 +27,8 @@ const SZS = organizationIdOf('SZS');
 
 // Controllable server answers.
 const memberByOrg = vi.hoisted(() => new Map<string, string | null>());
-const addressedByMember = vi.hoisted(() => new Map<string, ReadResult<readonly string[]>>());
+const memberReadFailures = vi.hoisted(() => new Set<string>());
+const addressedByMember = vi.hoisted(() => new Map<string, ReadResult<readonly string[]> | Promise<ReadResult<readonly string[]>>>());
 // The latest realtime onChange the listener registered, so a test can fire a notice.
 const live = vi.hoisted(() => ({ onChange: null as null | (() => void) }));
 
@@ -35,10 +36,11 @@ vi.mock('@/auth/operations', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/auth/operations')>();
   return {
     ...real,
-    fetchOwnMemberId: vi.fn(async (org?: string) => ({
-      ok: true as const,
-      value: (org !== undefined ? memberByOrg.get(org) : null) ?? null,
-    })),
+    fetchOwnMemberId: vi.fn(async (org?: string) =>
+      org !== undefined && memberReadFailures.has(org)
+        ? { ok: false as const, reason: 'UNAVAILABLE' as const }
+        : { ok: true as const, value: (org !== undefined ? memberByOrg.get(org) : null) ?? null },
+    ),
     fetchAddressedOpenInterventionIds: vi.fn(
       async (_org: string, memberId: string): Promise<ReadResult<readonly string[]>> =>
         addressedByMember.get(memberId) ?? { ok: true, value: [] },
@@ -81,6 +83,7 @@ let root: Root;
 beforeEach(() => {
   window.localStorage.clear();
   memberByOrg.clear();
+  memberReadFailures.clear();
   addressedByMember.clear();
   live.onChange = null;
   container = document.createElement('div');
@@ -168,6 +171,47 @@ describe('the app-level call-out alarm', () => {
     expect(plays()).toBe(1);
   });
 
+  it('ignores an older read that finishes after a newer arrival read', async () => {
+    writeAlarmSound(window.localStorage, 'u1', 'siren');
+    memberByOrg.set(DVD, 'dvd-member');
+    addressedByMember.set('dvd-member', { ok: true, value: [] });
+    await renderFor(gateway({ userId: 'u1', memberships: ['DVD'] }));
+
+    let finishOld!: (value: ReadResult<readonly string[]>) => void;
+    const oldRead = new Promise<ReadResult<readonly string[]>>((resolve) => {
+      finishOld = resolve;
+    });
+    addressedByMember.set('dvd-member', oldRead);
+    await notice();
+
+    addressedByMember.set('dvd-member', { ok: true, value: ['new-call'] });
+    await notice();
+    expect(plays()).toBe(1);
+
+    await act(async () => finishOld({ ok: true, value: [] }));
+    await flush();
+    await notice();
+    expect(plays()).toBe(1);
+  });
+
+  it('treats a newly granted service as a fresh baseline, not a new call-out', async () => {
+    writeAlarmSound(window.localStorage, 'u1', 'siren');
+    memberByOrg.set(DVD, 'dvd-member');
+    memberByOrg.set(SZS, 'szs-member');
+    addressedByMember.set('dvd-member', { ok: true, value: [] });
+    addressedByMember.set('szs-member', { ok: true, value: ['already-open-szs'] });
+    await renderFor(gateway({ userId: 'u1', memberships: ['DVD'] }));
+    expect(plays()).toBe(0);
+
+    await renderFor(gateway({ userId: 'u1', memberships: ['DVD', 'SZS'] }));
+    expect(ready()).toBe('true');
+    expect(plays()).toBe(0);
+
+    addressedByMember.set('szs-member', { ok: true, value: ['already-open-szs', 'new-szs'] });
+    await notice();
+    expect(plays()).toBe(1);
+  });
+
   it('does not establish a baseline from a refused read, and does not sound', async () => {
     writeAlarmSound(window.localStorage, 'u1', 'siren');
     memberByOrg.set(DVD, 'dvd-member');
@@ -182,6 +226,26 @@ describe('the app-level call-out alarm', () => {
     await notice();
     expect(ready()).toBe('true');
     expect(plays()).toBe(0);
+  });
+
+  it('retries a failed member-id lookup on the next notice instead of treating it as no membership', async () => {
+    writeAlarmSound(window.localStorage, 'u1', 'siren');
+    memberReadFailures.add(DVD);
+    memberByOrg.set(DVD, 'dvd-member');
+    addressedByMember.set('dvd-member', { ok: true, value: ['already-open'] });
+    await renderFor(gateway({ userId: 'u1', memberships: ['DVD'] }));
+    expect(ready()).toBe('false');
+    expect(watching()).toBe(0);
+
+    memberReadFailures.delete(DVD);
+    await notice();
+    expect(ready()).toBe('true');
+    expect(watching()).toBe(1);
+    expect(plays()).toBe(0);
+
+    addressedByMember.set('dvd-member', { ok: true, value: ['already-open', 'new-call'] });
+    await notice();
+    expect(plays()).toBe(1);
   });
 
   it('never sounds a DVD-only member for an SZS call-out', async () => {
