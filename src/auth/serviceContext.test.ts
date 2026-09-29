@@ -69,6 +69,18 @@ describe('resolveActingService', () => {
 });
 
 describe('remembered service storage', () => {
+  it('retains the old per-user service choice under the neutral key', () => {
+    const map = new Map([['dvd-tivat.acting-service:user-1', 'SZS']]);
+    const storage = {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, value),
+      removeItem: (key: string) => void map.delete(key),
+    };
+    expect(readRememberedService(storage, 'user-1')).toBe('SZS');
+    expect(map.get('boka-operativa.acting-service:user-1')).toBe('SZS');
+    expect(map.has('dvd-tivat.acting-service:user-1')).toBe(false);
+    expect(readRememberedService(storage, 'user-2')).toBeNull();
+  });
   it('round-trips per user id', () => {
     const store = new Map<string, string>();
     const storage = {

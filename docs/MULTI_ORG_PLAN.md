@@ -363,7 +363,7 @@ tests must fail against the code as it was before that phase.
 | **P5** | drop the mirror, reduce `access_grants` | destructive | ready; unblocked by D9 |
 | **P6** | SZS runs its own workflow | additive | **in progress** — unblocked by D14–D17; Stage A (#67, `202609270039`), Stage B (acting-service context, this PR), Stage C (SZS call-out lifecycle) to come |
 | **P7** | cross-service alerting | additive | blocked on Q1–Q4 (joint-intervention behaviour of Q5/Q8) |
-| **P8** | branding and storage keys | none | ready |
+| **P8** | branding and storage keys | none | in progress — neutral descriptions, per-service profile, local-key migration and neutral push topic in a separate draft PR |
 
 P1 through P5 can now run end to end without another answer. **P4 is split into
 six PRs** — one policy rewrite per table group — because "one PR" for 51 policies
@@ -1094,6 +1094,14 @@ visibility rules that Q3/Q4 decide.
 (`dvd-tivat.callout-draft`, `dvd-tivat-prototip:v2`) and the push topic prefix
 `dvd-` are renamed. The app title is already neutral ("Boka Operativa") and does
 not change.
+
+The P8 key change reads old local data before writing it under the new key:
+unsaved DVD and SZS drafts, fictional prototype state, language, service choice,
+and per-account sound choice. A current key always wins over an old one; clearing
+a draft or prototype state clears both names. The SZS profile has its official
+name only. Its member count, assembly point, fallback channel and operating
+model remain unknown until that service confirms them; DVD's confirmed facts
+remain DVD-only in the local prototype.
 
 **Acceptance criteria**
 
