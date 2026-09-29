@@ -22,8 +22,8 @@
  */
 
 // Bump on any change to this file or to what it caches.
-const VERSION = 'v6';
-const SHELL = `dvd-tivat-shell-${VERSION}`;
+const VERSION = 'v7';
+const SHELL = `boka-operativa-shell-${VERSION}`;
 
 self.addEventListener('install', (event) => {
   // The document is fetched so the application can start from cache next time;
@@ -42,7 +42,8 @@ self.addEventListener('activate', (event) => {
       const names = await caches.keys();
       await Promise.all(
         names
-          .filter((name) => name.startsWith('dvd-tivat-shell-') && name !== SHELL)
+          .filter((name) =>
+            (name.startsWith('dvd-tivat-shell-') || name.startsWith('boka-operativa-shell-')) && name !== SHELL)
           .map((name) => caches.delete(name)),
       );
       await self.clients.claim();
@@ -80,7 +81,7 @@ self.addEventListener('push', (event) => {
       body: 'Nova intervencija. Potvrdite prijem odmah.',
       icon: './icons/icon-192.png',
       badge: './icons/icon-192.png',
-      tag: interventionId ? `dvd-call-${interventionId}` : 'dvd-call',
+      tag: interventionId ? `boka-call-${interventionId}` : 'boka-call',
       renotify: true,
       requireInteraction: true,
       silent: false,
