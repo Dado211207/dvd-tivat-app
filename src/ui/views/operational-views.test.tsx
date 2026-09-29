@@ -1430,3 +1430,47 @@ describe('P7 targeted service archive', () => {
     expect(container.querySelector('[data-testid="archive-list"]')?.textContent).toContain('SZS pozvao DVD');
   });
 });
+
+describe('P7 targeted service command', () => {
+  afterEach(async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [INTERVENTION] });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValue({ ok: true, value: [] });
+  });
+
+  it('lets the targeted commander manage their own attendance without controlling the publisher lifecycle', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({
+      ok: true,
+      value: [{ ...INTERVENTION, id: OTHER_ID, title: 'DVD nacrt', status: 'DRAFT' }],
+    });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValue({
+      ok: true, value: [{ ...INTERVENTION, title: 'SZS pozvao DVD' }],
+    });
+
+    await show(<CommandView />, 'COMMANDER');
+    expect(container.querySelector('[data-testid="intervention-picker"]')?.textContent)
+      .toContain('SZS pozvao DVD');
+    expect(container.querySelector('[data-testid="joint-command-scope"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="status-DEPLOYED"]')).toBeNull();
+    expect(container.querySelector('[data-testid="close-intervention"]')).toBeNull();
+
+    act(() => {
+      pressByText('Prisustvo');
+    });
+    await settle();
+    expect(container.querySelector(`[data-testid="toggle-presence-${MEMBER_ID}"]`)).not.toBeNull();
+    expect(container.querySelector('[data-testid="pending-list"]')?.textContent)
+      .toContain('Ivo Vatrogasac');
+  });
+
+  it('fails closed if the targeted incident read is refused', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValueOnce({
+      ok: false, reason: 'REFUSED',
+    });
+    await show(<CommandView />, 'COMMANDER');
+    expect(container.textContent).toContain('Server je odbio');
+    expect(container.querySelector('[data-testid="intervention-picker"]')).toBeNull();
+  });
+});

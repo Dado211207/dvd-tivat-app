@@ -681,6 +681,8 @@ export const en: Strings = {
     unavailable: 'The server is not available at the moment. The view was not refreshed.',
     notSaved: 'The change was not saved.',
     pickIntervention: 'Intervention',
+    jointTargetedLabel: 'Joint intervention',
+    jointTargetedNotice: 'The other service runs this intervention. Here you see your members and confirm their attendance. Status changes and closure belong to the service that published the call-out.',
 
     newTitle: 'New call-out',
     newSummary: 'Prepare a new call-out',

@@ -33,6 +33,7 @@ import {
   fetchAvailability,
   fetchInterventionAudit,
   fetchInterventions,
+  fetchTargetedInterventions,
   fetchEligibleRecipients,
   fetchRecipientFacts,
   fetchVehicleMovements,
@@ -128,6 +129,8 @@ export function CommandView() {
 
 interface ConsoleData {
   interventions: readonly Intervention[];
+  /** Joint incidents published elsewhere, read here solely as a targeted service. */
+  targetedIds: ReadonlySet<string>;
   members: readonly RosterMember[];
   /**
    * Who may be CALLED, answered by the server.
@@ -164,6 +167,7 @@ interface ConsoleData {
 
 const EMPTY: ConsoleData = {
   interventions: [],
+  targetedIds: new Set(),
   members: [],
   eligible: null,
   vehicles: [],
@@ -220,9 +224,10 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         setLoadError(reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
       };
       try {
-        const [interventionsRead, members, eligible, vehicles, availabilityRead, movementsRead] =
+        const [interventionsRead, targetedRead, members, eligible, vehicles, availabilityRead, movementsRead] =
           await Promise.all([
             fetchInterventions(organizationId),
+            fetchTargetedInterventions(organizationId),
             loadRoster(organizationId),
             fetchEligibleRecipients(organizationId),
             loadVehicles(organizationId),
@@ -236,10 +241,13 @@ function CommandConsole({ context }: { context: OperationalContext }) {
          * a silently empty availability board, or an empty vehicle list, would
          * invite a decision made on information the server declined to give.
          */
-        const refused = [interventionsRead, availabilityRead, movementsRead].find((r) => !r.ok);
+        const refused = [interventionsRead, targetedRead, availabilityRead, movementsRead].find((r) => !r.ok);
         if (refused && !refused.ok) return failed(ticket, refused.reason);
-        if (!interventionsRead.ok || !availabilityRead.ok || !movementsRead.ok) return;
-        const interventions = interventionsRead.value;
+        if (!interventionsRead.ok || !targetedRead.ok || !availabilityRead.ok || !movementsRead.ok) return;
+        const ownIds = new Set(interventionsRead.value.map((item) => item.id));
+        const targetedIds = new Set(targetedRead.value.filter((item) => !ownIds.has(item.id)).map((item) => item.id));
+        const interventions = [...interventionsRead.value, ...targetedRead.value.filter((item) => targetedIds.has(item.id))]
+          .sort((a, b) => a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0);
 
         // The newest call-out that is still open is what a commander wants on
         // opening the screen; falling back to the newest of any kind means the
@@ -274,7 +282,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
 
         if (!mounted.current || ticket !== generation.current) return;
         setData({
-          interventions, members, eligible, vehicles,
+          interventions, targetedIds, members, eligible, vehicles,
           availability: availabilityRead.value,
           movements: movementsRead.value,
           recipients, attendance, audit,
@@ -368,6 +376,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
 
       <InterventionPicker
         interventions={data.interventions}
+        targetedIds={data.targetedIds}
         selectedId={selectedId}
         onSelect={(id) => {
           setSelectedId(id);
@@ -403,6 +412,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
               organizationId={organizationId}
               data={data}
               selected={selected}
+              targeted={selected !== null && data.targetedIds.has(selected.id)}
               onDone={after}
               onRefresh={() => void refresh(selectedId)}
             />
@@ -411,7 +421,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           {id === 'prisustvo' ? (
             <AttendanceTab data={data} selected={selected} onDone={after} context={context} />
           ) : null}
-          {id === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
+          {id === 'vozila' ? <VehiclesTab data={data} selected={selected} targeted={selected !== null && data.targetedIds.has(selected.id)} onDone={after} /> : null}
         </div>
       ))}
 
@@ -437,10 +447,12 @@ function CommandConsole({ context }: { context: OperationalContext }) {
 
 function InterventionPicker({
   interventions,
+  targetedIds,
   selectedId,
   onSelect,
 }: {
   interventions: readonly Intervention[];
+  targetedIds: ReadonlySet<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -472,6 +484,7 @@ function InterventionPicker({
       >
         {interventions.map((i) => (
           <option key={i.id} value={i.id}>
+            {targetedIds.has(i.id) ? `${t.command.jointTargetedLabel} - ` : ''}
             {t.vocabulary.interventionStatus[i.status] ?? i.status} - {i.title}
           </option>
         ))}
@@ -488,12 +501,14 @@ function CallOutTab({
   organizationId,
   data,
   selected,
+  targeted,
   onDone,
   onRefresh,
 }: {
   organizationId: string;
   data: ConsoleData;
   selected: Intervention | null;
+  targeted: boolean;
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
   onRefresh: () => void;
 }) {
@@ -879,6 +894,9 @@ function CallOutTab({
             the same description of it.
           */}
           <IncidentCard intervention={selected} testId="selected" />
+          {targeted ? (
+            <Notice tone="info" testId="joint-command-scope">{t.command.jointTargetedNotice}</Notice>
+          ) : null}
 
           {/*
             WHO IS COMING, second, on the tab the commander lands on.
@@ -894,7 +912,7 @@ function CallOutTab({
               note has no recipients to pick, no status to set and nothing to
               close, and an empty bordered card below the incident would read as
               a panel that failed to load. */}
-          {isDraft || isOpenStatus(selected.status) || selected.closeReason ? (
+          {isDraft || (!targeted && isOpenStatus(selected.status)) || selected.closeReason ? (
           <section className="panel" data-testid="intervention-actions">
           {isDraft ? (
             <>
@@ -1093,7 +1111,7 @@ function CallOutTab({
             </>
           ) : null}
 
-          {isOpenStatus(selected.status) ? (
+          {!targeted && isOpenStatus(selected.status) ? (
             <>
               <h3>{t.command.statusTitle}</h3>
               <div className="row-actions">
@@ -1819,10 +1837,12 @@ function AttendanceTab({
 function VehiclesTab({
   data,
   selected,
+  targeted,
   onDone,
 }: {
   data: ConsoleData;
   selected: Intervention | null;
+  targeted: boolean;
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
 }) {
   const t = useText();
@@ -1877,8 +1897,8 @@ function VehiclesTab({
                       } else {
                         const result = await recordVehicleDeparture(
                           vehicle.id,
-                          selected && isOpenStatus(selected.status) ? selected.id : null,
-                          selected && isOpenStatus(selected.status) ? selected.title : null,
+                          selected && !targeted && isOpenStatus(selected.status) ? selected.id : null,
+                          selected && !targeted && isOpenStatus(selected.status) ? selected.title : null,
                         );
                         await onDone(
                           result.ok ? { ok: true } : { ok: false, message: result.message },
