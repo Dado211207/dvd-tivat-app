@@ -859,10 +859,12 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
     // still be untouched by any later migration.
     const P7_JOINT = 'supabase/migrations/202609290040_joint_callouts.sql';
     const P7_ALLOWED = new Set(['publish_intervention', 'is_recipient_of']);
+    const P7_ACK = 'supabase/migrations/202609290042_joint_delivery_and_acknowledgement.sql';
     for (const file of later) {
       const body = sql(file);
       for (const name of guarded) {
         if (file === P7_JOINT && P7_ALLOWED.has(name)) continue;
+        if (file === P7_ACK && name === 'acknowledge_intervention') continue;
         expect(
           new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(body),
           `${file} re-creates ${name} after P4b secured it`,
@@ -887,6 +889,13 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
     expect(
       /is_recipient_of[\s\S]*current_member_id_in\(recipient\.organization_id\)/.test(p7),
       'P7 is_recipient_of stays recipient-only, resolved in the row’s own service',
+    ).toBe(true);
+    const p7Ack = sql(P7_ACK);
+    expect(
+      /recipient\.member_id = public\.current_member_id_in\(recipient\.organization_id\)/.test(p7Ack)
+        && /is_staff_in\(acting_service\)/.test(p7Ack)
+        && /is_recipient_of\(target_intervention\)/.test(p7Ack),
+      'P7 acknowledgement selects the caller’s frozen recipient in their own service',
     ).toBe(true);
   });
 });
