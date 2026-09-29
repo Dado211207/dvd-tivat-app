@@ -42,6 +42,8 @@ alter policy intervention_updates_read on public.intervention_updates
 -- the OTHER service's commander. The publisher/own-recipient branches keep
 -- their existing history, while actor names and raw member-linked detail never
 -- cross the service boundary. Publication's recipient_count is not exposed.
+-- A close/cancel event's open_attendance count covers all services, so the
+-- targeted service receives the shared reason/status without that count.
 create or replace function public.intervention_audit(target_intervention uuid)
 returns table(event_id uuid, occurred_at timestamptz, event_type text, detail jsonb, actor_name text, actor_is_you boolean)
 language sql
@@ -53,7 +55,15 @@ as $$
     entry.id,
     entry.occurred_at,
     entry.event_type,
-    entry.detail,
+    case
+      when public.is_joint_target_command(target_intervention)
+        and not (
+          public.is_command_in(entry.organization_id)
+          or public.is_recipient_in(target_intervention, entry.organization_id)
+        )
+      then entry.detail - 'open_attendance'
+      else entry.detail
+    end,
     case when public.is_command_in(entry.organization_id)
                 or public.is_recipient_in(target_intervention, entry.organization_id)
       then actor.full_name else null end,
