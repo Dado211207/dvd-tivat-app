@@ -108,7 +108,7 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     fetchTargetedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
     // A recipient's joint call-outs are merged in from here (P7); the single
     // call-out these tests exercise already comes back from fetchInterventions.
-    fetchAddressedInterventions: vi.fn(async () => ({ ok: true, value: [INTERVENTION] }) as const),
+    fetchAddressedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
     // Who may be CALLED is the server's answer, not a filter over the roster.
     // Pero is on the roster below but is NOT here: he stands in for the
     // withdrawn member whose account can no longer sign in.
