@@ -110,6 +110,94 @@ create trigger enforce_organization before insert or update on public.interventi
   for each row execute function public.enforce_organization_from_parent('members', 'member_id', 'id');
 
 -- ===========================================================================
+-- 3b. Caller-independent recipient eligibility, for resolving the OTHER service
+-- ===========================================================================
+--
+-- is_eligible_recipient_in (202609250029) gates on `is_staff_in(target)` — "only
+-- somebody who serves in that service may ask about its people" — which is right
+-- for a client enumerating recipients, but wrong for a joint call-out: the
+-- publishing service's commander is NOT staff in the service they are paging. So
+-- this variant answers the same per-member question WITHOUT the caller gate. It is
+-- for use only inside a security-definer function that has ALREADY authorised the
+-- caller (publish_intervention, which has confirmed is_command_in(publisher_org)),
+-- and it is callable by no client role — so it opens no way to enumerate another
+-- service's members from the client.
+
+create or replace function public.recipient_is_eligible_in(
+  target_member uuid,
+  target_organization uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.members member
+    join public.profiles profile on profile.user_id = member.user_id
+    join public.access_grants grant_row on grant_row.user_id = member.user_id
+    where member.id = target_member
+      and member.organization_id = target_organization
+      and member.active = true
+      and member.user_id is not null
+      and profile.profile_complete = true
+      and grant_row.active = true
+      and (
+        grant_row.role = 'OWNER'
+        or exists (
+          select 1
+          from public.organization_memberships membership
+          join public.organizations organization
+            on organization.id = membership.organization_id
+          where membership.user_id = member.user_id
+            and membership.organization_id = target_organization
+            and membership.active = true
+            and organization.active = true
+            and membership.role in ('ADMIN', 'COMMANDER', 'FIREFIGHTER')
+        )
+      )
+  )
+$$;
+
+comment on function public.recipient_is_eligible_in(uuid, uuid) is
+  'Whether a member may be paged by a service, WITHOUT the caller-staff gate that '
+  'is_eligible_recipient_in adds. For use only inside security-definer functions '
+  'that have already authorised the caller (publish_intervention resolving a joint '
+  'call-out''s other-service recipients, D19). Callable by no client role.';
+
+revoke all on function public.recipient_is_eligible_in(uuid, uuid) from public, anon, authenticated, service_role;
+
+-- ===========================================================================
+-- 3c. is_recipient_of recognises a recipient in their OWN service
+-- ===========================================================================
+--
+-- is_recipient_of resolved the caller's member in the CALL-OUT's service. On a
+-- joint call-out a DVD member paged by an SZS call-out holds a DVD recipient row,
+-- but current_member_id_in(SZS) is null for them, so they were not recognised as
+-- a recipient — they could not even read the call-out they were paged for. Resolve
+-- against the RECIPIENT ROW's service instead (the member's own, since 040 scopes
+-- the row to it). A no-op for a single-service call-out (row service = call-out
+-- service); correct for a joint one. Still strictly recipient-only: it matches
+-- only a row whose member is the caller's own member in that row's service.
+
+create or replace function public.is_recipient_of(target_intervention uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.intervention_recipients recipient
+    where recipient.intervention_id = target_intervention
+      and recipient.member_id = public.current_member_id_in(recipient.organization_id)
+  )
+$$;
+
+-- ===========================================================================
 -- 4. publish_intervention resolves additional recipient services
 -- ===========================================================================
 --
@@ -187,7 +275,7 @@ begin
 
     select count(*) into ineligible_count
     from unnest(recipient_member_ids) as requested(member_id)
-    where not public.is_eligible_recipient_in(requested.member_id, publisher_org);
+    where not public.recipient_is_eligible_in(requested.member_id, publisher_org);
     if ineligible_count > 0 then raise exception 'RECIPIENT_NOT_ELIGIBLE'; end if;
   end if;
 
@@ -209,7 +297,7 @@ begin
         and (
           (has_own and m.id = any(recipient_member_ids))
           or (m.organization_id = any(clean_org_ids)
-              and public.is_eligible_recipient_in(m.id, m.organization_id))
+              and public.recipient_is_eligible_in(m.id, m.organization_id))
         )
     ),
     ranked as (

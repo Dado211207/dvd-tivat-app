@@ -851,15 +851,18 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
       'acknowledge_intervention',
       'is_recipient_of',
     ];
-    // P7 (202609290040, D18/D19) intentionally re-creates publish_intervention to
-    // resolve additional recipient services. That single re-creation is allowed
-    // here and asserted below to keep P4b's publisher-command isolation; every
-    // other guarded function must still be untouched by any later migration.
+    // P7 (202609290040, D18/D19) intentionally re-creates two of these: publish_
+    // intervention (to resolve additional recipient services) and is_recipient_of
+    // (so a member paged by another service's joint call-out is recognised as a
+    // recipient of their own service's row). Both re-creations are allowed here and
+    // asserted below to keep P4b's isolation; every other guarded function must
+    // still be untouched by any later migration.
     const P7_JOINT = 'supabase/migrations/202609290040_joint_callouts.sql';
+    const P7_ALLOWED = new Set(['publish_intervention', 'is_recipient_of']);
     for (const file of later) {
       const body = sql(file);
       for (const name of guarded) {
-        if (name === 'publish_intervention' && file === P7_JOINT) continue;
+        if (file === P7_JOINT && P7_ALLOWED.has(name)) continue;
         expect(
           new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(body),
           `${file} re-creates ${name} after P4b secured it`,
@@ -867,9 +870,11 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
       }
     }
 
-    // P7's publish_intervention adds recipient organisations without weakening
-    // the isolation P4b secured: it still refuses to publish another service's
-    // call-out, and still refuses an own-selection member from another service.
+    // P7's publish_intervention adds recipient organisations without weakening the
+    // isolation P4b secured: it still refuses to publish another service's call-out
+    // and still refuses an own-selection member from another service. And its
+    // is_recipient_of is still strictly recipient-only — it resolves the caller's
+    // own member (current_member_id_in), never a blanket read.
     const p7 = sql(P7_JOINT);
     expect(
       /is_command_in\(publisher_org\)/.test(p7),
@@ -878,6 +883,10 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
     expect(
       /organization_id is distinct from publisher_org/.test(p7) && /ORGANIZATION_MISMATCH/.test(p7),
       'P7 publish_intervention still refuses a cross-service own-selection',
+    ).toBe(true);
+    expect(
+      /is_recipient_of[\s\S]*current_member_id_in\(recipient\.organization_id\)/.test(p7),
+      'P7 is_recipient_of stays recipient-only, resolved in the row’s own service',
     ).toBe(true);
   });
 });
