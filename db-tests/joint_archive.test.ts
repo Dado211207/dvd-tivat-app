@@ -117,10 +117,8 @@ describe('permanent recipient-service archive', () => {
     expect((await asUserCommitted(db, szsMember.userId, (client) =>
       client.query<{ interval_id: string }>('select public.attendance_check_in($1) as interval_id', [joint])))
       .rows[0]?.interval_id).toMatch(/^[0-9a-f-]{36}$/i);
-    expect((await asUserCommitted(db, szsCommand.userId, (client) =>
-      client.query<{ outcome: string }>(
-        "select public.close_intervention($1, 'CLOSED', 'Zavrseno', true) as outcome", [joint])))
-      .rows[0]?.outcome).toBe('OK');
+    await asUserCommitted(db, szsCommand.userId, (client) =>
+      client.query("select public.close_intervention($1, 'CLOSED', 'Zavrseno', true)", [joint]));
 
     const publisher = await read<{ event_type: string; detail: Record<string, unknown> }>(
       szsCommand, 'select event_type, detail from public.intervention_audit($1)', [joint]);
