@@ -2555,6 +2555,15 @@ dialog {
   border-radius: 50%;
 }
 
+/* The call-out sound picker groups its options under "ordinary" and "alarm". */
+.alarm-group {
+  margin-top: var(--sp-3);
+}
+
+.alarm-group__label {
+  margin: 0 0 var(--sp-1);
+}
+
 /* ------------------------------------------------- timings and milestones */
 
 /*

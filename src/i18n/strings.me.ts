@@ -324,6 +324,27 @@ export const me = {
     // switch is made. An explicit act on a deliberate screen, never a silent flip.
     actingServiceChange: 'Promijeni sluzbu',
 
+    alarm: {
+      title: 'Zvuk poziva na ovom uredjaju',
+      lead: 'Zvuk koji se cuje kada stigne novi poziv dok je aplikacija otvorena, na bilo kom ekranu. Bira se ovdje i pamti se na ovom uredjaju.',
+      legend: 'Izaberite zvuk',
+      off: 'Bez zvuka',
+      preview: 'Preslusaj',
+      groupOrdinary: 'Obicni',
+      groupAlarm: 'Alarmni',
+      // The one thing people get wrong about web notifications.
+      foregroundNote:
+        'Ovaj zvuk se cuje dok je aplikacija otvorena, na svakom ekranu. Kada obavjestenje stigne dok je aplikacija zatvorena ili u pozadini, telefon koristi svoj zvuk obavjestenja - njega mijenjate u podesavanjima telefona, ne ovdje.',
+      names: {
+        chime: 'Zvono',
+        twotone: 'Dva tona',
+        softarp: 'Blagi niz',
+        pulse: 'Puls',
+        siren: 'Sirena',
+        urgent: 'Hitno',
+      },
+    },
+
     notificationsTitle: 'Obavjestenja na ovom uredjaju',
     displayTitle: 'Vrijeme i prikaz',
     displayZone: 'Sva vremena se prikazuju po vremenu Crne Gore, bez obzira na podesavanja uredjaja.',

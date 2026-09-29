@@ -19,6 +19,7 @@ import { timeZoneIsSupported } from '@/i18n/time';
 import { useLanguage, useText } from '@/i18n/useText';
 import { useState } from 'react';
 import { PushNotificationPanel } from '../components/PushNotificationPanel';
+import { AlarmSoundPicker } from '../components/AlarmSoundPicker';
 import { ServiceSwitcher } from '../components/ServiceSwitcher';
 import { Notice } from '../components/primitives';
 import { hrefFor, type Route } from '../router';
@@ -117,6 +118,11 @@ export function SettingsView() {
       <div className="panel">
         <PushNotificationPanel variant="full" />
       </div>
+
+      {/* The in-app call-out sound sits beside the push panel: both are about
+          being alerted on this device, and this one says plainly which case it
+          covers (app open) versus the phone's own notification sound (app closed). */}
+      <AlarmSoundPicker />
 
       <section className="panel" aria-labelledby="settings-display">
         <h2 className="panel__title" id="settings-display">{t.settings.displayTitle}</h2>

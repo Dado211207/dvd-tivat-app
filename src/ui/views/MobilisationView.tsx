@@ -301,6 +301,10 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     onChange: () => void refresh(activeId, { silent: true }),
   });
 
+  // The call-out sound is no longer sounded here: a single app-level listener
+  // (`CallOutAlarm`, mounted above the router) sounds a newly-arrived call-out on
+  // any route, so one arrival makes one sound whichever screen is open.
+
   const active = useMemo(
     () => data.interventions.find((i) => i.id === activeId) ?? null,
     [data.interventions, activeId],

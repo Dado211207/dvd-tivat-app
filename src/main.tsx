@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { applyStoredLanguage } from './i18n/language';
 import { AccessProvider } from './auth/AccessProvider';
+import { CallOutAlarm } from './notifications/CallOutAlarm';
 import { registerServiceWorker } from './pwa';
 import { AppStateProvider } from './state/AppStateContext';
 import './styles/global.css';
@@ -23,6 +24,10 @@ createRoot(container).render(
         browser has been playing with. */}
     <AccessProvider>
       <AppStateProvider>
+        {/* The call-out alarm listens above the router, so a newly-arrived
+            call-out for the signed-in member can sound on any route - not only
+            while the "Moj poziv" screen is mounted. Headless; renders nothing. */}
+        <CallOutAlarm />
         <App />
       </AppStateProvider>
     </AccessProvider>
