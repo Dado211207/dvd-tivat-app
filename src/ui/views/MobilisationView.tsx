@@ -132,10 +132,11 @@ function requestedInterventionId(): string | null {
 
 /**
  * Merge call-outs the member was paged for in the acting service. The owner
- * query can also return an incident this person received THROUGH their other
- * service, so its rows are admitted only when the current service's recipient
- * read confirms them. This keeps the action buttons tied to the displayed
- * member identity (D14) even when the publisher owns the incident here.
+ * query can also return an incident a dual-service person received THROUGH
+ * their other service. For such an account, admit owner-query rows only when
+ * the acting service's recipient read confirms them. Single-service screens
+ * keep their established behavior. This ties actions to the displayed member
+ * identity (D14), even when the publisher owns the incident here.
  */
 function mergeInterventionsById(
   owned: readonly Intervention[],
@@ -221,7 +222,9 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         const addressed = addressedRead && addressedRead.ok ? addressedRead.value : [];
         const addressedIds = new Set(addressed.map((item) => item.id));
         const interventions = mergeInterventionsById(
-          interventionsRead.value.filter((item) => addressedIds.has(item.id)),
+          availableServices.length > 1
+            ? interventionsRead.value.filter((item) => addressedIds.has(item.id))
+            : interventionsRead.value,
           addressed,
         );
 
@@ -267,7 +270,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
-    [memberId, organizationId],
+    [memberId, organizationId, availableServices.length],
   );
 
   useEffect(() => {
