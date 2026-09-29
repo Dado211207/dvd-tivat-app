@@ -31,6 +31,7 @@ import {
   fetchAttendance,
   fetchAvailability,
   fetchInterventions,
+  fetchOwnMemberId,
   fetchRecipientFacts,
   isOpenStatus,
   JOURNEY_STEPS,
@@ -130,10 +131,11 @@ function requestedInterventionId(): string | null {
 }
 
 /**
- * Merge the service's own call-outs with the ones the member was paged for in
- * this service - which, for a P7 joint call-out, are OWNED by another service -
- * de-duplicated by id and newest first. A single-service call-out appears in both
- * lists and is kept once.
+ * Merge call-outs the member was paged for in the acting service. The owner
+ * query can also return an incident this person received THROUGH their other
+ * service, so its rows are admitted only when the current service's recipient
+ * read confirms them. This keeps the action buttons tied to the displayed
+ * member identity (D14) even when the publisher owns the incident here.
  */
 function mergeInterventionsById(
   owned: readonly Intervention[],
@@ -216,9 +218,11 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         if (!availabilityRead.ok) return failed(ticket, availabilityRead.reason);
         // A refused addressed read must not silently drop a joint call-out.
         if (addressedRead && !addressedRead.ok) return failed(ticket, addressedRead.reason);
+        const addressed = addressedRead && addressedRead.ok ? addressedRead.value : [];
+        const addressedIds = new Set(addressed.map((item) => item.id));
         const interventions = mergeInterventionsById(
-          interventionsRead.value,
-          addressedRead && addressedRead.ok ? addressedRead.value : [],
+          interventionsRead.value.filter((item) => addressedIds.has(item.id)),
+          addressed,
         );
 
         // Row level security already limits this to call-outs this member was
@@ -301,10 +305,15 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     let live = true;
     void (async () => {
       for (const other of others) {
-        const read = await fetchInterventions(organizationIdOf(other));
+        const otherOrganizationId = organizationIdOf(other);
+        const member = await fetchOwnMemberId(otherOrganizationId);
         if (!live) return;
-        // Only a call-out the person is genuinely a recipient of in that service
-        // comes back (RLS narrows it); anything else leaves the prompt unshown.
+        if (!member.ok || member.value === null) continue;
+        const read = await fetchAddressedInterventions(otherOrganizationId, member.value);
+        if (!live) return;
+        // An incident may be visible through command rights or ownership while
+        // the person was paged through another service. Only an actual recipient
+        // row there justifies switching their operational identity.
         if (read.ok && read.value.some((item) => item.id === requested)) {
           setCrossServiceLink(other);
           return;
