@@ -7,8 +7,10 @@ import {
   sameAccess,
   type Access,
   type AccessGateway,
+  type LoadAccessOptions,
   type SignedInAccess,
 } from './access';
+import { organizationCodeOf, organizationIdOf } from './serviceContext';
 
 const FIXED_NOW = () => new Date('2026-09-11T08:00:00.000Z');
 
@@ -25,7 +27,7 @@ function gateway(overrides: GatewayOverrides = {}): AccessGateway {
 }
 
 const load = (overrides: GatewayOverrides = {}): Promise<Access> =>
-  loadAccess(gateway(overrides), FIXED_NOW);
+  loadAccess(gateway(overrides), { now: FIXED_NOW });
 
 describe('loading the access snapshot', () => {
   it('reports a signed-out visitor without asking the server anything else', async () => {
@@ -65,6 +67,10 @@ describe('loading the access snapshot', () => {
       fullName: 'Probni Korisnik',
       profileComplete: true,
       accountStatus: 'ACTIVE',
+      // The legacy DVD gateway resolves the DVD service the DVD way: a role means
+      // a DVD membership, so the person acts as DVD and DVD is their only service.
+      service: 'DVD',
+      availableServices: ['DVD'],
       role: 'FIREFIGHTER',
       loadedAt: '2026-09-11T08:00:00.000Z',
     });
@@ -167,6 +173,208 @@ describe('failing closed', () => {
   });
 });
 
+/**
+ * P6: the acting service.
+ *
+ * A service-aware gateway carries `fetchServiceContext` and `fetchRoleIn`, so
+ * loadAccess resolves WHICH service the person is acting as and reads the role
+ * FOR THAT SERVICE. The single rule these tests exist to hold: the acting service
+ * only selects which service the server is asked about - it is never authority, so
+ * a person who prefers a service they hold nothing in cannot reach it.
+ */
+describe('the acting service', () => {
+  interface ServiceConfig {
+    readonly memberships: readonly string[];
+    readonly isOwner?: boolean;
+    readonly roleByService?: Readonly<Record<string, string | null>>;
+    readonly preferred?: string | null;
+    readonly status?: string;
+    readonly onRoleQuery?: (organizationId: string) => void;
+  }
+
+  function serviceGateway(config: ServiceConfig): {
+    gateway: AccessGateway;
+    options: LoadAccessOptions;
+  } {
+    const gateway: AccessGateway = {
+      currentUser: async () => ({ id: 'user-1', email: 'probni@example.invalid' }),
+      fetchProfile: async () => ({ fullName: 'Probni Korisnik', profileComplete: true }),
+      // The legacy shim must never be consulted once the service methods exist.
+      fetchRole: async () => {
+        throw new Error('fetchRole must not be called on the service-aware path');
+      },
+      fetchAccountStatus: async () => config.status ?? 'ACTIVE',
+      fetchServiceContext: async () => ({
+        memberships: config.memberships,
+        isOwner: config.isOwner ?? false,
+      }),
+      fetchRoleIn: async (organizationId) => {
+        config.onRoleQuery?.(organizationId);
+        const code = organizationCodeOf(organizationId);
+        return code ? (config.roleByService?.[code] ?? null) : null;
+      },
+    };
+    return {
+      gateway,
+      options: { now: FIXED_NOW, preferredService: () => config.preferred ?? null },
+    };
+  }
+
+  const loadService = (config: ServiceConfig): Promise<Access> => {
+    const { gateway, options } = serviceGateway(config);
+    return loadAccess(gateway, options);
+  };
+
+  it('gives a DVD-only member the DVD role, and DVD as their only service', async () => {
+    const access = await loadService({
+      memberships: ['DVD'],
+      roleByService: { DVD: 'FIREFIGHTER' },
+    });
+    expect(access).toMatchObject({
+      kind: 'SIGNED_IN',
+      service: 'DVD',
+      availableServices: ['DVD'],
+      role: 'FIREFIGHTER',
+    });
+  });
+
+  it('reaches the SZS path for an SZS-only member with no DVD membership', async () => {
+    const access = await loadService({
+      memberships: ['SZS'],
+      roleByService: { SZS: 'FIREFIGHTER', DVD: null },
+    });
+    expect(access).toMatchObject({
+      service: 'SZS',
+      availableServices: ['SZS'],
+      role: 'FIREFIGHTER',
+    });
+  });
+
+  it('defaults a dual-service member to DVD and reads the DVD role there', async () => {
+    const access = await loadService({
+      memberships: ['SZS', 'DVD'],
+      roleByService: { DVD: 'ADMIN', SZS: 'COMMANDER' },
+    });
+    expect(access).toMatchObject({
+      service: 'DVD',
+      availableServices: ['DVD', 'SZS'],
+      role: 'ADMIN',
+    });
+  });
+
+  it('honours a remembered SZS choice and reads the SZS role for it', async () => {
+    const access = await loadService({
+      memberships: ['DVD', 'SZS'],
+      roleByService: { DVD: 'ADMIN', SZS: 'COMMANDER' },
+      preferred: 'SZS',
+    });
+    expect(access).toMatchObject({ service: 'SZS', role: 'COMMANDER' });
+  });
+
+  it('gives the installation owner both services and OWNER, with no membership row', async () => {
+    const access = await loadService({
+      memberships: [],
+      isOwner: true,
+      roleByService: { DVD: 'OWNER', SZS: 'OWNER' },
+    });
+    expect(access).toMatchObject({
+      service: 'DVD',
+      availableServices: ['DVD', 'SZS'],
+      role: 'OWNER',
+    });
+    // The same owner, having switched, is OWNER in SZS too.
+    const asSzs = await loadService({
+      memberships: [],
+      isOwner: true,
+      roleByService: { DVD: 'OWNER', SZS: 'OWNER' },
+      preferred: 'SZS',
+    });
+    expect(asSzs).toMatchObject({ service: 'SZS', role: 'OWNER' });
+  });
+
+  it('gives a citizen no service and never asks the server for a role', async () => {
+    let roleQueries = 0;
+    const access = await loadService({
+      memberships: [],
+      isOwner: false,
+      onRoleQuery: () => {
+        roleQueries += 1;
+      },
+    });
+    expect(access).toMatchObject({ service: null, availableServices: [], role: null });
+    expect(accessObstacle(access)).toBe('NO_SERVICE_ROLE');
+    expect(roleQueries).toBe(0);
+  });
+
+  it('ignores a remembered service that is no longer available and never asks about it', async () => {
+    // The SZS membership was withdrawn, so only DVD remains. A stale "SZS" choice
+    // must resolve to DVD, and the server must never even be asked about SZS.
+    const asked: string[] = [];
+    const access = await loadService({
+      memberships: ['DVD'],
+      roleByService: { DVD: 'FIREFIGHTER' },
+      preferred: 'SZS',
+      onRoleQuery: (organizationId) => asked.push(organizationId),
+    });
+    expect(access).toMatchObject({ service: 'DVD', availableServices: ['DVD'], role: 'FIREFIGHTER' });
+    expect(asked).toEqual([organizationIdOf('DVD')]);
+  });
+
+  it('never lets a preferred service the person lacks become the acting service', async () => {
+    // A DVD-only member asking to act as SZS: the choice is dropped, SZS never
+    // appears in the services they may act in, and the role read is DVD's.
+    const access = await loadService({
+      memberships: ['DVD'],
+      roleByService: { DVD: 'FIREFIGHTER', SZS: 'COMMANDER' },
+      preferred: 'SZS',
+    });
+    expect(access).toMatchObject({ service: 'DVD', role: 'FIREFIGHTER' });
+    if (access.kind !== 'SIGNED_IN') throw new Error('expected SIGNED_IN');
+    expect(access.availableServices).not.toContain('SZS');
+  });
+
+  it('tells a suspended dual-service member it is suspended, not roleless', async () => {
+    const access = await loadService({
+      memberships: ['DVD', 'SZS'],
+      status: 'SUSPENDED',
+      roleByService: { DVD: null, SZS: null },
+    });
+    expect(accessObstacle(access)).toBe('SUSPENDED');
+  });
+
+  it('fails closed when the service context cannot be read', async () => {
+    const { options } = serviceGateway({ memberships: ['DVD'] });
+    const gateway: AccessGateway = {
+      currentUser: async () => ({ id: 'user-1', email: 'probni@example.invalid' }),
+      fetchProfile: async () => ({ fullName: 'Probni Korisnik', profileComplete: true }),
+      fetchRole: async () => 'FIREFIGHTER',
+      fetchAccountStatus: async () => 'ACTIVE',
+      fetchServiceContext: async () => {
+        throw new Error('network');
+      },
+      fetchRoleIn: async () => 'FIREFIGHTER',
+    };
+    expect(await loadAccess(gateway, options)).toEqual({ kind: 'UNAVAILABLE', reason: 'NETWORK' });
+  });
+
+  it('fails closed when the role for the acting service cannot be read', async () => {
+    const access = await loadAccess(
+      {
+        currentUser: async () => ({ id: 'user-1', email: 'probni@example.invalid' }),
+        fetchProfile: async () => ({ fullName: 'Probni Korisnik', profileComplete: true }),
+        fetchRole: async () => 'FIREFIGHTER',
+        fetchAccountStatus: async () => 'ACTIVE',
+        fetchServiceContext: async () => ({ memberships: ['DVD'], isOwner: false }),
+        fetchRoleIn: async () => {
+          throw new Error('network');
+        },
+      },
+      { now: FIXED_NOW },
+    );
+    expect(access).toEqual({ kind: 'UNAVAILABLE', reason: 'NETWORK' });
+  });
+});
+
 describe('narrowing what the wire returns', () => {
   it('accepts exactly the four operational roles', () => {
     expect(asOperationalRole('OWNER')).toBe('OWNER');
@@ -203,6 +411,8 @@ describe('two snapshots say the same thing', () => {
     fullName: 'Komandir Smjene',
     profileComplete: true,
     accountStatus: 'ACTIVE',
+    service: 'DVD',
+    availableServices: ['DVD'],
     role: 'COMMANDER',
     loadedAt: '2026-09-13T10:00:00.000Z',
     ...over,
@@ -227,6 +437,10 @@ describe('two snapshots say the same thing', () => {
     ['a completed profile', { profileComplete: false }],
     ['a changed name', { fullName: 'Neko Drugi' }],
     ['a changed address', { email: 'drugi@example.invalid' }],
+    // Switching the acting service, or gaining/losing a service to switch to, is a
+    // real change: the screens below must re-read the role and member for it.
+    ['a switched acting service', { service: 'SZS' as const, availableServices: ['DVD', 'SZS'] as const }],
+    ['a widened service list', { availableServices: ['DVD', 'SZS'] as const }],
   ])('is false for %s', (_label, over) => {
     expect(sameAccess(signedIn(), signedIn(over as Partial<SignedInAccess>))).toBe(false);
   });

@@ -48,6 +48,7 @@ import { formatDurationMs } from '@/auth/duration';
 import { loadRoster } from '@/auth/roster';
 import { readRouteParam } from '../router';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
+import { organizationIdOf } from '@/auth/serviceContext';
 import {
   factStates,
   nextStep,
@@ -79,7 +80,7 @@ export function MobilisationView() {
             <strong>{t.mobilisation.noMemberTitle}</strong> {t.mobilisation.noMemberText}
           </Notice>
         ) : (
-          <Mobilisation context={context} memberId={context.memberId} />
+          <Mobilisation key={`${context.userId}:${context.service}`} context={context} memberId={context.memberId} />
         )
       }
     </OperationalGate>
@@ -124,8 +125,9 @@ function requestedInterventionId(): string | null {
     : null;
 }
 
-function Mobilisation({ memberId }: { context: OperationalContext; memberId: string }) {
+function Mobilisation({ context, memberId }: { context: OperationalContext; memberId: string }) {
   const t = useText();
+  const organizationId = organizationIdOf(context.service);
   const [data, setData] = useState<MyData>(EMPTY);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,9 +163,9 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
       };
       try {
         const [interventionsRead, availabilityRead, members] = await Promise.all([
-          fetchInterventions(),
-          fetchAvailability(),
-          loadRoster(),
+          fetchInterventions(organizationId),
+          fetchAvailability(organizationId),
+          loadRoster(organizationId),
         ]);
         /*
          * Stop here rather than carrying on with nothing.
@@ -220,7 +222,7 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
-    [memberId],
+    [memberId, organizationId],
   );
 
   useEffect(() => {
@@ -301,7 +303,7 @@ function Mobilisation({ memberId }: { context: OperationalContext; memberId: str
   const callOutIsOpen = active !== null && isOpenStatus(active.status);
 
   const availability = (
-    <AvailabilityPanel data={data} busy={busy} onAct={act} collapsed={callOutIsOpen} />
+    <AvailabilityPanel data={data} busy={busy} onAct={act} collapsed={callOutIsOpen} organizationId={organizationId} />
   );
 
   return (
@@ -391,12 +393,14 @@ function AvailabilityPanel({
   busy,
   onAct,
   collapsed,
+  organizationId,
 }: {
   data: MyData;
   busy: boolean;
   onAct: (run: () => Promise<{ ok: boolean; message?: string }>, text: string) => Promise<void>;
   /** True while a call-out is open: this is about next week, that is about now. */
   collapsed: boolean;
+  organizationId: string;
 }) {
   const t = useText();
   const [note, setNote] = useState('');
@@ -417,7 +421,7 @@ function AvailabilityPanel({
           disabled={busy}
           onClick={() =>
             void onAct(
-              () => setOwnAvailability(true, note.trim() === '' ? null : note.trim()),
+              () => setOwnAvailability(true, note.trim() === '' ? null : note.trim(), organizationId),
               t.mobilisation.availableSavedYes,
             )
           }
@@ -432,7 +436,7 @@ function AvailabilityPanel({
           disabled={busy}
           onClick={() =>
             void onAct(
-              () => setOwnAvailability(false, note.trim() === '' ? null : note.trim()),
+              () => setOwnAvailability(false, note.trim() === '' ? null : note.trim(), organizationId),
               t.mobilisation.availableSavedNo,
             )
           }

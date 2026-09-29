@@ -21,6 +21,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { accessObstacle, hasOperationalAccess, type OperationalRole } from '@/auth/access';
+import type { OrganizationCode } from '@/auth/directory';
+import { organizationIdOf } from '@/auth/serviceContext';
 import type { Strings } from '@/i18n/strings.me';
 import { useText } from '@/i18n/useText';
 import { useAccess } from '@/auth/AccessProvider';
@@ -32,7 +34,16 @@ export interface OperationalContext {
   readonly role: OperationalRole;
   readonly userId: string;
   readonly fullName: string;
-  /** Null when the account is approved but not linked to a member record. */
+  /**
+   * The service this screen is operating in (P6). Every screen below the gate is
+   * for exactly one service - the one the person is acting as - and the member
+   * record and role above are that service's.
+   */
+  readonly service: OrganizationCode;
+  /**
+   * The member record in the acting service, or null when the account is approved
+   * but not linked to a member of THAT service. Read from `current_member_id_in`.
+   */
   readonly memberId: string | null;
 }
 
@@ -49,10 +60,12 @@ export interface OperationalContext {
  * from the person: an outage is waited out, a refusal never resolves on its own
  * and has to be fixed with access rights on the server.
  */
+// The member answer belongs to one account AND one acting service. A switch of
+// either is an identity boundary; a token refresh of the same identity is not.
 type MemberLoad =
   | { readonly kind: 'LOADING' }
-  | { readonly kind: 'READY'; readonly memberId: string | null }
-  | { readonly kind: 'FAILED'; readonly reason: ReadFailure };
+  | { readonly kind: 'READY'; readonly memberId: string | null; readonly service: string; readonly userId: string }
+  | { readonly kind: 'FAILED'; readonly reason: ReadFailure; readonly service: string; readonly userId: string };
 
 export interface OperationalGateProps {
   /** Roles allowed to see this screen. The server still decides every command. */
@@ -78,23 +91,28 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     };
   }, []);
 
-  const loadMember = useCallback(async () => {
+  const loadMember = useCallback(async (organizationId: string, userId: string) => {
     const ticket = ++generation.current;
-    // Only the FIRST read may show a spinner. Once this gate has an answer it
-    // keeps rendering `children` while it re-reads, because replacing them with
-    // a spinner unmounts the whole screen underneath - and every `useState` in
-    // it: the active tab, the selected intervention, half-typed text. That is
-    // what made the application look like it reloaded on returning to the tab.
-    setMember((current) => (current.kind === 'READY' ? current : { kind: 'LOADING' }));
-    // A failed BACKGROUND re-read keeps the last known answer. The screens
-    // below report their own server errors; tearing the gate down over a
-    // refresh that failed would lose the person's place for nothing.
+    // Keep the last answer only for the same account and service. A token
+    // refresh then keeps the screen's state; either identity change starts fresh.
+    setMember((current) =>
+      current.kind === 'READY' && current.service === organizationId && current.userId === userId
+        ? current
+        : { kind: 'LOADING' },
+    );
+    // A failed background re-read of the SAME identity keeps its last answer.
+    // A failed read for another account or service must never inherit it.
     const keepOrFail = (reason: ReadFailure) => (current: MemberLoad): MemberLoad =>
-      current.kind === 'READY' ? current : { kind: 'FAILED', reason };
+      current.kind === 'READY' && current.service === organizationId && current.userId === userId
+        ? current
+        : { kind: 'FAILED', reason, service: organizationId, userId };
     try {
-      const result = await fetchOwnMemberId();
+      // The member record is read FOR THE ACTING SERVICE. Switching service
+      // re-runs this with the other service's id, so the gate resolves the member
+      // that belongs to the service now on screen - never the previous one's.
+      const result = await fetchOwnMemberId(organizationId);
       if (!mounted.current || ticket !== generation.current) return;
-      if (result.ok) setMember({ kind: 'READY', memberId: result.value });
+      if (result.ok) setMember({ kind: 'READY', memberId: result.value, service: organizationId, userId });
       else setMember(keepOrFail(result.reason));
     } catch {
       // The read reports refusals and outages in its result now, so reaching
@@ -111,9 +129,11 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   const signedInUserId = access.kind === 'SIGNED_IN' ? access.userId : null;
   const signedInRole = access.kind === 'SIGNED_IN' ? access.role : null;
   const signedInStatus = access.kind === 'SIGNED_IN' ? access.accountStatus : null;
+  const signedInService = access.kind === 'SIGNED_IN' ? access.service : null;
+  const actingOrgId = signedInService === null ? null : organizationIdOf(signedInService);
   const operational = hasOperationalAccess(access);
   useEffect(() => {
-    if (!operational) {
+    if (!operational || actingOrgId === null || signedInUserId === null) {
       // NOT `READY` with a null member. `READY` means the server answered about
       // this account, and nobody has asked it yet - an account still being
       // checked, or one with no operational role at all, is simply unread.
@@ -127,12 +147,14 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
       setMember({ kind: 'LOADING' });
       return;
     }
-    void loadMember();
-  }, [operational, signedInUserId, signedInRole, signedInStatus, loadMember]);
+    // Re-runs when the acting service changes (actingOrgId), so a switch reloads
+    // the member for the service now on screen.
+    void loadMember(actingOrgId, signedInUserId);
+  }, [operational, signedInUserId, signedInRole, signedInStatus, actingOrgId, loadMember]);
 
   const retry = () => {
     void reload();
-    void loadMember();
+    if (actingOrgId !== null && signedInUserId !== null) void loadMember(actingOrgId, signedInUserId);
   };
 
   if (obstacle !== null) {
@@ -150,6 +172,10 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
   // here would be asserting the exact thing this screen must not assume.
   const role = access.role;
   if (role === null) return <Blocked obstacle="NO_SERVICE_ROLE" onRetry={retry} t={t} />;
+  // A role always comes with the service it was resolved in; this guard makes that
+  // explicit and fail-closed rather than asserting it with a cast.
+  const service = access.service;
+  if (service === null) return <Blocked obstacle="NO_SERVICE_ROLE" onRetry={retry} t={t} />;
 
   if (!allow.includes(role)) {
     // Named with the server's own meaning in both languages. "Komandir" is the
@@ -166,10 +192,17 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     );
   }
 
-  if (member.kind === 'LOADING') {
+  // The member answer counts only for the account and service now on screen.
+  // Before a new read resolves, the previous identity's member stays hidden.
+  const memberHere: MemberLoad =
+    member.kind !== 'LOADING' && (member.service !== actingOrgId || member.userId !== signedInUserId)
+      ? { kind: 'LOADING' }
+      : member;
+
+  if (memberHere.kind === 'LOADING') {
     return <p role="status">{t.gate.loadingOperational}</p>;
   }
-  if (member.kind === 'FAILED') {
+  if (memberHere.kind === 'FAILED') {
     /*
      * Both reasons get a way out of this screen, and they say different things.
      *
@@ -191,7 +224,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
      * labelled "check again" rather than "try again", because what changes is
      * the access rights, not the attempt.
      */
-    const refused = member.reason === 'REFUSED';
+    const refused = memberHere.reason === 'REFUSED';
     return (
       <Notice tone="error" testId="member-check-failed">
         <strong>
@@ -205,7 +238,7 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
     );
   }
 
-  if (requiresMember && member.memberId === null) {
+  if (requiresMember && memberHere.memberId === null) {
     return (
       <Notice tone="warn">
         <strong>{t.gate.noMemberTitle}</strong> {t.gate.noMemberText} {t.gate.noMemberUntilThen}{' '}
@@ -222,7 +255,8 @@ export function OperationalGate({ allow, requiresMember, children }: Operational
         role,
         userId: access.userId,
         fullName: access.fullName ?? access.email,
-        memberId: member.memberId,
+        service,
+        memberId: memberHere.memberId,
       })}
     </>
   );

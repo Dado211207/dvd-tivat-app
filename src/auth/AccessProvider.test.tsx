@@ -11,8 +11,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AccessProvider, useAccess } from './AccessProvider';
+import { AccessProvider, useAccess, type AccessContextValue } from './AccessProvider';
 import type { AccessGateway } from './access';
+import { organizationIdOf, rememberedServiceKey } from './serviceContext';
 import { RequireRole } from '@/ui/components/RequireRole';
 
 // React 18 wants this flag set before `act` is used.
@@ -197,5 +198,161 @@ describe('protected content and the server answer', () => {
 
     expect(text()).not.toContain('TAJNI SADRZAJ');
     expect(text()).toContain('Pristup ovom nalogu je ukinut');
+  });
+});
+
+/**
+ * P6: the acting service the provider hands downstream, and the switch.
+ *
+ * The provider owns which service a person is acting as: it resolves it on load
+ * from what the server says they may act in and what this device remembers, and
+ * `setActingService` changes it - by remembering the choice and reloading, so the
+ * new service's role and member still come from the server, never from the click.
+ */
+describe('the acting service the provider exposes', () => {
+  function serviceGateway(config: {
+    memberships: readonly string[];
+    isOwner?: boolean;
+    roleByService: Readonly<Record<string, string | null>>;
+  }): AccessGateway {
+    return {
+      currentUser: async () => ({ id: 'user-1', email: 'probni@example.invalid' }),
+      fetchProfile: async () => ({ fullName: 'Probni Korisnik', profileComplete: true }),
+      fetchRole: async () => {
+        throw new Error('legacy fetchRole must not be used on the service path');
+      },
+      fetchAccountStatus: async () => 'ACTIVE',
+      fetchServiceContext: async () => ({
+        memberships: config.memberships,
+        isOwner: config.isOwner ?? false,
+      }),
+      fetchRoleIn: async (organizationId) => {
+        if (organizationId === organizationIdOf('DVD')) return config.roleByService.DVD ?? null;
+        if (organizationId === organizationIdOf('SZS')) return config.roleByService.SZS ?? null;
+        return null;
+      },
+    };
+  }
+
+  function fakeStorage(initial: Record<string, string> = {}) {
+    const map = new Map(Object.entries(initial));
+    return {
+      map,
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, value),
+    };
+  }
+
+  let captured: AccessContextValue | null = null;
+  function Capture() {
+    captured = useAccess();
+    const service = captured.actingService ?? 'none';
+    const role = captured.access.kind === 'SIGNED_IN' ? captured.access.role ?? 'null' : '-';
+    return <p data-testid="ctx">{`${service}/${role}`}</p>;
+  }
+
+  const shown = () => container.querySelector('[data-testid="ctx"]')?.textContent ?? '';
+
+  async function render(gateway: AccessGateway, storage: Pick<Storage, 'getItem' | 'setItem'> | null) {
+    await act(async () => {
+      root.render(
+        <AccessProvider gateway={gateway} configured storage={storage}>
+          <Capture />
+        </AccessProvider>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  it('defaults a dual-service member to DVD and offers the switch', async () => {
+    const storage = fakeStorage();
+    await render(
+      serviceGateway({ memberships: ['DVD', 'SZS'], roleByService: { DVD: 'ADMIN', SZS: 'COMMANDER' } }),
+      storage,
+    );
+    expect(shown()).toBe('DVD/ADMIN');
+    expect(captured?.canSwitchService).toBe(true);
+    expect(captured?.availableServices).toEqual(['DVD', 'SZS']);
+  });
+
+  it('switches service on request, reads the new role, and remembers the choice', async () => {
+    const storage = fakeStorage();
+    await render(
+      serviceGateway({ memberships: ['DVD', 'SZS'], roleByService: { DVD: 'ADMIN', SZS: 'COMMANDER' } }),
+      storage,
+    );
+    await act(async () => {
+      await captured?.setActingService('SZS');
+    });
+    expect(shown()).toBe('SZS/COMMANDER');
+    // The choice was written to this device, so a later reload keeps it.
+    expect(storage.map.get(rememberedServiceKey('user-1'))).toBe('SZS');
+  });
+
+  it('keeps an explicit service switch for the session when device storage is blocked', async () => {
+    const blockedStorage = {
+      getItem: (): string | null => { throw new Error('storage blocked'); },
+      setItem: (): void => { throw new Error('storage blocked'); },
+    };
+    await render(
+      serviceGateway({ memberships: ['DVD', 'SZS'], roleByService: { DVD: 'ADMIN', SZS: 'COMMANDER' } }),
+      blockedStorage,
+    );
+    expect(shown()).toBe('DVD/ADMIN');
+
+    await act(async () => {
+      await captured?.setActingService('SZS');
+    });
+    expect(shown()).toBe('SZS/COMMANDER');
+
+    await act(async () => {
+      await captured?.reload();
+    });
+    expect(shown()).toBe('SZS/COMMANDER');
+  });
+
+  it('honours a remembered choice on load, without a silent reset on reload', async () => {
+    const storage = fakeStorage({ [rememberedServiceKey('user-1')]: 'SZS' });
+    await render(
+      serviceGateway({ memberships: ['DVD', 'SZS'], roleByService: { DVD: 'ADMIN', SZS: 'COMMANDER' } }),
+      storage,
+    );
+    expect(shown()).toBe('SZS/COMMANDER');
+    // A token refresh reloads the snapshot; it must not silently drop back to DVD.
+    await act(async () => {
+      await captured?.reload();
+    });
+    expect(shown()).toBe('SZS/COMMANDER');
+  });
+
+  it('never switches to a service the person does not hold', async () => {
+    const storage = fakeStorage();
+    await render(
+      serviceGateway({ memberships: ['DVD'], roleByService: { DVD: 'FIREFIGHTER', SZS: 'COMMANDER' } }),
+      storage,
+    );
+    expect(captured?.canSwitchService).toBe(false);
+    await act(async () => {
+      await captured?.setActingService('SZS');
+    });
+    // The click is dropped: still DVD, and nothing was written for SZS.
+    expect(shown()).toBe('DVD/FIREFIGHTER');
+    expect(storage.map.get(rememberedServiceKey('user-1'))).toBeUndefined();
+  });
+
+  it('gives the installation owner both services and OWNER in each', async () => {
+    const storage = fakeStorage();
+    await render(
+      serviceGateway({ memberships: [], isOwner: true, roleByService: { DVD: 'OWNER', SZS: 'OWNER' } }),
+      storage,
+    );
+    expect(shown()).toBe('DVD/OWNER');
+    expect(captured?.availableServices).toEqual(['DVD', 'SZS']);
+    await act(async () => {
+      await captured?.setActingService('SZS');
+    });
+    expect(shown()).toBe('SZS/OWNER');
   });
 });

@@ -40,6 +40,10 @@ export type FixtureRole = 'OWNER' | 'ADMIN' | 'COMMANDER' | 'FIREFIGHTER';
  * far easier to ship without noticing.
  */
 export interface FixtureOptions {
+  /** P6: run the browser fixture as an SZS-only member, without a DVD role. */
+  readonly service?: 'DVD' | 'SZS';
+  /** A small mutable fake for one isolated call-out lifecycle. */
+  readonly lifecycle?: boolean;
   /**
    * What `current_dvd_role()` answers.
    *
@@ -413,7 +417,23 @@ export async function installFixtureProject(
   // so the default is applied only when the key is genuinely absent.
   const role = 'role' in options ? options.role : 'COMMANDER';
   const accountStatus = options.accountStatus ?? 'ACTIVE';
-  const interventions = interventionRows(options.interventions ?? 'PUBLISHED');
+  const orgId = options.service === 'SZS' ? SZS_ID : DVD_ID;
+  const interventions = options.lifecycle
+    ? [{ ...interventionRows('PUBLISHED')[0] as Record<string, unknown>,
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', organization_id: DVD_ID,
+      title: 'DVD poziv koji SZS ne smije vidjeti' }]
+    : interventionRows(options.interventions ?? 'PUBLISHED');
+  const tables: Record<string, unknown[]> = options.lifecycle
+    ? {
+      ...TABLES,
+      members: (TABLES.members ?? []).map((row) => ({ ...row as object, organization_id: orgId })),
+      vehicles: [], vehicle_movements: [],
+      intervention_recipients: [], intervention_acknowledgements: [],
+      intervention_responses: [], intervention_journey: [], attendance_intervals: [],
+    }
+    : TABLES;
+  const draftId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const intervalId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
   if (options.language) {
     await page.addInitScript((language) => {
@@ -469,10 +489,81 @@ export async function installFixtureProject(
         return json(route, { code: '42501', message: 'permission denied for function ' + name }, 403);
       }
 
-      if (name === 'current_dvd_role') return json(route, role ?? null);
+      // P6: the client resolves the role and member for the ACTING service through
+      // `current_role_in` / `current_member_id_in`; `is_installation_owner` and
+      // `current_organization_memberships` decide which services are on offer.
+      // These answer exactly as the DVD shims do, so a fixture written for the
+      // DVD-only client keeps meaning the same thing for the service-aware one.
+      if (name === 'current_dvd_role') return json(route, options.service === 'SZS' ? null : role ?? null);
+      if (name === 'current_role_in') {
+        const body = route.request().postDataJSON() as { target_organization?: string };
+        return json(route, body.target_organization === orgId ? role ?? null : null);
+      }
+      if (name === 'is_installation_owner') return json(route, role === 'OWNER');
       if (name === 'current_account_status') return json(route, accountStatus);
-      if (name === 'current_member_id' && 'memberId' in options) {
-        return json(route, options.memberId ?? null);
+      if (name === 'current_member_id' || name === 'current_member_id_in') {
+        if (name === 'current_member_id_in' && options.service === 'SZS') {
+          const body = route.request().postDataJSON() as { target_organization?: string };
+          return json(route, body.target_organization === orgId ? MEMBER_ID : null);
+        }
+        if ('memberId' in options) return json(route, options.memberId ?? null);
+        return json(route, RPC.current_member_id);
+      }
+      if (options.service === 'SZS' && name === 'current_organization_memberships') {
+        return json(route, [{ organization_code: 'SZS', organization_name: 'SZS Tivat', membership_role: role }]);
+      }
+      if (name === 'eligible_recipients_in') return json(route, RPC.eligible_recipients);
+      if (options.lifecycle) {
+        const args = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+        const current = interventions.find((row) => (row as Record<string, unknown>).id === draftId) as Record<string, unknown> | undefined;
+        if (name === 'create_intervention_draft_in') {
+          if (args.target_organization !== orgId) return json(route, { message: 'COMMAND_REQUIRED' }, 400);
+          interventions.unshift({ id: draftId, organization_id: orgId,
+            kind: args.requested_kind, other_kind_note: null, title: args.requested_title,
+            instructions: args.requested_instructions, incident_location: args.requested_location,
+            assembly_point: args.requested_assembly_point, latitude: null, longitude: null,
+            status: 'DRAFT', version: 1, published_at: null, closed_at: null,
+            close_reason: null, created_at: new Date().toISOString() });
+          return json(route, draftId);
+        }
+        if (name === 'publish_intervention' && current) {
+          current.status = 'PUBLISHED'; current.version = 2; current.published_at = new Date().toISOString();
+          tables.intervention_recipients = (args.recipient_member_ids as string[]).map((member_id) => ({
+            intervention_id: draftId, member_id, member_name_at_publication: 'Ivo Vatrogasac',
+          }));
+          return json(route, draftId);
+        }
+        if (name === 'acknowledge_intervention') {
+          tables.intervention_acknowledgements!.push({ intervention_id: draftId, member_id: MEMBER_ID, opened_at: new Date().toISOString() });
+        }
+        if (name === 'submit_response') {
+          tables.intervention_responses!.push({ intervention_id: draftId, member_id: MEMBER_ID,
+            answer: args.requested_answer, eta_minutes: args.requested_eta,
+            updated_at: new Date().toISOString(), responded_at: new Date().toISOString() });
+        }
+        if (name === 'set_journey_progress') {
+          tables.intervention_journey = [{ intervention_id: draftId, member_id: MEMBER_ID,
+            progress: args.requested_progress, updated_at: new Date().toISOString() }];
+        }
+        if (name === 'attendance_check_in') {
+          tables.attendance_intervals!.push({ id: intervalId, intervention_id: draftId,
+            member_id: MEMBER_ID, started_at: new Date().toISOString(), ended_at: null,
+            source: 'SELF_DECLARED', verified: false, rejected_at: null, rejection_reason: null });
+          return json(route, intervalId);
+        }
+        if (name === 'attendance_check_out') {
+          (tables.attendance_intervals![0] as Record<string, unknown>).ended_at = new Date().toISOString();
+        }
+        if (name === 'attendance_confirm' || name === 'attendance_confirm_many') {
+          (tables.attendance_intervals![0] as Record<string, unknown>).verified = true;
+          if (name === 'attendance_confirm_many') return json(route, [{ interval_id: intervalId, outcome: 'CONFIRMED' }]);
+        }
+        if (name === 'close_intervention' && current) {
+          current.status = args.requested_status; current.closed_at = new Date().toISOString();
+          current.close_reason = args.requested_reason;
+        }
+        if (name === 'intervention_audit') return json(route, []);
+        if (name === 'attendance_totals') return json(route, []);
       }
       // Any command not named here answers "fine" - these tests are about what
       // the screens SHOW, and the commands themselves are proven against a real
@@ -517,7 +608,7 @@ export async function installFixtureProject(
           ? interventions
           : table === 'profiles' && options.longText
             ? LONG_TEXT_PROFILES
-            : (TABLES[table] ?? []);
+            : (tables[table] ?? []);
 
       /*
        * Apply `?column=eq.value`, because the real server does.

@@ -25,6 +25,12 @@ import {
   type ReactNode,
 } from 'react';
 import { loadAccess, sameAccess, type Access, type AccessGateway } from './access';
+import type { OrganizationCode } from './directory';
+import {
+  canSwitchService as canSwitchAmong,
+  readRememberedService,
+  writeRememberedService,
+} from './serviceContext';
 import {
   accountBackend,
   isAccountBackendConfigured,
@@ -37,6 +43,34 @@ export interface AccessContextValue {
   /** Re-reads role and status from the server. */
   readonly reload: () => Promise<void>;
   readonly signOut: () => Promise<void>;
+  /**
+   * The service the person is acting as (P6), or null. Mirrors `access.service`,
+   * surfaced here so a screen can read it without narrowing the snapshot union.
+   */
+  readonly actingService: OrganizationCode | null;
+  /** Every service they may act as, in the fixed DVD, SZS order. */
+  readonly availableServices: readonly OrganizationCode[];
+  /** True when more than one service is available - i.e. the switch is offered. */
+  readonly canSwitchService: boolean;
+  /**
+   * Act as a different service. A no-op unless signed in and the service is one
+   * the server says they may act in: the choice is remembered per account on this
+   * device and the snapshot is reloaded, so the new service's role and member come
+   * from the server, never from the click. Never fires during a load.
+   */
+  readonly setActingService: (service: OrganizationCode) => Promise<void>;
+}
+
+/** A stable empty list, so the context value does not churn while signed out. */
+const NO_SERVICES: readonly OrganizationCode[] = [];
+
+/** window.localStorage, or null wherever it is absent or blocked. Read once. */
+function defaultStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage : null;
+  } catch {
+    return null;
+  }
 }
 
 const AccessContext = createContext<AccessContextValue | null>(null);
@@ -47,11 +81,17 @@ export interface AccessProviderProps {
   readonly gateway?: AccessGateway;
   /** Injected in tests, so the provider can run without a project. */
   readonly configured?: boolean;
+  /** Injected in tests; production remembers the acting service in localStorage. */
+  readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
 }
 
-export function AccessProvider({ children, gateway, configured }: AccessProviderProps) {
+export function AccessProvider({ children, gateway, configured, storage }: AccessProviderProps) {
   const isConfigured = configured ?? isAccountBackendConfigured();
   const activeGateway = gateway ?? supabaseAccessGateway;
+  const activeStorage = useMemo(
+    () => (storage === undefined ? defaultStorage() : storage),
+    [storage],
+  );
 
   const [access, setAccess] = useState<Access>(
     isConfigured ? { kind: 'LOADING' } : { kind: 'NOT_CONFIGURED' },
@@ -61,17 +101,55 @@ export function AccessProvider({ children, gateway, configured }: AccessProvider
   // setting state after unmount.
   const mounted = useRef(true);
   const generation = useRef(0);
+  const signingOut = useRef(false);
+  // The latest snapshot, read inside setActingService without making that callback
+  // change identity on every reload.
+  const accessRef = useRef(access);
+  accessRef.current = access;
+  // A blocked localStorage write must not make an explicit switch bounce back to
+  // DVD on the following reload. Keep that person's choice for this mounted
+  // session as well; the server still checks whether it remains available.
+  const sessionChoices = useRef(new Map<string, OrganizationCode>());
+
+  // The remembered acting service is looked up by user id, which loadAccess only
+  // knows after it has read the session. Passing the lookup rather than a value
+  // lets loadAccess resolve it against the services the person may actually act
+  // in, so a stale or absent choice safely falls back to the default.
+  const readPreferred = useCallback(
+    (userId: string) => sessionChoices.current.get(userId) ?? readRememberedService(activeStorage, userId),
+    [activeStorage],
+  );
 
   const reload = useCallback(async () => {
     if (!isConfigured) return;
     const ticket = ++generation.current;
-    const next = await loadAccess(activeGateway);
-    if (!mounted.current || ticket !== generation.current) return;
+    // Auth events may fire while sign-out is still pending. A refresh during
+    // that window must not restore the old account's protected screens.
+    if (signingOut.current) return;
+    const next = await loadAccess(activeGateway, { preferredService: readPreferred });
+    if (!mounted.current || signingOut.current || ticket !== generation.current) return;
     // Keep the previous object when the answer is unchanged. Every consumer
     // downstream is keyed on this value, and a token refresh or a tab regaining
     // focus must not look like "the account changed" to any of them.
     setAccess((current) => (sameAccess(current, next) ? current : next));
-  }, [activeGateway, isConfigured]);
+  }, [activeGateway, isConfigured, readPreferred]);
+
+  const setActingService = useCallback(
+    async (service: OrganizationCode) => {
+      const current = accessRef.current;
+      // Only a signed-in person switches, and only to a service the server says
+      // they may act in. Writing the choice before reloading means the reload's
+      // preferred-service lookup returns it; the role and member for the new
+      // service still come from the server on that reload, never from this click.
+      if (current.kind !== 'SIGNED_IN') return;
+      if (current.service === service) return;
+      if (!current.availableServices.includes(service)) return;
+      sessionChoices.current.set(current.userId, service);
+      writeRememberedService(activeStorage, current.userId, service);
+      await reload();
+    },
+    [activeStorage, reload],
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -106,14 +184,35 @@ export function AccessProvider({ children, gateway, configured }: AccessProvider
   }, [gateway, isConfigured, reload]);
 
   const signOut = useCallback(async () => {
+    // Invalidate an access read already in flight before the sign-out request
+    // begins. Otherwise its old signed-in answer can restore protected screens
+    // while the server is still processing sign-out.
+    generation.current += 1;
+    signingOut.current = true;
     setAccess({ kind: 'LOADING' });
-    await backendSignOut();
-    await reload();
+    try {
+      await backendSignOut();
+    } finally {
+      // A failed sign-out may leave the session valid. Re-ask the server rather
+      // than leave the screen stuck in LOADING or assume the account signed out.
+      signingOut.current = false;
+      await reload();
+    }
   }, [reload]);
 
+  const actingService = access.kind === 'SIGNED_IN' ? access.service : null;
+  const availableServices = access.kind === 'SIGNED_IN' ? access.availableServices : NO_SERVICES;
   const value = useMemo<AccessContextValue>(
-    () => ({ access, reload, signOut }),
-    [access, reload, signOut],
+    () => ({
+      access,
+      reload,
+      signOut,
+      actingService,
+      availableServices,
+      canSwitchService: canSwitchAmong(availableServices),
+      setActingService,
+    }),
+    [access, reload, signOut, actingService, availableServices, setActingService],
   );
 
   return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>;

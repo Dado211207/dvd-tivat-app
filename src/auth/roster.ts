@@ -121,10 +121,24 @@ interface MemberRow {
   user_id: string | null;
 }
 
-export async function loadRoster(): Promise<RosterMember[]> {
-  const { data, error } = await accountBackend()
+/**
+ * P6: pass an `organizationId` to read one service's registry.
+ *
+ * The row-level-security policy already returns only services the caller is staff
+ * in (202609240024), so for a single-service person the filter is belt-and-braces.
+ * It matters for a dual-service person and the installation owner, who are staff in
+ * BOTH: without the filter they would see the other service's roster while acting
+ * as one. The filter is a server-side `where organization_id = …`, so the other
+ * service's rows never leave the database - the acting service only ever narrows
+ * what RLS already allows, it never widens it. Omitting the id keeps the pre-P6
+ * unscoped read for the call-out screens Stage C will scope.
+ */
+export async function loadRoster(organizationId?: string): Promise<RosterMember[]> {
+  let query = accountBackend()
     .from('members')
     .select('id, full_name, specialties, active, user_id');
+  if (organizationId !== undefined) query = query.eq('organization_id', organizationId);
+  const { data, error } = await query;
   if (error) throw error;
   return sortRoster(
     ((data ?? []) as MemberRow[]).map((row) => ({
@@ -137,15 +151,20 @@ export async function loadRoster(): Promise<RosterMember[]> {
   );
 }
 
-export async function loadGroups(): Promise<RosterGroup[]> {
+export async function loadGroups(organizationId?: string): Promise<RosterGroup[]> {
   const backend = accountBackend();
   // Two reads joined here rather than a PostgREST embed, for the same reason the
   // account directory does it: the join is expressed in the interface, not
-  // assumed from a foreign key the API happens to expose.
-  const [groups, links] = await Promise.all([
-    backend.from('groups').select('id, name, active'),
-    backend.from('group_members').select('group_id, member_id'),
-  ]);
+  // assumed from a foreign key the API happens to expose. Both are scoped to the
+  // acting service, so a dual-service admin's DVD view carries no SZS group and
+  // none of its members (see loadRoster for why the filter is here, not just RLS).
+  let groupsQuery = backend.from('groups').select('id, name, active');
+  let linksQuery = backend.from('group_members').select('group_id, member_id');
+  if (organizationId !== undefined) {
+    groupsQuery = groupsQuery.eq('organization_id', organizationId);
+    linksQuery = linksQuery.eq('organization_id', organizationId);
+  }
+  const [groups, links] = await Promise.all([groupsQuery, linksQuery]);
   if (groups.error) throw groups.error;
   if (links.error) throw links.error;
 
@@ -166,18 +185,31 @@ export async function loadGroups(): Promise<RosterGroup[]> {
     .sort((a, b) => a.name.localeCompare(b.name, 'sr'));
 }
 
-export async function loadVehicles(): Promise<RosterVehicle[]> {
-  const { data, error } = await accountBackend()
+export async function loadVehicles(organizationId?: string): Promise<RosterVehicle[]> {
+  let query = accountBackend()
     .from('vehicles')
     .select('id, callsign, name, kind, active');
+  if (organizationId !== undefined) query = query.eq('organization_id', organizationId);
+  const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as RosterVehicle[])
     .map((row) => ({ ...row }))
     .sort((a, b) => a.callsign.localeCompare(b.callsign, 'sr'));
 }
 
-export const createMember = (fullName: string, specialties: readonly string[]) =>
-  command('admin_create_member', {
+// P6: creates NAME the service (there is no row yet to derive it from), through
+// the `*_in` commands 202609240024 added. Passing the DVD id is identical to the
+// old `admin_create_member` wrapper - that wrapper is literally this call with the
+// DVD id - so a DVD admin's behaviour is unchanged; an SZS admin creates in SZS.
+// The edits below take no service: each derives it from the row it changes and the
+// server refuses a service the caller does not administer.
+export const createMember = (
+  organizationId: string,
+  fullName: string,
+  specialties: readonly string[],
+) =>
+  command('admin_create_member_in', {
+    target_organization: organizationId,
     requested_full_name: fullName,
     requested_specialties: specialties,
   });
@@ -202,8 +234,8 @@ export const linkMemberAccount = (memberId: string, userId: string) =>
 export const unlinkMemberAccount = (memberId: string, reason: string) =>
   command('admin_unlink_member_account', { target_member: memberId, requested_reason: reason });
 
-export const createGroup = (name: string) =>
-  command('admin_create_group', { requested_name: name });
+export const createGroup = (organizationId: string, name: string) =>
+  command('admin_create_group_in', { target_organization: organizationId, requested_name: name });
 
 export const renameGroup = (id: string, name: string) =>
   command('admin_rename_group', { target_group: id, requested_name: name });
@@ -218,8 +250,14 @@ export const setGroupActive = (id: string, active: boolean, reason: string) =>
 export const setGroupMembers = (id: string, memberIds: readonly string[]) =>
   command('admin_set_group_members', { target_group: id, member_ids: memberIds });
 
-export const createVehicle = (callsign: string, name: string, kind: string) =>
-  command('admin_create_vehicle', {
+export const createVehicle = (
+  organizationId: string,
+  callsign: string,
+  name: string,
+  kind: string,
+) =>
+  command('admin_create_vehicle_in', {
+    target_organization: organizationId,
     requested_callsign: callsign,
     requested_name: name,
     requested_kind: kind,

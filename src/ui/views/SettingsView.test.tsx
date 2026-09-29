@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { activeLanguage, resetLanguageForTests } from '@/i18n/language';
 import { en } from '@/i18n/strings.en';
 import { me } from '@/i18n/strings.me';
+import { AccessProvider } from '@/auth/AccessProvider';
 import { SettingsView } from './SettingsView';
 
 declare global {
@@ -31,8 +32,15 @@ let container: HTMLDivElement;
 let root: Root;
 
 async function show(): Promise<void> {
+  // Settings now hosts the acting-service switch, which reads the access context;
+  // an unconfigured provider signs nobody in, so the switch renders nothing and
+  // these language tests see exactly the screen they always did.
   await act(async () => {
-    root.render(<SettingsView />);
+    root.render(
+      <AccessProvider configured={false}>
+        <SettingsView />
+      </AccessProvider>,
+    );
   });
 }
 
