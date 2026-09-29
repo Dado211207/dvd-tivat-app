@@ -63,6 +63,7 @@ function interventionIn(service: 'DVD' | 'SZS', id: string) {
 const recipientFacts = vi.hoisted(() => vi.fn());
 const attendance = vi.hoisted(() => vi.fn());
 const interventionsFor = vi.hoisted(() => ({ dvd: [] as unknown[], szs: [] as unknown[] }));
+const addressedFor = vi.hoisted(() => ({ dvd: [] as unknown[], szs: [] as unknown[] }));
 
 vi.mock('@/auth/operations', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/auth/operations')>();
@@ -76,7 +77,10 @@ vi.mock('@/auth/operations', async (importOriginal) => {
       ok: true as const,
       value: (organizationId === SZS ? interventionsFor.szs : interventionsFor.dvd) as never,
     })),
-    fetchAddressedInterventions: vi.fn(async () => ({ ok: true as const, value: [] as never })),
+    fetchAddressedInterventions: vi.fn(async (organizationId: string) => ({
+      ok: true as const,
+      value: (organizationId === SZS ? addressedFor.szs : addressedFor.dvd) as never,
+    })),
     fetchAvailability: vi.fn(async () => ({ ok: true as const, value: [] })),
     fetchRecipientFacts: recipientFacts.mockImplementation(async () => ({ ok: true, value: [] })),
     fetchAttendance: attendance.mockImplementation(async () => ({ ok: true, value: [] })),
@@ -130,6 +134,8 @@ beforeEach(() => {
   resetLanguageForTests();
   interventionsFor.dvd = [interventionIn('DVD', DVD_CALL)];
   interventionsFor.szs = [interventionIn('SZS', SZS_CALL)];
+  addressedFor.dvd = [...interventionsFor.dvd];
+  addressedFor.szs = [...interventionsFor.szs];
   recipientFacts.mockClear();
   attendance.mockClear();
   container = document.createElement('div');
@@ -204,6 +210,28 @@ describe('a notification for a call-out in the other service', () => {
     expect(container.textContent).toContain('SZS: sistem javljanja');
   });
 
+  it('switches to the addressed service when the current service owns the joint incident', async () => {
+    const joint = { ...interventionIn('DVD', SZS_CALL), title: 'DVD zove SZS' };
+    // RLS permits the SZS recipient to read the DVD-owned parent, but their DVD
+    // member was not paged. The DVD screen must not offer a DVD action for it.
+    interventionsFor.dvd = [joint];
+    interventionsFor.szs = [];
+    addressedFor.dvd = [];
+    addressedFor.szs = [joint];
+
+    await show(dualGateway(), `#/mobilizacija?intervention=${SZS_CALL}`);
+    expect(crossNotice()?.textContent).toContain(SZS_LABEL);
+    expect(container.querySelector('[data-testid="acknowledge"]')).toBeNull();
+    expect(calledWith(recipientFacts, SZS_CALL)).toBe(false);
+
+    await act(async () => { switchButton()!.click(); });
+    for (let i = 0; i < 12; i += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    expect(crossNotice()).toBeNull();
+    expect(container.textContent).toContain('DVD zove SZS');
+  });
+
   it('offers nothing for a call-out in no service the person may act in', async () => {
     // A stale link, or somebody else's call-out: neither service holds it, so the
     // silent fallback stands - prompting a switch that also would not help is worse.
@@ -213,12 +241,11 @@ describe('a notification for a call-out in the other service', () => {
 
   it('never reaches into another service for a single-service member', async () => {
     const operations = await import('@/auth/operations');
-    const fetchInterventions = vi.mocked(operations.fetchInterventions);
+    const fetchAddressedInterventions = vi.mocked(operations.fetchAddressedInterventions);
     await show(singleGateway(), `#/mobilizacija?intervention=${SZS_CALL}`);
 
     expect(crossNotice()).toBeNull();
-    // The load-bearing negative control: a DVD-only member's screen must only ever
-    // read DVD. If it probed SZS, this fails - and so would the isolation promise.
-    expect(fetchInterventions.mock.calls.every((args) => args[0] !== SZS)).toBe(true);
+    // A DVD-only member's screen never probes another service's recipient rows.
+    expect(fetchAddressedInterventions.mock.calls.every((args) => args[0] !== SZS)).toBe(true);
   });
 });
