@@ -12,6 +12,17 @@ The single hard precondition below (the production-copy equivalence gate through
 production capture here, and one must never be created or committed. It is listed
 as the first gate the release owner runs, with the real data, before anything else.
 
+**Order of acceptance (owner decision, 2026-09-29).** Real-phone acceptance is a
+**post-deployment** activity, performed on the **deployed live application** by the
+owner (§1), **not** a pre-deployment gate and **not** a reason to build a separate
+phone preview. The pre-deployment gates that MUST hold before any production change
+are the database and release-safety ones in §0 — the 039 equivalence gate,
+confirmed backup/restore, migration verification, and the secure deployment order.
+Deploy once §0 holds (§2); then the owner runs the §1 phone acceptance against the
+live URL. Until that acceptance is done, the application is deployed but **not yet
+validated for real emergency reliance** (§1 opens with how to test safely on a live
+system).
+
 ---
 
 ## 0. Preconditions (all must hold before any production change)
@@ -46,12 +57,27 @@ as the first gate the release owner runs, with the real data, before anything el
 
 ---
 
-## 1. Phone-testing acceptance — the four account shapes
+## 1. Phone-testing acceptance — the four account shapes (owner, AFTER deployment)
 
-Do this on real devices, on a **preview/staging** deployment built against a
-non-production project, with fictional accounts, before production. Record device,
-OS, and evidence for each line. "Isolation holds" always means: the other
-service's roster, call-outs, availability, vehicles and archive are **not**
+**When:** after §2 deployment, on the **deployed live URL**, by the owner. This is a
+post-deployment acceptance, not a pre-deployment gate; do not build a separate phone
+preview for it.
+
+**Testing safely on a live system.** This is a real emergency-coordination tool, and
+migration 034 makes published call-outs and their history **permanent** (they cannot
+be deleted afterwards). So:
+- The non-disruptive checks below (sign in, correct landing screen, isolation, the
+  "acting as" badge, the service switch, Settings, sound preview, the "no member
+  record" refusals) are safe to run on production with the owner's own account(s).
+- Any check that **publishes a call-out or sends an SZS push pages real people** and
+  leaves a permanent record. Do those deliberately: announce them to the crew first,
+  or accept them as real, and close the call-out afterwards (it stays in the
+  archive). Do **not** invent fictional members or incidents on the production
+  database to test — use real, coordinated actions or hold that line for a
+  low-traffic window.
+
+Record device, OS, and evidence for each line. "Isolation holds" always means: the
+other service's roster, call-outs, availability, vehicles and archive are **not**
 visible, and no action the server would refuse is offered.
 
 ### 1a. DVD-only member (the existing case — must be unchanged)
@@ -70,6 +96,11 @@ visible, and no action the server would refuse is offered.
 - [ ] Runs the full SZS call-out lifecycle end to end.
 - [ ] Isolation holds against DVD throughout (a DVD call-out/roster is never seen).
 - [ ] Attendance is credited to **SZS** in the archive and all-time totals.
+- [ ] **SZS push delivery:** a published SZS call-out delivers a Web Push to a
+  subscribed SZS member's phone, and tapping it opens that call-out. The background
+  sound is the **phone's** notification sound (not the in-app §1f choice). Coordinate
+  first — this pages a real member and leaves a permanent record (see the safety note
+  at the top of §1).
 
 ### 1c. Dual-service member (two member records, D13)
 
@@ -131,10 +162,11 @@ visible, and no action the server would refuse is offered.
 
 ---
 
-## 2. Deployment order (only after §0 and §1 pass and are authorised)
+## 2. Deployment order (only after §0 passes and is authorised)
 
 Apply in this order. Do each step, verify it, then proceed; do not batch across
-the migration/frontend/worker boundaries.
+the migration/frontend/worker boundaries. **§1 phone acceptance follows this
+section, on the deployed live app** — it is no longer a precondition for deploying.
 
 1. **Database migrations.** Production is at migration `202609230021` (22 applied).
    Apply every migration from `202609240022` through `202609270039` **in filename
