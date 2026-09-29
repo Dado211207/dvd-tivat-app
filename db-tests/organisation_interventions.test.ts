@@ -1878,9 +1878,15 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
     // names a service. Its only writers of such rows are the two vehicle
     // commands, which now always do - asserted by behaviour above, both
     // services. Pinned so a second table with a DVD fallback is noticed.
+    // P7/D20 (202609290041) moved this fallback out of the shared
+    // enforce_organization_from_parent 'dvd-if-orphaned' argument and into a
+    // dedicated enforce_audit_organization() trigger, because member-action audit
+    // rows now carry the acting member's service (D21) rather than the call-out's;
+    // the DVD orphan default lives in that function's body, so match it too.
     const { rows } = await db.query<{ relname: string }>(
       `select c.relname::text from pg_trigger t join pg_class c on c.oid = t.tgrelid
-        where not t.tgisinternal and pg_get_triggerdef(t.oid) ~ 'dvd-if-orphaned'
+        where not t.tgisinternal
+          and pg_get_triggerdef(t.oid) ~ 'dvd-if-orphaned|enforce_audit_organization'
           and c.relname in (${REACHABLE_TABLES})
         order by 1`,
     );
