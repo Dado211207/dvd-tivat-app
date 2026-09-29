@@ -115,8 +115,8 @@ describe('permanent recipient-service archive', () => {
 
   it('keeps the publisher close count but removes the other service attendance total', async () => {
     expect((await asUserCommitted(db, szsMember.userId, (client) =>
-      client.query<{ outcome: string }>('select public.attendance_check_in($1) as outcome', [joint])))
-      .rows[0]?.outcome).toBe('OK');
+      client.query<{ interval_id: string }>('select public.attendance_check_in($1) as interval_id', [joint])))
+      .rows[0]?.interval_id).toMatch(/^[0-9a-f-]{36}$/i);
     expect((await asUserCommitted(db, szsCommand.userId, (client) =>
       client.query<{ outcome: string }>(
         "select public.close_intervention($1, 'CLOSED', 'Zavrseno', true) as outcome", [joint])))
