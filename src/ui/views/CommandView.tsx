@@ -57,7 +57,8 @@ import {
   type VehicleMovement,
 } from '@/auth/operations';
 import { useLiveOperations } from '@/auth/live';
-import { isPermissionDenied } from '@/auth/supabaseClient';
+import { isPermissionDenied, MULTI_SERVICE_ADMIN_AVAILABLE } from '@/auth/supabaseClient';
+import { ORGANIZATION_CODES } from '@/auth/directory';
 import { requestPushDelivery } from '@/notifications/push';
 import { formatDurationMs } from '@/auth/duration';
 import { recipientTimings, summarise } from '@/auth/metrics';
@@ -65,7 +66,7 @@ import { OperationalSummary, ResponseTimings } from '../components/timings';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { ActingServiceBadge } from '../components/ActingServiceBadge';
-import { organizationIdOf } from '@/auth/serviceContext';
+import { organizationCodeOf, organizationIdOf } from '@/auth/serviceContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IncidentCard } from '../components/IncidentCard';
 import {
@@ -534,6 +535,16 @@ function CallOutTab({
   const idempotencyKey = useRef(`ui-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const [selectedMembers, setSelectedMembers] = useState<ReadonlySet<string>>(new Set());
+  // P7/D18/D19: a commander may also alert the WHOLE other service. Only offered
+  // when service assignment is enabled (otherwise the other service has no
+  // members and the toggle would page nobody), keeping a DVD-only deployment
+  // byte-identical. The acting service comes from the console's organizationId.
+  const [targetWholeOther, setTargetWholeOther] = useState(false);
+  const actingService = organizationCodeOf(organizationId);
+  const otherService = actingService
+    ? ORGANIZATION_CODES.find((code) => code !== actingService) ?? null
+    : null;
+  const canTargetOther = MULTI_SERVICE_ADMIN_AVAILABLE && otherService !== null;
   const [confirming, setConfirming] = useState<null | 'PUBLISH' | 'CLOSE' | 'CANCEL'>(null);
   const [closeReason, setCloseReason] = useState('');
 
@@ -590,13 +601,16 @@ function CallOutTab({
     if (!selected) return;
     setBusy(true);
     try {
-      const result = await publishIntervention(selected.id, [...selectedMembers]);
+      const organizationIds =
+        canTargetOther && targetWholeOther && otherService ? [organizationIdOf(otherService)] : [];
+      const result = await publishIntervention(selected.id, [...selectedMembers], organizationIds);
       const workerReached = result.ok ? await requestPushDelivery(result.value) : false;
       await onDone(
         result.ok ? { ok: true } : { ok: false, message: result.message },
         workerReached ? t.command.publishedWorkerReached : t.command.publishedWorkerQueued,
       );
       setSelectedMembers(new Set());
+      setTargetWholeOther(false);
     } finally {
       setBusy(false);
       setConfirming(null);
@@ -970,12 +984,28 @@ function CallOutTab({
               <p className="muted small" data-testid="selected-recipient-count">
                 {t.command.selectedCount}: {selectedMembers.size}
               </p>
+              {canTargetOther && otherService ? (
+                <div className="joint-target" data-testid="joint-target">
+                  <label className="pick">
+                    <input
+                      type="checkbox"
+                      data-testid="target-other-service"
+                      checked={targetWholeOther}
+                      onChange={(event) => setTargetWholeOther(event.target.checked)}
+                    />
+                    <span className="pick__name">
+                      {t.command.alsoAlertService.replace('{service}', t.accounts.organizationLabel[otherService])}
+                    </span>
+                  </label>
+                  <p className="muted small">{t.command.alsoAlertServiceNote}</p>
+                </div>
+              ) : null}
               <div className="row-actions">
                 <button
                   type="button"
                   className="btn btn--primary"
                   data-testid="to-review"
-                  disabled={selectedMembers.size === 0}
+                  disabled={selectedMembers.size === 0 && !targetWholeOther}
                   onClick={() => setPublishStep('REVIEW')}
                 >
                   {t.command.wizardToReview}
@@ -1022,6 +1052,14 @@ function CallOutTab({
                 <p className="review__count" data-testid="review-count">
                   <strong>{selectedMembers.size}</strong> {t.command.reviewRecipients}
                 </p>
+                {canTargetOther && targetWholeOther && otherService ? (
+                  <p className="review__joint" data-testid="review-joint">
+                    {t.command.reviewAlsoService.replace(
+                      '{service}',
+                      t.accounts.organizationLabel[otherService],
+                    )}
+                  </p>
+                ) : null}
                 <ul className="review__names" data-testid="review-names">
                   {eligible
                     .filter((m) => selectedMembers.has(m.memberId))
@@ -1045,7 +1083,7 @@ function CallOutTab({
                     type="button"
                     className="btn btn--danger btn--big"
                     data-testid="publish"
-                    disabled={busy || selectedMembers.size === 0}
+                    disabled={busy || (selectedMembers.size === 0 && !targetWholeOther)}
                     onClick={() => setConfirming('PUBLISH')}
                   >
                     {t.command.publish}

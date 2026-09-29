@@ -784,6 +784,10 @@ export const me = {
     availableNo: 'Nije dostupan',
     availableUnknown: 'Nije izjasnjen',
     selectedCount: 'Izabrano',
+    alsoAlertService: 'Pozovi i cijelu sluzbu {service}',
+    alsoAlertServiceNote:
+      'Poziva se i svaki dostupan clan te sluzbe, u okviru svoje sluzbe. Svaka sluzba potom vidi i potvrdjuje samo svoje ljude.',
+    reviewAlsoService: 'Poziva se i cijela sluzba {service}.',
 
     publish: 'Objavi poziv',
     discardDraft: 'Odbaci nacrt',

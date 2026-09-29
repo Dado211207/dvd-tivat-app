@@ -27,6 +27,7 @@ import {
   checkIn,
   checkOut,
   ETA_BANDS,
+  fetchAddressedInterventions,
   fetchAttendance,
   fetchAvailability,
   fetchInterventions,
@@ -128,6 +129,24 @@ function requestedInterventionId(): string | null {
     : null;
 }
 
+/**
+ * Merge the service's own call-outs with the ones the member was paged for in
+ * this service - which, for a P7 joint call-out, are OWNED by another service -
+ * de-duplicated by id and newest first. A single-service call-out appears in both
+ * lists and is kept once.
+ */
+function mergeInterventionsById(
+  owned: readonly Intervention[],
+  addressed: readonly Intervention[],
+): readonly Intervention[] {
+  const byId = new Map<string, Intervention>();
+  for (const item of owned) byId.set(item.id, item);
+  for (const item of addressed) if (!byId.has(item.id)) byId.set(item.id, item);
+  return [...byId.values()].sort((a, b) =>
+    a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+  );
+}
+
 function Mobilisation({ context, memberId }: { context: OperationalContext; memberId: string }) {
   const t = useText();
   const { availableServices, setActingService } = useAccess();
@@ -172,8 +191,15 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         setLoadError(reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
       };
       try {
-        const [interventionsRead, availabilityRead, members] = await Promise.all([
+        const [interventionsRead, addressedRead, availabilityRead, members] = await Promise.all([
           fetchInterventions(organizationId),
+          // A joint call-out (P7) is OWNED by the publishing service, so
+          // `fetchInterventions(organizationId)` - which filters on the owning
+          // service - cannot surface it to a member of a TARGETED service. Read
+          // the member's own recipient rows in this service too, and merge, so a
+          // DVD member paged by an SZS call-out sees it here without switching.
+          // An owner has no member id and no recipient rows, so skip it for them.
+          memberId ? fetchAddressedInterventions(organizationId, memberId) : null,
           fetchAvailability(organizationId),
           loadRoster(organizationId),
         ]);
@@ -188,7 +214,12 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
          */
         if (!interventionsRead.ok) return failed(ticket, interventionsRead.reason);
         if (!availabilityRead.ok) return failed(ticket, availabilityRead.reason);
-        const interventions = interventionsRead.value;
+        // A refused addressed read must not silently drop a joint call-out.
+        if (addressedRead && !addressedRead.ok) return failed(ticket, addressedRead.reason);
+        const interventions = mergeInterventionsById(
+          interventionsRead.value,
+          addressedRead && addressedRead.ok ? addressedRead.value : [],
+        );
 
         // Row level security already limits this to call-outs this member was
         // sent, so there is nothing to filter client-side - and filtering here

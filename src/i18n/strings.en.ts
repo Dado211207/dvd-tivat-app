@@ -723,6 +723,10 @@ export const en: Strings = {
     availableNo: 'Not available',
     availableUnknown: 'Has not said',
     selectedCount: 'Selected',
+    alsoAlertService: 'Also alert the whole {service}',
+    alsoAlertServiceNote:
+      'Every available member of that service is called as well, under their own service. Each service then sees and confirms only its own people.',
+    reviewAlsoService: 'Also alerting the whole {service}.',
 
     publish: 'Publish the call-out',
     discardDraft: 'Discard draft',

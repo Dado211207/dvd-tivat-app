@@ -37,6 +37,7 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
           recorded.filters[key] = values;
           return builder;
         },
+        limit: (_count: number) => builder,
         then: (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
           Promise.resolve({
             // Hosted REST APIs commonly cap a response. A joined parent filter
@@ -63,10 +64,32 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
   }),
 }));
 
-import { fetchAddressedOpenInterventionIds } from './operations';
+import { fetchAddressedInterventions, fetchAddressedOpenInterventionIds } from './operations';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const MEMBER = '00000000-0000-4000-8000-000000000101';
+
+/** A minimally-complete embedded intervention row, as PostgREST returns it. */
+const embeddedIntervention = (id: string, overrides: Record<string, unknown> = {}) => ({
+  interventions: {
+    id,
+    kind: 'POZAR',
+    other_kind_note: null,
+    title: 'Zajednicka intervencija',
+    instructions: 'Upute.',
+    incident_location: 'Lokacija',
+    assembly_point: null,
+    latitude: null,
+    longitude: null,
+    status: 'PUBLISHED',
+    version: 2,
+    published_at: '2026-09-29T10:00:00Z',
+    closed_at: null,
+    close_reason: null,
+    created_at: '2026-09-29T09:59:00Z',
+    ...overrides,
+  },
+});
 
 beforeEach(() => {
   recorded.table = '';
@@ -133,6 +156,42 @@ describe('fetchAddressedOpenInterventionIds', () => {
   it('fails closed on an error - never an empty success', async () => {
     recorded.error = { code: '42501', message: 'permission denied' };
     const result = await fetchAddressedOpenInterventionIds(DVD, MEMBER);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('fetchAddressedInterventions', () => {
+  it('reads the member’s own recipient rows in one service, embedding the call-out', async () => {
+    recorded.rows = [embeddedIntervention('joint-1')];
+    await fetchAddressedInterventions(DVD, MEMBER);
+    expect(recorded.table).toBe('intervention_recipients');
+    expect(recorded.select).toContain('interventions!inner(');
+    expect(recorded.filters).toMatchObject({ organization_id: DVD, member_id: MEMBER });
+  });
+
+  it('returns the full call-out embedded through the recipient row (a joint call-out owned elsewhere)', async () => {
+    recorded.rows = [embeddedIntervention('joint-1', { title: 'SZS zove DVD' })];
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value).toHaveLength(1);
+    expect(result.ok && result.value[0]).toMatchObject({ id: 'joint-1', title: 'SZS zove DVD', status: 'PUBLISHED' });
+  });
+
+  it('de-duplicates by call-out id, even if two recipient rows point at one call-out', async () => {
+    recorded.rows = [embeddedIntervention('joint-1'), embeddedIntervention('joint-1')];
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok && result.value.map((i) => i.id)).toEqual(['joint-1']);
+  });
+
+  it('tolerates the embedded call-out arriving as an array', async () => {
+    recorded.rows = [{ interventions: [embeddedIntervention('arr-1').interventions] }];
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok && result.value.map((i) => i.id)).toEqual(['arr-1']);
+  });
+
+  it('fails closed on an error - never an empty success', async () => {
+    recorded.error = { code: '42501', message: 'permission denied' };
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
     expect(result.ok).toBe(false);
   });
 });

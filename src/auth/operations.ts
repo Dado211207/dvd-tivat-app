@@ -509,34 +509,75 @@ export async function fetchOwnMemberId(
   return ok((data as string | null) ?? null);
 }
 
+const INTERVENTION_COLUMNS =
+  'id, kind, other_kind_note, title, instructions, incident_location, assembly_point,' +
+  ' latitude, longitude, status, version, published_at, closed_at, close_reason, created_at';
+
+const mapInterventionRow = (row: InterventionRow): Intervention => ({
+  id: row.id,
+  kind: row.kind as InterventionKind,
+  otherKindNote: (row.other_kind_note as string | null) ?? null,
+  title: row.title as string,
+  instructions: row.instructions as string,
+  incidentLocation: row.incident_location as string,
+  assemblyPoint: (row.assembly_point as string | null) ?? null,
+  latitude: (row.latitude as number | null) ?? null,
+  longitude: (row.longitude as number | null) ?? null,
+  status: row.status as InterventionStatus,
+  version: row.version as number,
+  publishedAt: (row.published_at as string | null) ?? null,
+  closedAt: (row.closed_at as string | null) ?? null,
+  closeReason: (row.close_reason as string | null) ?? null,
+  createdAt: row.created_at as string,
+});
+
 /** Only a successful empty read means there are no visible interventions. */
 export async function fetchInterventions(organizationId?: string): Promise<ReadResult<readonly Intervention[]>> {
-  let query = accountBackend()
-    .from('interventions')
-    .select(
-      'id, kind, other_kind_note, title, instructions, incident_location, assembly_point,' +
-        ' latitude, longitude, status, version, published_at, closed_at, close_reason, created_at',
-    );
+  let query = accountBackend().from('interventions').select(INTERVENTION_COLUMNS);
   if (organizationId !== undefined) query = query.eq('organization_id', organizationId);
   const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
   if (error || !Array.isArray(data)) return readFailure(error);
-  return ok((data as unknown as InterventionRow[]).map((row) => ({
-    id: row.id,
-    kind: row.kind as InterventionKind,
-    otherKindNote: (row.other_kind_note as string | null) ?? null,
-    title: row.title as string,
-    instructions: row.instructions as string,
-    incidentLocation: row.incident_location as string,
-    assemblyPoint: (row.assembly_point as string | null) ?? null,
-    latitude: (row.latitude as number | null) ?? null,
-    longitude: (row.longitude as number | null) ?? null,
-    status: row.status as InterventionStatus,
-    version: row.version as number,
-    publishedAt: (row.published_at as string | null) ?? null,
-    closedAt: (row.closed_at as string | null) ?? null,
-    closeReason: (row.close_reason as string | null) ?? null,
-    createdAt: row.created_at as string,
-  })));
+  return ok((data as unknown as InterventionRow[]).map(mapInterventionRow));
+}
+
+/**
+ * The call-outs a member was actually PAGED for in one service, whatever service
+ * OWNS them (P7). On a joint call-out a member of a targeted service holds a
+ * recipient row scoped to their OWN service (migration 040), while the call-out
+ * itself belongs to the publishing service. `fetchInterventions(org)` filters on
+ * the call-out's owning service, so it cannot surface such a call-out to the
+ * recipient; this reads the member's own recipient rows in `organizationId` and
+ * returns the interventions embedded through them. Row level security allows both
+ * halves - `recipients_self_read` for the recipient row (member is the caller's
+ * own member in that service) and `interventions_recipient_read` for the embedded
+ * call-out (is_recipient_of) - so it can never surface a call-out the member was
+ * not paged for, in any service.
+ *
+ * Used to merge joint call-outs into the recipient view; a single-service call-out
+ * comes back here too and is de-duplicated by id against `fetchInterventions`.
+ */
+export async function fetchAddressedInterventions(
+  organizationId: string,
+  memberId: string,
+): Promise<ReadResult<readonly Intervention[]>> {
+  const { data, error } = await accountBackend()
+    .from('intervention_recipients')
+    .select(`interventions!inner(${INTERVENTION_COLUMNS})`)
+    .eq('organization_id', organizationId)
+    .eq('member_id', memberId)
+    .limit(100);
+  if (error || !Array.isArray(data)) return readFailure(error);
+  const rows = data as unknown as { interventions: InterventionRow | InterventionRow[] | null }[];
+  const seen = new Set<string>();
+  const out: Intervention[] = [];
+  for (const row of rows) {
+    const embedded = Array.isArray(row.interventions) ? row.interventions[0] : row.interventions;
+    if (embedded && !seen.has(embedded.id)) {
+      seen.add(embedded.id);
+      out.push(mapInterventionRow(embedded));
+    }
+  }
+  return ok(out);
 }
 
 /**
@@ -856,10 +897,22 @@ export const discardDraft = (interventionId: string, reason: string) =>
     requested_reason: reason,
   });
 
-export const publishIntervention = (interventionId: string, memberIds: readonly string[]) =>
+/**
+ * Publish a call-out to hand-picked recipients of the publishing service and,
+ * for a joint call-out (P7/D18/D19), to every eligible member of each additional
+ * service in `organizationIds`. The default empty list is a plain single-service
+ * publish, unchanged. The server resolves and de-duplicates recipients (D16); the
+ * client only names which whole services to include.
+ */
+export const publishIntervention = (
+  interventionId: string,
+  memberIds: readonly string[],
+  organizationIds: readonly string[] = [],
+) =>
   commandReturning<string>('publish_intervention', {
     target_intervention: interventionId,
     recipient_member_ids: memberIds,
+    recipient_organization_ids: organizationIds,
   });
 
 export const setInterventionStatus = (

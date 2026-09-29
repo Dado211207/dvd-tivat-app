@@ -76,6 +76,7 @@ vi.mock('@/auth/operations', async (importOriginal) => {
       ok: true as const,
       value: (organizationId === SZS ? interventionsFor.szs : interventionsFor.dvd) as never,
     })),
+    fetchAddressedInterventions: vi.fn(async () => ({ ok: true as const, value: [] as never })),
     fetchAvailability: vi.fn(async () => ({ ok: true as const, value: [] })),
     fetchRecipientFacts: recipientFacts.mockImplementation(async () => ({ ok: true, value: [] })),
     fetchAttendance: attendance.mockImplementation(async () => ({ ok: true, value: [] })),
