@@ -112,4 +112,24 @@ describe('permanent recipient-service archive', () => {
       client.query(`select public.set_intervention_status($1, 'DEPLOYED', null)`, [joint])))
       .rejects.toThrow('ORGANIZATION_MISMATCH');
   });
+
+  it('keeps the publisher close count but removes the other service attendance total', async () => {
+    expect((await asUserCommitted(db, szsMember.userId, (client) =>
+      client.query<{ outcome: string }>('select public.attendance_check_in($1) as outcome', [joint])))
+      .rows[0]?.outcome).toBe('OK');
+    expect((await asUserCommitted(db, szsCommand.userId, (client) =>
+      client.query<{ outcome: string }>(
+        "select public.close_intervention($1, 'CLOSED', 'Zavrseno', true) as outcome", [joint])))
+      .rows[0]?.outcome).toBe('OK');
+
+    const publisher = await read<{ event_type: string; detail: Record<string, unknown> }>(
+      szsCommand, 'select event_type, detail from public.intervention_audit($1)', [joint]);
+    const target = await read<{ event_type: string; detail: Record<string, unknown> }>(
+      dvdCommand, 'select event_type, detail from public.intervention_audit($1)', [joint]);
+    expect(publisher.find((event) => event.event_type === 'INTERVENTION_CLOSED')
+      ?.detail['open_attendance']).toBe(1);
+    const closed = target.find((event) => event.event_type === 'INTERVENTION_CLOSED');
+    expect(closed?.detail['reason']).toBe('Zavrseno');
+    expect(closed?.detail).not.toHaveProperty('open_attendance');
+  });
 });
