@@ -107,7 +107,20 @@ UNIQUE (callsign)` (globally unique across both services).
 | **D16** *(Q8, joint dedupe)* | On a future joint call-out, a dual-service person gets **one notification and makes one response**, recording which service represents it. Joint call-outs themselves are **P7**; this only fixes the intended dedupe so P6 does not build the opposite. |
 | **D17** *(Q6, Q7)* | The **existing DVD response options, ETA bands and intervention kinds are the P6 defaults** for SZS. Cheap to diverge later if SZS asks. |
 
-**Still OPEN: Q1–Q4** (and the joint-intervention behaviour of Q5/Q8). They block **P7** (joint call-outs / cross-service alerting) only; P6 can now run to completion.
+### Answered 2026-09-29, unblocking P7 (Q1–Q4)
+
+Owner decisions on the joint cross-service call-out (P7). These are permanent authority/schema rules, recorded here rather than assumed.
+
+| # | Decision |
+|---|---|
+| **D18** *(Q1, direction)* | **Symmetric.** Either service may include the other as a recipient organisation on a call-out (SZS→DVD **and** DVD→SZS). The schema and policies are direction-agnostic; who initiates is not restricted by service. |
+| **D19** *(Q2, targeting)* | **Whole-service.** A recipient organisation is paged in full — every *eligible* member of it (active, linked, complete profile, active operational role, per P0). No sub-group ("Smjena A") targeting in P7; it is an additive follow-up (a `intervention_recipient_groups` table) if SZS later asks. |
+| **D20** *(Q3, command)* | **Publisher commands; each service confirms its own.** Close/update/correct/cancel a joint intervention is the **publishing** service's command staff only (the record has one owner, `interventions.organization_id`). Attendance confirmation is **per service**: each service's command staff confirm attendance for **only their own service's participants**, even on a call-out another service published. |
+| **D21** *(Q4, archive)* | **Both archives, scoped.** The intervention is owned by the publishing service and appears in full in its archive. Each recipient service also gets a **permanent, scoped** view: the shared incident facts (kind, title, instructions, location, timing, status) **plus its own participants only** — never the other service's roster, responses, journeys or attendance. |
+
+Attendance credit stays **D15** (credited to the participant's own service, derived from the member record used — so a DVD member on an SZS call-out is credited to DVD; migration `202609270039` already does this). Dedupe stays **D16**: one notification and one response per person, deduplicated by `user_id`; a person who is a member of the publishing service (including a dual-service person) is filed under their **publishing-service** member record, so they appear and are credited once (§6.2). A recipient-service-only member is filed under their own service.
+
+**All of Q1–Q8 are now answered.** Q1–Q4 by D18–D21 above; Q5/Q8 joint behaviour by D15/D16 + these. Nothing in §6–§7 remains open for P7.
 
 ---
 
@@ -317,10 +330,10 @@ owner's.
 
 | # | Question | Blocks |
 |---|---|---|
-| **Q1** | Symmetric or one-way? May DVD also alert SZS, or is it only SZS→DVD as described in the brief? | P7 |
-| **Q2** | May SZS target specific DVD groups (e.g. "Smjena A"), or only "all of DVD"? | P7 |
-| **Q3** | Who commands a joint intervention? May a DVD commander who was added as a recipient organisation see the SZS command console for it, close it, confirm attendance — and if attendance, only for DVD's own people or for everyone on it? | P7 |
-| **Q4** | Whose archive does a joint intervention land in? Does DVD get a permanent record of an SZS call-out its members attended, and if so does it show SZS's members and instructions, or only DVD's own participation? | P7 |
+| ~~Q1~~ | **ANSWERED — D18.** Symmetric: either service may include the other. | — |
+| ~~Q2~~ | **ANSWERED — D19.** Whole-service targeting; no sub-groups in P7. | — |
+| ~~Q3~~ | **ANSWERED — D20.** Publisher commands; each service confirms only its own participants' attendance. | — |
+| ~~Q4~~ | **ANSWERED — D21.** Both archives, scoped: recipient sees the shared incident + its own participants only. | — |
 | **Q5** | Is a DVD member's attendance on an SZS intervention credited to DVD, SZS, or both? This decides what the participation totals mean, and it is not reversible once records exist. | P6 (schema), P7 (behaviour) |
 | **Q6** | Does SZS need different response options or ETA bands from DVD's, or are the current ones right for both? | P6 |
 | **Q7** | Does SZS use the same intervention kinds as DVD (`interventions.kind`), or its own taxonomy? | P6 |
@@ -362,7 +375,7 @@ tests must fail against the code as it was before that phase.
 | **P4a–f** | the 51 policies, six PRs | none (policies only) | ready; unblocked by D9 |
 | **P5** | drop the mirror, reduce `access_grants` | destructive | ready; unblocked by D9 |
 | **P6** | SZS runs its own workflow | additive | **in progress** — unblocked by D14–D17; Stage A (#67, `202609270039`), Stage B (acting-service context, this PR), Stage C (SZS call-out lifecycle) to come |
-| **P7** | cross-service alerting | additive | blocked on Q1–Q4 (joint-intervention behaviour of Q5/Q8) |
+| **P7** | cross-service alerting | additive | **in progress** — unblocked by D18–D21 (Q1–Q4 answered 2026-09-29); joint call-outs, symmetric, whole-service, publisher-command + per-service attendance confirm, scoped dual archive |
 | **P8** | branding and storage keys | none | ready |
 
 P1 through P5 can now run end to end without another answer. **P4 is split into
