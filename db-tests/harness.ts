@@ -67,6 +67,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609250037_service_role_trigger_grants.sql',
   'supabase/migrations/202609250038_retire_dvd_role_mirror.sql',
   'supabase/migrations/202609270039_attendance_credit_service.sql',
+  'supabase/migrations/202609290040_joint_callouts.sql',
 ];
 
 export const DATABASE_URL =

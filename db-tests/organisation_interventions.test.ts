@@ -851,15 +851,34 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
       'acknowledge_intervention',
       'is_recipient_of',
     ];
+    // P7 (202609290040, D18/D19) intentionally re-creates publish_intervention to
+    // resolve additional recipient services. That single re-creation is allowed
+    // here and asserted below to keep P4b's publisher-command isolation; every
+    // other guarded function must still be untouched by any later migration.
+    const P7_JOINT = 'supabase/migrations/202609290040_joint_callouts.sql';
     for (const file of later) {
       const body = sql(file);
       for (const name of guarded) {
+        if (name === 'publish_intervention' && file === P7_JOINT) continue;
         expect(
           new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(body),
           `${file} re-creates ${name} after P4b secured it`,
         ).toBe(false);
       }
     }
+
+    // P7's publish_intervention adds recipient organisations without weakening
+    // the isolation P4b secured: it still refuses to publish another service's
+    // call-out, and still refuses an own-selection member from another service.
+    const p7 = sql(P7_JOINT);
+    expect(
+      /is_command_in\(publisher_org\)/.test(p7),
+      'P7 publish_intervention still checks the publishing service command',
+    ).toBe(true);
+    expect(
+      /organization_id is distinct from publisher_org/.test(p7) && /ORGANIZATION_MISMATCH/.test(p7),
+      'P7 publish_intervention still refuses a cross-service own-selection',
+    ).toBe(true);
   });
 });
 
@@ -1754,14 +1773,19 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
     }
   }, 120_000);
 
-  it('derives the fifteen tables a call-out reaches', async () => {
-    // Pinned so that a sixteenth is looked at by whoever adds it: the two
+  it('derives the sixteen tables a call-out reaches', async () => {
+    // Pinned so that a seventeenth is looked at by whoever adds it: the two
     // assertions below cover it automatically, but somebody should know.
+    // The sixteenth is intervention_recipient_organizations (P7, 202609290040):
+    // the additional services a joint call-out targets. It carries organization_id
+    // (the targeted service) and a service-scoped SELECT policy, so the isolation
+    // and no-DVD-only-policy assertions below cover it like the rest.
     const { rows } = await db.query<{ tbl: string }>(REACHABLE_TABLES);
     expect(rows.map((row) => row.tbl).sort()).toEqual(
       [
         'interventions',
         'intervention_recipients',
+        'intervention_recipient_organizations',
         'intervention_updates',
         'intervention_acknowledgements',
         'operational_audit',
