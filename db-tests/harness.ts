@@ -69,6 +69,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609270039_attendance_credit_service.sql',
   'supabase/migrations/202609290040_joint_callouts.sql',
   'supabase/migrations/202609290041_joint_participation.sql',
+  'supabase/migrations/202609290042_joint_delivery_and_acknowledgement.sql',
 ];
 
 export const DATABASE_URL =
