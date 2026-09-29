@@ -105,6 +105,7 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     ...real,
     fetchOwnMemberId: vi.fn(async () => ({ ok: true, value: MEMBER_ID }) as const),
     fetchInterventions: vi.fn(async () => ({ ok: true, value: [INTERVENTION] }) as const),
+    fetchTargetedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
     // A recipient's joint call-outs are merged in from here (P7); the single
     // call-out these tests exercise already comes back from fetchInterventions.
     fetchAddressedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
@@ -1415,5 +1416,17 @@ describe('with nothing happening', () => {
     const text = await show(<ArchiveView />, 'COMMANDER');
     expect(text).not.toMatch(/Arhiva nije ucitana/);
     expect(text).toMatch(/Arhiva je prazna/i);
+  });
+});
+
+describe('P7 targeted service archive', () => {
+  it('lists an incident published by the other service without switching', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValueOnce({ ok: true, value: [] });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValueOnce({
+      ok: true, value: [{ ...INTERVENTION, title: 'SZS pozvao DVD' }],
+    });
+    await show(<ArchiveView />, 'COMMANDER');
+    expect(container.querySelector('[data-testid="archive-list"]')?.textContent).toContain('SZS pozvao DVD');
   });
 });

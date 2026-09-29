@@ -64,7 +64,9 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
   }),
 }));
 
-import { fetchAddressedInterventions, fetchAddressedOpenInterventionIds } from './operations';
+import {
+  fetchAddressedInterventions, fetchAddressedOpenInterventionIds, fetchTargetedInterventions,
+} from './operations';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const MEMBER = '00000000-0000-4000-8000-000000000101';
@@ -193,5 +195,21 @@ describe('fetchAddressedInterventions', () => {
     recorded.error = { code: '42501', message: 'permission denied' };
     const result = await fetchAddressedInterventions(DVD, MEMBER);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('fetchTargetedInterventions', () => {
+  it('reads shared incidents through rows targeting the selected service, without a member id', async () => {
+    recorded.rows = [embeddedIntervention('joint-archive', { status: 'CLOSED' })];
+    const result = await fetchTargetedInterventions(DVD);
+    expect(recorded.table).toBe('intervention_recipient_organizations');
+    expect(recorded.filters).toMatchObject({ organization_id: DVD });
+    expect(recorded.select).toContain('interventions!inner(');
+    expect(result.ok && result.value[0]).toMatchObject({ id: 'joint-archive', status: 'CLOSED' });
+  });
+
+  it('keeps a refused archive read distinct from an empty archive', async () => {
+    recorded.error = { code: '42501', message: 'permission denied' };
+    expect((await fetchTargetedInterventions(DVD)).ok).toBe(false);
   });
 });

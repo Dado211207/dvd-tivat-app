@@ -581,6 +581,31 @@ export async function fetchAddressedInterventions(
 }
 
 /**
+ * Joint call-outs targeting the selected service, including closed ones. The
+ * recipient-service archive cannot use fetchInterventions(org): those records
+ * are owned by the publishing service. The embedded parent is still checked by
+ * interventions RLS; the targeting row is checked by its own RLS policy. A
+ * refusal remains a refusal, never an empty archive.
+ */
+export async function fetchTargetedInterventions(
+  organizationId: string,
+): Promise<ReadResult<readonly Intervention[]>> {
+  const { data, error } = await accountBackend()
+    .from('intervention_recipient_organizations')
+    .select(`interventions!inner(${INTERVENTION_COLUMNS})`)
+    .eq('organization_id', organizationId)
+    .limit(100);
+  if (error || !Array.isArray(data)) return readFailure(error);
+  const rows = data as unknown as { interventions: InterventionRow | InterventionRow[] | null }[];
+  const byId = new Map<string, Intervention>();
+  for (const row of rows) {
+    const embedded = Array.isArray(row.interventions) ? row.interventions[0] : row.interventions;
+    if (embedded) byId.set(embedded.id, mapInterventionRow(embedded));
+  }
+  return ok([...byId.values()]);
+}
+
+/**
  * The OPEN call-outs a given member was actually sent, in one service.
  *
  * This is the recipient signal the app-level call-out alarm needs, and it is

@@ -70,6 +70,7 @@ export const MIGRATIONS = [
   'supabase/migrations/202609290040_joint_callouts.sql',
   'supabase/migrations/202609290041_joint_participation.sql',
   'supabase/migrations/202609290042_joint_delivery_and_acknowledgement.sql',
+  'supabase/migrations/202609290043_joint_archive.sql',
 ];
 
 export const DATABASE_URL =
