@@ -29,7 +29,7 @@ import {
   subscribeToLanguage,
 } from './language';
 
-const KEY = 'dvd-tivat.language';
+const KEY = 'boka-operativa.language';
 
 function withStorage(store: Storage): void {
   vi.stubGlobal('window', { ...window, localStorage: store });
@@ -88,6 +88,12 @@ describe('a Montenegrin fire society reads Crnogorski unless it says otherwise',
 });
 
 describe('the choice survives a reload on the device that made it', () => {
+  it('retains a choice saved by the old DVD-keyed build', () => {
+    window.localStorage.setItem('dvd-tivat.language', 'en');
+    expect(readStoredLanguage()).toBe('en');
+    expect(window.localStorage.getItem(KEY)).toBe('en');
+    expect(window.localStorage.getItem('dvd-tivat.language')).toBeNull();
+  });
   it('stores and reads back the chosen language', () => {
     expect(setActiveLanguage('en')).toBe(true);
     expect(window.localStorage.getItem(KEY)).toBe('en');

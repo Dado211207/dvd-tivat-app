@@ -1,7 +1,7 @@
 {
   "name": "Boka Operativa",
   "short_name": "Boka Operativa",
-  "description": "Operativna aplikacija za pozive, odzive i evidenciju DVD Tivat.",
+  "description": "Operativna aplikacija za pozive, odzive i evidenciju sluzbi Tivat.",
   "lang": "sr-Latn",
   "dir": "ltr",
   "start_url": "./",

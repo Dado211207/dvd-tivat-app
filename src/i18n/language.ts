@@ -57,7 +57,8 @@ export const LANGUAGE_TAG: Record<Language, string> = {
   en: 'en-GB',
 };
 
-const STORAGE_KEY = 'dvd-tivat.language';
+const STORAGE_KEY = 'boka-operativa.language';
+const LEGACY_STORAGE_KEY = 'dvd-tivat.language';
 
 export function normaliseLanguage(value: unknown): Language | null {
   return (LANGUAGES as readonly unknown[]).includes(value) ? (value as Language) : null;
@@ -73,7 +74,16 @@ export function normaliseLanguage(value: unknown): Language | null {
  */
 export function readStoredLanguage(): Language {
   try {
-    return normaliseLanguage(window.localStorage.getItem(STORAGE_KEY)) ?? DEFAULT_LANGUAGE;
+    const current = window.localStorage.getItem(STORAGE_KEY);
+    if (current !== null) return normaliseLanguage(current) ?? DEFAULT_LANGUAGE;
+    const old = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (old !== null && normaliseLanguage(old) !== null) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, old);
+        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+      } catch { /* The old choice remains readable. */ }
+    }
+    return normaliseLanguage(old) ?? DEFAULT_LANGUAGE;
   } catch {
     return DEFAULT_LANGUAGE;
   }
@@ -83,6 +93,7 @@ export function readStoredLanguage(): Language {
 export function storeLanguage(language: Language): boolean {
   try {
     window.localStorage.setItem(STORAGE_KEY, language);
+    try { window.localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* New key wins. */ }
     return true;
   } catch {
     return false;

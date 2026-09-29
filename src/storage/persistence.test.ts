@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSeedState } from '@/domain/seed';
 import { SCHEMA_VERSION } from '@/domain/types';
-import { clearStoredState, loadState, saveState, STORAGE_KEY } from './persistence';
+import { clearStoredState, loadState, saveState, LEGACY_STORAGE_KEY, STORAGE_KEY } from './persistence';
 
 /** A minimal in-memory Storage that can be told to misbehave. */
 function fakeStorage(options: { failRead?: boolean; failReadKey?: string; failWrite?: boolean } = {}) {
@@ -63,6 +63,37 @@ afterEach(() => {
 });
 
 describe('loading', () => {
+  it('moves valid legacy prototype data to the neutral key without changing its contents', () => {
+    const { store } = fakeStorage();
+    install(store);
+    const saved = createSeedState();
+    saved.exercises[0]!.title = 'Sacuvana vjezba';
+    store.setItem(LEGACY_STORAGE_KEY, JSON.stringify(saved));
+    expect(loadState()).toMatchObject({ status: 'UCITANO', state: saved });
+    expect(store.getItem(STORAGE_KEY)).toBe(JSON.stringify(saved));
+    expect(store.getItem(LEGACY_STORAGE_KEY)).toBeNull();
+  });
+
+  it('reads legacy data without deleting it if the browser refuses writes', () => {
+    const { store, data } = fakeStorage({ failWrite: true });
+    install(store);
+    const saved = createSeedState();
+    data.set(LEGACY_STORAGE_KEY, JSON.stringify(saved));
+    expect(loadState()).toMatchObject({ status: 'SAMO_CITANJE', state: saved });
+    expect(data.get(LEGACY_STORAGE_KEY)).toBe(JSON.stringify(saved));
+  });
+
+  it('never revives legacy data when a current value exists', () => {
+    const { store } = fakeStorage();
+    install(store);
+    const current = createSeedState();
+    const old = createSeedState();
+    old.exercises[0]!.title = 'Old data';
+    store.setItem(STORAGE_KEY, JSON.stringify(current));
+    store.setItem(LEGACY_STORAGE_KEY, JSON.stringify(old));
+    expect(loadState().state).toEqual(current);
+  });
+
   it('starts from the fictional seed on a first run, without warning', () => {
     install(fakeStorage().store);
     const result = loadState();
@@ -208,11 +239,13 @@ describe('reset', () => {
 
     store.setItem('nesto-drugo', 'ostaje');
     saveState(createSeedState());
+    store.setItem(LEGACY_STORAGE_KEY, JSON.stringify(createSeedState()));
     expect(data.has(STORAGE_KEY)).toBe(true);
 
     clearStoredState();
 
     expect(data.has(STORAGE_KEY)).toBe(false);
+    expect(data.has(LEGACY_STORAGE_KEY)).toBe(false);
     expect(data.get('nesto-drugo')).toBe('ostaje');
   });
 
