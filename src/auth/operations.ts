@@ -565,6 +565,7 @@ export async function fetchAddressedInterventions(
     .select(`interventions!inner(${INTERVENTION_COLUMNS})`)
     .eq('organization_id', organizationId)
     .eq('member_id', memberId)
+    .order('added_at', { ascending: false })
     .limit(100);
   if (error || !Array.isArray(data)) return readFailure(error);
   const rows = data as unknown as { interventions: InterventionRow | InterventionRow[] | null }[];
@@ -594,6 +595,7 @@ export async function fetchTargetedInterventions(
     .from('intervention_recipient_organizations')
     .select(`interventions!inner(${INTERVENTION_COLUMNS})`)
     .eq('organization_id', organizationId)
+    .order('added_at', { ascending: false })
     .limit(100);
   if (error || !Array.isArray(data)) return readFailure(error);
   const rows = data as unknown as { interventions: InterventionRow | InterventionRow[] | null }[];
