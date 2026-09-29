@@ -305,6 +305,7 @@ export const en: Strings = {
     actingServiceSwitching: 'Switching service...',
     actingServiceHint:
       'The choice is remembered on this device. It does not change your rights - the server decides those separately for each service.',
+    actingServiceChange: 'Change service',
 
     notificationsTitle: 'Notifications on this device',
     displayTitle: 'Time and display',
@@ -516,6 +517,11 @@ export const en: Strings = {
     noCallOutTitle: 'There is no call-out for you',
     noCallOutText:
       'When your commander calls you out to an intervention it will appear here. This list shows only the call-outs you are on.',
+
+    otherServiceCallOutTitle: 'This call-out is in your other service.',
+    otherServiceCallOutText:
+      'The call-out you opened is in {service}. You are acting as a different service, so it is not shown here.',
+    otherServiceCallOutSwitch: 'Switch to {service}',
 
     availabilityTitle: 'My general availability',
     availabilityNote:
