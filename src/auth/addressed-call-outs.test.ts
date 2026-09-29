@@ -14,6 +14,8 @@ const recorded = vi.hoisted(() => ({
   table: '' as string,
   select: '' as string,
   filters: {} as Record<string, unknown>,
+  order: null as { column: string; ascending: boolean } | null,
+  limit: null as number | null,
   // The rows the stubbed query resolves with, and an optional error.
   rows: [] as unknown[],
   error: null as unknown,
@@ -37,23 +39,38 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
           recorded.filters[key] = values;
           return builder;
         },
-        limit: (_count: number) => builder,
+        order: (column: string, options: { ascending: boolean }) => {
+          recorded.order = { column, ascending: options.ascending };
+          return builder;
+        },
+        limit: (count: number) => {
+          recorded.limit = count;
+          return builder;
+        },
         then: (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
           Promise.resolve({
             // Hosted REST APIs commonly cap a response. A joined parent filter
             // must run before that cap, or years of closed history hide a new page.
-            data: recorded.error ? null : (
-              recorded.select.includes('interventions!inner(') &&
-              Array.isArray(recorded.filters['interventions.status'])
-                ? recorded.rows.filter((row) => {
-                    const related = (row as {
-                      interventions: { status: string } | { status: string }[] | null;
-                    }).interventions;
-                    const status = (Array.isArray(related) ? related[0] : related)?.status ?? '';
-                    return (recorded.filters['interventions.status'] as readonly string[]).includes(status);
+            data: recorded.error ? null : (() => {
+              const filtered = recorded.select.includes('interventions!inner(') &&
+                Array.isArray(recorded.filters['interventions.status'])
+                  ? recorded.rows.filter((row) => {
+                      const related = (row as {
+                        interventions: { status: string } | { status: string }[] | null;
+                      }).interventions;
+                      const status = (Array.isArray(related) ? related[0] : related)?.status ?? '';
+                      return (recorded.filters['interventions.status'] as readonly string[]).includes(status);
+                    })
+                  : recorded.rows;
+              const ordered = recorded.order?.column === 'added_at'
+                ? [...filtered].sort((a, b) => {
+                    const left = (a as { added_at?: string }).added_at ?? '';
+                    const right = (b as { added_at?: string }).added_at ?? '';
+                    return recorded.order?.ascending ? left.localeCompare(right) : right.localeCompare(left);
                   })
-                : recorded.rows
-            ).slice(0, 1000),
+                : filtered;
+              return ordered.slice(0, recorded.limit ?? 1000);
+            })(),
             error: recorded.error,
           }).then(
             resolve,
@@ -97,6 +114,8 @@ beforeEach(() => {
   recorded.table = '';
   recorded.select = '';
   recorded.filters = {};
+  recorded.order = null;
+  recorded.limit = null;
   recorded.rows = [];
   recorded.error = null;
 });
@@ -159,6 +178,30 @@ describe('fetchAddressedOpenInterventionIds', () => {
     recorded.error = { code: '42501', message: 'permission denied' };
     const result = await fetchAddressedOpenInterventionIds(DVD, MEMBER);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('newest P7 call-outs survive the server row cap', () => {
+  it('keeps a newly addressed call-out after more than 100 older recipient rows', async () => {
+    recorded.rows = Array.from({ length: 100 }, (_, index) => ({
+      ...embeddedIntervention(`old-${index}`),
+      added_at: `2026-01-01T00:${String(index % 60).padStart(2, '0')}:00Z`,
+    }));
+    recorded.rows.push({ ...embeddedIntervention('newest'), added_at: '2026-09-29T17:00:00Z' });
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok && result.value).toHaveLength(100);
+    expect(result.ok && result.value[0]?.id).toBe('newest');
+  });
+
+  it('keeps a newly targeted joint incident in the service archive after 100 older entries', async () => {
+    recorded.rows = Array.from({ length: 100 }, (_, index) => ({
+      ...embeddedIntervention(`old-${index}`),
+      added_at: '2026-01-01T00:00:00Z',
+    }));
+    recorded.rows.push({ ...embeddedIntervention('newest'), added_at: '2026-09-29T17:00:00Z' });
+    const result = await fetchTargetedInterventions(DVD);
+    expect(result.ok && result.value).toHaveLength(100);
+    expect(result.ok && result.value[0]?.id).toBe('newest');
   });
 });
 
