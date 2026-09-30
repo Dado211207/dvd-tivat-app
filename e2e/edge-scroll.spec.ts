@@ -40,8 +40,16 @@ for (const size of SIZES) {
         edge: getComputedStyle(document.documentElement).overscrollBehavior,
         height: document.documentElement.scrollHeight,
         visibleHeight: window.innerHeight,
+        offenders: [...document.querySelectorAll<HTMLElement>('main *')]
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            return box.width > 0 && box.left < window.innerWidth &&
+              box.right > window.innerWidth + 1 && getComputedStyle(element).display !== 'none';
+          })
+          .slice(0, 8)
+          .map((element) => `${element.tagName}.${element.className || '-'}: ${Math.round(element.getBoundingClientRect().right)}px`),
       }));
-      expect(geometry.width, `${route} extends past the ${size.name} viewport`)
+      expect(geometry.width, `${route} extends past the ${size.name} viewport: ${geometry.offenders.join(', ')}`)
         .toBeLessThanOrEqual(geometry.viewport + 1);
       expect(geometry.edge, `${route} allows page edge bounce/refresh`).toBe('none');
 
