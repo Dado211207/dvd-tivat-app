@@ -60,7 +60,7 @@ for (const size of SIZES) {
         edge: getComputedStyle(document.documentElement).overscrollBehavior,
         height: document.documentElement.scrollHeight,
         visibleHeight: window.innerHeight,
-        offenders: [...document.querySelectorAll<HTMLElement>('main *')]
+        offenders: [...document.querySelectorAll<HTMLElement>('body *')]
           .filter((element) => {
             const box = element.getBoundingClientRect();
             return box.width > 0 && box.left < window.innerWidth &&
@@ -74,13 +74,19 @@ for (const size of SIZES) {
             const style = getComputedStyle(element);
             return `${element.tagName}.${element.className || '-'}: ${Math.round(box.left)}..${Math.round(box.right)}px, overflow=${style.overflowX}`;
           }),
+        containers: [...document.querySelectorAll<HTMLElement>('html, body, #root, .app, .main, .registry, .table-wrap, .station-rail')]
+          .slice(0, 18)
+          .map((element) => {
+            const box = element.getBoundingClientRect();
+            return `${element.tagName}.${element.className || '-'}: box=${Math.round(box.left)}..${Math.round(box.right)} scroll=${element.scrollWidth}/${element.clientWidth} overflow=${getComputedStyle(element).overflowX}`;
+          }),
       }));
       // Browser layout metrics can include wide descendants inside a clipped,
       // independently scrollable table. What matters is whether the DOCUMENT
       // can actually move sideways when the person drags past its edge.
       await page.evaluate(() => window.scrollTo(100_000, window.scrollY));
       const pageShift = await page.evaluate(() => window.scrollX);
-      expect(pageShift, `${route} can drag the whole ${size.name} page sideways: ${geometry.width}px layout, ${geometry.offenders.join(', ')}`).toBe(0);
+      expect(pageShift, `${route} can drag the whole ${size.name} page sideways: ${geometry.width}px layout, ${geometry.offenders.join(', ')}; containers: ${geometry.containers.join(' | ')}`).toBe(0);
       if (route !== 'evidencija') {
         expect(geometry.width, `${route} extends past the ${size.name} viewport: ${geometry.offenders.join(', ')}`)
           .toBeLessThanOrEqual(geometry.viewport + 1);
