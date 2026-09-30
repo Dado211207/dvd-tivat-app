@@ -32,6 +32,26 @@ for (const size of SIZES) {
       } else {
         await expect(page.locator('main')).not.toBeEmpty();
       }
+      if (route === 'evidencija') {
+        const rosterRegion = page.locator('.registry .table-wrap').first();
+        await expect(rosterRegion).toBeVisible();
+        const reach = await rosterRegion.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const overflow = element.scrollWidth > element.clientWidth + 1;
+          if (overflow) element.scrollLeft = element.scrollWidth;
+          return {
+            right: box.right,
+            overflow,
+            scrolled: element.scrollLeft,
+            canScroll: getComputedStyle(element).overflowX === 'auto',
+          };
+        });
+        expect(reach.right, 'the roster scroll region extends outside the phone').toBeLessThanOrEqual(size.width + 1);
+        if (reach.overflow) {
+          expect(reach.canScroll, 'roster columns are clipped instead of scrollable').toBe(true);
+          expect(reach.scrolled, 'later roster columns cannot be reached').toBeGreaterThan(0);
+        }
+      }
       // Wait for the asynchronous server-backed content, not just the shell.
       await expect(page.locator('main')).not.toContainText('Ova kopija nije povezana sa serverom');
       const geometry = await page.evaluate(() => ({
