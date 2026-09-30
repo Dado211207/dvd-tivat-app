@@ -10,3 +10,8 @@
   VITE_SUPABASE_URL = "https://zoipjcdtcfetqvcfmhxd.supabase.co"
   VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_CQ6WaUSVGnmEFMgMD1U11w_J5P5LRmF"
   VITE_MULTI_SERVICE_ADMIN_ENABLED = "true"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
