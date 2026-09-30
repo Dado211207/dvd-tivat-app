@@ -2025,6 +2025,19 @@ dialog {
   overflow-wrap: anywhere;
 }
 
+/* Roster tables can be wider than the phone, but their labelled scroll region
+   remains inside the card. A native table's intrinsic width must not make the
+   document itself draggable sideways. */
+.registry {
+  overflow-x: clip;
+}
+
+.registry .table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .registry .stack {
   display: grid;
   gap: 0.6rem;
