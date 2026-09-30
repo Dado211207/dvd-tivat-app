@@ -23,7 +23,7 @@ Za test svih uloga i stvarnog poziva potrebni su izmisljeni test clanovi i dodje
 ## Provjereno i preostalo
 
 - Netlify deploy `6abcb687df467fdc47ba95c7` je `ready`. HTTPS otvara aplikaciju i prikazuje prijavu za test bazu. `manifest.webmanifest` se posluzuje kao `application/manifest+json`; servisni radnik i ikone su dostupni. Fizicka iPhone instalacija jos nije provjerena.
-- `send-web-push` je ACTIVE v1 na test projektu, sa provjerom ovlascenja u samoj funkciji (`verify_jwt=false` je nuzan za poziv rasporeda bez korisnickog JWT). **Nisu podeseni** VAPID privatni/javni par, `PUSH_WORKER_SECRET`, `VAPID_SUBJECT`, `ALLOWED_ORIGIN`, javna build varijabla `VITE_WEB_PUSH_PUBLIC_KEY` ni minutni Cron. Zato pozadinski push trenutno nije spreman za test na telefonu.
+- `send-web-push` je ACTIVE v1 na test projektu, sa provjerom ovlascenja u samoj funkciji (`verify_jwt=false` je nuzan za poziv rasporeda bez korisnickog JWT). `ALLOWED_ORIGIN` i `VAPID_SUBJECT` su postavljeni na test HTTPS adresu. `pg_net`, `pg_cron` i Vault su dostupni, a Cron zasad ima nula poslova. **Nisu podeseni** VAPID privatni/javni par, `PUSH_WORKER_SECRET`, javna build varijabla `VITE_WEB_PUSH_PUBLIC_KEY` ni minutni Cron. Zato pozadinski push trenutno nije spreman za test na telefonu.
 - Ne proglasavati zvuk i obavjestenja pouzdanim bez testa na fizickom iPhone. Web Push na iPhone radi za web aplikaciju dodatu na pocetni ekran i dozvola se trazi korisnickom radnjom. Potreban je probni poziv sa izmisljеним clanovima, provjera primitka, otvaranja, zakljucanog ekrana i Focus rezima.
 - CI za kandidata na `af710077de410ead0adbe52d5d5c7cf8773a9a27` je prosao (run `36682329199`); nakon izmjena ovog dokumenta provjeriti novi tacan SHA.
 
