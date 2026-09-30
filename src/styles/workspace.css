@@ -1037,6 +1037,8 @@ fieldset {
 
 .account-steps li {
   display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
   align-content: start;
   min-height: 144px;
   padding: 15px;
@@ -1090,6 +1092,8 @@ fieldset {
 }
 
 .account-table-wrap {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -1314,6 +1318,8 @@ fieldset {
 }
 
 .table-wrap {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--c-line);
   border-radius: 13px;
@@ -2008,6 +2014,15 @@ dialog {
     font-size: 0.8rem;
     text-align: center;
   }
+}
+
+/* Table and long account values may overflow inside their own scroll regions,
+   never make the whole page wider than a phone or an in-between tablet. */
+.registry,
+.account-directory {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .registry .stack {
