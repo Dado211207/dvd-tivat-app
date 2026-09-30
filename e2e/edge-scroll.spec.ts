@@ -46,8 +46,13 @@ for (const size of SIZES) {
             return box.width > 0 && box.left < window.innerWidth &&
               box.right > window.innerWidth + 1 && getComputedStyle(element).display !== 'none';
           })
-          .slice(0, 8)
-          .map((element) => `${element.tagName}.${element.className || '-'}: ${Math.round(element.getBoundingClientRect().right)}px`),
+          .sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)
+          .slice(0, 14)
+          .map((element) => {
+            const box = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return `${element.tagName}.${element.className || '-'}: ${Math.round(box.left)}..${Math.round(box.right)}px, overflow=${style.overflowX}`;
+          }),
       }));
       expect(geometry.width, `${route} extends past the ${size.name} viewport: ${geometry.offenders.join(', ')}`)
         .toBeLessThanOrEqual(geometry.viewport + 1);
