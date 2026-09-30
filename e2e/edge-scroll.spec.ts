@@ -74,11 +74,6 @@ for (const size of SIZES) {
             const style = getComputedStyle(element);
             return `${element.tagName}.${element.className || '-'}: ${Math.round(box.left)}..${Math.round(box.right)}px, overflow=${style.overflowX}`;
           }),
-        widthContributors: [...document.querySelectorAll<HTMLElement>('body *')]
-          .filter((element) => element.scrollWidth > window.innerWidth + 1)
-          .sort((a, b) => b.scrollWidth - a.scrollWidth)
-          .slice(0, 15)
-          .map((element) => `${element.tagName}.${element.className || '-'}: scroll=${element.scrollWidth} parent=${element.parentElement?.className || '-'}`),
         containers: [...document.querySelectorAll<HTMLElement>('html, body, #root, .app, .main, .registry, .table-wrap, .station-rail')]
           .slice(0, 18)
           .map((element) => {
@@ -86,32 +81,14 @@ for (const size of SIZES) {
             return `${element.tagName}.${element.className || '-'}: box=${Math.round(box.left)}..${Math.round(box.right)} scroll=${element.scrollWidth}/${element.clientWidth} overflow=${getComputedStyle(element).overflowX}`;
           }),
       }));
-      if (route === 'evidencija' && size.width <= 430) {
-        const isolation = await page.evaluate(() => {
-          const selectors = ['main', '.station-rail', '.masthead', '.sim-bar', '.foot', '.registry', '.registry .table-wrap', '.skip-link'];
-          return selectors.map((selector) => {
-            const el = document.querySelector<HTMLElement>(selector);
-            if (!el) return [selector, -1];
-            const previous = el.style.display;
-            el.style.display = 'none';
-            const width = document.documentElement.scrollWidth;
-            el.style.display = previous;
-            return [selector, width];
-          });
-        });
-        expect(geometry.width, `contributors: ${geometry.widthContributors.join(' | ')}; isolate: ${JSON.stringify(isolation)}`)
-          .toBeLessThanOrEqual(size.width + 1);
-      }
       // Browser layout metrics can include wide descendants inside a clipped,
       // independently scrollable table. What matters is whether the DOCUMENT
       // can actually move sideways when the person drags past its edge.
       await page.evaluate(() => window.scrollTo(100_000, window.scrollY));
       const pageShift = await page.evaluate(() => window.scrollX);
       expect(pageShift, `${route} can drag the whole ${size.name} page sideways: ${geometry.width}px layout, ${geometry.offenders.join(', ')}; containers: ${geometry.containers.join(' | ')}`).toBe(0);
-      if (route !== 'evidencija') {
-        expect(geometry.width, `${route} extends past the ${size.name} viewport: ${geometry.offenders.join(', ')}`)
-          .toBeLessThanOrEqual(geometry.viewport + 1);
-      }
+      expect(geometry.width, `${route} extends past the ${size.name} viewport: ${geometry.offenders.join(', ')}`)
+        .toBeLessThanOrEqual(geometry.viewport + 1);
 
       expect(geometry.edge, `${route} allows page edge bounce/refresh`).toBe('none');
 
