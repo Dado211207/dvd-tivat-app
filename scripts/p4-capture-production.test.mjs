@@ -3,7 +3,16 @@ import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
-import { captureResult, outputPath } from './p4-capture-production.mjs';
+import { captureResult, outputPath, sourceUrl } from './p4-capture-production.mjs';
+
+test('only the expected production project can be captured', () => {
+  assert.equal(sourceUrl('postgresql://postgres:example@db.yskhdzrdbywrpfowckpn.supabase.co:5432/postgres').hostname,
+    'db.yskhdzrdbywrpfowckpn.supabase.co');
+  assert.equal(sourceUrl('postgresql://postgres.yskhdzrdbywrpfowckpn:example@aws-0-eu-west-1.pooler.supabase.com:5432/postgres').username,
+    'postgres.yskhdzrdbywrpfowckpn');
+  assert.throws(() => sourceUrl('postgresql://postgres:example@db.another.supabase.co:5432/postgres'), /expected DVD Tivat/);
+  assert.throws(() => sourceUrl('postgresql://postgres:example@db.yskhdzrdbywrpfowckpn.supabase.co:5432/other'), /expected DVD Tivat/);
+});
 
 test('the capture can only be saved outside the source tree', async () => {
   await assert.rejects(outputPath('capture.production-export.json'), /absolute path/);
