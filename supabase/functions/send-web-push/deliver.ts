@@ -320,7 +320,7 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
               keys: { p256dh: String(subscription.p256dh), auth: String(subscription.auth_secret) },
             },
             payload,
-            { TTL: 180, urgency: 'high', topic: `boka-${String(row.intervention_id).slice(0, 20)}` },
+            { TTL: 180, urgency: 'high', topic: String(row.intervention_id).replaceAll('-', '') },
           );
           await Promise.all([
             service.from('web_push_subscriptions').update({
