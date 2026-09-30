@@ -13,6 +13,17 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const projectRef = 'yskhdzrdbywrpfowckpn';
+
+export function sourceUrl(connectionString) {
+  const url = new URL(connectionString);
+  const direct = url.hostname === `db.${projectRef}.supabase.co` && url.username === 'postgres';
+  const pooler = url.hostname.endsWith('.pooler.supabase.com') && url.username === `postgres.${projectRef}`;
+  if (!['postgres:', 'postgresql:'].includes(url.protocol) || !(direct || pooler) || !url.password || url.pathname !== '/postgres') {
+    throw new Error('Use the direct or session-pooler URL for the expected DVD Tivat project.');
+  }
+  return url;
+}
 
 export async function outputPath(argument) {
   if (!argument || !isAbsolute(argument) || !argument.endsWith('.production-export.json')) {
@@ -43,8 +54,7 @@ async function main() {
   const target = await outputPath(process.argv[2]);
   const connectionString = process.env.DVD_READONLY_DATABASE_URL;
   if (!connectionString) throw new Error('Set DVD_READONLY_DATABASE_URL in the local environment.');
-  const url = new URL(connectionString);
-  if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('Use a PostgreSQL connection URL.');
+  sourceUrl(connectionString);
 
   const sql = await readFile(resolve(repo, 'scripts/p4-equivalence-production.sql'), 'utf8');
   // PostgreSQL executes this multi-statement simple query in one implicit
