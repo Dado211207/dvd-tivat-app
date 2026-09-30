@@ -75,8 +75,17 @@ for (const size of SIZES) {
             return `${element.tagName}.${element.className || '-'}: ${Math.round(box.left)}..${Math.round(box.right)}px, overflow=${style.overflowX}`;
           }),
       }));
-      expect(geometry.width, `${route} extends past the ${size.name} viewport: ${geometry.offenders.join(', ')}`)
-        .toBeLessThanOrEqual(geometry.viewport + 1);
+      // Browser layout metrics can include wide descendants inside a clipped,
+      // independently scrollable table. What matters is whether the DOCUMENT
+      // can actually move sideways when the person drags past its edge.
+      await page.evaluate(() => window.scrollTo(100_000, window.scrollY));
+      const pageShift = await page.evaluate(() => window.scrollX);
+      expect(pageShift, `${route} can drag the whole ${size.name} page sideways: ${geometry.width}px layout, ${geometry.offenders.join(', ')}`).toBe(0);
+      if (route !== 'evidencija') {
+        expect(geometry.width, `${route} extends past the ${size.name} viewport: ${geometry.offenders.join(', ')}`)
+          .toBeLessThanOrEqual(geometry.viewport + 1);
+      }
+
       expect(geometry.edge, `${route} allows page edge bounce/refresh`).toBe('none');
 
       // Edge control must not block normal scrolling of long content.
