@@ -25,9 +25,31 @@ On 2026-09-30, the signed-in Supabase **Database > Backups** page stated that th
 - [ ] The capture command is now prepared: from a trusted machine with a direct **session** PostgreSQL connection, set `DVD_READONLY_DATABASE_URL` in the local environment and run `npm run capture:p4 -- /private/outside/repo/fresh.production-export.json`. The command sends the SQL as **one** read-only batch (a `psql -f` invocation would break its transaction), refuses output in the repository, creates a private file without overwriting, and prints no rows or credentials. The URL must contain a working database password; the existing password cannot be retrieved from the dashboard. Run `npm run gate:p4 -- /private/outside/repo/fresh.production-export.json` against a *local* PostgreSQL server (the gate rejects remote database URLs). This command has only been tested against synthetic results; it has **not** yet captured the hosted project or passed the production-derived gate.
 - [ ] This Supabase organisation is on the **Free** plan (verified 2026-09-29). Supabase's daily hosted backups cover Pro/Team/Enterprise, not Free: make a **manual logical backup** with the supported CLI/pg_dump workflow, keep it outside the repository, and **exercise a restore on a separate target**. Record where the encrypted recovery artifact lives, who can restore it, its timestamp and scope. Do not use the live project itself as the restore rehearsal. See [Supabase backup guidance](https://supabase.com/docs/guides/platform/backups).
 - [ ] For the logical backup follow [Supabase's current CLI backup/restore guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore): use `supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f roles.sql --role-only`, then `-f schema.sql`, then `-f data.sql --use-copy --data-only -x storage.buckets_vectors -x storage.vector_indexes`. It needs Supabase CLI, Docker and the database password. Encrypt the three files before storing or transferring them; never attach them to a PR or CI artifact. Restore the same three files on a **separate PostgreSQL-17-compatible Supabase target** with `psql --single-transaction --variable ON_ERROR_STOP=1 --file roles.sql --file schema.sql --command 'SET session_replication_role = replica' --file data.sql --dbname "$DVD_RESTORE_DB_URL"`, then compare table and auth-user counts and confirm login/roles and migration history as applicable. The logical database dump does **not** include Storage object bytes, Edge Functions or project settings; account for each separately before calling it a complete recovery. Do not run the restore command against the production URL. These instructions are preparation, not a passed recovery test.
+- [ ] A single **local rehearsal command** is now prepared for the owner's trusted Mac/Linux computer; see the next section. It prompts for the existing password without echo, backs up roles/schema/data and the separate migration ledger with Supabase CLI, encrypts an archive to an age recipient outside the repository, restores into a fresh local Supabase PostgreSQL 17, compares counts, then runs the production read-only P4 capture and gate against isolated local databases. No production write is performed. It has passed syntax and guard checks, but it has **not** run against the production database or exercised the actual restore in this workspace; only a successful local run can check these boxes.
 - [ ] Review the final combined diff and resolve all review findings; re-run the full CI on the exact final head. Record the head SHA and CI run.
 - [ ] Confirm the current Pages latch is false; confirm the intended Supabase project URL and **publishable** key in Actions variables, `VITE_MULTI_SERVICE_ADMIN_ENABLED=true` for SZS assignment, and the optional public Web Push key. Never pass a service-role/secret key into a browser build.
 - [ ] Decide the migration/worker maintenance window and check whether the old worker is scheduled externally. The 8 old queued rows are IN_APP on closed interventions, not Web Push. Check scheduler/worker configuration and verify no unexpected Web Push dispatch on the isolated target before relying on the new worker. A stale alert must not page a real phone during a test.
+
+## Private local rehearsal (existing password)
+
+On a trusted Mac/Linux computer, install the free [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started), Docker Desktop, PostgreSQL 17 client (`psql`), Node 22+ and [age](https://age-encryption.org/). Start Docker. Clone/check out the **exact candidate head**, run `npm ci`, then run:
+
+```bash
+bash scripts/release-preflight.sh check
+mkdir -p "$HOME/Boka-Backups" "$HOME/.config/boka-operativa"
+age-keygen -o "$HOME/.config/boka-operativa/recovery.key"
+age-keygen -y "$HOME/.config/boka-operativa/recovery.key"
+```
+
+Save a separate, offline copy of `recovery.key` in a place only the owner can access. The last command prints a **public** `age1...` recipient; insert it below. From the Supabase dashboard's **Connect → Session pooler** panel, copy only the host (for example `aws-0-eu-west-1.pooler.supabase.com`), **not** the full URL or password. Then:
+
+```bash
+npm run release:preflight -- "$HOME/Boka-Backups" age1YOUR_PUBLIC_RECIPIENT
+```
+
+The command asks for the host and then the existing database password without displaying it. No secret is entered in a shell command, repository file, PR or GitHub Actions. It stops on any dump, encryption, restore, count or equivalence error and leaves the encrypted backup intact. Any error diagnostic is encrypted to the same recipient; decrypt and redact it locally before sharing. The `*.tar.age` archive and the separate recovery key are both required for recovery. Check that the key can decrypt the archive on a separate machine before treating it as durable. Storage currently has zero object bytes (read-only check 2026-09-30); verify again before relying on a database-only recovery. Edge Functions and project settings are still separate from the database archive.
+
+The script deliberately has no production migration, worker deployment or Pages publish command. It produces evidence for the release gates; inspect that evidence before continuing with the rollout steps below.
 
 ## Controlled rollout
 
