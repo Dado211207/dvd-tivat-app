@@ -1,8 +1,12 @@
-# Separate phone-test hosting. Public VITE_* build values are configured on
-# the Netlify test site; no project key or password belongs in this file.
+# Separate phone-test hosting. These values are public browser configuration:
+# the publishable key is intentionally embedded in the client bundle. No
+# database password or privileged key belongs in this file.
 [build]
   command = "npm run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "22"
+  VITE_SUPABASE_URL = "https://zoipjcdtcfetqvcfmhxd.supabase.co"
+  VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_CQ6WaUSVGnmEFMgMD1U11w_J5P5LRmF"
+  VITE_MULTI_SERVICE_ADMIN_ENABLED = "true"
