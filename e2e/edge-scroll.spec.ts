@@ -48,8 +48,9 @@ for (const size of SIZES) {
       // Edge control must not block normal scrolling of long content.
       if (geometry.height > geometry.visibleHeight + 50) {
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-        expect(await page.evaluate(() => window.scrollY), `${route} cannot reach its bottom`)
-          .toBeGreaterThan(0);
+        await expect.poll(() => page.evaluate(() => window.scrollY), {
+          message: `${route} cannot reach its bottom`,
+        }).toBeGreaterThan(0);
         await page.evaluate(() => window.scrollTo(0, 0));
       }
     }
