@@ -15,6 +15,8 @@
     "check:migrations": "node scripts/check-migration-drift.mjs --repo-only",
     "gate:p3": "node scripts/p3-equivalence-gate.mjs",
     "gate:p4": "node scripts/p4-equivalence-gate.mjs",
+    "capture:p4": "node scripts/p4-capture-production.mjs",
+    "test:capture": "node --test scripts/p4-capture-production.test.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.db-tests.json",
     "lint": "eslint .",
