@@ -228,7 +228,7 @@ export function AccountAccessSetup() {
     try {
       const outcome = await resendSignupConfirmation(email);
       if (!outcome.ok) {
-        setError(explain(outcome));
+        setError(outcome.unreachable ? explain(outcome) : t.accountAccess.confirmationSendFailed);
         return;
       }
       setUnreachableRuns(0);

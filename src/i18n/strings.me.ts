@@ -121,6 +121,7 @@ export const me = {
     requestReceived: 'Zahtjev je primljen. Ako je ovo nova adresa, provjerite email za potvrdu. Ako nalog vec postoji, prijavite se postojecom lozinkom.',
     resendConfirmation: 'Posalji novi email za potvrdu',
     confirmationResent: 'Zahtjev je primljen. Ako nalog ceka potvrdu, otvorite samo najnoviji email i njegov link. Stariji link vise ne koristite.',
+    confirmationSendFailed: 'Novi email trenutno nije poslat. Sacekajte prije ponovnog pokusaja ili otvorite najnoviji vec primljeni email za potvrdu.',
     profileRequired: 'Dopunite ime i prezime, broj telefona i datum rodjenja da bi vlasnik mogao provjeriti ko trazi pristup.',
     fullName: 'Ime i prezime', displayOnly: 'Prikazni podatak. Ne daje operativna prava.',
     saveProfile: 'Sacuvaj profil', saving: 'Cuvam...', signOut: 'Odjavi se',

@@ -114,6 +114,7 @@ export const en: Strings = {
     requestReceived: 'Request received. If this is a new address, check your email for confirmation. If the account already exists, sign in with your current password.',
     resendConfirmation: 'Send a new confirmation email',
     confirmationResent: 'Request received. If the account awaits confirmation, open only the newest email and its link. Do not use older links.',
+    confirmationSendFailed: 'A new email was not sent right now. Wait before trying again, or open the newest confirmation email you have already received.',
     profileRequired: 'Complete your full name, telephone number and date of birth so the owner can identify who is requesting access.',
     fullName: 'Full name', displayOnly: 'Display information only. It does not grant operational access.',
     saveProfile: 'Save profile', saving: 'Saving...', signOut: 'Sign out',

@@ -199,6 +199,18 @@ describe('account registration', () => {
     expect(container.textContent).toMatch(/Ako nalog ceka potvrdu/i);
   });
 
+  it('does not blame the password when confirmation email delivery is refused', async () => {
+    resend.mockResolvedValue({ ok: false });
+    await openForm();
+    const button = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((candidate) => /Posalji novi email za potvrdu/i.test(candidate.textContent ?? ''));
+    await act(async () => button?.click());
+    await settle();
+
+    expect(container.textContent).toMatch(/Novi email trenutno nije poslat/i);
+    expect(container.textContent).not.toMatch(/Provjerite email i lozinku/i);
+  });
+
   it('submits all required profile fields with a normalized telephone', async () => {
     register.mockResolvedValue({ ok: true, sessionStarted: false });
     await openForm();
