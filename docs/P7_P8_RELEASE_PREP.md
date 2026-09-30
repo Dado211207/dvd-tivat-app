@@ -15,7 +15,9 @@ Supabase project `yskhdzrdbywrpfowckpn` was ACTIVE_HEALTHY on PostgreSQL 17. The
 
 Counts at that snapshot: 9 accounts, 7 members, 5 interventions, 0 open interventions, 0 active SZS memberships, 8 QUEUED notification rows (all IN_APP on CLOSED interventions; 0 queued WEB_PUSH rows) and 1 active Web Push subscription. These are counts only, not a row-level inventory. The installation OWNER account's required profile is complete but it has no active member record and no active DVD membership. Do not fabricate a roster row or use an unrelated existing member to make a test pass. Link the owner's real DVD member record through the authorised registry workflow when its identity is verified.
 
-The hosted `send-web-push` function is ACTIVE version 2, using the old `policy.ts` worker; the repository's P4e/P7 worker has not been deployed. Recent Pages runs on `main` were skipped by the P6 latch, last observed run `36510948652` on `4403fcad`. That is evidence for that run only; inspect the **current** `P6_PAGES_RELEASE_READY` Actions variable before any merge. Its present value was not available through the connected GitHub API.
+The hosted `send-web-push` function is ACTIVE version 2, using the old `policy.ts` worker; the repository's P4e/P7 worker has not been deployed. Recent Pages runs on `main` were skipped by the P6 latch, last observed run `36510948652` on `4403fcad`. On 2026-09-30, the signed-in GitHub repository variables page showed no `P6_PAGES_RELEASE_READY` variable; the other required public build variables were present. Recheck immediately before any merge or release.
+
+On 2026-09-30, the signed-in Supabase **Database > Backups** page stated that the Free plan has no project backups. The existing database password is not viewable in its settings. A logical dump therefore still needs an authorised direct database connection, and a separate-target restore remains unproved. Do not reset the production password just to make a release test possible.
 
 ## Preconditions: record evidence, then release
 
@@ -29,7 +31,7 @@ The hosted `send-web-push` function is ACTIVE version 2, using the old `policy.t
 
 1. Keep the Pages latch false. Apply repository migrations `202609240022` through `202609290043` in **filename order**, one at a time, checking each applied ledger entry and schema outcome. Stop on the first error; do not run a partly migrated client. The P4 gate and recovery rehearsal above are prerequisites.
 2. Deploy the reviewed `send-web-push` worker from the candidate only after its database requirements are installed; verify its configuration and a fictional opted-in device on an isolated project, then read-only production health. Do not send a fictional production alert or expose secrets.
-3. Merge the reviewed combined candidate when it is safe for `main` to contain P7+P8. Check the successful `main` CI and that Pages is still skipped while latched. Confirm the final release SHA and build variables, then set `P6_PAGES_RELEASE_READY=true` and manually dispatch **Deploy demonstration build**. Verify the published URL and schema version before asking the owner to sign in.
+3. Merge the reviewed combined candidate when it is safe for `main` to contain P7+P8. Check the successful `main` CI and that Pages is still skipped while latched. Confirm the final release SHA and build variables, then set `P6_PAGES_RELEASE_READY=true` and manually dispatch **Deploy demonstration build** on `main`. The Pages workflow now checks that the exact current `main` commit passed push CI and checks out that SHA; a stale CI completion or dispatch from another branch cannot deploy. Verify the published URL and schema version before asking the owner to sign in.
 4. Read-only production smoke check: DVD and SZS isolation, account access, scoped archive, worker health, no unexpected push and no new queued Web Push rows for closed interventions. Leave the human alert fallback in place.
 
 ## Owner acceptance on the deployed URL
