@@ -1,0 +1,8 @@
+# Separate phone-test hosting. Public VITE_* build values are configured on
+# the Netlify test site; no project key or password belongs in this file.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
