@@ -29,3 +29,5 @@ Thumbs.db
 *.log
 npm-debug.log*
 dist-fixture/
+.netlify/
+deploy-*.zip
