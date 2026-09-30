@@ -72,12 +72,14 @@ function queue(
   write: Reply = { data: null, error: null },
   count: Reply = { data: 0, error: null },
   sweep: Reply = { data: [queued], error: null },
+  subscriptions: Reply = { data: [], error: null },
 ) {
   return scripted((op) => {
     if (op.kind === 'rpc' && op.table === 'push_delivery_queue') return sweep;
     if (op.kind === 'rpc' && op.table === 'push_delivery_verdict') return verdict;
     if (op.kind === 'rpc' && op.table === 'push_delivery_mislabelled') return count;
     if (op.kind === 'select' && op.table === 'notification_outbox') throw new Error('the table is never swept directly');
+    if (op.kind === 'select' && op.table === 'web_push_subscriptions') return subscriptions;
     return write;
   });
 }
@@ -162,6 +164,20 @@ describe('an answer the worker cannot act on', () => {
     const db = queue({ data: null, error: null });
     await deliverQueued({ service: db, send: neverSend, scheduler: true });
     expect(db.ops.find((op) => op.kind === 'rpc' && op.table === 'push_delivery_verdict')?.payload).toEqual({ target_outbox: ALERT });
+  });
+
+  it('keeps the alert and its attempt budget when the device lookup times out', async () => {
+    const db = queue(
+      { data: { verdict: 'DELIVER', user_id: 'u1', published_at: null }, error: null },
+      { data: { id: ALERT }, error: null },
+      undefined,
+      undefined,
+      { data: null, error: { message: 'timeout' } },
+    );
+    expect(await deliverQueued({ service: db, send: neverSend, scheduler: true })).toMatchObject({
+      accepted: 0, rejected: 0, failed: 1,
+    });
+    expect(writes(db), 'a transient lookup failure must not claim or close an alert').toEqual([]);
   });
 });
 
