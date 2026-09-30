@@ -10,6 +10,7 @@
   VITE_SUPABASE_URL = "https://zoipjcdtcfetqvcfmhxd.supabase.co"
   VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_CQ6WaUSVGnmEFMgMD1U11w_J5P5LRmF"
   VITE_MULTI_SERVICE_ADMIN_ENABLED = "true"
+  VITE_WEB_PUSH_PUBLIC_KEY = "BGtUfssmZkaCbR52jLUfgJSrpG0wM7q4JR1UsXzDKmyodLNZ4c1az9rYBwWJ4X1buphcp8UQF6kGndGrfXXQgE0"
 
 [[headers]]
   for = "/manifest.webmanifest"
