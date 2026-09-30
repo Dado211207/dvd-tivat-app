@@ -21,6 +21,7 @@ import {
   PASSWORD_RESET_AVAILABLE,
   completeOwnProfile,
   registerWithEmail,
+  resendSignupConfirmation,
   signInWithEmail,
 } from '@/auth/supabaseClient';
 import { isPlausibleFullName } from '@/access/policy';
@@ -211,6 +212,27 @@ export function AccountAccessSetup() {
       setMessage(
         t.accountAccess.requestReceived,
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    setError('');
+    setMessage('');
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setError(t.accountAccess.invalidEmail);
+      return;
+    }
+    setBusy(true);
+    try {
+      const outcome = await resendSignupConfirmation(email);
+      if (!outcome.ok) {
+        setError(explain(outcome));
+        return;
+      }
+      setUnreachableRuns(0);
+      setMessage(t.accountAccess.confirmationResent);
     } finally {
       setBusy(false);
     }
@@ -413,6 +435,12 @@ export function AccountAccessSetup() {
               </button>
             </div>
           </form>
+
+          {mode === 'SIGN_IN' ? (
+            <button className="btn" type="button" disabled={busy} onClick={() => void resendConfirmation()}>
+              {t.accountAccess.resendConfirmation}
+            </button>
+          ) : null}
 
           {PASSWORD_RESET_AVAILABLE ? (
             <button className="btn" type="button" disabled={busy} onClick={() => {

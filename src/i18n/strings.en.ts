@@ -112,6 +112,8 @@ export const en: Strings = {
     invalidEmail: 'Enter a valid email address.', shortPassword: 'The password must be at least 12 characters.',
     wait: 'Please wait...', noAccount: 'I do not have an account', haveAccount: 'I already have an account',
     requestReceived: 'Request received. If this is a new address, check your email for confirmation. If the account already exists, sign in with your current password.',
+    resendConfirmation: 'Send a new confirmation email',
+    confirmationResent: 'Request received. If the account awaits confirmation, open only the newest email and its link. Do not use older links.',
     profileRequired: 'Complete your full name, telephone number and date of birth so the owner can identify who is requesting access.',
     fullName: 'Full name', displayOnly: 'Display information only. It does not grant operational access.',
     saveProfile: 'Save profile', saving: 'Saving...', signOut: 'Sign out',
