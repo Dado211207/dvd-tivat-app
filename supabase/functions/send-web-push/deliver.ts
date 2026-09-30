@@ -237,6 +237,21 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
       return 'SKIPPED';
     }
 
+    // Read devices before consuming an attempt. A transient lookup error is
+    // not evidence that the account has no subscribed device; leave the alert
+    // queued so the scheduler can retry without losing its attempt budget.
+    let activeSubscriptions: Row[] = [];
+    if (action.kind === 'SEND') {
+      const { data: subscriptions, error: subscriptionsError } = await service
+        .from('web_push_subscriptions')
+        .select('id, endpoint, p256dh, auth_secret, expiration_time')
+        .eq('user_id', action.userId)
+        .is('revoked_at', null);
+      if (subscriptionsError || !Array.isArray(subscriptions)) throw new Error('SUBSCRIPTION_READ_FAILED');
+      activeSubscriptions = (subscriptions as Row[]).filter((subscription) =>
+        subscriptionUsable(subscription.expiration_time as string | null, now()));
+    }
+
     const nextAttempt = Number(row.attempt_count) + 1;
     const { data: claimed, error: claimError } = await service
       .from('notification_outbox')
@@ -266,14 +281,6 @@ export async function deliverQueued(worker: Worker, interventionId?: string): Pr
 
     // The devices are the ACCOUNT's: somebody serving in two services has one
     // phone, reached as whichever member each call-out was sent to.
-    const { data: subscriptions } = await service
-      .from('web_push_subscriptions')
-      .select('id, endpoint, p256dh, auth_secret, expiration_time')
-      .eq('user_id', action.userId)
-      .is('revoked_at', null);
-
-    const activeSubscriptions = ((subscriptions ?? []) as Row[]).filter((subscription) =>
-      subscriptionUsable(subscription.expiration_time as string | null, now()));
     if (activeSubscriptions.length === 0) {
       await service.from('notification_delivery_attempts').insert({
         outbox_id: row.id,
