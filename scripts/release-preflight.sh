@@ -12,7 +12,7 @@ mode="${1:-check}"
 
 fail() { printf 'Release preflight stopped: %s\n' "$1" >&2; exit 1; }
 
-for cmd in node npm supabase docker psql age tar; do
+for cmd in node npm supabase docker psql age tar git; do
   command -v "$cmd" >/dev/null 2>&1 || fail "Missing $cmd. Install it before running this rehearsal."
 done
 docker info >/dev/null 2>&1 || fail 'Docker is not running.'
@@ -22,6 +22,8 @@ if [[ "$mode" == check ]]; then
   exit 0
 fi
 [[ "$mode" == run ]] || fail 'Usage: bash scripts/release-preflight.sh [check|run]'
+[[ -z "$(git -C "$REPO" status --porcelain)" ]] || fail 'The release checkout has uncommitted files. Use a clean candidate commit.'
+candidate_sha="$(git -C "$REPO" rev-parse HEAD)"
 [[ -n "${DVD_PRODUCTION_DB_URL:-}" ]] || fail 'DVD_PRODUCTION_DB_URL is missing.'
 [[ -n "${DVD_BACKUP_RECIPIENT:-}" && "$DVD_BACKUP_RECIPIENT" == age1* ]] || fail 'Set DVD_BACKUP_RECIPIENT to an age public recipient.'
 [[ -n "${DVD_BACKUP_DIR:-}" && "$DVD_BACKUP_DIR" == /* ]] || fail 'DVD_BACKUP_DIR must be an existing absolute directory outside the repository.'
@@ -77,8 +79,8 @@ source_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_UR
 custom_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$custom_sql" 2>"$work/stage.log")" \
   || fail 'Final production auth/storage definition check failed.'
 [[ "$custom_before" == "$custom_after" ]] || fail 'Production auth/storage definitions changed during backup.'
-printf 'Captured at %s UTC; auth users | members | interventions | storage objects | buckets | migration entries: %s\n' \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$source_before" > manifest.txt
+printf 'Candidate: %s\nCaptured at %s UTC; auth users | members | interventions | storage objects | buckets | migration entries: %s\n' \
+  "$candidate_sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$source_before" > manifest.txt
 
 archive="$backup_dir/boka-db-$(date -u +%Y%m%dT%H%M%SZ).tar.age"
 [[ ! -e "$archive" ]] || fail 'The encrypted archive filename already exists.'
@@ -101,7 +103,10 @@ cd "$work/dump"
 run_private 'Independent restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
   -f roles.sql -f schema.sql -c 'SET session_replication_role = replica' -f data.sql \
   --dbname "$local_url"
+# A freshly started Supabase stack may already own this schema. Replace its
+# empty local ledger inside the isolated target before restoring the source.
 run_private 'Migration history restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
+  -c 'drop schema if exists supabase_migrations cascade' \
   -f history_schema.sql -f history_data.sql --dbname "$local_url"
 run_private 'App-owned auth/storage restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
   -f custom_auth_storage.sql --dbname "$local_url"
@@ -122,4 +127,5 @@ run_private 'Production-copy migration equivalence gate' npm run gate:p4 -- "$ca
 [[ -s "$work/gate-report.json" ]] || fail 'The gate produced no report.'
 report="$archive.gate-report.age"
 run_private 'Gate report encryption' age -r "$DVD_BACKUP_RECIPIENT" -o "$report" "$work/gate-report.json"
-printf 'Production-copy equivalence gate passed. Encrypted backup: %s\nEncrypted gate report: %s\n' "$archive" "$report"
+printf 'Production-copy equivalence gate passed for %s.\nEncrypted backup: %s\nEncrypted gate report: %s\n' \
+  "$candidate_sha" "$archive" "$report"
