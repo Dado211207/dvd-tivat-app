@@ -54,9 +54,13 @@ run_private() {
   : >"$work/stage.log"
 }
 
-source_counts_sql="select (select count(*) from auth.users), (select count(*) from public.members), (select count(*) from public.interventions), (select count(*) from storage.objects), (select count(*) from supabase_migrations.schema_migrations)"
+source_counts_sql="select (select count(*) from auth.users), (select count(*) from public.members), (select count(*) from public.interventions), (select count(*) from storage.objects), (select count(*) from storage.buckets), (select count(*) from supabase_migrations.schema_migrations)"
+custom_sql="select (select count(*) from pg_trigger where tgrelid='auth.users'::regclass and tgname='create_dvd_account'), (select count(*) from pg_policies where schemaname='storage' and tablename='objects' and policyname in ('report_objects_create_own','report_objects_read_authorized')), md5(coalesce((select pg_get_triggerdef(oid) from pg_trigger where tgrelid='auth.users'::regclass and tgname='create_dvd_account'),'') || '|' || coalesce((select string_agg(policyname || '|' || cmd || '|' || roles::text || '|' || coalesce(qual,'') || '|' || coalesce(with_check,''), E'\\n' order by policyname) from pg_policies where schemaname='storage' and tablename='objects' and policyname in ('report_objects_create_own','report_objects_read_authorized')),''))"
 source_before="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$source_counts_sql" 2>"$work/stage.log")" \
   || fail 'Production read-only count failed. Check the existing password and session connection.'
+custom_before="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$custom_sql" 2>"$work/stage.log")" \
+  || fail 'Production auth/storage definition check failed.'
+[[ "$custom_before" == 1\|2\|* ]] || fail 'Expected app-owned auth trigger and two Storage policies are missing.'
 
 cd "$work/dump"
 run_private 'Roles dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f roles.sql --role-only
@@ -65,16 +69,20 @@ run_private 'Data dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f da
 run_private 'Migration history schema dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f history_schema.sql --schema supabase_migrations
 run_private 'Migration history data dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f history_data.sql --use-copy --data-only --schema supabase_migrations
 for file in roles.sql schema.sql data.sql history_schema.sql history_data.sql; do [[ -s "$file" ]] || fail "$file is empty."; done
+cp "$REPO/scripts/restore-supabase-custom.sql" custom_auth_storage.sql
 
 source_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$source_counts_sql" 2>"$work/stage.log")" \
   || fail 'Final production read-only count failed.'
 [[ "$source_before" == "$source_after" ]] || fail 'Production row counts changed during backup; take another snapshot in a quiet window.'
-printf 'Captured at %s UTC; auth users | members | interventions | storage objects | migration entries: %s\n' \
+custom_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$custom_sql" 2>"$work/stage.log")" \
+  || fail 'Final production auth/storage definition check failed.'
+[[ "$custom_before" == "$custom_after" ]] || fail 'Production auth/storage definitions changed during backup.'
+printf 'Captured at %s UTC; auth users | members | interventions | storage objects | buckets | migration entries: %s\n' \
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$source_before" > manifest.txt
 
 archive="$backup_dir/boka-db-$(date -u +%Y%m%dT%H%M%SZ).tar.age"
 [[ ! -e "$archive" ]] || fail 'The encrypted archive filename already exists.'
-tar -cf - roles.sql schema.sql data.sql history_schema.sql history_data.sql manifest.txt | age -r "$DVD_BACKUP_RECIPIENT" -o "$archive" \
+tar -cf - roles.sql schema.sql data.sql history_schema.sql history_data.sql custom_auth_storage.sql manifest.txt | age -r "$DVD_BACKUP_RECIPIENT" -o "$archive" \
   >"$work/stage.log" 2>&1 || { rm -f -- "$archive"; fail 'Backup encryption failed.'; }
 [[ -s "$archive" ]] || fail 'Encrypted archive is empty.'
 printf 'Encrypted backup saved: %s\n' "$archive"
@@ -95,9 +103,14 @@ run_private 'Independent restore' psql -X --single-transaction -v ON_ERROR_STOP=
   --dbname "$local_url"
 run_private 'Migration history restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
   -f history_schema.sql -f history_data.sql --dbname "$local_url"
+run_private 'App-owned auth/storage restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
+  -f custom_auth_storage.sql --dbname "$local_url"
 restored="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$local_url" -c "$source_counts_sql" 2>"$work/stage.log")" \
   || fail 'Restored count check failed.'
 [[ "$restored" == "$source_before" ]] || fail 'Restored row counts differ from the production snapshot.'
+custom_restored="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$local_url" -c "$custom_sql" 2>"$work/stage.log")" \
+  || fail 'Restored auth/storage definition check failed.'
+[[ "$custom_restored" == "$custom_before" ]] || fail 'Restored auth/storage definitions differ from production.'
 printf 'Independent PostgreSQL 17 restore counts match.\n'
 
 # The gate creates/drops its own databases on the local server, not production.
