@@ -6,7 +6,7 @@ Prepared 2026-09-29 for DVD Tivat / SZS Tivat. This document is an execution rec
 
 - P7: draft [#79](https://github.com/Dado211207/dvd-tivat-app/pull/79), head `aefbb22d9bbffbd3add274348275c0c1230a40ec`; CI `36593132662` succeeded.
 - P8: draft [#80](https://github.com/Dado211207/dvd-tivat-app/pull/80), head `f38000932f8f1bd434357ac7d715313d6d0dae9e`; CI `36587236536` succeeded.
-- Combined tree: draft [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81), validated at `4dfd7f04da89b5c13db251be0fc834ec29759503`; CI `36593177745` succeeded before this documentation update. Re-run CI on the final head and record that exact SHA before merging.
+- Combined tree: draft [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81). Its CI `36673898531` succeeded at `2ddf1fa2959af8d076522a3ad460256428f14bc4` before this rehearsal refinement. Re-run CI on the final PR head and record that exact SHA before merging. The encrypted rehearsal manifest and result print the checkout SHA; it must match that final candidate.
 - D18–D21 are the product contract: symmetric whole-service call-outs; publishing service commands the incident; each service confirms its own attendance; both archives contain the shared incident, with only their own participants.
 
 ## Read-only hosted preflight (2026-09-29, 16:03 UTC)
@@ -50,6 +50,8 @@ npm run release:preflight -- "$HOME/Boka-Backups" age1YOUR_PUBLIC_RECIPIENT
 The command asks for the host and then the existing database password without displaying it. No secret is entered in a shell command, repository file, PR or GitHub Actions. It stops on any dump, encryption, restore, count or equivalence error and leaves the encrypted backup intact. Any error diagnostic is encrypted to the same recipient; decrypt and redact it locally before sharing. The `*.tar.age` archive and the separate recovery key are both required for recovery. Check that the key can decrypt the archive on a separate machine before treating it as durable. Storage currently has zero object bytes (read-only check 2026-09-30); verify again before relying on a database-only recovery. Edge Functions and project settings are still separate from the database archive.
 
 The script deliberately has no production migration, worker deployment or Pages publish command. It produces evidence for the release gates; inspect that evidence before continuing with the rollout steps below.
+
+The rehearsal requires a clean candidate checkout. Its separate local ledger restore replaces the initialized local `supabase_migrations` schema, then compares the restored migration count to production. This affects only the isolated local target. A successful run reports the candidate SHA and encrypted backup/report paths; retain those together with the offline recovery key.
 
 ## Controlled rollout
 
