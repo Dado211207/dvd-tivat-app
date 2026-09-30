@@ -44,7 +44,8 @@ for (const size of SIZES) {
           .filter((element) => {
             const box = element.getBoundingClientRect();
             return box.width > 0 && box.left < window.innerWidth &&
-              box.right > window.innerWidth + 1 && getComputedStyle(element).display !== 'none';
+              box.right > window.innerWidth + 1 && getComputedStyle(element).display !== 'none' &&
+              !element.closest('.table-wrap, .account-table-wrap');
           })
           .sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)
           .slice(0, 14)
