@@ -2,6 +2,8 @@
 
 Prepared 2026-09-29 for DVD Tivat / SZS Tivat. This document is an execution record, not evidence that the release gates passed. Do not turn on the Pages latch, merge the candidate into a publishing branch, or apply production migrations by treating fixture CI as production-copy evidence.
 
+The owner now prefers a cloud-only phone test and does not want anything run or stored on their Mac or business laptop. A separate Free Supabase project and Netlify test URL are documented in [CLOUD_PHONE_TEST.md](./CLOUD_PHONE_TEST.md). That isolated test can proceed without the private local rehearsal below; it is not a substitute for the production-copy equivalence, backup and restore gates required before changing the live project. The local instructions remain a historical preparation path and are not an action requested of the owner for this phone test.
+
 ## Exact candidate
 
 - P7: draft [#79](https://github.com/Dado211207/dvd-tivat-app/pull/79), head `aefbb22d9bbffbd3add274348275c0c1230a40ec`; CI `36593132662` succeeded.
