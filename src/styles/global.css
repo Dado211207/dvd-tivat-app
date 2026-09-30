@@ -19,6 +19,8 @@ body,
    horizontal navigation rows retain their own controlled scrolling. */
 html,
 body {
+  /* Wide tables scroll in their own labelled regions, never the entire app. */
+  overflow-x: clip;
   overscroll-behavior: none;
 }
 
