@@ -2035,6 +2035,8 @@ dialog {
 .registry .table-wrap {
   width: 100%;
   max-width: 100%;
+  /* The table's intrinsic width belongs to this local scroll region. */
+  contain: inline-size;
   overflow-x: auto;
 }
 
