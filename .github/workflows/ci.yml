@@ -68,6 +68,9 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      - name: Read-only capture safeguards
+        run: npm run test:capture
+
       # The half of the drift check that needs no credentials: every migration
       # file is applied by the harness, in the order their filenames sort, and
       # no two derive the same name. The other half - comparing against the
