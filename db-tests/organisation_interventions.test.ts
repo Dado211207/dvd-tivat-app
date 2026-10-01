@@ -860,11 +860,14 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
     const P7_JOINT = 'supabase/migrations/202609290040_joint_callouts.sql';
     const P7_ALLOWED = new Set(['publish_intervention', 'is_recipient_of']);
     const P7_ACK = 'supabase/migrations/202609290042_joint_delivery_and_acknowledgement.sql';
+    const FAST_CALLOUT = 'supabase/migrations/20261001134812_automatic_service_callouts_and_optional_report.sql';
+    const FAST_ALLOWED = new Set(['publish_intervention', 'close_intervention']);
     for (const file of later) {
       const body = sql(file);
       for (const name of guarded) {
         if (file === P7_JOINT && P7_ALLOWED.has(name)) continue;
         if (file === P7_ACK && name === 'acknowledge_intervention') continue;
+        if (file === FAST_CALLOUT && FAST_ALLOWED.has(name)) continue;
         expect(
           new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(body),
           `${file} re-creates ${name} after P4b secured it`,
@@ -896,6 +899,18 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
         && /is_staff_in\(acting_service\)/.test(p7Ack)
         && /is_recipient_of\(target_intervention\)/.test(p7Ack),
       'P7 acknowledgement selects the caller’s frozen recipient in their own service',
+    ).toBe(true);
+    const fast = sql(FAST_CALLOUT);
+    expect(
+      /is_command_in\(publisher_org\)/.test(fast)
+        && /candidate\.organization_id is distinct from publisher_org/.test(fast)
+        && /m\.organization_id = publisher_org/.test(fast),
+      'automatic publication checks the publisher and limits own-service members',
+    ).toBe(true);
+    expect(
+      /is_command_in\(current_row\.organization_id\)/.test(fast)
+        && /requested_status = 'CANCELLED' and char_length\(normalized_reason\) < 2/.test(fast),
+      'optional completion report keeps service isolation and requires cancellation reason',
     ).toBe(true);
   });
 });
