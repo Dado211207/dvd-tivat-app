@@ -428,6 +428,10 @@ export const en: Strings = {
     notConfigured: 'The push service is not yet connected to this published version.',
     denied: 'Notifications are refused in the phone’s settings. Allow them for Boka Operativa, then open the application again.',
     failed: 'The notification was not set up. Check the connection and try again.',
+    browserSubscriptionFailed:
+      'The browser could not create a push subscription. No request reached the server yet. Check this site\'s notification permission, then try another browser or network. A work laptop may block the push service through its network or browser policy.',
+    browserPermissionBlocked:
+      'The browser blocked the push subscription. Check this site\'s notification permission and the browser or device policy.',
 
     memberRequired:
       'Your account is not linked to a member of the society, so it cannot receive a call-out. Open Records - Members, add your member record and link it to this account.',
