@@ -17,7 +17,7 @@ Stanje 2026-09-30. Grana: `codex/p7-p8-integration` / draft PR #81. Ovaj dokumen
 
 `e2e/viewport.spec.ts` provjerava horizontalno sirenje, presjecen tekst, dostupne kolone i velicinu dodirnih kontrola na tri operativna ekrana. `e2e/mobile-settings-accounts.spec.ts` provjerava statusnu traku i kartice Naloga na telefonima. `e2e/edge-scroll.spec.ts` dodatno otvara Nalozi, Podesavanja i Evidenciju na osam sirina u dva Chromium profila, uz dug tekst. Mjeri da stranica ne prelazi sirinu ekrana, da je `overscroll-behavior: none`, da se dugi ekran moze skrolovati i da siroke tabele u Evidenciji ostaju dostupne u sopstvenoj skrol zoni. Izabrani CSS ne gasi normalan vertikalni skrol.
 
-Tokom prosirenja testa otkriveni su: sirenje Evidencije na telefonu i Naloga na pojedinim tablet sirinama. Ispravke su u grani; njihov prolaz mora potvrditi **finalni CI**. Fizicki test gumastog odskakanja/povlacenja prstom na iOS/iPadOS i Androidu ostaje za uredjaje, jer headless Chromium ne dokazuje ponasanje Safari gestova.
+Tokom prosirenja testa otkriveni su: sirenje Evidencije na telefonu i Naloga na pojedinim tablet sirinama. Ispravke su u grani. CI za commit `df0ab7cb` potvrdio je lint, tipove, testove baze, build i browser/accessibility matricu, ukljucujuci test stvarnog bocnog pomjeranja stranice nakon skrolovanja tabele do kraja. Fizicki test gumastog odskakanja/povlacenja prstom na iOS/iPadOS i Androidu ostaje za uredjaje, jer headless Chromium ne dokazuje ponasanje Safari gestova.
 
 ## Funkcionalni tokovi
 
@@ -41,3 +41,7 @@ Browser testovi koriste **mock API i izmisljene podatke**, pa dokaz da interfejs
 - Prije operativne upotrebe: prihvat DVD/SZS, provjeren backup/restore i fallback kanal. Vidi [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md).
 
 Naziv aplikacije: [NAME_OPTIONS.md](./NAME_OPTIONS.md).
+
+## Objavljena test verzija
+
+Postojeca Netlify adresa je rucni upload ranijeg builda; ova GitHub grana ne objavljuje se automatski na telefon. Zeleni CI potvrdjuje kod u grani, ali nije dokaz da su CSS popravke vec instalirane na vlasnikovom iPhoneu. Za novu probu treba objaviti build iz finalnog commita na istu test adresu, provjeriti deploy ID i osvjeziti instaliranu PWA. Ne upotrebljavati test aplikaciju za stvarnu uzbunu.
