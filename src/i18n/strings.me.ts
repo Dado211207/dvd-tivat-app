@@ -461,6 +461,10 @@ export const me = {
     notConfigured: 'Push servis jos nije povezan sa ovom objavljenom verzijom.',
     denied: 'Notifikacije su odbijene u podesavanjima telefona. Dozvolite ih za Boka Operativa, pa otvorite aplikaciju ponovo.',
     failed: 'Notifikacija nije podesena. Provjerite vezu i pokusajte ponovo.',
+    browserSubscriptionFailed:
+      'Pregledac nije uspio napraviti push pretplatu. Zahtjev jos nije stigao do servera. Provjerite dozvolu za obavjestenja za ovaj sajt, pa pokusajte u drugom pregledacu ili na drugoj mrezi. Na poslovnom laptopu mreza ili pravila pregledaca mogu blokirati push servis.',
+    browserPermissionBlocked:
+      'Pregledac je blokirao pravljenje push pretplate. Provjerite dozvolu za obavjestenja za ovaj sajt i pravila pregledaca ili racunara.',
 
     /*
      * Svaki od ovih razloga se ranije prikazivao kao "provjerite vezu", pa je
