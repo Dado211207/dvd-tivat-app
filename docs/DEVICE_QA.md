@@ -45,3 +45,7 @@ Naziv aplikacije: [NAME_OPTIONS.md](./NAME_OPTIONS.md).
 ## Objavljena test verzija
 
 Netlify test adresa je 2026-10-01 rucno objavljena iz commita `ac840f6`: deploy `6abdf29b8db7f63eaf1ca3aa` je `ready`. Provjereni su novi CSS hash `index-Dv_d3Xqh.css`, test Supabase URL u JS bundleu, odsustvo produkcionog URL-a i pocetni ekran za neprijavljenog korisnika. GitHub grana se i dalje ne objavljuje automatski. Vlasnik je 2026-10-01 poslije otvaranja nove test verzije na iPhoneu javio: "Pregledao sam i izgleda mi da sve radi". To je pozitivan prvi smoke test bez prijavljene greske, bez pojedinacnog zapisnika za svaki ekran, uredjaj, gest ili tok. Duboki link, novi push, uredjivanje clana/uloge i vise naloga time nijesu zasebno potvrdjeni. Ne upotrebljavati test aplikaciju za stvarnu uzbunu.
+
+## iPhone automatski zum pri fokusu polja
+
+Korisnik je 2026-10-01 prijavio da prikaz ostane zumiran i da ga mora rucno odaljiti; video nije bio dostupan, a slucajno poslata slika nije prikaz aplikacije. U kodu su nadjena polja sa izracunatim tekstom manjim od 16 px (npr. pretraga naloga i izbor sluzbe). Na test grani commit `6878042` postavlja najmanje 16 px za tekst editable kontrola na ekranima do 899 px bez zabrane pinch zuma. Novi browser test na dvije telefonske sirine provjerava izracunatu velicinu vidljivih kontrola; puni CI je zelen. Netlify test deploy `6abe27c5092c031288949f5a` je `ready` i javna adresa vraca novi CSS `index-CF9Na965.css`. Fizicki iOS test ponovnog fokusa i zatvaranja tastature tek treba da potvrdi da je upravo ovaj uzrok uklonjen.
