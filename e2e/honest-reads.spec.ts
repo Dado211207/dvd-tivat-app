@@ -336,7 +336,7 @@ test.describe('a refused member check is never shown as "you are not in the soci
       page,
       'mobilizacija',
       { role: 'FIREFIGHTER', serverFails: 'ACCESS' },
-      /./,
+      FAILURE_WORDING,
     );
 
     expect(text, 'a server that did not answer is not a roster fact').not.toMatch(
