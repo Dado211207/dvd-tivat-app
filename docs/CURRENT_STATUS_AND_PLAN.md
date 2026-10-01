@@ -1,5 +1,10 @@
 # Boka Operativa - trenutno stanje i plan
 
+## Brzi poziv: kod spreman, testni sajt ceka objavu (1. oktobar 2026)
+
+Novi komandni obrazac je na jednom ekranu. Komandir bira svoju sluzbu, drugu ili obje, a server pri objavi sam zamrzava sve podobne operativne primaoce, bez rucnog biranja ljudi. Dvojni clan dobija jedan poziv. Normalno zatvaranje dozvoljava prazan razlog i opcioni izvjestaj; otkazivanje zadrzava obavezan razlog. Implementacija, kriterijumi i ogranicenja: [FAST_CALLOUT.md](./FAST_CALLOUT.md). Draft PR #81 na commitu `be59d575` ima zeleni [CI](https://github.com/Dado211207/dvd-tivat-app/actions/runs/36881818287) sa DB/RLS i 392 browser testa. Migracija je primijenjena samo u odvojenu testnu Supabase bazu. **Novi frontend jos nije na Netlify test adresi**: radni terminal za slanje izvornog koda privremeno nije dostupan. Postojeci testni sajt prikazuje raniji build; produkcija nije dirana. Nakon povratka terminala objaviti i provjeriti Netlify deploy, pa tek onda testirati ovaj tok na telefonu i laptopu.
+
+
 Azurnost: 2026-10-01, poslije objave novog test builda i ranije probe na vlasnikovom iPhoneu. Ovaj zapis opisuje **izolovanu test aplikaciju**, ne produkciju DVD Tivat. Izvrsni zapis testa: [CLOUD_PHONE_TEST.md](./CLOUD_PHONE_TEST.md). Uslovi za produkciju: [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md). Detaljan plan organizacija: [MULTI_ORG_PLAN.md](./MULTI_ORG_PLAN.md). Matrica testiranja uredjaja i tokova: [DEVICE_QA.md](./DEVICE_QA.md). Prijedlozi novog imena: [NAME_OPTIONS.md](./NAME_OPTIONS.md).
 
 ## Sta je stvarno uradjeno
