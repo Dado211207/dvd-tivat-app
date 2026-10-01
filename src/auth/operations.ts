@@ -924,16 +924,13 @@ export const discardDraft = (interventionId: string, reason: string) =>
     requested_reason: reason,
   });
 
-/**
- * Publish a call-out to hand-picked recipients of the publishing service and,
- * for a joint call-out (P7/D18/D19), to every eligible member of each additional
- * service in `organizationIds`. The default empty list is a plain single-service
- * publish, unchanged. The server resolves and de-duplicates recipients (D16); the
- * client only names which whole services to include.
+/** NULL means all eligible members of the publishing service at publication.
+ * An empty array means only the additional services. Explicit member arrays
+ * remain supported for older clients. The server resolves and de-duplicates.
  */
 export const publishIntervention = (
   interventionId: string,
-  memberIds: readonly string[],
+  memberIds: readonly string[] | null,
   organizationIds: readonly string[] = [],
 ) =>
   commandReturning<string>('publish_intervention', {

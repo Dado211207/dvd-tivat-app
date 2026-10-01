@@ -694,7 +694,10 @@ export async function installFixtureProject(
         }
         if (name === 'publish_intervention' && current) {
           current.status = 'PUBLISHED'; current.version = 2; current.published_at = new Date().toISOString();
-          tables.intervention_recipients = (args.recipient_member_ids as string[]).map((member_id) => ({
+          const ownRecipients = args.recipient_member_ids === null
+            ? (RPC.eligible_recipients as { member_id: string }[]).map((member) => member.member_id)
+            : args.recipient_member_ids as string[];
+          tables.intervention_recipients = ownRecipients.map((member_id) => ({
             intervention_id: draftId, member_id, member_name_at_publication: 'Ivo Vatrogasac',
           }));
           return json(route, draftId);

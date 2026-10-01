@@ -339,7 +339,7 @@ describe('the commander console renders on real data', () => {
    * Pero, the server's eligible list does not, and the picker must follow the
    * server rather than the roster.
    */
-  describe('the recipient picker offers only who the server says may be called', () => {
+  describe('automatic recipients follow server eligibility', () => {
     const DRAFT = { ...INTERVENTION, status: 'DRAFT' as const, publishedAt: null, version: 1 };
 
     async function showDraft(
@@ -355,17 +355,10 @@ describe('the commander console renders on real data', () => {
       return show(<CommandView />, 'COMMANDER');
     }
 
-    it('lists the server’s answer and not the roster', async () => {
+    it('does not offer a manual roster picker and allows publishing when the server finds eligible members', async () => {
       await showDraft([{ memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac' }]);
-      const picker = container.querySelector('[data-testid="recipient-picker"]');
-      expect(picker?.textContent).toContain('Ivo Vatrogasac');
-      // Pero IS in the roster mock and is NOT in the server's list. A screen
-      // filtering the roster itself would show him here - which is exactly how
-      // a withdrawn member reached the real picker.
-      expect(
-        picker?.textContent,
-        'a member the server does not offer must not appear',
-      ).not.toContain('Pero Vatrogasac');
+      expect(container.querySelector('[data-testid="recipient-picker"]')).toBeNull();
+      expect(container.querySelector<HTMLButtonElement>('[data-testid="publish"]')?.disabled).toBe(false);
     });
 
     it('says the list could not be read, rather than showing an empty one', async () => {

@@ -283,26 +283,18 @@ test.describe('a commander', () => {
     await expect(page.getByTestId('selected-title')).toBeVisible();
 
     await expect(page.getByText(/zatvorena i vise se ne mijenja/i)).toHaveCount(0);
-    // And the publishing sequence is offered, which it would not be if the
-    // screen genuinely believed this were over.
-    await expect(page.getByTestId('recipient-picker')).toBeVisible();
+    // Publishing the saved draft is offered without selecting individuals.
+    await expect(page.getByTestId('publish')).toBeVisible();
   });
 
-  test('reviews what is about to be sent without repeating the card above it', async ({ page }) => {
+  test('reviews the selected service without asking for individual members', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openOperational(page, 'poziv', { role: 'COMMANDER', interventions: 'DRAFT' });
-    await expect(page.getByTestId('recipient-picker')).toBeVisible();
-
-    await page.getByTestId('recipient-picker').getByRole('checkbox').first().check();
-    await page.getByTestId('to-review').click();
-
-    const review = page.getByTestId('publish-review');
-    await expect(review).toBeVisible();
-    // Says what and to whom...
-    await expect(page.getByTestId('review-what')).toContainText('Nacrt: dimnjak');
-    await expect(page.getByTestId('review-count')).toContainText('1');
-    await expect(page.getByTestId('review-names')).toContainText('Ivo Vatrogasac');
-    // ...and never says provider acceptance is a telephone ringing.
+    await expect(page.getByTestId('recipient-picker')).toHaveCount(0);
+    await page.getByTestId('publish').click();
+    const review = page.getByRole('dialog');
+    await expect(review).toContainText('Nacrt: dimnjak');
+    await expect(review).toContainText('DVD Tivat');
     await expect(review).toContainText(/ne znaci|does not mean|nije dokaz|is not proof/i);
 
     // Exactly one incident card on the screen. It used to render a second full

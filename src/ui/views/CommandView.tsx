@@ -99,25 +99,7 @@ function tabLabel(id: Tab, t: Strings): string {
     : t.command.tabVehicles;
 }
 
-/**
- * Writing a call-out, one question at a time.
- *
- * Four steps in the commander's head, two server operations underneath:
- * `DETAILS` and `WHERE` end in `create_intervention_draft`, `WHO` and `REVIEW`
- * in `publish_intervention`. The split is at the write, so no step has to carry
- * half-entered state across one.
- */
-type ComposeStep = 'DETAILS' | 'WHERE';
-type PublishStep = 'WHO' | 'REVIEW';
-
-const COMPOSE_STEPS: readonly ComposeStep[] = ['DETAILS', 'WHERE'];
-
-function composeStepLabel(id: ComposeStep | PublishStep, t: Strings): string {
-  return id === 'DETAILS' ? t.command.stepDetails
-    : id === 'WHERE' ? t.command.stepWhere
-    : id === 'WHO' ? t.command.stepWho
-    : t.command.stepReview;
-}
+type CallOutAudience = 'OWN' | 'OTHER' | 'BOTH';
 
 export function CommandView() {
   return (
@@ -327,10 +309,10 @@ function CommandConsole({ context }: { context: OperationalContext }) {
     void refresh();
   }, [refresh]);
 
-  const after = async (outcome: { ok: boolean; message?: string }, successText: string) => {
+  const after = async (outcome: { ok: boolean; message?: string }, successText: string, focusId?: string) => {
     if (outcome.ok) {
       setMessage({ tone: 'info', text: successText });
-      await refresh(selectedId);
+      await refresh(focusId ?? selectedId);
     } else {
       setMessage({ tone: 'error', text: outcome.message ?? t.command.notSaved });
     }
@@ -414,7 +396,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
               selected={selected}
               targeted={selected !== null && data.targetedIds.has(selected.id)}
               onDone={after}
-              onRefresh={() => void refresh(selectedId)}
+              onRefresh={(id) => void refresh(id ?? selectedId)}
             />
           ) : null}
           {id === 'pregled' ? <OverviewTab data={data} selected={selected} /> : null}
@@ -509,8 +491,8 @@ function CallOutTab({
   data: ConsoleData;
   selected: Intervention | null;
   targeted: boolean;
-  onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
-  onRefresh: () => void;
+  onDone: (outcome: { ok: boolean; message?: string }, text: string, focusId?: string) => Promise<void>;
+  onRefresh: (id?: string) => void;
 }) {
   const t = useText();
 
@@ -549,37 +531,30 @@ function CallOutTab({
   // return the SAME draft, never create a second call-out for one incident.
   const idempotencyKey = useRef(`ui-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-  const [selectedMembers, setSelectedMembers] = useState<ReadonlySet<string>>(new Set());
-  // P7/D18/D19: a commander may also alert the WHOLE other service. Only offered
-  // when service assignment is enabled (otherwise the other service has no
-  // members and the toggle would page nobody), keeping a DVD-only deployment
-  // byte-identical. The acting service comes from the console's organizationId.
-  const [targetWholeOther, setTargetWholeOther] = useState(false);
+  // The audience is a service, never a hand-picked set of people. A commander
+  // can alert their own service, the other service, or both. The server freezes
+  // every eligible member at publication time, including a new member who
+  // registered after this screen loaded.
+  const [audience, setAudience] = useState<CallOutAudience>('OWN');
   const actingService = organizationCodeOf(organizationId);
   const otherService = actingService
     ? ORGANIZATION_CODES.find((code) => code !== actingService) ?? null
     : null;
   const canTargetOther = MULTI_SERVICE_ADMIN_AVAILABLE && otherService !== null;
-  const [confirming, setConfirming] = useState<null | 'PUBLISH' | 'CLOSE' | 'CANCEL'>(null);
+  const [confirming, setConfirming] = useState<null | 'QUICK_PUBLISH' | 'PUBLISH' | 'CLOSE' | 'CANCEL'>(null);
   const [closeReason, setCloseReason] = useState('');
 
-  // Where the commander is in each half of the sequence. Two pieces of state,
-  // not one, because the two halves are separated by a write to the server and
-  // a draft that exists is a different situation from one still being typed.
-  const [composeStep, setComposeStep] = useState<ComposeStep>('DETAILS');
-  const [publishStep, setPublishStep] = useState<PublishStep>('WHO');
-
-  const availableBy = useMemo(
-    () => new Map(data.availability.map((a) => [a.memberId, a] as const)),
-    [data.availability],
-  );
-  // Not filtered here. The screen used to apply its own rule - an active
-  // roster row with a linked account - which passed a member whose ACCOUNT had
-  // been withdrawn. The server answers this question now, by the same rule
-  // `publish_intervention` enforces, so the list and the command cannot
-  // disagree. See `fetchEligibleRecipients`.
   const eligible = data.eligible ?? [];
   const eligibleUnavailable = data.eligible === null;
+  const includesOwn = audience !== 'OTHER';
+  const includesOther = canTargetOther && audience !== 'OWN';
+  const otherOrganizationIds = includesOther && otherService ? [organizationIdOf(otherService)] : [];
+  const audienceLabel = audience === 'BOTH' && otherService
+    ? t.command.audienceBoth.replace('{own}', t.accounts.organizationLabel[actingService ?? 'DVD'])
+      .replace('{other}', t.accounts.organizationLabel[otherService])
+    : audience === 'OTHER' && otherService
+      ? t.accounts.organizationLabel[otherService]
+      : t.accounts.organizationLabel[actingService ?? 'DVD'];
 
   const create = async () => {
     setError(null);
@@ -599,13 +574,12 @@ function CallOutTab({
         setError(result.message);
         return;
       }
-      await onDone({ ok: true }, t.command.draftSaved);
+      await onDone({ ok: true }, t.command.draftSaved, result.value);
       // The server holds it now, so the copy on this device has done its job.
       // Left behind it would reappear in the form the next time the console
       // opened, as a second call-out for an incident already recorded.
       setDraft(EMPTY_DRAFT);
       clearDraft(organizationId);
-      setComposeStep('DETAILS');
       idempotencyKey.current = `ui-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     } finally {
       setBusy(false);
@@ -616,16 +590,59 @@ function CallOutTab({
     if (!selected) return;
     setBusy(true);
     try {
-      const organizationIds =
-        canTargetOther && targetWholeOther && otherService ? [organizationIdOf(otherService)] : [];
-      const result = await publishIntervention(selected.id, [...selectedMembers], organizationIds);
+      const result = await publishIntervention(
+        selected.id, includesOwn ? null : [], otherOrganizationIds,
+      );
       const workerReached = result.ok ? await requestPushDelivery(result.value) : false;
       await onDone(
         result.ok ? { ok: true } : { ok: false, message: result.message },
         workerReached ? t.command.publishedWorkerReached : t.command.publishedWorkerQueued,
+        selected.id,
       );
-      setSelectedMembers(new Set());
-      setTargetWholeOther(false);
+    } finally {
+      setBusy(false);
+      setConfirming(null);
+    }
+  };
+
+  const quickPublish = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      // Keep the same key if the response is lost: a retry resumes the server
+      // draft instead of creating a second incident. Never clear the form until
+      // publication succeeds.
+      const created = await createDraft({
+        organizationId,
+        kind: draft.kind as InterventionKind,
+        title: draft.title.trim(),
+        instructions: draft.instructions.trim(),
+        location: draft.location.trim(),
+        idempotencyKey: idempotencyKey.current,
+        otherKindNote: draft.kind === 'DRUGO' ? draft.otherNote.trim() : null,
+        assemblyPoint: draft.assembly.trim() === '' ? null : draft.assembly.trim(),
+      });
+      if (!created.ok) {
+        setError(created.message);
+        return;
+      }
+      const published = await publishIntervention(
+        created.value, includesOwn ? null : [], otherOrganizationIds,
+      );
+      if (!published.ok) {
+        setError(published.message);
+        onRefresh(created.value);
+        return;
+      }
+      const workerReached = await requestPushDelivery(published.value);
+      await onDone(
+        { ok: true },
+        workerReached ? t.command.publishedWorkerReached : t.command.publishedWorkerQueued,
+        created.value,
+      );
+      setDraft(EMPTY_DRAFT);
+      clearDraft(organizationId);
+      idempotencyKey.current = `ui-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     } finally {
       setBusy(false);
       setConfirming(null);
@@ -696,159 +713,96 @@ function CallOutTab({
    * fields are also held in one object persisted to this device, so a reload
    * does not lose them either - see `callOutDraft.ts`.
    */
-  const composer = (
-    <div className="wizard" data-testid="new-call-out-wizard" data-step={composeStep}>
-      {error ? <Notice tone="error">{error}</Notice> : null}
+  const audienceSelector = (groupName: string) => (
+    <fieldset className="audience-picker" data-testid="audience-picker">
+      <legend>{t.command.audienceTitle}</legend>
+      <p className="muted small">{t.command.audienceNote}</p>
+      <label className="pick">
+        <input type="radio" name={groupName} value="OWN"
+          checked={audience === 'OWN'} onChange={() => setAudience('OWN')} />
+        <span>{t.accounts.organizationLabel[actingService ?? 'DVD']}</span>
+      </label>
+      {canTargetOther && otherService ? (
+        <>
+          <label className="pick">
+            <input type="radio" name={groupName} value="OTHER"
+              checked={audience === 'OTHER'} onChange={() => setAudience('OTHER')} />
+            <span>{t.accounts.organizationLabel[otherService]}</span>
+          </label>
+          <label className="pick">
+            <input type="radio" name={groupName} value="BOTH"
+              checked={audience === 'BOTH'} onChange={() => setAudience('BOTH')} />
+            <span>{t.command.audienceBoth.replace('{own}', t.accounts.organizationLabel[actingService ?? 'DVD'])
+              .replace('{other}', t.accounts.organizationLabel[otherService])}</span>
+          </label>
+        </>
+      ) : null}
+      {includesOwn && eligibleUnavailable ? (
+        <Notice tone="error" testId="eligible-recipients-unavailable">
+          {t.command.recipientsUnreadTitle} {t.command.recipientsUnreadText}
+        </Notice>
+      ) : includesOwn && eligible.length === 0 ? (
+        <Notice tone="warn" testId="no-eligible-recipients">
+          {t.command.recipientsNoneTitle} {t.command.recipientsNoneText}
+        </Notice>
+      ) : null}
+    </fieldset>
+  );
 
+  const composer = (
+    <div className="stack" data-testid="new-call-out-wizard">
+      {error ? <Notice tone="error">{error}</Notice> : null}
       {restored && draftHasContent(draft) ? (
         <Notice tone="info" testId="draft-restored">{t.command.draftRestored}</Notice>
       ) : null}
-
-      <ol className="wizard__steps" data-testid="wizard-steps">
-        {COMPOSE_STEPS.map((id, index) => (
-          <li
-            key={id}
-            className={`wizard__step ${composeStep === id ? 'wizard__step--on' : ''}`}
-            aria-current={composeStep === id ? 'step' : undefined}
-            data-testid={`wizard-step-${id}`}
-          >
-            <span className="wizard__num">{index + 1}</span>
-            <span className="wizard__name">{composeStepLabel(id, t)}</span>
-          </li>
-        ))}
-      </ol>
-
-      <div hidden={composeStep !== 'DETAILS'}>
-        <p className="muted small">{t.command.newNote}</p>
-
-        <Field label={t.command.fieldKind} required controlId="new-kind">
-          {(props) => (
-            <select
-              {...props}
-              data-testid="new-kind"
-              value={draft.kind}
-              onChange={(e) => field('kind', e.target.value)}
-            >
-              {INTERVENTION_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {t.vocabulary.interventionKind[k] ?? k}
-                </option>
-              ))}
-            </select>
-          )}
+      <Field label={t.command.fieldKind} required controlId="new-kind">
+        {(props) => (
+          <select {...props} data-testid="new-kind" value={draft.kind}
+            onChange={(event) => field('kind', event.target.value)}>
+            {INTERVENTION_KINDS.map((kind) => (
+              <option key={kind} value={kind}>{t.vocabulary.interventionKind[kind] ?? kind}</option>
+            ))}
+          </select>
+        )}
+      </Field>
+      {draft.kind === 'DRUGO' ? (
+        <Field label={t.command.fieldOtherKind} required controlId="new-other">
+          {(props) => <input {...props} data-testid="new-other" value={draft.otherNote}
+            onChange={(event) => field('otherNote', event.target.value)} />}
         </Field>
-
-        {draft.kind === 'DRUGO' ? (
-          <Field label={t.command.fieldOtherKind} required controlId="new-other">
-            {(props) => (
-              <input
-                {...props}
-                data-testid="new-other"
-                value={draft.otherNote}
-                onChange={(e) => field('otherNote', e.target.value)}
-              />
-            )}
-          </Field>
-        ) : null}
-
-        <Field
-          label={t.command.fieldTitle}
-          required
-          hint={t.command.fieldTitleHint}
-          controlId="new-title"
-        >
-          {(props) => (
-            <input
-              {...props}
-              data-testid="new-title"
-              value={draft.title}
-              onChange={(e) => field('title', e.target.value)}
-            />
-          )}
-        </Field>
-
-        <div className="row-actions">
-          <button
-            type="button"
-            className="btn btn--primary"
-            data-testid="wizard-next"
-            disabled={!detailsComplete}
-            onClick={() => setComposeStep('WHERE')}
-          >
-            {t.command.wizardNext}
-          </button>
-        </div>
-      </div>
-
-      <div hidden={composeStep !== 'WHERE'}>
-        <Field
-          label={t.command.fieldLocation}
-          required
-          hint={t.command.fieldLocationHint}
-          controlId="new-location"
-        >
-          {(props) => (
-            <input
-              {...props}
-              data-testid="new-location"
-              value={draft.location}
-              onChange={(e) => field('location', e.target.value)}
-            />
-          )}
-        </Field>
-
-        <Field label={t.command.fieldAssembly} controlId="new-assembly">
-          {(props) => (
-            <input
-              {...props}
-              data-testid="new-assembly"
-              value={draft.assembly}
-              onChange={(e) => field('assembly', e.target.value)}
-            />
-          )}
-        </Field>
-
-        <Field label={t.command.fieldInstructions} required controlId="new-instructions">
-          {(props) => (
-            <textarea
-              {...props}
-              data-testid="new-instructions"
-              rows={3}
-              value={draft.instructions}
-              onChange={(e) => field('instructions', e.target.value)}
-            />
-          )}
-        </Field>
-
-        {/* Said before the button rather than discovered after it. Saving a
-            draft is not sending it, and a commander who believes otherwise has
-            a crew nobody called. */}
-        <Notice tone="info">{t.command.draftIsNotSent}</Notice>
-
-        <div className="row-actions">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            data-testid="wizard-back"
-            onClick={() => setComposeStep('DETAILS')}
-          >
-            {t.command.wizardBack}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            data-testid="create-draft"
-            disabled={busy || !detailsComplete || !whereComplete}
-            onClick={() => void create()}
-          >
-            {busy ? t.command.saving : t.command.saveDraft}
-          </button>
-        </div>
+      ) : null}
+      <Field label={t.command.fieldTitle} required hint={t.command.fieldTitleHint} controlId="new-title">
+        {(props) => <input {...props} data-testid="new-title" value={draft.title}
+          onChange={(event) => field('title', event.target.value)} />}
+      </Field>
+      <Field label={t.command.fieldLocation} required hint={t.command.fieldLocationHint} controlId="new-location">
+        {(props) => <input {...props} data-testid="new-location" value={draft.location}
+          onChange={(event) => field('location', event.target.value)} />}
+      </Field>
+      <Field label={t.command.fieldAssembly} controlId="new-assembly">
+        {(props) => <input {...props} data-testid="new-assembly" value={draft.assembly}
+          onChange={(event) => field('assembly', event.target.value)} />}
+      </Field>
+      <Field label={t.command.fieldInstructions} required controlId="new-instructions">
+        {(props) => <textarea {...props} data-testid="new-instructions" rows={3}
+          value={draft.instructions} onChange={(event) => field('instructions', event.target.value)} />}
+      </Field>
+      {audienceSelector('new-callout-audience')}
+      <div className="row-actions">
+        <button type="button" className="btn btn--primary btn--big" data-testid="quick-review"
+          disabled={busy || !detailsComplete || !whereComplete || (includesOwn && (eligibleUnavailable || eligible.length === 0))}
+          onClick={() => setConfirming('QUICK_PUBLISH')}>
+          {t.command.quickReview}
+        </button>
+        <button type="button" className="btn btn--ghost" data-testid="create-draft"
+          disabled={busy || !detailsComplete || !whereComplete} onClick={() => void create()}>
+          {busy ? t.command.saving : t.command.saveDraft}
+        </button>
       </div>
     </div>
   );
 
-  const composerPanel = running ? (
+  const composerPanel = running || isDraft ? (
     <section className="panel">
       <details className="disclosure" data-testid="new-call-out-disclosure">
         <summary className="disclosure__summary">{t.command.newSummary}</summary>
@@ -916,197 +870,19 @@ function CallOutTab({
           <section className="panel" data-testid="intervention-actions">
           {isDraft ? (
             <>
-              {/*
-                Steps three and four of the same sequence.
-
-                They live here rather than in the composer above because they
-                belong to a DIFFERENT server operation: the first two steps end
-                in `create_intervention_draft`, these two in
-                `publish_intervention`. Splitting them at the boundary the
-                server already draws means neither half has to carry state
-                across a write, and the draft is safe on the server before
-                anybody starts choosing who to wake.
-              */}
-              <ol className="wizard__steps" data-testid="publish-steps">
-                {(['WHO', 'REVIEW'] as const).map((id, index) => (
-                  <li
-                    key={id}
-                    className={`wizard__step ${publishStep === id ? 'wizard__step--on' : ''}`}
-                    aria-current={publishStep === id ? 'step' : undefined}
-                    data-testid={`publish-step-${id}`}
-                  >
-                    <span className="wizard__num">{index + 3}</span>
-                    <span className="wizard__name">{composeStepLabel(id, t)}</span>
-                  </li>
-                ))}
-              </ol>
-
-              <div hidden={publishStep !== 'WHO'}>
-              <h3>{t.command.recipientsTitle}</h3>
-              <p className="muted small">{t.command.recipientsNote}</p>
-              {/*
-                An empty picker with no explanation reads as a screen that has
-                not finished loading. It has two entirely different causes and a
-                commander must not have to guess which one they are looking at.
-              */}
-              {eligibleUnavailable ? (
-                <Notice tone="error" testId="eligible-recipients-unavailable">
-                  <strong>{t.command.recipientsUnreadTitle}</strong> {t.command.recipientsUnreadText}
-                </Notice>
-              ) : eligible.length === 0 ? (
-                <Notice tone="warn" testId="no-eligible-recipients">
-                  <strong>{t.command.recipientsNoneTitle}</strong> {t.command.recipientsNoneText}
-                </Notice>
-              ) : null}
-              <ScrollRegion
-                label={t.command.recipientsListLabel}
-                className="table-wrap table-wrap--tall"
-              >
-                <ul className="pick-list" data-testid="recipient-picker">
-                  {eligible.map((m) => {
-                    const availability = availableBy.get(m.memberId);
-                    return (
-                      <li key={m.memberId}>
-                        <label className="pick">
-                          <input
-                            type="checkbox"
-                            checked={selectedMembers.has(m.memberId)}
-                            onChange={(event) => {
-                              const next = new Set(selectedMembers);
-                              if (event.target.checked) next.add(m.memberId);
-                              else next.delete(m.memberId);
-                              setSelectedMembers(next);
-                            }}
-                          />
-                          <span className="pick__name">{m.fullName}</span>
-                          {availability ? (
-                            <Chip
-                              tone={availability.available ? 'yes' : 'no'}
-                              symbol={availability.available ? '+' : '-'}
-                            >
-                              {availability.available
-                                ? t.command.availableYes
-                                : t.command.availableNo}
-                            </Chip>
-                          ) : (
-                            <Chip tone="unknown" symbol="?">
-                              {t.command.availableUnknown}
-                            </Chip>
-                          )}
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </ScrollRegion>
-              <p className="muted small" data-testid="selected-recipient-count">
-                {t.command.selectedCount}: {selectedMembers.size}
-              </p>
-              {canTargetOther && otherService ? (
-                <div className="joint-target" data-testid="joint-target">
-                  <label className="pick">
-                    <input
-                      type="checkbox"
-                      data-testid="target-other-service"
-                      checked={targetWholeOther}
-                      onChange={(event) => setTargetWholeOther(event.target.checked)}
-                    />
-                    <span className="pick__name">
-                      {t.command.alsoAlertService.replace('{service}', t.accounts.organizationLabel[otherService])}
-                    </span>
-                  </label>
-                  <p className="muted small">{t.command.alsoAlertServiceNote}</p>
-                </div>
-              ) : null}
+              <h3>{t.command.publishDraftTitle}</h3>
+              <p className="muted small">{t.command.publishDraftNote}</p>
+              {audienceSelector('saved-callout-audience')}
               <div className="row-actions">
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  data-testid="to-review"
-                  disabled={selectedMembers.size === 0 && !targetWholeOther}
-                  onClick={() => setPublishStep('REVIEW')}
-                >
-                  {t.command.wizardToReview}
+                <button type="button" className="btn btn--danger btn--big" data-testid="publish"
+                  disabled={busy || (includesOwn && (eligibleUnavailable || eligible.length === 0))}
+                  onClick={() => setConfirming('PUBLISH')}>
+                  {t.command.publish}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  data-testid="discard-draft"
-                  disabled={busy}
-                  onClick={() => setConfirming('CANCEL')}
-                >
+                <button type="button" className="btn btn--ghost" data-testid="discard-draft"
+                  disabled={busy} onClick={() => setConfirming('CANCEL')}>
                   {t.command.discardDraft}
                 </button>
-              </div>
-              </div>
-
-              {/*
-                The last look before a telephone rings in somebody's pocket.
-
-                Publishing is the one act on this console that reaches other
-                people, and until now it was a button underneath a scrolling
-                list of names - the commander could see the crew they had ticked
-                or the incident they had written, never both. This shows exactly
-                what is about to be sent and to how many, in one screenful,
-                using the record the server already holds rather than the form
-                fields, so what is reviewed is what will actually go.
-              */}
-              <div hidden={publishStep !== 'REVIEW'} data-testid="publish-review">
-                <h3>{t.command.reviewTitle}</h3>
-                {/*
-                  A SUMMARY, not a second card.
-
-                  This rendered a full `IncidentCard` and the full card was
-                  already directly above it on the same screen - the identical
-                  block twice, which is the duplication this whole pass exists
-                  to remove. What the review step has to add is confirmation of
-                  what is about to be sent, in one line, plus the names.
-                */}
-                <p className="review__what" data-testid="review-what">
-                  <strong>{selected.title}</strong>
-                  {' - '}
-                  {selected.incidentLocation}
-                </p>
-                <p className="review__count" data-testid="review-count">
-                  <strong>{selectedMembers.size}</strong> {t.command.reviewRecipients}
-                </p>
-                {canTargetOther && targetWholeOther && otherService ? (
-                  <p className="review__joint" data-testid="review-joint">
-                    {t.command.reviewAlsoService.replace(
-                      '{service}',
-                      t.accounts.organizationLabel[otherService],
-                    )}
-                  </p>
-                ) : null}
-                <ul className="review__names" data-testid="review-names">
-                  {eligible
-                    .filter((m) => selectedMembers.has(m.memberId))
-                    .map((m) => (
-                      <li key={m.memberId}>{m.fullName}</li>
-                    ))}
-                </ul>
-                {/* Provider acceptance is not a ringing telephone. Said here,
-                    before publishing, not only in the confirmation. */}
-                <Notice tone="warn">{t.command.confirmPublishTransport}</Notice>
-                <div className="row-actions">
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    data-testid="review-back"
-                    onClick={() => setPublishStep('WHO')}
-                  >
-                    {t.command.wizardBack}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--danger btn--big"
-                    data-testid="publish"
-                    disabled={busy || (selectedMembers.size === 0 && !targetWholeOther)}
-                    onClick={() => setConfirming('PUBLISH')}
-                  >
-                    {t.command.publish}
-                  </button>
-                </div>
               </div>
             </>
           ) : null}
@@ -1160,7 +936,7 @@ function CallOutTab({
 
           {selected.closeReason ? (
             <p className="muted small">
-              {t.command.closedWithNote}: <strong>{selected.closeReason}</strong>
+              {selected.status === 'CANCELLED' ? t.command.cancelReason : t.command.closedWithNote}: <strong>{selected.closeReason}</strong>
             </p>
           ) : null}
           </section>
@@ -1174,18 +950,19 @@ function CallOutTab({
 
       {composerPanel}
 
-      {confirming === 'PUBLISH' ? (
+      {confirming === 'PUBLISH' || confirming === 'QUICK_PUBLISH' ? (
         <ConfirmDialog
           open
           title={t.command.confirmPublishTitle}
           confirmLabel={t.command.confirmPublishAction}
+          confirmDisabled={busy}
           onCancel={() => setConfirming(null)}
-          onConfirm={() => void publish()}
+          onConfirm={() => void (confirming === 'QUICK_PUBLISH' ? quickPublish() : publish())}
         >
-          <p>
-            {t.command.confirmPublishToPrefix} <strong>{selectedMembers.size}</strong>{' '}
-            {t.command.confirmPublishToSuffix}
-          </p>
+          <p><strong>{confirming === 'QUICK_PUBLISH' ? draft.title.trim() : selected?.title}</strong></p>
+          <p>{confirming === 'QUICK_PUBLISH' ? draft.location.trim() : selected?.incidentLocation}</p>
+          <p>{t.command.audienceTitle}: <strong>{audienceLabel}</strong></p>
+          <p className="muted small">{t.command.audienceAtPublish}</p>
           <p className="muted small">{t.command.confirmPublishTransport}</p>
         </ConfirmDialog>
       ) : null}
@@ -1199,7 +976,7 @@ function CallOutTab({
           confirmLabel={
             confirming === 'CLOSE' ? t.command.confirmCloseAction : t.command.confirmDiscardAction
           }
-          confirmDisabled={closeReason.trim().length < 2}
+          confirmDisabled={busy || (confirming === 'CANCEL' && closeReason.trim().length < 2)}
           onCancel={() => {
             setConfirming(null);
             setCloseReason('');
@@ -1219,18 +996,17 @@ function CallOutTab({
           }
         >
           <Field
-            label={t.command.fieldReason}
-            required
-            hint={t.command.reasonStaysHint}
+            label={confirming === 'CLOSE' ? t.command.fieldReport : t.command.fieldReason}
+            required={confirming === 'CANCEL'}
+            hint={confirming === 'CLOSE' ? t.command.reportHint : t.command.reasonStaysHint}
             controlId="close-reason"
           >
-            {(props) => (
-              <input
-                {...props}
-                data-testid="close-reason"
-                value={closeReason}
-                onChange={(e) => setCloseReason(e.target.value)}
-              />
+            {(props) => confirming === 'CLOSE' ? (
+              <textarea {...props} data-testid="close-reason" rows={3} maxLength={500}
+                value={closeReason} onChange={(e) => setCloseReason(e.target.value)} />
+            ) : (
+              <input {...props} data-testid="close-reason" maxLength={500}
+                value={closeReason} onChange={(e) => setCloseReason(e.target.value)} />
             )}
           </Field>
           {confirming === 'CLOSE' && openIntervals > 0 ? (
@@ -1243,7 +1019,7 @@ function CallOutTab({
       ) : null}
 
       <p className="muted small">
-        <button type="button" className="btn btn--ghost" onClick={onRefresh}>
+        <button type="button" className="btn btn--ghost" onClick={() => onRefresh()}>
           {t.command.refresh}
         </button>
       </p>

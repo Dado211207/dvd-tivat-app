@@ -397,7 +397,7 @@ function InterventionRecord({
         </dl>
         {record.closeReason ? (
           <p className="small">
-            <strong>{t.archive.closeNote}:</strong> {record.closeReason}
+            <strong>{record.status === 'CANCELLED' ? t.archive.cancelNote : t.archive.closeNote}:</strong> {record.closeReason}
           </p>
         ) : null}
         {closed ? null : (
