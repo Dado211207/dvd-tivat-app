@@ -2033,6 +2033,8 @@ dialog {
 }
 
 .registry .table-wrap {
+  /* Keep the visually hidden table caption inside the clipped scroll box. */
+  position: relative;
   width: 100%;
   max-width: 100%;
   /* The table's intrinsic width belongs to this local scroll region. */
