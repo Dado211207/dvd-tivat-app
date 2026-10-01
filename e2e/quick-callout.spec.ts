@@ -20,7 +20,7 @@ test('an SZS commander who also serves DVD chooses DVD, SZS or both without pick
   await form.getByTestId('new-instructions').fill('Samo vjezba.');
   const audience = form.getByTestId('audience-picker');
   await expect(audience.getByRole('radio')).toHaveCount(3);
-  await expect(audience.getByRole('radio', { name: /Sluzba zastite/i })).toBeChecked();
+  await expect(audience.locator('input[value="OWN"]')).toBeChecked();
   await audience.getByRole('radio', { name: 'DVD Tivat', exact: true }).check();
   await form.getByTestId('quick-review').click();
   const review = page.getByRole('dialog');
