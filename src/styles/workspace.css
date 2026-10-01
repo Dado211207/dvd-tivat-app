@@ -3430,3 +3430,12 @@ dialog {
 .response-cell--no { border-top: 3px solid var(--c-no); }
 .response-cell--unknown { border-top: 3px solid var(--c-unknown); }
 .response-cell--accent { border-top: 3px solid var(--c-accent); }
+
+/* iOS enlarges the visual viewport when a focused form control uses text below
+   16px, then can leave the PWA enlarged after the keyboard closes. Keep every
+   editable control legible on touch-sized screens without disabling pinch zoom. */
+@media (max-width: 899px) {
+  :is(input:not([type='checkbox']):not([type='radio']), select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+}
