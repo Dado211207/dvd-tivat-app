@@ -56,7 +56,36 @@ export type PushFailure =
   | 'PUSH_SUBSCRIPTION_CONFLICT'
   | 'PUSH_DEVICE_REJECTED'
   | 'PUSH_SERVER_REFUSED'
-  | 'PUSH_UNREACHABLE';
+  | 'PUSH_UNREACHABLE'
+  | 'PUSH_BROWSER_SUBSCRIPTION_FAILED'
+  | 'PUSH_BROWSER_PERMISSION_BLOCKED';
+
+/** These failures happen before a registration request can reach Supabase. */
+function browserSubscriptionFailure(error: unknown): Error {
+  const name = error !== null && typeof error === 'object' && 'name' in error
+    ? String(error.name) : '';
+  return new Error(
+    name === 'NotAllowedError' || name === 'SecurityError'
+      ? 'PUSH_BROWSER_PERMISSION_BLOCKED'
+      : 'PUSH_BROWSER_SUBSCRIPTION_FAILED',
+  );
+}
+
+async function readyRegistration(): Promise<ServiceWorkerRegistration> {
+  try {
+    return await navigator.serviceWorker.ready;
+  } catch (error) {
+    throw browserSubscriptionFailure(error);
+  }
+}
+
+async function deviceSubscription(registration: ServiceWorkerRegistration): Promise<PushSubscription | null> {
+  try {
+    return await registration.pushManager.getSubscription();
+  } catch (error) {
+    throw browserSubscriptionFailure(error);
+  }
+}
 
 /** The reasons `register_web_push_subscription` raises, in wire form. */
 const SERVER_REASONS: readonly (readonly [string, PushFailure])[] = [
@@ -92,7 +121,7 @@ async function saveSubscription(subscription: PushSubscription): Promise<void> {
   const json = subscription.toJSON();
   const p256dh = json.keys?.p256dh;
   const auth = json.keys?.auth;
-  if (!p256dh || !auth) throw new Error('PUSH_KEYS_MISSING');
+  if (!p256dh || !auth) throw new Error('PUSH_DEVICE_REJECTED');
 
   const expiration = subscription.expirationTime
     ? new Date(subscription.expirationTime).toISOString()
@@ -109,26 +138,32 @@ async function saveSubscription(subscription: PushSubscription): Promise<void> {
 
 export async function currentPushSubscription(): Promise<PushSubscription | null> {
   if (pushCapability() !== 'AVAILABLE') return null;
-  const registration = await navigator.serviceWorker.ready;
-  return registration.pushManager.getSubscription();
+  return deviceSubscription(await readyRegistration());
 }
 
 export async function enableWebPush(): Promise<PushSubscription> {
   if (pushCapability() !== 'AVAILABLE') throw new Error('PUSH_UNAVAILABLE');
 
-  const permission =
-    Notification.permission === 'default'
-      ? await Notification.requestPermission()
-      : Notification.permission;
+  const permission = Notification.permission === 'default'
+    ? await Notification.requestPermission().catch((error: unknown) => {
+      throw browserSubscriptionFailure(error);
+    })
+    : Notification.permission;
   if (permission !== 'granted') throw new Error('PUSH_PERMISSION_DENIED');
 
-  const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
+  const registration = await readyRegistration();
+  let subscription = await deviceSubscription(registration);
   let created = subscription === null;
-  const subscribe = () => registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey(),
-    });
+  const subscribe = async () => {
+    try {
+      return await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey(),
+      });
+    } catch (error) {
+      throw browserSubscriptionFailure(error);
+    }
+  };
   subscription ??= await subscribe();
 
   try {
@@ -173,8 +208,8 @@ export async function enableWebPush(): Promise<PushSubscription> {
  */
 export async function repairWebPushRegistration(): Promise<boolean> {
   if (pushCapability() !== 'AVAILABLE' || Notification.permission !== 'granted') return false;
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription();
+  const registration = await readyRegistration();
+  const subscription = await deviceSubscription(registration);
   if (subscription === null) return false;
   await saveSubscription(subscription);
   return true;
