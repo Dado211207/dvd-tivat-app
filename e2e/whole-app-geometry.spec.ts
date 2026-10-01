@@ -27,6 +27,10 @@ async function checkGeometry(page: Page, screen: string, width: number) {
       smallFields: fields.filter((field) => parseFloat(getComputedStyle(field).fontSize) < 16)
         .map((field) => `${field.tagName.toLowerCase()}#${field.id || '-'} ${getComputedStyle(field).fontSize}`),
       outsideFields: fields.filter((field) => {
+        // The roster and account tables intentionally scroll inside their own
+        // bounded holders; edge-scroll.spec.ts checks that their far columns
+        // can actually be reached. Their offscreen cells are not page overflow.
+        if (field.closest('.table-wrap, .account-table-wrap')) return false;
         const box = field.getBoundingClientRect();
         return box.left < -1 || box.right > window.innerWidth + 1;
       }).map((field) => `${field.tagName.toLowerCase()}#${field.id || '-'} ${Math.round(field.getBoundingClientRect().left)}..${Math.round(field.getBoundingClientRect().right)}`),
