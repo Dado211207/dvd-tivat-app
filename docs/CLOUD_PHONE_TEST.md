@@ -1,12 +1,12 @@
 # Cloud test na telefonu
 
-Stanje 2026-09-30, poslije korisnicke potvrde prijema na zakljucanom iPhoneu. Aktuelni plan je u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Ovaj test je odvojen od postojece produkcije i ne trazi instalaciju niti cuvanje podataka na vlasnikovom Macu ili poslovnom laptopu.
+Stanje 2026-10-01, poslije korisnicke potvrde prijema na zakljucanom iPhoneu i nove test objave. Aktuelni plan je u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Ovaj test je odvojen od postojece produkcije i ne trazi instalaciju niti cuvanje podataka na vlasnikovom Macu ili poslovnom laptopu.
 
 ## Adrese i granica
 
 - Test aplikacija: <https://boka-operativa-phone-test.netlify.app/>
 - Test Supabase: `dvd-tivat-phone-test` (`zoipjcdtcfetqvcfmhxd`), Free plan; Netlify: `boka-operativa-phone-test`.
-- Kod: draft PR [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81), grana `codex/p7-p8-integration`. Novi commit na GitHubu sam po sebi ne objavljuje novi Netlify build; test sajt je zasebno deployovan.
+- Kod: draft PR [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81), grana `codex/p7-p8-integration`. Novi commit na GitHubu sam po sebi ne objavljuje novi Netlify build. Test sajt je 2026-10-01 u 05:42 UTC zasebno objavljen iz commita `ac840f6` kao Netlify deploy `6abdf29b8db7f63eaf1ca3aa`.
 - Produkcioni Supabase `yskhdzrdbywrpfowckpn`, stari push worker i produkcioni GitHub Pages nijesu mijenjani u ovom testu.
 
 Test baza je podignuta od migracija iz PR-a, bez kopiranja produkcionih naloga ili intervencija. Poslije pocetnog postavljanja u njoj su napravljeni samo vlasnikov test nalog, vlasnikov DVD roster zapis i jedan fikcionalni testni pozar. Novi grant za worker je primijenjen **samo u test bazi** i sacuvan u repository migraciji `20260930190239_worker_joint_recipient_organization_read.sql`.
@@ -24,6 +24,10 @@ Test baza je podignuta od migracija iz PR-a, bez kopiranja produkcionih naloga i
 | Zvuk | Izbor u aplikaciji vazi za otvorenu, vidljivu aplikaciju. Pri zakljucanom telefonu iOS bira zvuk Web Push obavjestenja. Foreground zvuk nije ovim testom posebno potvrdjen. |
 
 Providerovo `ACCEPTED` samo po sebi ne dokazuje prijem na telefonu; ovdje imamo i zasebnu korisnikovu potvrdu. Nijesmo izmjerili vrijeme od objave do prikaza na telefonu, provjerili tap/deep link, korisnikov odgovor, Focus/tihi rezim, Android ili vise korisnika. Testni pozar nije stvarna intervencija.
+
+## Nova objava za ponovnu probu
+
+Netlify je potvrdio `ready`, a javna test adresa vraca novi CSS asset i JS konfiguraciju za **test** Supabase, bez produkcionog URL-a. U odvojenom cloud browseru pocetni ekran i prijava se otvaraju. To ne potvrdjuje prijem novog builda, skrol gestove ni ponovni push na vlasnikovom fizickom iPhoneu. Otvori instaliranu aplikaciju dok ima mreze; ako se pojavi dugme za osvjezavanje aplikacije, dovrsi rad na trenutnom ekranu pa ga pritisni. Ne brisi instalaciju zbog updatea jer bi to moglo ukloniti postojecu push pretplatu.
 
 ## Kako vlasnik ponavlja bezbjednu probu
 
