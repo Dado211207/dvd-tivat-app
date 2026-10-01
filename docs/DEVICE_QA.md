@@ -1,6 +1,6 @@
 # Testiranje uredjaja i tokova - matrica
 
-Stanje 2026-09-30. Grana: `codex/p7-p8-integration` / draft PR #81. Ovaj dokument razlikuje tri izvora dokaza: vlasnikov stvarni iPhone, Chromium na GitHub Actions runneru sa simuliranim dimenzijama i testove SQL baze. Simulirana sirina nije fizicki iPad, Safari, Android ni laptop koji neko drzi u ruci.
+Stanje 2026-10-01. Grana: `codex/p7-p8-integration` / draft PR #81. Ovaj dokument razlikuje tri izvora dokaza: vlasnikov stvarni iPhone, Chromium na GitHub Actions runneru sa simuliranim dimenzijama i testove SQL baze. Simulirana sirina nije fizicki iPad, Safari, Android ni laptop koji neko drzi u ruci.
 
 ## Uredjaji i gestovi
 
@@ -44,4 +44,4 @@ Naziv aplikacije: [NAME_OPTIONS.md](./NAME_OPTIONS.md).
 
 ## Objavljena test verzija
 
-Postojeca Netlify adresa je rucni upload ranijeg builda; ova GitHub grana ne objavljuje se automatski na telefon. Zeleni CI potvrdjuje kod u grani, ali nije dokaz da su CSS popravke vec instalirane na vlasnikovom iPhoneu. Za novu probu treba objaviti build iz finalnog commita na istu test adresu, provjeriti deploy ID i osvjeziti instaliranu PWA. Ne upotrebljavati test aplikaciju za stvarnu uzbunu.
+Netlify test adresa je 2026-10-01 rucno objavljena iz commita `ac840f6`: deploy `6abdf29b8db7f63eaf1ca3aa` je `ready`. Provjereni su novi CSS hash `index-Dv_d3Xqh.css`, test Supabase URL u JS bundleu, odsustvo produkcionog URL-a i pocetni ekran za neprijavljenog korisnika. GitHub grana se i dalje ne objavljuje automatski. Potrebno je otvoriti instaliranu PWA na vlasnikovom telefonu i fizicki ponoviti skrol i funkcionalne tokove; cloud browser nije njegov iPhone. Ne upotrebljavati test aplikaciju za stvarnu uzbunu.
