@@ -1,6 +1,6 @@
 # Boka Operativa - trenutno stanje i plan
 
-Azurnost: 2026-09-30, poslije probe na vlasnikovom iPhoneu. Ovaj zapis opisuje **izolovanu test aplikaciju**, ne produkciju DVD Tivat. Izvrsni zapis testa: [CLOUD_PHONE_TEST.md](./CLOUD_PHONE_TEST.md). Uslovi za produkciju: [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md). Detaljan plan organizacija: [MULTI_ORG_PLAN.md](./MULTI_ORG_PLAN.md).
+Azurnost: 2026-09-30, poslije probe na vlasnikovom iPhoneu. Ovaj zapis opisuje **izolovanu test aplikaciju**, ne produkciju DVD Tivat. Izvrsni zapis testa: [CLOUD_PHONE_TEST.md](./CLOUD_PHONE_TEST.md). Uslovi za produkciju: [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md). Detaljan plan organizacija: [MULTI_ORG_PLAN.md](./MULTI_ORG_PLAN.md). Matrica testiranja uredjaja i tokova: [DEVICE_QA.md](./DEVICE_QA.md). Prijedlozi novog imena: [NAME_OPTIONS.md](./NAME_OPTIONS.md).
 
 ## Sta je stvarno uradjeno
 
@@ -23,8 +23,10 @@ Apple za Web Push dokumentuje izbor **ima/nema zvuka** preko `silent`, bez izbor
 ## Redosljed rada
 
 1. **Test aplikacija, bez troska za vlasnikove racunare.** Nastaviti probu na iPhoneu: otvoriti test poziv iz obavjestenja; zabiljeziti vrijeme objave, prikaza i otvaranja; probati izabrani zvuk dok je aplikacija otvorena. Provjeriti potvrdjivanje prijema i odgovor `Moj poziv`, bez stvarnog izlaska na teren. Kasnije koristiti odvojene test naloge za DVD, SZS i oba servisa te Android uredjaj ako je dostupan. Svaki test poziv mora imati jasno upozorenje da nije stvarna intervencija.
-2. **Zatvoriti kod i provjere.** Odgovarajucu DB migraciju primijeniti u test projektu (vec uradjeno), drzati je u harness listi, provjeriti finalni CI na tacnom head SHA, pregledati draft #81 i provjeriti da raspored, push, prava i duboki link ostaju ispravni. PR ne proglasavati spremnim na osnovu jednog telefona.
+2. **Zatvoriti kod i provjere.** Odgovarajucu DB migraciju primijeniti u test projektu (vec uradjeno), drzati je u harness listi, pregledati zeleni CI za funkcionalni commit `df0ab7cb` i ponoviti kontrolu na konacnom head SHA, pregledati draft #81 i provjeriti da raspored, push, prava i duboki link ostaju ispravni. PR ne proglasavati spremnim na osnovu jednog telefona.
 3. **Odluka o zvuku pri zakljucanom ekranu.** Ako je prilagodjena sirena obavezna, pripremiti *zasebnu native iPhone aplikaciju*, uz postojeci server kao izvor istine: autentikacija, APNs registracija tokena, mapiranje tokena na nalog, native obavjestenje sa zapakovanim zvukom, opoziv starih uredjaja, bez podataka o lokaciji na zakljucanom ekranu. Testirati u TestFlight/distribuciji uz uslove Apple Developer programa i stvarne troskove tek nakon odluke; ne obecavati besplatan App Store ili native push. Razmotriti Android zasebno. Kriticna obavjestenja koja mogu zaobici tihi rezim/Focus zavise od posebnih Apple prava i nijesu dio postojeceg plana.
 4. **Produkcija tek poslije kapija.** Ne spajati test bazu sa produkcijom. Zasebno zavrsiti produkcionu provjeru kompatibilnosti i RLS, rucni enkriptovani backup sa vracanjem na drugi cilj, kontrolisane migracije, worker, odobrenje DVD/SZS, test svake uloge, fallback kanal i zabiljezen prihvat. Detalji: [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md).
+
+GitHub izmjene rasporeda i push workera nijesu automatski objavljene na Netlify test adresi; za novu probu telefonom potreban je zaseban deploy iz provjerenog commita.
 
 Status native sirene: **plan, nije implementirana**. Status poziva na jednom iPhoneu: **stvarni Web Push prijem potvrdio vlasnik**. Status operativne pouzdanosti: **nije prihvacena za stvarne intervencije**.
