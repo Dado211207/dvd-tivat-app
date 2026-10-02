@@ -91,10 +91,28 @@ svaki prikazani korak, razumljivost bez zvuka i citljivost na telefonu.
 
 - Povezati sajt, aplikaciju i videa; provjeriti sve linkove, QR, titlove,
   kontrast i prelom ekrana. Tek tada traziti vlasnikov pregled cijelog paketa.
+- Zavrsni javni link aplikacije mora imati profesionalno ime bez rijeci `test`
+  (radni primjer `boka-signal.netlify.app`, samo ako je slobodan). Isto vazi
+  za javni informativni sajt. Stari testni URL ne stampati kao trajni QR.
 - Posebno, prije stvarne upotrebe za uzbunjivanje: SZS/dualni nalog, iPhone i
   Android dostava, rezervni ljudski kanal, produkciona kompatibilnost,
   enkriptovani backup sa vracanjem i prihvat DVD/SZS. To nijesu radnje za
   vlasnika sada; uslovi su u [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md).
+
+### Zavrsni prelaz sa testne adrese
+
+Promjena Netlify poddomena je promjena **origin-a** web aplikacije. Postojeci
+Safari/Android precac, prijava, service worker i Web Push pretplata ne mogu se
+smatrati prenesenim na novu adresu. Zato na kraju pripremiti profesionalnu
+adresu kao zasebnu objavu, provjeriti da je slobodna i da otvara tacan build,
+pa podesiti novu adresu u Supabase Auth dozvoljenim redirect URL-ovima i svim
+linkovima. Na novoj adresi se korisnici prijavljuju i posebno ukljucuju
+obavjestenja. Prije gasenja testnog URL-a provjeriti registraciju uredjaja,
+prijavu, push i prelaz postojecih testera; staru adresu zadrzati dostupnom
+tokom tog prelaza. Tek poslije prihvata azurirati sajt, videa, QR i
+dokumentaciju na zavrsni link i ukloniti testni naziv iz javne prezentacije.
+Ne mijenjati postojeci testni Netlify site name na silu i ne pretpostaviti da
+obican HTTP redirect prenosi instaliranu PWA ili push dozvolu.
 
 ## Evidencija
 

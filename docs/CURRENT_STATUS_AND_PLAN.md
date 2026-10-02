@@ -13,6 +13,10 @@ pregled podobnih primalaca i push pretplata prije objave, vodjena priprema
 naloga, zatim pregled izgleda i javni materijali. Stari naziv u ovom naslovu
 oznacava trenutno objavljenu verziju.
 
+Zavrsni javni URL ce biti profesionalno imenovan bez `test` u adresi. Stari
+testni host ostaje do zavrsetka prelaza naloga i push pretplata; sam redirect
+ne prenosi instaliranu aplikaciju. Koraci su u planu dovrsetka.
+
 ## Brzi poziv: objavljen na izdvojenom testnom sajtu (1. oktobar 2026)
 
 **Ubrzanje odgovora, 2. oktobar:** kod u draft PR #81 sada dozvoljava clanu da
