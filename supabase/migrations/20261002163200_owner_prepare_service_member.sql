@@ -13,7 +13,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  code text := upper(btrim(coalesce(organization_code, '')));
+  normalized_code text := upper(btrim(coalesce(organization_code, '')));
   role_name text := upper(btrim(coalesce(requested_role, '')));
   org_id uuid;
   record_id uuid;
@@ -32,7 +32,7 @@ begin
   end if;
 
   select org.id into org_id from public.organizations org
-  where org.code = code and org.active;
+  where org.code = normalized_code and org.active;
   if org_id is null then raise exception 'ORGANIZATION_NOT_FOUND'; end if;
 
   select profile.full_name, profile.profile_complete, grant_row.active, grant_row.role
@@ -70,7 +70,7 @@ begin
   end if;
 
   perform public.admin_link_member_account(record_id, target_user);
-  perform public.owner_set_organization_membership(target_user, code, role_name);
+  perform public.owner_set_organization_membership(target_user, normalized_code, role_name);
   return record_id;
 end;
 $$;

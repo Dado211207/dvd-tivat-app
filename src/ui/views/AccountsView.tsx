@@ -540,6 +540,10 @@ function MemberPreparation({ account, onClose, onDone }: {
   }, []);
 
   useEffect(() => {
+    setRole(account.memberships[service] ?? 'FIREFIGHTER');
+  }, [account.memberships, service]);
+
+  useEffect(() => {
     let current = true;
     setRoster(null);
     setRosterFailed(false);
