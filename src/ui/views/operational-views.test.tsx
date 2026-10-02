@@ -116,6 +116,8 @@ vi.mock('@/auth/operations', async (importOriginal) => {
       { memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac', role: 'FIREFIGHTER' as const, specialties: [] },
     ]),
     fetchRecipientFacts: vi.fn(async () => ({ ok: true, value: RECIPIENTS }) as const),
+    acknowledgeIntervention: vi.fn(async () => ({ ok: true }) as const),
+    submitResponse: vi.fn(async () => ({ ok: true }) as const),
     fetchAttendance: vi.fn(async () => ({ ok: true, value: [PENDING_INTERVAL] }) as const),
     // Null is "the chronology could not be read", which is what an older
     // project without the reading function answers. The screen must then fall
@@ -458,6 +460,63 @@ describe('the firefighter screen renders on real data', () => {
 
     await show(<MobilisationView />, 'FIREFIGHTER');
     expect(container.querySelector('[data-testid="acknowledge"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="answer-DOLAZIM"]')).not.toBeNull();
+  });
+
+  it('saves an immediate answer and then its separate receipt with one tap', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.submitResponse).mockClear();
+    vi.mocked(operations.acknowledgeIntervention).mockClear();
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce({ ok: true, value: [
+      { ...RECIPIENTS[0]!, acknowledgedAt: null, answer: null, answeredAt: null, journey: null, journeyAt: null },
+    ] });
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    await act(async () => {
+      (container.querySelector('[data-testid="answer-DOLAZIM"]') as HTMLButtonElement).click();
+    });
+    expect(operations.submitResponse).toHaveBeenCalledWith(INTERVENTION_ID, 'DOLAZIM', null, false);
+    expect(operations.acknowledgeIntervention).toHaveBeenCalledWith(INTERVENTION_ID);
+    expect(vi.mocked(operations.submitResponse).mock.invocationCallOrder[0]!).toBeLessThan(
+      vi.mocked(operations.acknowledgeIntervention).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('never records a receipt as part of a failed answer', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.submitResponse).mockReset().mockResolvedValueOnce({ ok: false, message: 'Server odbio odgovor.' });
+    vi.mocked(operations.acknowledgeIntervention).mockClear();
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce({ ok: true, value: [
+      { ...RECIPIENTS[0]!, acknowledgedAt: null, answer: null, answeredAt: null, journey: null, journeyAt: null },
+    ] });
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    await act(async () => {
+      (container.querySelector('[data-testid="answer-DOLAZIM"]') as HTMLButtonElement).click();
+    });
+    expect(operations.acknowledgeIntervention).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Server odbio odgovor.');
+    vi.mocked(operations.submitResponse).mockReset().mockResolvedValue({ ok: true });
+  });
+
+  it('keeps the saved answer visible and offers receipt retry when that request fails', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.submitResponse).mockReset().mockResolvedValue({ ok: true });
+    vi.mocked(operations.acknowledgeIntervention).mockReset()
+      .mockResolvedValueOnce({ ok: false, message: 'Potvrda prijema nije sacuvana.' });
+    const unanswered = { ...RECIPIENTS[0]!, acknowledgedAt: null, answer: null, answeredAt: null, journey: null, journeyAt: null };
+    const answered = { ...unanswered, answer: 'DOLAZIM' as const, answeredAt: '2026-09-13T08:05:00.000Z' };
+    vi.mocked(operations.fetchRecipientFacts)
+      .mockResolvedValueOnce({ ok: true, value: [unanswered] })
+      .mockResolvedValueOnce({ ok: true, value: [answered] });
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    await act(async () => {
+      (container.querySelector('[data-testid="answer-DOLAZIM"]') as HTMLButtonElement).click();
+    });
+    expect(container.querySelector('[data-testid="fact-answered"]')?.getAttribute('data-mark')).toBe('YES');
+    expect(container.querySelector('[data-testid="fact-acknowledged"]')?.getAttribute('data-mark')).toBe('NO');
+    expect(container.querySelector('[data-testid="acknowledge"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="answer-DOLAZIM"]')).toBeNull();
+    expect(container.textContent).toContain('Odgovor je sacuvan, ali potvrda prijema nije.');
+    vi.mocked(operations.acknowledgeIntervention).mockReset().mockResolvedValue({ ok: true });
   });
 
   it('says in words that reporting movement is not reporting attendance', async () => {

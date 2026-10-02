@@ -3160,6 +3160,12 @@ dialog {
   border-top: 1px solid var(--c-line);
 }
 
+.act__receipt-only {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--c-line);
+}
+
 /* The minute bands and the movement steps are short words, so two across a
    phone keeps them large without wasting a whole row each. */
 .act__choices--eta,

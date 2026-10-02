@@ -37,6 +37,16 @@ Otkazivanje poziva je druga radnja i zadrzava obavezan razlog. Ako postoje
 otvoreni zapisi prisustva, potvrda o tome ostaje vidljiva; zatvaranje im ne
 izmisljava vrijeme zavrsetka.
 
+## Odgovor clana jednim dodirom
+
+Na novom pozivu clan odmah vidi `Dolazim`, `Dolazim kasnije` i `Ne mogu`.
+Izbor odgovora prvo cuva odgovor na serveru, pa zatim odvojeno biljezi da je
+clan vidio poziv. `Dolazim kasnije` dodatno trazi procjenu od 15, 30 ili
+60 minuta. Ako clan jos ne zna odgovor, moze pritisnuti samo `Vidio sam poziv`.
+Potvrda prijema i odgovor i dalje ostaju dvije zasebne cinjenice. Ako odgovor
+uspije, a potvrda prijema ne, ekran prikazuje sta je sacuvano i nudi ponovno
+slanje potvrde; ne ponavlja vec sacuvani odgovor.
+
 ## Provjere prije prihvata
 
 1. Komandir DVD objavljuje samo DVD-u, zatim objema sluzbama.
@@ -47,3 +57,6 @@ izmisljava vrijeme zavrsetka.
 4. Obican vatrogasac i gradjanin ne mogu objaviti ni putem direktnog zahtjeva.
 5. Zatvaranje bez teksta radi; opcioni izvjestaj se vidi u arhivi;
    otkazivanje bez razloga se odbija.
+6. Clan sa novim pozivom jednim pritiskom `Dolazim` biljezi odgovor i prijem;
+   `Vidio sam poziv` radi bez odgovora, a pad jednog zahtjeva ne prikazuje
+   drugi kao sacuvan ako nije.

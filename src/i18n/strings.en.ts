@@ -878,7 +878,12 @@ export const en: Strings = {
 
     doAcknowledge: 'I have seen the call-out',
     doAcknowledgeWhy: 'Tell the commander it reached you.',
+    ackOnlyHint: 'Not sure yet? You can just confirm receipt.',
+    receiptRetryTitle: 'Your answer is already saved',
+    receiptRetryWhy: 'Only the receipt still needs confirmation.',
     doAnswer: 'Are you coming?',
+    answerAlsoAcknowledges: 'Answering also confirms you have seen the call-out.',
+    answerSavedReceiptRetry: 'Your answer was saved, but the receipt was not. If the call-out is still open, retry the receipt.',
     doAnswerWhy: 'The commander is waiting for your answer.',
     doMove: 'Report where you are',
     doMoveWhy: 'This does not state attendance - not even "On scene".',

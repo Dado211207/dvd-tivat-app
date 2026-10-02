@@ -23,8 +23,11 @@ test('SZS commander publishes, answers, attends, confirms, closes and archives t
 
   await page.goto('http://127.0.0.1:4174/#/mobilizacija');
   await expect(page.getByTestId('callout-title')).toContainText('SZS vježba spašavanja');
-  await page.getByTestId('acknowledge').click();
+  // A decision is one tap: answer first, then record receipt without asking
+  // for a second button. Both remain separate facts on the member's screen.
   await page.getByTestId('answer-DOLAZIM').click();
+  await expect(page.getByTestId('fact-acknowledged')).toHaveAttribute('data-mark', 'YES');
+  await expect(page.getByTestId('fact-answered')).toHaveAttribute('data-mark', 'YES');
   await page.getByTestId('journey-NA_LICU_MJESTA').click();
   await page.getByTestId('check-in').click();
   await page.getByTestId('check-out').click();

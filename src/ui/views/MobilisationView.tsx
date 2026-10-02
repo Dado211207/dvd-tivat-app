@@ -386,7 +386,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     setBusy(true);
     const outcome = await run();
     if (outcome.ok) {
-      setMessage({ tone: 'info', text: successText });
+      setMessage({ tone: 'info', text: outcome.message ?? successText });
       await refresh(activeId);
     } else {
       setMessage({ tone: 'error', text: outcome.message ?? t.mobilisation.notSaved });
@@ -702,9 +702,9 @@ function CallOutCard({
 /**
  * The one thing to do now, at the size of the one thing to do now.
  *
- * Each branch writes exactly ONE fact, which is the rule the whole schema rests
- * on: opening is not answering, answering is not arriving, arriving is not
- * attendance, and none of these buttons quietly records another.
+ * The answer shortcut writes two separate facts: the answer first, then a
+ * receipt that the member saw the call-out. Neither is confused with arrival
+ * or attendance. Receipt alone remains a separate choice.
  */
 function NextAction({
   step,
@@ -721,6 +721,20 @@ function NextAction({
 }) {
   const t = useText();
   const [wantsEta, setWantsEta] = useState(false);
+
+  // An answer is the time-critical fact the commander needs. Save it first;
+  // once it succeeds, record the separate receipt fact with the same tap.
+  // If that second request fails, the answer remains saved and the receipt
+  // button reappears after refresh. Never claim that a failed answer succeeded.
+  const answerWithReceipt = async (
+    answer: 'DOLAZIM' | 'DOLAZIM_KASNIJE' | 'NE_MOGU',
+    eta: number | null,
+  ) => {
+    const response = await submitResponse(intervention.id, answer, eta, false);
+    if (!response.ok || state.acknowledged) return response;
+    const receipt = await acknowledgeIntervention(intervention.id);
+    return receipt.ok ? response : { ok: true, message: t.callout.answerSavedReceiptRetry };
+  };
 
   if (step === 'DONE') {
     const why = !state.open
@@ -739,35 +753,28 @@ function NextAction({
 
   return (
     <section className="act" data-testid="next-action" data-step={step}>
-      {/* On every step, so the card is recognisable as THE card before anybody
-          has read a word of it. Three of the six steps are a single button and
-          used to open straight onto their caveat, which reads as a note rather
-          than as the thing being asked for. */}
+      {/* On every step, so the card is recognisable as THE next action. */}
       <p className="act__eyebrow">{t.callout.nextLabel}</p>
 
-      {step === 'ACKNOWLEDGE' ? (
+      {step === 'ACKNOWLEDGE' && state.answer !== null ? (
         <>
-          <p className="act__why">{t.callout.doAcknowledgeWhy}</p>
-          <button
-            type="button"
-            className="act__button act__button--primary"
-            data-testid="acknowledge"
-            disabled={busy}
-            onClick={() =>
-              void onAct(
-                () => acknowledgeIntervention(intervention.id),
-                t.mobilisation.ackSaved,
-              )
-            }
-          >
+          <p className="act__title">{t.callout.receiptRetryTitle}</p>
+          <p className="act__why">{t.callout.receiptRetryWhy}</p>
+          <button type="button" className="act__button act__button--primary"
+            data-testid="acknowledge" disabled={busy}
+            onClick={() => void onAct(
+              () => acknowledgeIntervention(intervention.id),
+              t.mobilisation.ackSaved,
+            )}>
             {t.callout.doAcknowledge}
           </button>
         </>
       ) : null}
 
-      {step === 'ANSWER' ? (
+      {step === 'ANSWER' || (step === 'ACKNOWLEDGE' && state.answer === null) ? (
         <>
           <p className="act__title">{t.callout.doAnswer}</p>
+          {step === 'ACKNOWLEDGE' ? <p className="act__why">{t.callout.answerAlsoAcknowledges}</p> : null}
           {/*
             One tap is the answer.
             
@@ -790,7 +797,7 @@ function NextAction({
               disabled={busy}
               onClick={() =>
                 void onAct(
-                  () => submitResponse(intervention.id, 'DOLAZIM', null, false),
+                  () => answerWithReceipt('DOLAZIM', null),
                   t.mobilisation.answerSaved,
                 )
               }
@@ -814,7 +821,7 @@ function NextAction({
               disabled={busy}
               onClick={() =>
                 void onAct(
-                  () => submitResponse(intervention.id, 'NE_MOGU', null, false),
+                  () => answerWithReceipt('NE_MOGU', null),
                   t.mobilisation.answerSaved,
                 )
               }
@@ -835,7 +842,7 @@ function NextAction({
                     disabled={busy}
                     onClick={() =>
                       void onAct(
-                        () => submitResponse(intervention.id, 'DOLAZIM_KASNIJE', band, false),
+                        () => answerWithReceipt('DOLAZIM_KASNIJE', band),
                         t.mobilisation.answerSaved,
                       )
                     }
@@ -844,6 +851,25 @@ function NextAction({
                   </button>
                 ))}
               </div>
+            </div>
+          ) : null}
+          {step === 'ACKNOWLEDGE' ? (
+            <div className="act__receipt-only">
+              <p className="act__why">{t.callout.ackOnlyHint}</p>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                data-testid="acknowledge"
+                disabled={busy}
+                onClick={() =>
+                  void onAct(
+                    () => acknowledgeIntervention(intervention.id),
+                    t.mobilisation.ackSaved,
+                  )
+                }
+              >
+                {t.callout.doAcknowledge}
+              </button>
             </div>
           ) : null}
         </>

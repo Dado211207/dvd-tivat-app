@@ -949,7 +949,12 @@ export const me = {
     /** The one dominant action, named for the state it belongs to. */
     doAcknowledge: 'Vidio sam poziv',
     doAcknowledgeWhy: 'Javite komandiru da je poziv stigao do vas.',
+    ackOnlyHint: 'Jos ne znate odgovor? Mozete samo potvrditi prijem.',
+    receiptRetryTitle: 'Odgovor je vec sacuvan',
+    receiptRetryWhy: 'Jos samo potvrdite da ste vidjeli poziv.',
     doAnswer: 'Dolazite li?',
+    answerAlsoAcknowledges: 'Odgovorom ujedno potvrdjujete da ste vidjeli poziv.',
+    answerSavedReceiptRetry: 'Odgovor je sacuvan, ali potvrda prijema nije. Ako je poziv jos otvoren, ponovite potvrdu.',
     doAnswerWhy: 'Komandir ceka vas odgovor.',
     doMove: 'Javite gdje ste',
     doMoveWhy: 'Ne prijavljuje prisustvo - ni "Na licu mjesta".',
