@@ -80,6 +80,7 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
   const [statusAudit, setStatusAudit] = useState<StatusAuditEntry[]>([]);
   const [membershipAudit, setMembershipAudit] = useState<OrganizationMembershipAuditEntry[]>([]);
   const [query, setQuery] = useState('');
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -118,8 +119,11 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    if (!needle || accounts === null) return accounts ?? [];
+    if (accounts === null) return [];
     return accounts.filter((account) =>
+      (!unassignedOnly || (account.role !== 'OWNER' &&
+        !account.memberships.DVD && !account.memberships.SZS)) &&
+      (!needle ||
       `${account.fullName ?? ''} ${account.email} ${account.phone ?? ''} ${account.dateOfBirth ?? ''} ${roleSearchTerms(
         account,
         t.accounts.roleLabel,
@@ -127,16 +131,20 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
         t.accounts.statusLabel[statusOf(account)]
       } ${t.accounts.organizationLabel.DVD} ${t.accounts.organizationLabel.SZS} DVD SZS`
         .toLocaleLowerCase()
-        .includes(needle),
+        .includes(needle)),
     );
   }, [
     accounts,
     query,
+    unassignedOnly,
     t.accounts.organizationLabel.DVD,
     t.accounts.organizationLabel.SZS,
     t.accounts.roleLabel,
     t.accounts.statusLabel,
   ]);
+
+  const unassignedCount = accounts?.filter((account) =>
+    account.role !== 'OWNER' && !account.memberships.DVD && !account.memberships.SZS).length ?? 0;
 
   async function changeMembership(
     account: DirectoryAccount,
@@ -266,14 +274,24 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
             disabled={loading || accounts === null || loadFailed}
           />
         </label>
+        <button type="button" className="btn btn--ghost" data-testid="unassigned-filter"
+          aria-pressed={unassignedOnly} disabled={loading || accounts === null || loadFailed}
+          onClick={() => setUnassignedOnly((current) => !current)}>
+          {unassignedOnly ? t.accounts.showAllAccounts :
+            t.accounts.showUnassigned.replace('{count}', String(unassignedCount))}
+        </button>
 
         {loading ? (
           <p role="status">{t.accounts.loading}</p>
         ) : loadFailed || accounts === null ? null : filtered.length === 0 ? (
-          <EmptyState title={t.accounts.noResults}>
+          <EmptyState title={unassignedOnly && !query.trim()
+            ? t.accounts.noUnassigned
+            : t.accounts.noResults}>
             {accounts.length === 0
               ? t.accounts.noAccounts
-              : t.accounts.changeSearch}
+              : unassignedOnly && !query.trim()
+                ? t.accounts.showAllAccounts
+                : t.accounts.changeSearch}
           </EmptyState>
         ) : (
           <div className="account-table-wrap table-wrap--cards">

@@ -258,6 +258,19 @@ describe('AccountsView: role search follows active memberships, not the inert gr
     expect(text).not.toMatch(/Boris Drugi/);
   });
 
+  it('shows accounts without an active service role in one tap', async () => {
+    await renderAccounts();
+    const filter = container.querySelector<HTMLButtonElement>('[data-testid="unassigned-filter"]');
+    expect(filter?.textContent).toContain('(1)');
+    await act(async () => filter?.click());
+    const rows = container.querySelectorAll('.account-table tbody tr');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.textContent).toContain('Boris Drugi');
+    expect(filter?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => filter?.click());
+    expect(container.querySelectorAll('.account-table tbody tr')).toHaveLength(3);
+  });
+
   it('still finds the owner by the OWNER label', async () => {
     await renderAccounts();
     await act(async () => typeSearch('vlasnik'));

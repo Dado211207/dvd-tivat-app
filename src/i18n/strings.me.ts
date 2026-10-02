@@ -168,6 +168,8 @@ export const me = {
     pageTitle: 'Nalozi i pristup', ownerOnly: 'Samo vlasnik sistema', allAccounts: 'Registrovani nalozi',
     accountCount: 'Broj naloga: {count}', risk: 'Ovo su nalozi na serveru. Promjene sluzbe, uloge i pristupa odmah stupaju na snagu i ostaju u evidenciji.',
     search: 'Pretrazi po imenu, emailu, sluzbi, ulozi ili statusu', loading: 'Ucitavam naloge sa servera...',
+    showUnassigned: 'Bez DVD/SZS uloge ({count})', showAllAccounts: 'Prikazi sve naloge',
+    noUnassigned: 'Nema naloga bez DVD/SZS uloge',
     noResults: 'Nema rezultata', noAccounts: 'Server nije vratio nijedan nalog.', changeSearch: 'Promijenite pojam za pretragu.',
     account: 'Nalog', status: 'Status', role: 'Uloga', access: 'Pristup', noName: 'Ime nije uneseno',
     ownAccountLocked: 'Sopstveni nalog se ne mijenja odavde.', ownerLocked: 'Vlasnicki nalog je zasticen.',

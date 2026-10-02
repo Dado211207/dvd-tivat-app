@@ -161,6 +161,8 @@ export const en: Strings = {
     pageTitle: 'Accounts and access', ownerOnly: 'System owner only', allAccounts: 'Registered accounts',
     accountCount: 'Accounts: {count}', risk: 'These are server accounts. Service, role and access changes take effect immediately and are recorded below.',
     search: 'Search by name, email, service, role or status', loading: 'Loading accounts from the server...',
+    showUnassigned: 'No DVD/SZS role ({count})', showAllAccounts: 'Show all accounts',
+    noUnassigned: 'No accounts without a DVD/SZS role',
     noResults: 'No results', noAccounts: 'The server returned no accounts.', changeSearch: 'Change the search term.',
     account: 'Account', status: 'Status', role: 'Role', access: 'Access', noName: 'Name not entered',
     ownAccountLocked: 'You cannot change your own account here.', ownerLocked: 'The owner account is protected.',

@@ -121,6 +121,10 @@ obican HTTP redirect prenosi instaliranu PWA ili push dozvolu.
   **Boka Signal** sa originalnim SVG/PWA ikonama. Nijedna od ovih novih
   izmjena nije objavljena na testnom sajtu. Potrebni su jos preflight,
   vodjena priprema naloga, zavrsni vizuelni pregled, sajt i videa.
+- U istom nacrtu vlasnik moze jednim izborom izdvojiti naloge bez aktivne
+  DVD/SZS uloge. To skracuje trazenje novih gradjanskih naloga, ali ne mijenja
+  rostersku vezu niti automatski dodjeljuje pristup. Vodjeni postupak pripreme
+  je i dalje poseban zadatak.
 
 Za svaku fazu upisati PR/commit, adresu testne objave, provjere i otvorene
 rizike u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Video i
