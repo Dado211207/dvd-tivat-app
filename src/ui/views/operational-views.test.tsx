@@ -282,6 +282,21 @@ describe('title, location and assembly point are not confused with each other', 
 });
 
 describe('the commander console renders on real data', () => {
+  it('fills an editable TEST instruction without publishing or guessing the location', async () => {
+    await show(<CommandView />, 'COMMANDER');
+    const preset = container.querySelector<HTMLButtonElement>('[data-testid="preset-test"]');
+    expect(preset).not.toBeNull();
+    act(() => preset?.click());
+    const instructions = container.querySelector<HTMLTextAreaElement>('[data-testid="new-instructions"]');
+    const kind = container.querySelector<HTMLSelectElement>('[data-testid="new-kind"]');
+    expect(instructions?.value).toContain('Ne izlazite na teren');
+    expect(instructions?.readOnly).toBe(false);
+    expect(kind?.value).toBe('TEST');
+    expect(container.querySelector<HTMLInputElement>('[data-testid="new-title"]')?.value).toBe('');
+    expect(container.querySelector<HTMLInputElement>('[data-testid="new-location"]')?.value).toBe('');
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="quick-review"]')?.disabled).toBe(true);
+  });
+
   it('shows the call-out and does not fail to render', async () => {
     const text = await show(<CommandView />, 'COMMANDER');
     expect(text).not.toMatch(/Ova kopija nije povezana|nije za vasu ulogu/);

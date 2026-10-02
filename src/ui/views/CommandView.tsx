@@ -791,6 +791,25 @@ function CallOutTab({
         {(props) => <textarea {...props} data-testid="new-instructions" rows={3}
           value={draft.instructions} onChange={(event) => field('instructions', event.target.value)} />}
       </Field>
+      {draft.instructions.trim() === '' ? (
+        <div className="stack" data-testid="instruction-presets">
+          <p className="muted small">{t.command.instructionPresetsTitle}</p>
+          <div className="row-actions">
+            <button type="button" className="btn btn--ghost" data-testid="preset-test"
+              onClick={() => setDraft((current) => ({
+                ...current, kind: 'TEST', instructions: t.command.instructionPresetTest,
+              }))}>
+              {t.command.instructionPresetTestLabel}
+            </button>
+            <button type="button" className="btn btn--ghost" data-testid="preset-exercise"
+              onClick={() => setDraft((current) => ({
+                ...current, kind: 'VJEZBA', instructions: t.command.instructionPresetExercise,
+              }))}>
+              {t.command.instructionPresetExerciseLabel}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {audienceSelector('new-callout-audience')}
       <div className="row-actions">
         <button type="button" className="btn btn--primary btn--big" data-testid="quick-review"
