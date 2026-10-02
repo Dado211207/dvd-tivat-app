@@ -1,5 +1,7 @@
 # Boka Operativa - trenutno stanje i plan
 
+**Novi redosljed rada, 2. oktobar:** prvo zavrsiti ubrzanja i izgled aplikacije, zatim ime/logo, javni informativni sajt i tri videa (iPhone, Android, komandir i vatrogasci). Bez novih proba na vlasnikovom telefonu za sada. Detaljni koraci i uslovi: [APP_FINISH_AND_ONBOARDING_PLAN.md](./APP_FINISH_AND_ONBOARDING_PLAN.md).
+
 ## Brzi poziv: objavljen na izdvojenom testnom sajtu (1. oktobar 2026)
 
 **Ubrzanje odgovora, 2. oktobar:** kod u draft PR #81 sada dozvoljava clanu da
