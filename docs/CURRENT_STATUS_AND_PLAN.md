@@ -8,7 +8,10 @@ je zelen ([run 36976634301](https://github.com/Dado211207/dvd-tivat-app/actions/
 Vlasnik je izricito odobrio prenos izvora na postojeci testni Netlify sajt.
 Objava iz commita `b3b4814` je `6abf5e819e860ed014fdf8d3` (ready,
 2026-10-02 07:34 UTC). Javna adresa vraca novi tekst jednog dodira i samo
-testni Supabase URL; fizicka proba na telefonu jos nije potvrdjena.
+testni Supabase URL. Vlasnik je zatim na telefonu pritisnuo `Dolazim` na
+novom pozivu vrste TEST; odgovor i potvrda prijema su zasebno upisani u
+testnu bazu u 08:10:59 i 08:11:00 UTC. Prikaz novog push obavjestenja na
+telefonu nije zasebno opisan.
 [Plan daljih pojednostavljenja](./UX_SPEED_NEXT.md).
 
 **Proba 2. oktobra:** korisnik je izvrsio korake, a izdvojena test baza biljezi DVD poziv za dva primaoca, jedno otvaranje i odgovor `DOLAZIM`, push prihvacen od provajdera i zatvaranje bez razloga. [Detaljan zapis](./CLOUD_PHONE_TEST.md) odvaja serverske dokaze od prikaza na fizickom telefonu. SZS i zajednicki tok jos cekaju prihvat; testna SZS trenutno nema roster zapis ni operativnu ulogu, pa prvo treba pripremiti zaseban testni nalog.
@@ -43,6 +46,6 @@ Apple za Web Push dokumentuje izbor **ima/nema zvuka** preko `silent`, bez izbor
 3. **Odluka o zvuku pri zakljucanom ekranu.** Ako je prilagodjena sirena obavezna, pripremiti *zasebnu native iPhone aplikaciju*, uz postojeci server kao izvor istine: autentikacija, APNs registracija tokena, mapiranje tokena na nalog, native obavjestenje sa zapakovanim zvukom, opoziv starih uredjaja, bez podataka o lokaciji na zakljucanom ekranu. Testirati u TestFlight/distribuciji uz uslove Apple Developer programa i stvarne troskove tek nakon odluke; ne obecavati besplatan App Store ili native push. Razmotriti Android zasebno. Kriticna obavjestenja koja mogu zaobici tihi rezim/Focus zavise od posebnih Apple prava i nijesu dio postojeceg plana.
 4. **Produkcija tek poslije kapija.** Ne spajati test bazu sa produkcijom. Zasebno zavrsiti produkcionu provjeru kompatibilnosti i RLS, rucni enkriptovani backup sa vracanjem na drugi cilj, kontrolisane migracije, worker, odobrenje DVD/SZS, test svake uloge, fallback kanal i zabiljezen prihvat. Detalji: [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md).
 
-Test adresa je sada rucno objavljena iz commita `b3b4814`. GitHub commit sam po sebi i dalje ne pokrece automatski Netlify deploy. Vlasnik je 2026-10-01 pregledao raniju test verziju na iPhoneu i javio da mu izgleda da sve radi, bez prijavljene greske. Za brzi komandni tok 2. oktobra imamo serverski trag poziva, odgovora i zatvaranja; za odgovor jednim dodirom jos cekamo fizicku probu. Detalji korisnickog iskustva na uredjajima i proba obje sluzbe jos nijesu potvrdjeni.
+Test adresa je sada rucno objavljena iz commita `b3b4814`. GitHub commit sam po sebi i dalje ne pokrece automatski Netlify deploy. Vlasnik je 2026-10-01 pregledao raniju test verziju na iPhoneu i javio da mu izgleda da sve radi, bez prijavljene greske. Za brzi komandni tok 2. oktobra imamo serverski trag poziva, odgovora i zatvaranja; odgovor jednim dodirom je potom potvrdjen na fizickom telefonu i u dva odvojena serverska zapisa. Detalji prikaza novog pusha i proba obje sluzbe jos nijesu potvrdjeni.
 
 Status native sirene: **plan, nije implementirana**. Status poziva na jednom iPhoneu: **stvarni Web Push prijem potvrdio vlasnik**. Status operativne pouzdanosti: **nije prihvacena za stvarne intervencije**.

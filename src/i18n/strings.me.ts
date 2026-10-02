@@ -798,6 +798,8 @@ export const me = {
     recipientsNoneTitle: 'Nijedan clan trenutno ne moze da primi poziv.',
     recipientsNoneText:
       'Poziv se moze poslati samo clanu sa aktivnim nalogom i popunjenim profilom. Clan kome je nalog ukinut se ovdje ne prikazuje.',
+    ownRecipientsNone: 'U vasoj sluzbi trenutno nema podobnih clanova. Ako druga sluzba ima operativce, server ce ih ukljuciti pri objavi; ako nema nikoga, odbice slanje.',
+    ownRecipientsUnread: 'Spisak vase sluzbe nije ucitan. Server ce provjeriti primaoce obje sluzbe pri objavi i odbiti slanje ako nema nikoga.',
     recipientsListLabel: 'Spisak clanova za poziv',
     availableYes: 'Dostupan',
     availableNo: 'Nije dostupan',

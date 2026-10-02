@@ -12,8 +12,11 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
   `Vidio sam poziv` ostaje za clana koji jos ne zna odgovor. Ako potvrda
   prijema ne uspije poslije sacuvanog odgovora, ekran to kaze i nudi retry.
   Kod i automatski testovi su na PR #81, a testni Netlify deploy
-  `6abf5e819e860ed014fdf8d3` je spreman; fizicki telefon jos nije prihvatio
-  ovaj novi ekran.
+  `6abf5e819e860ed014fdf8d3` je spreman. Vlasnik je na telefonu pritisnuo
+  `Dolazim`; testni server je sacuvao odgovor i potvrdu prijema.
+- Ispravljena je blokada za slanje objema sluzbama kada sluzba komandira nema
+  podobnih primalaca. Server i dalje odbija objavu ako ih nema ni u jednoj
+  sluzbi. Ova izmjena je u posebnoj grani i jos nije na testnoj adresi.
 
 ## Naredne izmjene, po vrijednosti
 

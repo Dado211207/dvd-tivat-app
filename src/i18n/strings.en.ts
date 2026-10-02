@@ -737,6 +737,8 @@ export const en: Strings = {
     recipientsNoneTitle: 'No member can currently receive a call-out.',
     recipientsNoneText:
       'A call-out can only go to a member with an active account and a completed profile. A member whose account has been withdrawn is not shown here.',
+    ownRecipientsNone: 'Your service currently has no eligible members. If the other service has operational members, the server will include them when you publish; otherwise it will reject the call-out.',
+    ownRecipientsUnread: 'Your service roster did not load. The server will check both services when you publish and reject the call-out if nobody is eligible.',
     recipientsListLabel: 'List of members to call out',
     availableYes: 'Available',
     availableNo: 'Not available',

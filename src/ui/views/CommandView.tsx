@@ -737,11 +737,15 @@ function CallOutTab({
           </label>
         </>
       ) : null}
-      {includesOwn && eligibleUnavailable ? (
+      {audience === 'BOTH' && (eligibleUnavailable || eligible.length === 0) ? (
+        <Notice tone="warn" testId="own-service-eligibility-warning">
+          {eligibleUnavailable ? t.command.ownRecipientsUnread : t.command.ownRecipientsNone}
+        </Notice>
+      ) : audience === 'OWN' && eligibleUnavailable ? (
         <Notice tone="error" testId="eligible-recipients-unavailable">
           {t.command.recipientsUnreadTitle} {t.command.recipientsUnreadText}
         </Notice>
-      ) : includesOwn && eligible.length === 0 ? (
+      ) : audience === 'OWN' && eligible.length === 0 ? (
         <Notice tone="warn" testId="no-eligible-recipients">
           {t.command.recipientsNoneTitle} {t.command.recipientsNoneText}
         </Notice>
@@ -790,7 +794,7 @@ function CallOutTab({
       {audienceSelector('new-callout-audience')}
       <div className="row-actions">
         <button type="button" className="btn btn--primary btn--big" data-testid="quick-review"
-          disabled={busy || !detailsComplete || !whereComplete || (includesOwn && (eligibleUnavailable || eligible.length === 0))}
+          disabled={busy || !detailsComplete || !whereComplete || (audience === 'OWN' && (eligibleUnavailable || eligible.length === 0))}
           onClick={() => setConfirming('QUICK_PUBLISH')}>
           {t.command.quickReview}
         </button>
@@ -875,7 +879,7 @@ function CallOutTab({
               {audienceSelector('saved-callout-audience')}
               <div className="row-actions">
                 <button type="button" className="btn btn--danger btn--big" data-testid="publish"
-                  disabled={busy || (includesOwn && (eligibleUnavailable || eligible.length === 0))}
+                  disabled={busy || (audience === 'OWN' && (eligibleUnavailable || eligible.length === 0))}
                   onClick={() => setConfirming('PUBLISH')}>
                   {t.command.publish}
                 </button>
