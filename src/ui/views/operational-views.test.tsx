@@ -315,6 +315,11 @@ describe('the commander console renders on real data', () => {
     const headings = [...(table?.querySelectorAll('thead th') ?? [])].map((h) => h.textContent);
     // Opened, answered, moving and present are four different things.
     expect(headings).toEqual(['Clan', 'Otvorio', 'Odgovor', 'Kretanje', 'Prisustvo']);
+    const first = table?.querySelector('tbody tr');
+    expect(first?.querySelectorAll('.response-time')).toHaveLength(3);
+    expect(first?.querySelector('td:nth-child(2) .response-time')?.textContent).toMatch(/\d{2}:\d{2}/);
+    expect(first?.querySelector('td:nth-child(3) .response-time')?.textContent).toMatch(/\d{2}:\d{2}/);
+    expect(first?.querySelector('td:nth-child(4) .response-time')?.textContent).toMatch(/\d{2}:\d{2}/);
   });
 
   it('never reads a journey report as attendance', async () => {

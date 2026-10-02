@@ -1793,6 +1793,13 @@ dialog {
   display: none;
 }
 
+.response-time {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--c-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .masthead__mark {
   padding: 0;
   background: transparent;

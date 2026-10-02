@@ -19,9 +19,9 @@ import type { Strings } from './strings.me';
 
 export const en: Strings = {
   app: {
-    name: 'Boka Operativa',
+    name: 'Boka Signal',
     subtitle: 'Mobilisation and records',
-    mark: 'BO',
+    mark: 'BS',
   },
 
   serverErrors: {
@@ -238,7 +238,7 @@ export const en: Strings = {
     groupWork: 'Work',
     groupSociety: 'Society',
     main: 'Main navigation',
-    workspace: 'Boka Operativa',
+    workspace: 'Boka Signal',
     skipToContent: 'Skip to content',
   },
 
@@ -425,10 +425,10 @@ export const en: Strings = {
     disable: 'Turn off on this device',
     openSettings: 'Settings',
 
-    installOnIos: 'On an iPhone, first choose Share - Add to Home Screen, open Boka Operativa from that icon, then turn notifications on here.',
+    installOnIos: 'On an iPhone, first choose Share - Add to Home Screen, open Boka Signal from that icon, then turn notifications on here.',
     unsupported: 'This browser does not support reliable Web Push notifications.',
     notConfigured: 'The push service is not yet connected to this published version.',
-    denied: 'Notifications are refused in the phone’s settings. Allow them for Boka Operativa, then open the application again.',
+    denied: 'Notifications are refused in the phone’s settings. Allow them for Boka Signal, then open the application again.',
     failed: 'The notification was not set up. Check the connection and try again.',
     browserSubscriptionFailed:
       'The browser could not create a push subscription. No request reached the server yet. Check this site\'s notification permission, then try another browser or network. A work laptop may block the push service through its network or browser policy.',

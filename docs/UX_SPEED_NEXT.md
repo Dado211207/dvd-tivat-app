@@ -16,9 +16,10 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
   `Dolazim`; testni server je sacuvao odgovor i potvrdu prijema.
 - Ispravljena je blokada za slanje objema sluzbama kada sluzba komandira nema
   podobnih primalaca. Server i dalje odbija objavu ako ih nema ni u jednoj
-  sluzbi. Ova izmjena je u draft PR #82 i jos nije na testnoj adresi.
-
-- Dva uredjiva predloga uputstva (`Proba aplikacije` i `Vjezba`) pripremljena su u draft PR #82; ubacuju vrstu i tekst samo kad je polje prazno. Naslov, lokacija i potvrda objave ostaju rucni. Kod je provjeren tipovima, lintom i testom ekrana; jos nije na testnom sajtu.
+  sluzbi. Ova izmjena je u posebnoj grani i jos nije na testnoj adresi.
+- U draft PR #82 dodati su uredjivi predlozi TEST/VJEZBA za komandira i
+  vremena pojedinacnog otvaranja, odgovora i kretanja u komandnom pregledu.
+  Sve je samo u kodu; testna aplikacija i dalje prikazuje prethodno izdanje.
 
 ## Naredne izmjene, po vrijednosti
 
@@ -32,10 +33,9 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
    naloga, potpun profil, povezivanje roster zapisa i operativnu ulogu u jedan
    vodjeni postupak. Novi nalog i dalje pocinje kao gradjanin, a promjenu
    izvrsava ovlasceni administrator uz trag u reviziji.
-3. **Kratki predlosci uputstva.** Ponuditi nekoliko tekstova za vjezbu i
-   intervenciju koje komandir moze urediti. Lokacija i naslov ostaju obavezni
-   za svaki novi poziv; predlozak nikada sam ne objavljuje poziv. Predloske
-   potvrditi sa DVD/SZS prije operativne upotrebe.
+3. **Predlosci za stvarnu intervenciju.** TEST/VJEZBA su pripremljeni. Tekst
+   za stvarnu intervenciju usaglasiti sa DVD/SZS prije dodavanja; lokacija,
+   naslov i potvrda objave ostaju obavezni.
 4. **Mjeriti stvarno kasnjenje.** Na testnim pozivima prikazati vremena objave,
    prihvata push provajdera, otvaranja i odgovora. Odvojiti serverski prihvat
    od prikaza na telefonu; ako problem bude u mrezi ili pretplati, komandir

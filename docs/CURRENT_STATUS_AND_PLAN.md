@@ -1,6 +1,17 @@
 # Boka Operativa - trenutno stanje i plan
 
-**Novi redosljed rada, 2. oktobar:** prvo zavrsiti ubrzanja i izgled aplikacije, zatim ime/logo, javni informativni sajt i tri videa (iPhone, Android, komandir i vatrogasci). Bez novih proba na vlasnikovom telefonu za sada. Detaljni koraci i uslovi: [APP_FINISH_AND_ONBOARDING_PLAN.md](./APP_FINISH_AND_ONBOARDING_PLAN.md).
+## Nacrt poboljsanja, jos nije na testnom sajtu (2. oktobar 2026)
+
+[Plan dovrsetka, sajta i tri videa](./APP_FINISH_AND_ONBOARDING_PLAN.md) je
+upisan prije izmjena. Draft PR #82 sada ima ispravku za poziv objema sluzbama
+kada sluzba komandira nema primalaca, dva uredjiva predloga uputstva za TEST
+i VJEZBU, vremena otvaranja/odgovora/kretanja na komandnom pregledu i nacrt
+identiteta **Boka Signal** sa novim SVG/PWA ikonama. Sve su to promjene u kodu,
+ne objavljene funkcije. Sajt i tri videa jos nijesu napravljeni. Ne traziti
+novu probu na vlasnikovom telefonu tokom ove faze. Naredni rad: serverski
+pregled podobnih primalaca i push pretplata prije objave, vodjena priprema
+naloga, zatim pregled izgleda i javni materijali. Stari naziv u ovom naslovu
+oznacava trenutno objavljenu verziju.
 
 ## Brzi poziv: objavljen na izdvojenom testnom sajtu (1. oktobar 2026)
 

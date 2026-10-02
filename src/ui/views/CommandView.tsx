@@ -1187,38 +1187,47 @@ function OverviewTab({
                     <th scope="row">{r.memberName}</th>
                     <td data-label={t.command.colOpened}>
                       {r.acknowledgedAt ? (
-                        <Chip tone="yes" symbol="+">{t.command.chipOpened}</Chip>
+                        <>
+                          <Chip tone="yes" symbol="+">{t.command.chipOpened}</Chip>
+                          <small className="response-time">{formatTime(r.acknowledgedAt)}</small>
+                        </>
                       ) : (
                         <Chip tone="unknown" symbol="?">{t.command.chipNotOpened}</Chip>
                       )}
                     </td>
                     <td data-label={t.timings.colAnswer}>
                       {r.answer ? (
-                        <Chip
-                          tone={
-                            r.answer === 'DOLAZIM'
-                              ? 'yes'
-                              : r.answer === 'DOLAZIM_KASNIJE'
-                                ? 'later'
-                                : 'no'
-                          }
-                          symbol={SERVER_ANSWER_SYMBOL[r.answer] ?? '?'}
-                        >
-                          {t.vocabulary.answer[r.answer] ?? r.answer}
-                          {r.etaMinutes ? ` (${r.etaMinutes} ${t.timings.minutesShort})` : ''}
-                        </Chip>
+                        <>
+                          <Chip
+                            tone={
+                              r.answer === 'DOLAZIM'
+                                ? 'yes'
+                                : r.answer === 'DOLAZIM_KASNIJE'
+                                  ? 'later'
+                                  : 'no'
+                            }
+                            symbol={SERVER_ANSWER_SYMBOL[r.answer] ?? '?'}
+                          >
+                            {t.vocabulary.answer[r.answer] ?? r.answer}
+                            {r.etaMinutes ? ` (${r.etaMinutes} ${t.timings.minutesShort})` : ''}
+                          </Chip>
+                          {r.answeredAt ? <small className="response-time">{formatTime(r.answeredAt)}</small> : null}
+                        </>
                       ) : (
                         <Chip tone="unknown" symbol="?">{t.vocabulary.noAnswer}</Chip>
                       )}
                     </td>
                     <td data-label={t.timings.colMovement}>
                       {r.journey ? (
-                        <Chip
-                          tone={r.journey === 'ODUSTAJEM' ? 'no' : 'accent'}
-                          symbol={JOURNEY_SYMBOL[r.journey] ?? '?'}
-                        >
-                          {t.vocabulary.journey[r.journey] ?? r.journey}
-                        </Chip>
+                        <>
+                          <Chip
+                            tone={r.journey === 'ODUSTAJEM' ? 'no' : 'accent'}
+                            symbol={JOURNEY_SYMBOL[r.journey] ?? '?'}
+                          >
+                            {t.vocabulary.journey[r.journey] ?? r.journey}
+                          </Chip>
+                          {r.journeyAt ? <small className="response-time">{formatTime(r.journeyAt)}</small> : null}
+                        </>
                       ) : (
                         <Chip tone="unknown" symbol="?">{t.command.chipNoMovement}</Chip>
                       )}

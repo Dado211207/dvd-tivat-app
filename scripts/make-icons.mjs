@@ -5,17 +5,17 @@
  * shape is reviewable: an icon is the one asset nobody can diff. Run
  * `node scripts/make-icons.mjs` after changing anything below.
  *
- * The mark is an original bell on the project's teal. **No DVD Tivat logo or
- * emblem is used**, and the shape is deliberately not a fire-service cross or
- * anything that could be mistaken for an official insignia - this is a
- * prototype and must not dress itself as the society's own badge.
+ * The Boka Signal mark joins a radio pulse and two sea waves. It uses no DVD
+ * or SZS emblem, emergency number or official insignia. The SVG masthead and
+ * raster launcher icons depict the same original symbol.
  */
 
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-const TEAL = [7, 118, 135];
+const NAVY = [7, 30, 42];
+const AQUA = [107, 214, 210];
 const WHITE = [255, 255, 255];
 
 /** Coverage of one shape at a point, sampled 4x4 for a smooth edge. */
@@ -33,16 +33,6 @@ function coverage(x, y, size, inside) {
 
 const inCircle = (u, v, cx, cy, r) => (u - cx) ** 2 + (v - cy) ** 2 <= r * r;
 
-function inTriangle(u, v, [ax, ay], [bx, by], [cx, cy]) {
-  const sign = (px, py, qx, qy, rx, ry) => (px - rx) * (qy - ry) - (qx - rx) * (py - ry);
-  const d1 = sign(u, v, ax, ay, bx, by);
-  const d2 = sign(u, v, bx, by, cx, cy);
-  const d3 = sign(u, v, cx, cy, ax, ay);
-  const neg = d1 < 0 || d2 < 0 || d3 < 0;
-  const pos = d1 > 0 || d2 > 0 || d3 > 0;
-  return !(neg && pos);
-}
-
 /** Rounded square, so the icon has a shape of its own on a plain background. */
 function inRoundedSquare(u, v, radius) {
   const dx = Math.max(radius - u, 0, u - (1 - radius));
@@ -51,39 +41,25 @@ function inRoundedSquare(u, v, radius) {
   return dx * dx + dy * dy <= radius * radius;
 }
 
-const inRect = (u, v, x0, y0, x1, y1) => u >= x0 && u <= x1 && v >= y0 && v <= y1;
-
-const inQuad = (u, v, a, b, c, d) => inTriangle(u, v, a, b, c) || inTriangle(u, v, a, c, d);
-
 /**
- * The mark is a bell, not a flame.
- *
- * Two earlier attempts at a flame - a circle drawn up to a point - both read as
- * a droplet or a keyhole at icon size, which is what that silhouette actually
- * is. A bell survives 32 pixels, and it is the truer sign for this application:
- * the product is a CALL-OUT, not a fire. What it does is ring.
- *
- * `shrink` pulls the mark towards the centre for the maskable variant, where a
- * launcher may crop up to 20% off every edge.
+ * A signal above the waves stays legible at phone icon sizes. Maskable launchers
+ * pull all strokes into the safe zone, so neither the pulse nor the waves crop.
  */
-function bell(u, v, shrink) {
+function signal(u, v, shrink) {
   const x = 0.5 + (u - 0.5) / shrink;
   const y = 0.5 + (v - 0.5) / shrink;
-  return (
-    // Crown, then the body flaring out to the rim.
-    (inCircle(x, y, 0.5, 0.44, 0.2) && y <= 0.44) ||
-    inQuad(x, y, [0.3, 0.42], [0.7, 0.42], [0.78, 0.65], [0.22, 0.65]) ||
-    inRect(x, y, 0.17, 0.65, 0.83, 0.715) ||
-    // The handle it hangs from, and the clapper swinging below.
-    inCircle(x, y, 0.5, 0.225, 0.05) ||
-    inCircle(x, y, 0.5, 0.79, 0.062)
-  );
+  const radius = Math.hypot(x - 0.5, y - 0.43);
+  const arc = y <= 0.43 &&
+    (Math.abs(radius - 0.12) <= 0.019 || Math.abs(radius - 0.23) <= 0.019);
+  const waves = x >= 0.21 && x <= 0.79 && [0.65, 0.76].some((level) =>
+    Math.abs(y - (level + 0.035 * Math.sin(2 * Math.PI * (x - 0.21) / 0.58))) <= 0.022);
+  return { aqua: arc || waves, white: inCircle(x, y, 0.5, 0.438, 0.05) };
 }
 
 function render(size, { maskable = false, transparent = false } = {}) {
   // Maskable icons keep the mark inside the safe zone; a plain icon may use
   // the full square and gets rounded corners of its own.
-  const scale = maskable ? 0.64 : 1;
+  const scale = maskable ? 0.7 : 1;
   const pixels = Buffer.alloc(size * size * 4);
 
   for (let y = 0; y < size; y += 1) {
@@ -93,18 +69,17 @@ function render(size, { maskable = false, transparent = false } = {}) {
       const plate = maskable
         ? 1
         : coverage(x, y, size, (u, v) => inRoundedSquare(u, v, 0.22));
-      const mark = coverage(x, y, size, (u, v) => bell(u, v, scale));
+      const aqua = coverage(x, y, size, (u, v) => signal(u, v, scale).aqua);
+      const white = coverage(x, y, size, (u, v) => signal(u, v, scale).white);
 
       const alpha = transparent ? plate : 1;
-      const base = transparent && plate === 0 ? [0, 0, 0] : TEAL;
+      const base = transparent && plate === 0 ? [0, 0, 0] : NAVY;
+      const withSignal = base.map((c, i) =>
+        (c * (1 - aqua) + AQUA[i] * aqua) * (1 - white) + WHITE[i] * white);
 
-      // A plain white silhouette. An attempt at shading inside the body only
-      // added noise at the sizes this is actually seen at.
-      const withBell = base.map((c, i) => c * (1 - mark) + WHITE[i] * mark);
-
-      pixels[offset] = Math.round(withBell[0]);
-      pixels[offset + 1] = Math.round(withBell[1]);
-      pixels[offset + 2] = Math.round(withBell[2]);
+      pixels[offset] = Math.round(withSignal[0]);
+      pixels[offset + 1] = Math.round(withSignal[1]);
+      pixels[offset + 2] = Math.round(withSignal[2]);
       pixels[offset + 3] = Math.round(alpha * 255);
     }
   }

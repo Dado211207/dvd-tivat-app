@@ -98,6 +98,12 @@ svaki prikazani korak, razumljivost bez zvuka i citljivost na telefonu.
 
 ## Evidencija
 
+- 2. oktobar: draft PR #82 ima popravku zajednickog poziva, uredjive
+  predloge TEST/VJEZBA, vremena odziva na komandnom pregledu i nacrt imena
+  **Boka Signal** sa originalnim SVG/PWA ikonama. Nijedna od ovih novih
+  izmjena nije objavljena na testnom sajtu. Potrebni su jos preflight,
+  vodjena priprema naloga, zavrsni vizuelni pregled, sajt i videa.
+
 Za svaku fazu upisati PR/commit, adresu testne objave, provjere i otvorene
 rizike u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Video i
 sajt dobijaju vlastite linkove tek kad zaista postoje; ne navoditi plan kao

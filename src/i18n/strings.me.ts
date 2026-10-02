@@ -26,9 +26,9 @@
 
 export const me = {
   app: {
-    name: 'Boka Operativa',
+    name: 'Boka Signal',
     subtitle: 'Mobilizacija i evidencija',
-    mark: 'BO',
+    mark: 'BS',
   },
 
   serverErrors: {
@@ -246,7 +246,7 @@ export const me = {
     groupWork: 'Rad',
     groupSociety: 'Drustvo',
     main: 'Glavna navigacija',
-    workspace: 'Boka Operativa',
+    workspace: 'Boka Signal',
     skipToContent: 'Preskoci na sadrzaj',
   },
 
@@ -458,10 +458,10 @@ export const me = {
     disable: 'Iskljuci na ovom uredjaju',
     openSettings: 'Podesavanja',
 
-    installOnIos: 'Na iPhoneu prvo izaberite Podijeli - Dodaj na pocetni ekran, otvorite Boka Operativa sa te ikone, pa ovdje ukljucite notifikacije.',
+    installOnIos: 'Na iPhoneu prvo izaberite Podijeli - Dodaj na pocetni ekran, otvorite Boka Signal sa te ikone, pa ovdje ukljucite notifikacije.',
     unsupported: 'Ovaj pregledac ne podrzava pouzdane Web Push notifikacije.',
     notConfigured: 'Push servis jos nije povezan sa ovom objavljenom verzijom.',
-    denied: 'Notifikacije su odbijene u podesavanjima telefona. Dozvolite ih za Boka Operativa, pa otvorite aplikaciju ponovo.',
+    denied: 'Notifikacije su odbijene u podesavanjima telefona. Dozvolite ih za Boka Signal, pa otvorite aplikaciju ponovo.',
     failed: 'Notifikacija nije podesena. Provjerite vezu i pokusajte ponovo.',
     browserSubscriptionFailed:
       'Pregledac nije uspio napraviti push pretplatu. Zahtjev jos nije stigao do servera. Provjerite dozvolu za obavjestenja za ovaj sajt, pa pokusajte u drugom pregledacu ili na drugoj mrezi. Na poslovnom laptopu mreza ili pravila pregledaca mogu blokirati push servis.',
