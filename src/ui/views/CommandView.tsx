@@ -35,6 +35,7 @@ import {
   fetchInterventions,
   fetchTargetedInterventions,
   fetchEligibleRecipients,
+  fetchCalloutReadiness,
   fetchRecipientFacts,
   fetchVehicleMovements,
   isOpenStatus,
@@ -53,6 +54,7 @@ import {
   type Intervention,
   type InterventionKind,
   type EligibleRecipient,
+  type CalloutReadiness,
   type ReadFailure,
   type RecipientFacts,
   type VehicleMovement,
@@ -542,6 +544,9 @@ function CallOutTab({
     : null;
   const canTargetOther = MULTI_SERVICE_ADMIN_AVAILABLE && otherService !== null;
   const [confirming, setConfirming] = useState<null | 'QUICK_PUBLISH' | 'PUBLISH' | 'CLOSE' | 'CANCEL'>(null);
+  const [readiness, setReadiness] = useState<CalloutReadiness | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(true);
+  const [readinessRetry, setReadinessRetry] = useState(0);
   const [closeReason, setCloseReason] = useState('');
 
   const eligible = data.eligible ?? [];
@@ -555,6 +560,27 @@ function CallOutTab({
     : audience === 'OTHER' && otherService
       ? t.accounts.organizationLabel[otherService]
       : t.accounts.organizationLabel[actingService ?? 'DVD'];
+
+  const checkingForPublish = confirming === 'PUBLISH' || confirming === 'QUICK_PUBLISH';
+  useEffect(() => {
+    if (!checkingForPublish) return;
+    let current = true;
+    setReadiness(null);
+    setReadinessLoading(true);
+    const otherIds = includesOther && otherService ? [organizationIdOf(otherService)] : [];
+    void fetchCalloutReadiness(organizationId, includesOwn, otherIds).then((result) => {
+      if (!current) return;
+      setReadiness(result);
+      setReadinessLoading(false);
+    });
+    return () => { current = false; };
+  }, [checkingForPublish, organizationId, includesOwn, includesOther, otherService, readinessRetry]);
+
+  const reviewPublish = (kind: 'PUBLISH' | 'QUICK_PUBLISH') => {
+    setReadiness(null);
+    setReadinessLoading(true);
+    setConfirming(kind);
+  };
 
   const create = async () => {
     setError(null);
@@ -814,7 +840,7 @@ function CallOutTab({
       <div className="row-actions">
         <button type="button" className="btn btn--primary btn--big" data-testid="quick-review"
           disabled={busy || !detailsComplete || !whereComplete || (audience === 'OWN' && (eligibleUnavailable || eligible.length === 0))}
-          onClick={() => setConfirming('QUICK_PUBLISH')}>
+          onClick={() => reviewPublish('QUICK_PUBLISH')}>
           {t.command.quickReview}
         </button>
         <button type="button" className="btn btn--ghost" data-testid="create-draft"
@@ -899,7 +925,7 @@ function CallOutTab({
               <div className="row-actions">
                 <button type="button" className="btn btn--danger btn--big" data-testid="publish"
                   disabled={busy || (audience === 'OWN' && (eligibleUnavailable || eligible.length === 0))}
-                  onClick={() => setConfirming('PUBLISH')}>
+                  onClick={() => reviewPublish('PUBLISH')}>
                   {t.command.publish}
                 </button>
                 <button type="button" className="btn btn--ghost" data-testid="discard-draft"
@@ -978,13 +1004,39 @@ function CallOutTab({
           open
           title={t.command.confirmPublishTitle}
           confirmLabel={t.command.confirmPublishAction}
-          confirmDisabled={busy}
+          confirmDisabled={busy || readinessLoading || readiness?.eligibleCount === 0}
           onCancel={() => setConfirming(null)}
           onConfirm={() => void (confirming === 'QUICK_PUBLISH' ? quickPublish() : publish())}
         >
           <p><strong>{confirming === 'QUICK_PUBLISH' ? draft.title.trim() : selected?.title}</strong></p>
           <p>{confirming === 'QUICK_PUBLISH' ? draft.location.trim() : selected?.incidentLocation}</p>
           <p>{t.command.audienceTitle}: <strong>{audienceLabel}</strong></p>
+          {readinessLoading ? <p role="status">{t.command.readinessLoading}</p>
+            : readiness ? (
+              <>
+                <p data-testid="readiness-counts">
+                  {t.command.readinessCounts
+                    .replace('{eligible}', String(readiness.eligibleCount))
+                    .replace('{push}', String(readiness.pushReadyCount))}
+                </p>
+                {readiness.eligibleCount === 0 ? (
+                  <Notice tone="error" testId="readiness-empty">{t.command.readinessEmpty}</Notice>
+                ) : readiness.pushReadyCount === 0 ? (
+                  <Notice tone="warn" testId="readiness-no-push">{t.command.readinessNoPush}</Notice>
+                ) : null}
+                <p className="muted small">
+                  {t.command.readinessTime.replace('{time}', formatTime(readiness.checkedAt))}
+                  {' '}{t.command.readinessMayChange}
+                </p>
+              </>
+            ) : (
+              <Notice tone="warn" testId="readiness-unavailable">
+                {t.command.readinessUnavailable}{' '}
+                <button type="button" className="btn btn--ghost" onClick={() => setReadinessRetry((n) => n + 1)}>
+                  {t.command.refresh}
+                </button>
+              </Notice>
+            )}
           <p className="muted small">{t.command.audienceAtPublish}</p>
           <p className="muted small">{t.command.confirmPublishTransport}</p>
         </ConfirmDialog>

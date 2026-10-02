@@ -119,8 +119,12 @@ obican HTTP redirect prenosi instaliranu PWA ili push dozvolu.
 - 2. oktobar: draft PR #82 ima popravku zajednickog poziva, uredjive
   predloge TEST/VJEZBA, vremena odziva na komandnom pregledu i nacrt imena
   **Boka Signal** sa originalnim SVG/PWA ikonama. Nijedna od ovih novih
-  izmjena nije objavljena na testnom sajtu. Potrebni su jos preflight,
-  vodjena priprema naloga, zavrsni vizuelni pregled, sajt i videa.
+  izmjena nije objavljena na testnom sajtu. Dodat je i serverski pregled broja
+  podobnih naloga i aktivnih push pretplata u potvrdi slanja. Migracija je
+  provjerena samo na izdvojenoj test bazi: DVD 2/1, SZS 0/0 i obje sluzbe
+  2/1 na postojecim test podacima. Neovlasceni nalog je odbijen. To je
+  trenutni zbir, ne potvrda dostave; preostaju CI, vodjena priprema naloga,
+  zavrsni vizuelni pregled, sajt i videa.
 - U istom nacrtu vlasnik moze jednim izborom izdvojiti naloge bez aktivne
   DVD/SZS uloge. To skracuje trazenje novih gradjanskih naloga, ali ne mijenja
   rostersku vezu niti automatski dodjeljuje pristup. Vodjeni postupak pripreme

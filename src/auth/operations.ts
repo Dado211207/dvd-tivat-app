@@ -157,6 +157,12 @@ export interface EligibleRecipient {
   readonly specialties: readonly string[];
 }
 
+export interface CalloutReadiness {
+  readonly eligibleCount: number;
+  readonly pushReadyCount: number;
+  readonly checkedAt: string;
+}
+
 export interface RecipientFacts {
   readonly memberId: string;
   readonly memberName: string;
@@ -439,6 +445,34 @@ export async function fetchEligibleRecipients(organizationId?: string): Promise<
       role: row.role as OperationalRoleName,
       specialties: row.specialties ?? [],
     }));
+  } catch {
+    return null;
+  }
+}
+
+/** Counts unique accounts at this instant; publish_intervention resolves again. */
+export async function fetchCalloutReadiness(
+  publisherOrganization: string,
+  includeOwn: boolean,
+  recipientOrganizationIds: readonly string[],
+): Promise<CalloutReadiness | null> {
+  try {
+    const { data, error } = await accountBackend().rpc('callout_readiness', {
+      publisher_organization: publisherOrganization,
+      include_own: includeOwn,
+      recipient_organization_ids: recipientOrganizationIds,
+    });
+    if (error || !Array.isArray(data) || data.length !== 1) return null;
+    const row = data[0] as Record<string, unknown>;
+    const eligibleCount = row.eligible_count;
+    const pushReadyCount = row.push_ready_count;
+    const checkedAt = row.checked_at;
+    if (!Number.isInteger(eligibleCount) || !Number.isInteger(pushReadyCount) ||
+        (eligibleCount as number) < 0 || (pushReadyCount as number) < 0 ||
+        (pushReadyCount as number) > (eligibleCount as number) || typeof checkedAt !== 'string') {
+      return null;
+    }
+    return { eligibleCount: eligibleCount as number, pushReadyCount: pushReadyCount as number, checkedAt };
   } catch {
     return null;
   }

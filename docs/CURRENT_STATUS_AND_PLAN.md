@@ -8,8 +8,15 @@ kada sluzba komandira nema primalaca, dva uredjiva predloga uputstva za TEST
 i VJEZBU, vremena otvaranja/odgovora/kretanja na komandnom pregledu i nacrt
 identiteta **Boka Signal** sa novim SVG/PWA ikonama. Sve su to promjene u kodu,
 ne objavljene funkcije. Sajt i tri videa jos nijesu napravljeni. Ne traziti
-novu probu na vlasnikovom telefonu tokom ove faze. Naredni rad: serverski
-pregled podobnih primalaca i push pretplata prije objave, vodjena priprema
+novu probu na vlasnikovom telefonu tokom ove faze. U nacrtu je sada i pregled
+broja jedinstvenih podobnih naloga i naloga sa aktivnom Web Push pretplatom u
+potvrdi objave. Server daje zbir samo komandiru i ponovo racuna stvarne
+primaoce pri slanju. U izdvojenoj testnoj Supabase bazi migracija je dala
+DVD 2 podobna / 1 push, SZS 0 / 0 i zajedno 2 / 1 za postojece test podatke;
+neovlasceni nalog je odbijen, anoniman nema EXECUTE pravo. Nula poznatih
+primalaca blokira potvrdu, a nula push pretplata upozorava. Broj pretplata
+ne dokazuje dostavu, a prikaz nije jos objavljen na testnom sajtu. Naredni rad:
+CI provjera ovog koraka, vodjena priprema
 naloga, zatim pregled izgleda i javni materijali. Stari naziv u ovom naslovu
 oznacava trenutno objavljenu verziju.
 
