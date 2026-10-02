@@ -18,6 +18,8 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
   podobnih primalaca. Server i dalje odbija objavu ako ih nema ni u jednoj
   sluzbi. Ova izmjena je u draft PR #82 i jos nije na testnoj adresi.
 
+- Dva uredjiva predloga uputstva (`Proba aplikacije` i `Vjezba`) pripremljena su u draft PR #82; ubacuju vrstu i tekst samo kad je polje prazno. Naslov, lokacija i potvrda objave ostaju rucni. Kod je provjeren tipovima, lintom i testom ekrana; jos nije na testnom sajtu.
+
 ## Naredne izmjene, po vrijednosti
 
 1. **Spremnost prije objave.** Na pregledu poziva prikazati broj operativnih
