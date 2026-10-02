@@ -6,7 +6,7 @@ Stanje 2026-10-02, poslije prve probe brzog poziva sa testnim nalozima. Aktuelni
 
 - Test aplikacija: <https://boka-operativa-phone-test.netlify.app/>
 - Test Supabase: `dvd-tivat-phone-test` (`zoipjcdtcfetqvcfmhxd`), Free plan; Netlify: `boka-operativa-phone-test`.
-- Kod: draft PR [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81), grana `codex/p7-p8-integration`. Novi commit na GitHubu sam po sebi ne objavljuje novi Netlify build. Trenutni testni frontend je objavljen iz kodnog commita `cf1c94d` kao Netlify deploy `6abe8e4f67afc951415aa1a4` (ready, 2026-10-01 u 16:46 UTC). Raniji deploy `6abdf29b8db7f63eaf1ca3aa` pripada prvoj iPhone probi.
+- Kod: draft PR [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81), grana `codex/p7-p8-integration`. Novi commit na GitHubu sam po sebi ne objavljuje novi Netlify build. Trenutni testni frontend je objavljen iz commita `b3b4814` kao Netlify deploy `6abf5e819e860ed014fdf8d3` (ready, 2026-10-02 u 07:34 UTC). Prethodni `6abe8e4f67afc951415aa1a4` pripada prvoj probi brzog komandnog toka, a `6abdf29b8db7f63eaf1ca3aa` ranijoj iPhone probi.
 - Produkcioni Supabase `yskhdzrdbywrpfowckpn`, stari push worker i produkcioni GitHub Pages nijesu mijenjani u ovom testu.
 
 Test baza je podignuta od migracija iz PR-a, bez kopiranja produkcionih naloga ili intervencija. U pocetnoj fazi napravljeni su vlasnikov test nalog, DVD roster zapis i jedan fikcionalni testni pozar; kasnije su dodati testni nalozi i pozivi za prihvat toka. Novi grant za worker je primijenjen **samo u test bazi** i sacuvan u repository migraciji `20260930190239_worker_joint_recipient_organization_read.sql`.
@@ -43,7 +43,7 @@ Pregled spremnosti testne baze istog dana pokazuje dva aktivna, povezana DVD ros
 
 ## Nova objava za ponovnu probu
 
-Netlify je potvrdio `ready`, a javna test adresa vraca novi CSS asset i JS konfiguraciju za **test** Supabase, bez produkcionog URL-a. U odvojenom cloud browseru pocetni ekran i prijava se otvaraju. To ne potvrdjuje prijem novog builda, skrol gestove ni ponovni push na vlasnikovom fizickom iPhoneu. Otvori instaliranu aplikaciju dok ima mreze; ako se pojavi dugme za osvjezavanje aplikacije, dovrsi rad na trenutnom ekranu pa ga pritisni. Ne brisi instalaciju zbog updatea jer bi to moglo ukloniti postojecu push pretplatu.
+Netlify je potvrdio `ready` za `6abf5e819e860ed014fdf8d3`. Javna adresa vraca tekst novog ekrana odgovora jednim dodirom i JS konfiguraciju za **test** Supabase, bez produkcionog URL-a. To ne potvrdjuje prijem novog builda, skrol gestove ni ponovni push na vlasnikovom fizickom iPhoneu. Otvori instaliranu aplikaciju dok ima mreze; ako se pojavi dugme za osvjezavanje aplikacije, dovrsi rad na trenutnom ekranu pa ga pritisni. Ne brisi instalaciju zbog updatea jer bi to moglo ukloniti postojecu push pretplatu.
 
 ## Kako vlasnik ponavlja bezbjednu probu
 

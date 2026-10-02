@@ -11,7 +11,8 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
   pa odvojeno biljezi prijem poziva. `Dolazim kasnije` trazi procjenu vremena.
   `Vidio sam poziv` ostaje za clana koji jos ne zna odgovor. Ako potvrda
   prijema ne uspije poslije sacuvanog odgovora, ekran to kaze i nudi retry.
-  Kod i automatski testovi su na PR #81; fizicki telefon jos nije prihvatio
+  Kod i automatski testovi su na PR #81, a testni Netlify deploy
+  `6abf5e819e860ed014fdf8d3` je spreman; fizicki telefon jos nije prihvatio
   ovaj novi ekran.
 
 ## Naredne izmjene, po vrijednosti
