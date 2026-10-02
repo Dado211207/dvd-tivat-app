@@ -1,4 +1,4 @@
-# Tri video uputstva za Boka Signal
+# Tri video uputstva za FireNexa
 
 Radni scenario, 2. oktobar 2026. Video snimci jos nijesu izvezeni ni objavljeni.
 Snimati tek na zavrsnoj testnoj verziji i provjerenoj adresi. U kadru su samo
@@ -10,7 +10,7 @@ simuliranim ekranom mora imati oznaku `Ilustracija`.
 
 | Vrijeme | Kadar sa stvarnog iPhonea | Naracija / titl |
 | --- | --- | --- |
-| 0-8 s | Naslov i profesionalni link sajta; testna oznaka dok traje proba | `Boka Signal se instalira iz Safarija. Otvori aktuelni link sa ovog sajta.` |
+| 0-8 s | Naslov i profesionalni link sajta; testna oznaka dok traje proba | `FireNexa se instalira iz Safarija. Otvori aktuelni link sa ovog sajta.` |
 | 8-25 s | Safari na PWA adresi, dijeljenje, `Dodaj na pocetni ekran` | `Dodirni Dijeli, pa Dodaj na pocetni ekran. Ako vidis Otvori kao web aplikaciju, ostavi ukljuceno i potvrdi Dodaj.` |
 | 25-37 s | Ikona na pocetnom ekranu i otvaranje | `Pokreni novu ikonu sa pocetnog ekrana.` |
 | 37-52 s | Prijava fiktivnog naloga, bez prikaza lozinke | `Prijavi se svojim nalogom. Novi nalog nema operativna prava dok vlasnik ne poveze clanstvo i ulogu.` |

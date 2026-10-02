@@ -255,7 +255,7 @@ export function App() {
       <aside className="station-rail" aria-label={t.nav.workspace}>
         <div className="masthead__identity">
           <div className="masthead__mark" aria-hidden="true">
-            <img src="./icons/boka-operativa.svg" alt="" />
+            <img src="./icons/firenexa.svg" alt="" />
           </div>
           <div>
             <div className="masthead__name">{t.app.name}</div>
@@ -282,7 +282,7 @@ export function App() {
 
       <header className="masthead">
         <div className="workspace-heading">
-          <img src="./icons/boka-operativa.svg" alt="" />
+          <img src="./icons/firenexa.svg" alt="" />
           <p className="workspace-heading__title">{t.app.name}</p>
         </div>
         <div className="masthead__tools">

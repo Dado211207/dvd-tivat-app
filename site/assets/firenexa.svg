@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FireNexa">
+  <rect width="512" height="512" rx="112" fill="#071e2a"/>
+  <polygon points="120,148 238,148 238,190 162,190 162,238 224,238 224,280 162,280 162,364 120,364" fill="#6bd6d2"/>
+  <polygon points="254,148 294,148 350,276 350,148 392,148 392,364 352,364 296,236 296,364 254,364" fill="#ffffff"/>
+  <polygon points="120,108 196,108 196,120 120,120" fill="#ffb668"/>
+</svg>

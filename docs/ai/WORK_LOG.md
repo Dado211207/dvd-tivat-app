@@ -2555,3 +2555,40 @@ the production smoke test.
   remain intentionally DVD-scoped.
 
 ---
+
+
+## 2026-10-02 - Work handoff and FireNexa identity
+
+Read the shared conversation's complete available user/assistant text (tool
+outputs in the share are redacted), the pasted continuation and current GitHub
+PR metadata. Resume #82 on `codex/callout-readiness`; #83 runs combined CI against
+main. Starting head `1ab25d0` had full CI success in run `37044135976`.
+
+Implemented the owner's selected **FireNexa** identity across both languages,
+HTML, manifest, push/offline titles, application and public-guide mastheads,
+package metadata and video scripts. Replaced the geographic wave mark with an
+original F/N symbol; SVG and all five PNG launcher assets are generated from
+one coordinate source. Incremented SW to v9 while retaining cache namespace,
+local storage keys, start URL/scope and update-on-user-action behavior.
+No migration or hosted data change. Updated the finishing plan and the primary
+project-state record so September notes no longer masquerade as current work.
+The guide adds FAQs for membership, whole-service recipients, push permissions
+and the separate attendance record. Its link still points to the existing
+isolated host; no invented final address or completed video is presented.
+
+Local validation: ESLint, TypeScript and production build passed; 53 test files,
+848 unit/component tests passed; migration list has no drift (48 files); bundle
+scan found no secret; production audit found zero vulnerabilities. All 74
+selected desktop/mobile browser tests passed, including quick call-out,
+owner-both-services, navigation/update behavior, edge-scroll, every-screen
+geometry, public guide and accessibility. Guide width was also checked at
+320/360/390/768/1440 px with no horizontal overflow. The default Playwright
+browser download failed; an unpacked Chromium 153 from a temporary npm package
+ran the checks, with no dependency or browser binary committed.
+
+Publication boundary: Netlify connector confirms old deploy
+`6abf5e819e860ed014fdf8d3`; CLI says not logged in and connector cannot select
+this source branch for a build. No rename, new origin, deploy, production merge,
+production migration, alert, user creation or purchased service was performed.
+Next: full GitHub CI on this exact change, authenticated publication, final URL
+transition, public site and the three videos as described in the finishing plan.

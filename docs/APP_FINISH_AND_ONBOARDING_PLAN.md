@@ -49,11 +49,12 @@ sajt; produkcioni prelaz ima zasebne uslove u
 
 ### 2. Ime, logo i izgled
 
-- Radna preporuka je **Boka Signal**: krace ime koje odgovara DVD-u i SZS-u.
-  [NAME_OPTIONS.md](./NAME_OPTIONS.md) cuva alternative i razloge. Prije javne
-  upotrebe provjeriti dostupnost naziva i dobiti prihvat predstavnika sluzbi.
-- Nacrtati originalan, citljiv znak: signal/odziv, motiv Boke, bez tudjeg
-  grba, broja hitne sluzbe ili obecanja garantovanog alarma. Napraviti SVG i
+- Vlasnik je 2. oktobra odabrao **FireNexa** sa opisom
+  **Fire & Rescue Response Platform**. Odluka je konacna za razvojni identitet;
+  [NAME_OPTIONS.md](./NAME_OPTIONS.md) cuva odluku i granice provjere domena.
+  Domen jos nije kupljen niti je dostupnost garantovana.
+- Nacrtati originalan, citljiv znak: inicijali F/N sa signalnim akcentom,
+  bez geografskog motiva, tudjeg grba, broja hitne sluzbe ili obecanja garantovanog alarma. Napraviti SVG i
   PWA ikone 192/512, maskable i Apple touch icon, u svijetloj/tamnoj primjeni.
 - Ujednaciti naziv na naslovu stranice, u aplikaciji, manifestu, instaliranoj
   ikoni i push naslovu. Zadrzati postojeci URL, PWA identitet/scope i kljuceve
@@ -92,7 +93,7 @@ svaki prikazani korak, razumljivost bez zvuka i citljivost na telefonu.
 - Povezati sajt, aplikaciju i videa; provjeriti sve linkove, QR, titlove,
   kontrast i prelom ekrana. Tek tada traziti vlasnikov pregled cijelog paketa.
 - Zavrsni javni link aplikacije mora imati profesionalno ime bez rijeci `test`
-  (radni primjer `boka-signal.netlify.app`, samo ako je slobodan). Isto vazi
+  (radni primjer `firenexa.netlify.app`, samo ako je slobodan). Isto vazi
   za javni informativni sajt. Stari testni URL ne stampati kao trajni QR.
 - Posebno, prije stvarne upotrebe za uzbunjivanje: SZS/dualni nalog, iPhone i
   Android dostava, rezervni ljudski kanal, produkciona kompatibilnost,
@@ -113,6 +114,17 @@ tokom tog prelaza. Tek poslije prihvata azurirati sajt, videa, QR i
 dokumentaciju na zavrsni link i ukloniti testni naziv iz javne prezentacije.
 Ne mijenjati postojeci testni Netlify site name na silu i ne pretpostaviti da
 obican HTTP redirect prenosi instaliranu PWA ili push dozvolu.
+
+## Nastavak u Work okruzenju, 2. oktobar
+
+Prvo zavrsiti FireNexa ime u oba jezika, HTML-u, manifestu, pushu, ikonama,
+informativnom sajtu i video scenarijima. Napraviti originalni F/N znak i
+azurirati glavni zapis projekta. Zadrzati postojece lokalne kljuceve,
+PWA scope i testni origin tokom ove promjene da bi se sacuvali prijava,
+nacrti i podesavanja. Podaci i migracije se ovom promjenom ne prepravljaju.
+Zatim provjeriti postojeci tok i izgled na telefonu i desktopu i CI na
+novom commitu; ne traziti nove probe od vlasnika sada. Konacni javni link
+bez `test`, sajt i video uputstva ostaju naredne isporuke.
 
 ## Evidencija
 

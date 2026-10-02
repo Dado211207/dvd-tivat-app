@@ -1,4 +1,31 @@
-# Boka Operativa - trenutno stanje i plan
+# FireNexa - trenutno stanje i plan
+
+## Nastavak razvoja u Work okruzenju (2. oktobar 2026)
+
+Vlasnik je odabrao **FireNexa - Fire & Rescue Response Platform**. Kod na
+`codex/callout-readiness` sada koristi novo ime i originalni F/N znak u oba
+jezika, HTML-u, manifestu, offline ekranu, pushu i informativnom sajtu.
+PWA scope, postojece lokalne postavke i prijava se cuvaju. SW verzija je
+povecana radi azuriranja shell-a. Ovo je promjena identiteta i materijala;
+nema nove migracije niti izmjene hosted podataka.
+
+Lokalna provjera FireNexa izmjena: lint, tipovi, 848 unit/component testova,
+build, 74 desktop/mobile browser provjere, bez migration drift-a i bez privatnih
+kljuceva u bundleu. Produkcioni audit nema poznatih ranjivosti. Sajt je
+pregledan na 320/360/390/768/1440 px bez horizontalnog pomjeranja stranice.
+Puni CI novog commita se vodi na PR #83; nije zamijenjen starim CI rezultatom.
+
+Pocetni PR #82/#83 head `1ab25d0` ima uspjesan puni
+[CI 37044135976](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37044135976).
+Novo ime nije dokaz objave: prethodna javna aplikacija ostaje na starom
+origin-u dok se ne upise konkretan novi deploy. Konacna adresa bez `test`
+jos nije objavljena, domen nije kupljen i tri videa nijesu izvezena.
+
+Glavni [zapis projekta](./ai/PROJECT_STATE.md) sada pocinje ovim nastavkom;
+stariji septembarski odjeljci su istorija. Prvo dovrsiti automatske provjere,
+GitHub izmjene i pregled izgleda. Ne traziti nove vlasnikove probe na telefonu
+sada. Zatim pripremiti zavrsnu adresu, objavu sajta i tri video uputstva prema
+[planu dovrsetka](./APP_FINISH_AND_ONBOARDING_PLAN.md).
 
 ## Nacrt poboljsanja, jos nije na testnom sajtu (2. oktobar 2026)
 
@@ -6,7 +33,7 @@
 upisan prije izmjena. Draft PR #82 sada ima ispravku za poziv objema sluzbama
 kada sluzba komandira nema primalaca, dva uredjiva predloga uputstva za TEST
 i VJEZBU, vremena otvaranja/odgovora/kretanja na komandnom pregledu i nacrt
-identiteta **Boka Signal** sa novim SVG/PWA ikonama. Sve su to promjene u kodu,
+identiteta (prvobitno **Boka Signal**, sada odabrana **FireNexa**) sa novim SVG/PWA ikonama. Sve su to promjene u kodu,
 ne objavljene funkcije. Sajt je pripremljen u kodu; tri videa jos nijesu
 snimljena. Ne traziti
 novu probu na vlasnikovom telefonu tokom ove faze. U nacrtu je sada i pregled
@@ -28,8 +55,7 @@ PR granu za rucnu objavu. Zato taj kod jos nije na testnom sajtu. Zatim slijede 
 izgleda i javni materijali. Staticni izvor informativnog sajta je pripremljen u
 `site/`, sa instalacijom, ulogama i oznacenim video sekcijama u pripremi;
 scenariji za tri videa su u [VIDEO_PRODUCTION_SCRIPT.md](./VIDEO_PRODUCTION_SCRIPT.md).
-Sajt i videa jos nijesu objavljeni. Stari naziv u ovom naslovu
-oznacava trenutno objavljenu verziju.
+Sajt i videa jos nijesu objavljeni. Boka Operativa je naziv ranije objavljene verzije; novi identitet je FireNexa.
 
 U draft PR #82 dodat je filter naloga bez aktivne DVD/SZS uloge, radi brzeg
 pronalazenja novih gradjanskih naloga. Ne dodjeljuje prava automatski.

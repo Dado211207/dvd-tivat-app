@@ -1,8 +1,8 @@
-# Boka Signal informativni sajt
+# FireNexa informativni sajt
 
 Statican, odvojen sajt za javni opis, instalaciju i uputstva. Nema prijave,
 operativnih podataka, forme za hitne dojave ni pristup bazi. `index.html`,
-`site.css` i `assets/boka-signal.svg` cine cijeli sajt; moze se objaviti iz
+`site.css` i `assets/firenexa.svg` cine cijeli sajt; moze se objaviti iz
 direktorijuma `site/` na zasebnom besplatnom hostingu. Ne objavljivati kao
 podputanju postojece PWA jer bi to mijenjalo service worker granice.
 

@@ -4,9 +4,59 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-22
+Last updated: 2026-10-02
 
-## Current delivery: the data-layer read contract
+## Current delivery: FireNexa and the finishing plan
+
+Resume from `codex/callout-readiness`, draft PR #82, with #83 providing combined
+CI against `main`; #81 holds the preceding P7/P8 integration. At this handoff
+`main` is `4403fca`, #81 is `fa38031`, and #82/#83 started at `1ab25d0`.
+CI run `37044135976` passed on that starting head. Do not use the old September
+sections below as the current release checklist.
+
+Owner decisions carried into Work on 2 October:
+
+- **FireNexa** is the selected product name; tagline **Fire & Rescue Response Platform**.
+- Finish the app, branding and public guide, then deliver three videos: iPhone
+  installation, Android installation and usage for commander/firefighter.
+- No new owner phone exercises during this finishing phase. Automated checks
+  and fixture browser review can continue independently.
+- Commander selects DVD, SZS or both; server calls all eligible operational
+  accounts once per person. A commander in one service may call the other
+  from that command context. Response, acknowledgement, movement and confirmed
+  attendance remain separate facts. Normal closing has an optional report;
+  cancellation keeps its reason.
+- Citizen-first registration; owner assigns DVD/SZS/both and the roster link.
+  The owner's isolated-cloud account already has OWNER rights and DVD member
+  standing, according to the prior hosted record. Do not recreate people.
+- Free services only, cloud-only user workflow. The owner does not want local
+  software, backups or rehearsal work on their computers.
+- Final app/site links must have a professional name without `test`; preserve
+  the old origin until login, installation and push transition are validated.
+
+The current candidate includes readiness totals before publish, two editable
+TEST/VJEZBA instruction templates, response timestamps, unassigned-account
+filter and an atomic guided roster/role preparation RPC. The new FireNexa
+change covers both language bundles, HTML, manifest, push/offline text, SVG,
+launcher icons, public guide and video scripts. Existing storage keys and PWA
+scope remain stable; no database migration accompanies this identity change.
+
+**Hosted boundary:** the last recorded phone-test deployment is
+`6abf5e819e860ed014fdf8d3` on `boka-operativa-phone-test.netlify.app`, backed by
+isolated project `zoipjcdtcfetqvcfmhxd`. Production project
+`yskhdzrdbywrpfowckpn` remains separate and has not received P7/P8. Never call a
+GitHub commit a deployed feature. Free Netlify CLI authentication must be
+verified before attempting publication; connector deploy does not select this
+PR branch. No final URL, purchased domain or exported video exists yet.
+
+Current authoritative documents:
+[finishing plan](../APP_FINISH_AND_ONBOARDING_PLAN.md),
+[status](../CURRENT_STATUS_AND_PLAN.md), [identity](../NAME_OPTIONS.md),
+[cloud evidence](../CLOUD_PHONE_TEST.md),
+[release gates](../P7_P8_RELEASE_PREP.md),
+[video script](../VIDEO_PRODUCTION_SCRIPT.md).
+
+## Historical delivery: the data-layer read contract
 
 `ReadResult<T>` replaces every read that answered a refusal with `[]`. The
 owner chose a result over a throw for one reason: the compiler enforces it.

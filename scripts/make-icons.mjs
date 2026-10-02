@@ -5,7 +5,7 @@
  * shape is reviewable: an icon is the one asset nobody can diff. Run
  * `node scripts/make-icons.mjs` after changing anything below.
  *
- * The Boka Signal mark joins a radio pulse and two sea waves. It uses no DVD
+ * The FireNexa mark combines F/N initials and a signal accent. It uses no DVD
  * or SZS emblem, emergency number or official insignia. The SVG masthead and
  * raster launcher icons depict the same original symbol.
  */
@@ -17,6 +17,12 @@ import { dirname, resolve } from 'node:path';
 const NAVY = [7, 30, 42];
 const AQUA = [107, 214, 210];
 const WHITE = [255, 255, 255];
+const AMBER = [255, 182, 104];
+const F = [[120, 148], [238, 148], [238, 190], [162, 190], [162, 238],
+  [224, 238], [224, 280], [162, 280], [162, 364], [120, 364]];
+const N = [[254, 148], [294, 148], [350, 276], [350, 148], [392, 148],
+  [392, 364], [352, 364], [296, 236], [296, 364], [254, 364]];
+const PULSE = [[120, 108], [196, 108], [196, 120], [120, 120]];
 
 /** Coverage of one shape at a point, sampled 4x4 for a smooth edge. */
 function coverage(x, y, size, inside) {
@@ -31,7 +37,17 @@ function coverage(x, y, size, inside) {
   return hits / 16;
 }
 
-const inCircle = (u, v, cx, cy, r) => (u - cx) ** 2 + (v - cy) ** 2 <= r * r;
+function inPolygon(x, y, points) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, yi] = points[i];
+    const [xj, yj] = points[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
 
 /** Rounded square, so the icon has a shape of its own on a plain background. */
 function inRoundedSquare(u, v, radius) {
@@ -42,18 +58,13 @@ function inRoundedSquare(u, v, radius) {
 }
 
 /**
- * A signal above the waves stays legible at phone icon sizes. Maskable launchers
- * pull all strokes into the safe zone, so neither the pulse nor the waves crop.
+ * Block initials stay legible at phone icon sizes. Maskable launchers keep
+ * the complete symbol inside the central safe circle.
  */
 function signal(u, v, shrink) {
-  const x = 0.5 + (u - 0.5) / shrink;
-  const y = 0.5 + (v - 0.5) / shrink;
-  const radius = Math.hypot(x - 0.5, y - 0.43);
-  const arc = y <= 0.43 &&
-    (Math.abs(radius - 0.12) <= 0.019 || Math.abs(radius - 0.23) <= 0.019);
-  const waves = x >= 0.21 && x <= 0.79 && [0.65, 0.76].some((level) =>
-    Math.abs(y - (level + 0.035 * Math.sin(2 * Math.PI * (x - 0.21) / 0.58))) <= 0.022);
-  return { aqua: arc || waves, white: inCircle(x, y, 0.5, 0.438, 0.05) };
+  const x = (0.5 + (u - 0.5) / shrink) * 512;
+  const y = (0.5 + (v - 0.5) / shrink) * 512;
+  return { aqua: inPolygon(x, y, F), white: inPolygon(x, y, N), amber: inPolygon(x, y, PULSE) };
 }
 
 function render(size, { maskable = false, transparent = false } = {}) {
@@ -71,11 +82,12 @@ function render(size, { maskable = false, transparent = false } = {}) {
         : coverage(x, y, size, (u, v) => inRoundedSquare(u, v, 0.22));
       const aqua = coverage(x, y, size, (u, v) => signal(u, v, scale).aqua);
       const white = coverage(x, y, size, (u, v) => signal(u, v, scale).white);
+      const amber = coverage(x, y, size, (u, v) => signal(u, v, scale).amber);
 
       const alpha = transparent ? plate : 1;
       const base = transparent && plate === 0 ? [0, 0, 0] : NAVY;
       const withSignal = base.map((c, i) =>
-        (c * (1 - aqua) + AQUA[i] * aqua) * (1 - white) + WHITE[i] * white);
+        ((c * (1 - aqua) + AQUA[i] * aqua) * (1 - white) + WHITE[i] * white) * (1 - amber) + AMBER[i] * amber);
 
       pixels[offset] = Math.round(withSignal[0]);
       pixels[offset + 1] = Math.round(withSignal[1]);
@@ -133,6 +145,17 @@ const outputs = [
   ['public/icons/apple-touch-icon.png', 180, {}],
   ['public/icons/favicon-32.png', 32, { transparent: true }],
 ];
+
+// SVG and PNG share the same coordinates; neither asset is edited separately.
+const polygon = (points, colour) =>
+  `  <polygon points="${points.map((point) => point.join(',')).join(' ')}" fill="${colour}"/>`;
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FireNexa">\n` +
+  `  <rect width="512" height="512" rx="112" fill="#071e2a"/>\n` +
+  [polygon(F, '#6bd6d2'), polygon(N, '#ffffff'), polygon(PULSE, '#ffb668')].join('\n') + '\n</svg>\n';
+for (const path of ['public/icons/firenexa.svg', 'site/assets/firenexa.svg']) {
+  mkdirSync(dirname(resolve(path)), { recursive: true });
+  writeFileSync(resolve(path), svg);
+}
 
 for (const [path, size, options] of outputs) {
   const file = resolve(process.cwd(), path);
