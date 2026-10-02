@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Client } from 'pg';
 import {
-  asUser, completeProfile, connect, createAccount, createMember,
+  asUserCommitted, completeProfile, connect, createAccount, createMember,
   expectRefused, grantRole, resetSchema, type TestAccount,
 } from './harness';
 
@@ -15,7 +15,7 @@ let citizen: TestAccount;
 let existingSzsMember: string;
 
 async function prepare(account: TestAccount, service: string, role: string, member: string | null = null) {
-  return asUser(db, owner.userId, async (c) => {
+  return asUserCommitted(db, owner.userId, async (c) => {
     const result = await c.query<{ owner_prepare_service_member: string }>(
       'select public.owner_prepare_service_member($1, $2, $3, $4)',
       [account.userId, service, role, member],
@@ -93,7 +93,7 @@ describe('owner prepares a service member in one transaction', () => {
     );
     expect(rows).toHaveLength(0);
     const { rows: grants } = await db.query(
-      'select id from public.organization_memberships where user_id in ($1, $2)',
+      'select user_id from public.organization_memberships where user_id in ($1, $2)',
       [incomplete.userId, citizen.userId],
     );
     expect(grants).toHaveLength(0);
