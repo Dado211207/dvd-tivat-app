@@ -14,6 +14,8 @@ const recorded = vi.hoisted(() => ({
   table: '' as string,
   select: '' as string,
   filters: {} as Record<string, unknown>,
+  order: null as { column: string; ascending: boolean } | null,
+  limit: null as number | null,
   // The rows the stubbed query resolves with, and an optional error.
   rows: [] as unknown[],
   error: null as unknown,
@@ -37,22 +39,38 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
           recorded.filters[key] = values;
           return builder;
         },
+        order: (column: string, options: { ascending: boolean }) => {
+          recorded.order = { column, ascending: options.ascending };
+          return builder;
+        },
+        limit: (count: number) => {
+          recorded.limit = count;
+          return builder;
+        },
         then: (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
           Promise.resolve({
             // Hosted REST APIs commonly cap a response. A joined parent filter
             // must run before that cap, or years of closed history hide a new page.
-            data: recorded.error ? null : (
-              recorded.select.includes('interventions!inner(') &&
-              Array.isArray(recorded.filters['interventions.status'])
-                ? recorded.rows.filter((row) => {
-                    const related = (row as {
-                      interventions: { status: string } | { status: string }[] | null;
-                    }).interventions;
-                    const status = (Array.isArray(related) ? related[0] : related)?.status ?? '';
-                    return (recorded.filters['interventions.status'] as readonly string[]).includes(status);
+            data: recorded.error ? null : (() => {
+              const filtered = recorded.select.includes('interventions!inner(') &&
+                Array.isArray(recorded.filters['interventions.status'])
+                  ? recorded.rows.filter((row) => {
+                      const related = (row as {
+                        interventions: { status: string } | { status: string }[] | null;
+                      }).interventions;
+                      const status = (Array.isArray(related) ? related[0] : related)?.status ?? '';
+                      return (recorded.filters['interventions.status'] as readonly string[]).includes(status);
+                    })
+                  : recorded.rows;
+              const ordered = recorded.order?.column === 'added_at'
+                ? [...filtered].sort((a, b) => {
+                    const left = (a as { added_at?: string }).added_at ?? '';
+                    const right = (b as { added_at?: string }).added_at ?? '';
+                    return recorded.order?.ascending ? left.localeCompare(right) : right.localeCompare(left);
                   })
-                : recorded.rows
-            ).slice(0, 1000),
+                : filtered;
+              return ordered.slice(0, recorded.limit ?? 1000);
+            })(),
             error: recorded.error,
           }).then(
             resolve,
@@ -63,15 +81,41 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
   }),
 }));
 
-import { fetchAddressedOpenInterventionIds } from './operations';
+import {
+  fetchAddressedInterventions, fetchAddressedOpenInterventionIds, fetchTargetedInterventions,
+} from './operations';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const MEMBER = '00000000-0000-4000-8000-000000000101';
+
+/** A minimally-complete embedded intervention row, as PostgREST returns it. */
+const embeddedIntervention = (id: string, overrides: Record<string, unknown> = {}) => ({
+  interventions: {
+    id,
+    kind: 'POZAR',
+    other_kind_note: null,
+    title: 'Zajednicka intervencija',
+    instructions: 'Upute.',
+    incident_location: 'Lokacija',
+    assembly_point: null,
+    latitude: null,
+    longitude: null,
+    status: 'PUBLISHED',
+    version: 2,
+    published_at: '2026-09-29T10:00:00Z',
+    closed_at: null,
+    close_reason: null,
+    created_at: '2026-09-29T09:59:00Z',
+    ...overrides,
+  },
+});
 
 beforeEach(() => {
   recorded.table = '';
   recorded.select = '';
   recorded.filters = {};
+  recorded.order = null;
+  recorded.limit = null;
   recorded.rows = [];
   recorded.error = null;
 });
@@ -134,5 +178,81 @@ describe('fetchAddressedOpenInterventionIds', () => {
     recorded.error = { code: '42501', message: 'permission denied' };
     const result = await fetchAddressedOpenInterventionIds(DVD, MEMBER);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('newest P7 call-outs survive the server row cap', () => {
+  it('keeps a newly addressed call-out after more than 100 older recipient rows', async () => {
+    recorded.rows = Array.from({ length: 100 }, (_, index) => ({
+      ...embeddedIntervention(`old-${index}`),
+      added_at: `2026-01-01T00:${String(index % 60).padStart(2, '0')}:00Z`,
+    }));
+    recorded.rows.push({ ...embeddedIntervention('newest'), added_at: '2026-09-29T17:00:00Z' });
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok && result.value).toHaveLength(100);
+    expect(result.ok && result.value[0]?.id).toBe('newest');
+  });
+
+  it('keeps a newly targeted joint incident in the service archive after 100 older entries', async () => {
+    recorded.rows = Array.from({ length: 100 }, (_, index) => ({
+      ...embeddedIntervention(`old-${index}`),
+      added_at: '2026-01-01T00:00:00Z',
+    }));
+    recorded.rows.push({ ...embeddedIntervention('newest'), added_at: '2026-09-29T17:00:00Z' });
+    const result = await fetchTargetedInterventions(DVD);
+    expect(result.ok && result.value).toHaveLength(100);
+    expect(result.ok && result.value[0]?.id).toBe('newest');
+  });
+});
+
+describe('fetchAddressedInterventions', () => {
+  it('reads the member’s own recipient rows in one service, embedding the call-out', async () => {
+    recorded.rows = [embeddedIntervention('joint-1')];
+    await fetchAddressedInterventions(DVD, MEMBER);
+    expect(recorded.table).toBe('intervention_recipients');
+    expect(recorded.select).toContain('interventions!inner(');
+    expect(recorded.filters).toMatchObject({ organization_id: DVD, member_id: MEMBER });
+  });
+
+  it('returns the full call-out embedded through the recipient row (a joint call-out owned elsewhere)', async () => {
+    recorded.rows = [embeddedIntervention('joint-1', { title: 'SZS zove DVD' })];
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value).toHaveLength(1);
+    expect(result.ok && result.value[0]).toMatchObject({ id: 'joint-1', title: 'SZS zove DVD', status: 'PUBLISHED' });
+  });
+
+  it('de-duplicates by call-out id, even if two recipient rows point at one call-out', async () => {
+    recorded.rows = [embeddedIntervention('joint-1'), embeddedIntervention('joint-1')];
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok && result.value.map((i) => i.id)).toEqual(['joint-1']);
+  });
+
+  it('tolerates the embedded call-out arriving as an array', async () => {
+    recorded.rows = [{ interventions: [embeddedIntervention('arr-1').interventions] }];
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok && result.value.map((i) => i.id)).toEqual(['arr-1']);
+  });
+
+  it('fails closed on an error - never an empty success', async () => {
+    recorded.error = { code: '42501', message: 'permission denied' };
+    const result = await fetchAddressedInterventions(DVD, MEMBER);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('fetchTargetedInterventions', () => {
+  it('reads shared incidents through rows targeting the selected service, without a member id', async () => {
+    recorded.rows = [embeddedIntervention('joint-archive', { status: 'CLOSED' })];
+    const result = await fetchTargetedInterventions(DVD);
+    expect(recorded.table).toBe('intervention_recipient_organizations');
+    expect(recorded.filters).toMatchObject({ organization_id: DVD });
+    expect(recorded.select).toContain('interventions!inner(');
+    expect(result.ok && result.value[0]).toMatchObject({ id: 'joint-archive', status: 'CLOSED' });
+  });
+
+  it('keeps a refused archive read distinct from an empty archive', async () => {
+    recorded.error = { code: '42501', message: 'permission denied' };
+    expect((await fetchTargetedInterventions(DVD)).ok).toBe(false);
   });
 });

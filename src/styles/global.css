@@ -14,6 +14,16 @@ body,
   height: 100%;
 }
 
+/* Keep document scrolling, but stop extra drag at its edges and avoid
+   accidental pull-to-refresh/history swipe in the installed app. Internal
+   horizontal navigation rows retain their own controlled scrolling. */
+html,
+body {
+  /* Wide tables scroll in their own labelled regions, never the entire app. */
+  overflow-x: clip;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family: var(--font);

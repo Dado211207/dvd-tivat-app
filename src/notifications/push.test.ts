@@ -126,6 +126,22 @@ describe('device-bound Web Push client', () => {
     expect(backend.rpc).not.toHaveBeenCalled();
   });
 
+  it('identifies a browser push-service failure before any server request', async () => {
+    const browser = installPushBrowser({ permission: 'granted' });
+    browser.subscribe.mockRejectedValueOnce(new DOMException('Push service unavailable', 'AbortError'));
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_BROWSER_SUBSCRIPTION_FAILED');
+    expect(backend.rpc).not.toHaveBeenCalled();
+  });
+
+  it('identifies a browser policy refusal before any server request', async () => {
+    const browser = installPushBrowser({ permission: 'granted' });
+    browser.subscribe.mockRejectedValueOnce(new DOMException('Blocked by policy', 'NotAllowedError'));
+
+    await expect(enableWebPush()).rejects.toThrow('PUSH_BROWSER_PERMISSION_BLOCKED');
+    expect(backend.rpc).not.toHaveBeenCalled();
+  });
+
   it('replaces a previous account subscription in a shared browser without reassigning it', async () => {
     const browser = installPushBrowser({ permission: 'granted', existingSubscription: true });
     backend.rpc

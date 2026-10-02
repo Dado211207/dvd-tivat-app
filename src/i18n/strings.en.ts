@@ -46,6 +46,7 @@ export const en: Strings = {
       INTERVAL_REJECTED: "That record was rejected. Return it to pending first.",
       INTERVAL_CONFIRMED: "That record is already confirmed. Withdraw confirmation first.",
       REASON_REQUIRED: "A reason of at least two characters is required.",
+      REPORT_TOO_LONG: "The report can have at most 500 characters.",
       VEHICLE_NOT_FOUND: "The vehicle no longer exists.",
       VEHICLE_NOT_IN_SERVICE: "The vehicle is not in service.",
       VEHICLE_ALREADY_OUT: "That vehicle is already deployed.",
@@ -62,8 +63,8 @@ export const en: Strings = {
       LOCATION_REQUIRED: "A location is required.",
       KIND_NOTE_REQUIRED: "Enter a short description for the \"Other\" type.",
       IDEMPOTENCY_KEY_REQUIRED: "The request key is missing. Try again.",
-      NO_RECIPIENTS: "Select at least one member.",
-      NO_ACTIVE_RECIPIENTS: "None of the selected members are active.",
+      NO_RECIPIENTS: "Choose a service to alert.",
+      NO_ACTIVE_RECIPIENTS: "No active operational member in the selected services can receive this call-out.",
       NO_INTERVALS: "No records are selected.",
       TOO_MANY_INTERVALS: "Too many records at once. Split them into smaller groups.",
       AVAILABILITY_REQUIRED: "Select your availability.",
@@ -86,6 +87,7 @@ export const en: Strings = {
       FULL_NAME_REQUIRED: "The full name must contain at least two characters.",
       NAME_REQUIRED: "A name of at least two characters is required.",
       REASON_REQUIRED: "A reason of at least two characters is required.",
+      REPORT_TOO_LONG: "The report can have at most 500 characters.",
     },
   },
 
@@ -112,6 +114,9 @@ export const en: Strings = {
     invalidEmail: 'Enter a valid email address.', shortPassword: 'The password must be at least 12 characters.',
     wait: 'Please wait...', noAccount: 'I do not have an account', haveAccount: 'I already have an account',
     requestReceived: 'Request received. If this is a new address, check your email for confirmation. If the account already exists, sign in with your current password.',
+    resendConfirmation: 'Send a new confirmation email',
+    confirmationResent: 'Request received. If the account awaits confirmation, open only the newest email and its link. Do not use older links.',
+    confirmationSendFailed: 'A new email was not sent right now. Wait before trying again, or open the newest confirmation email you have already received.',
     profileRequired: 'Complete your full name, telephone number and date of birth so the owner can identify who is requesting access.',
     fullName: 'Full name', displayOnly: 'Display information only. It does not grant operational access.',
     saveProfile: 'Save profile', saving: 'Saving...', signOut: 'Sign out',
@@ -425,6 +430,10 @@ export const en: Strings = {
     notConfigured: 'The push service is not yet connected to this published version.',
     denied: 'Notifications are refused in the phone’s settings. Allow them for Boka Operativa, then open the application again.',
     failed: 'The notification was not set up. Check the connection and try again.',
+    browserSubscriptionFailed:
+      'The browser could not create a push subscription. No request reached the server yet. Check this site\'s notification permission, then try another browser or network. A work laptop may block the push service through its network or browser policy.',
+    browserPermissionBlocked:
+      'The browser blocked the push subscription. Check this site\'s notification permission and the browser or device policy.',
 
     memberRequired:
       'Your account is not linked to a member of the society, so it cannot receive a call-out. Open Records - Members, add your member record and link it to this account.',
@@ -608,7 +617,8 @@ export const en: Strings = {
     closed: 'Closed',
     stillRunning: 'still running',
     state: 'State',
-    closeNote: 'Note on closing',
+    closeNote: 'Short report',
+    cancelNote: 'Cancellation reason',
     notClosedYet:
       'This intervention is not closed yet, so the record is not final. Attendance can still be stated and confirmed.',
 
@@ -681,6 +691,8 @@ export const en: Strings = {
     unavailable: 'The server is not available at the moment. The view was not refreshed.',
     notSaved: 'The change was not saved.',
     pickIntervention: 'Intervention',
+    jointTargetedLabel: 'Joint intervention',
+    jointTargetedNotice: 'The other service runs this intervention. Here you see your members and confirm their attendance. Status changes and closure belong to the service that published the call-out.',
 
     newTitle: 'New call-out',
     newSummary: 'Prepare a new call-out',
@@ -696,6 +708,13 @@ export const en: Strings = {
     saving: 'Saving...',
     saveDraft: 'Save draft',
     draftSaved: 'The call-out is saved as a draft. It has not been published.',
+    quickReview: 'Review and publish',
+    audienceTitle: 'Who receives it',
+    audienceNote: 'All active operational members of the selected service are included automatically. The server determines the list when you publish.',
+    audienceBoth: '{own} and {other}',
+    audienceAtPublish: 'The server includes all active operational members of the selected services at publication. You do not select individual members.',
+    publishDraftTitle: 'Publish saved draft',
+    publishDraftNote: 'Choose the service. The server will call all its active operational members.',
 
     stepDetails: 'What happened',
     stepWhere: 'Where and what to do',
@@ -723,6 +742,10 @@ export const en: Strings = {
     availableNo: 'Not available',
     availableUnknown: 'Has not said',
     selectedCount: 'Selected',
+    alsoAlertService: 'Also alert the whole {service}',
+    alsoAlertServiceNote:
+      'Every available member of that service is called as well, under their own service. Each service then sees and confirms only its own people.',
+    reviewAlsoService: 'Also alerting the whole {service}.',
 
     publish: 'Publish the call-out',
     discardDraft: 'Discard draft',
@@ -731,7 +754,10 @@ export const en: Strings = {
     statusTitle: 'State of the intervention',
     statusChanged: 'The state was changed to',
     closeIntervention: 'Close the intervention',
-    closedWithNote: 'Closed',
+    closedWithNote: 'Short report',
+    cancelReason: 'Cancellation reason',
+    fieldReport: 'What was done (optional)',
+    reportHint: 'You may briefly describe the intervention. A report is not required to close it.',
     closedMessage: 'The intervention is closed.',
     cancelledMessage: 'The intervention is cancelled.',
     noInterventionTitle: 'There is no intervention',
@@ -852,7 +878,12 @@ export const en: Strings = {
 
     doAcknowledge: 'I have seen the call-out',
     doAcknowledgeWhy: 'Tell the commander it reached you.',
+    ackOnlyHint: 'Not sure yet? You can just confirm receipt.',
+    receiptRetryTitle: 'Your answer is already saved',
+    receiptRetryWhy: 'Only the receipt still needs confirmation.',
     doAnswer: 'Are you coming?',
+    answerAlsoAcknowledges: 'Answering also confirms you have seen the call-out.',
+    answerSavedReceiptRetry: 'Your answer was saved, but the receipt was not. If the call-out is still open, retry the receipt.',
     doAnswerWhy: 'The commander is waiting for your answer.',
     doMove: 'Report where you are',
     doMoveWhy: 'This does not state attendance - not even "On scene".',

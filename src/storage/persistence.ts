@@ -18,7 +18,8 @@ import { SCHEMA_VERSION, type AppState } from '@/domain/types';
 // fictional dataset. The old key is deliberately left untouched: upgrading
 // must not rewrite or delete a previous local demonstration behind the user's
 // back.
-export const STORAGE_KEY = 'dvd-tivat-prototip:v2';
+export const STORAGE_KEY = 'boka-operativa-prototip:v2';
+export const LEGACY_STORAGE_KEY = 'dvd-tivat-prototip:v2';
 
 export type LoadStatus =
   | 'UCITANO'
@@ -106,8 +107,13 @@ export function loadState(): LoadResult {
   const writable = storageAcceptsWrites(storage);
 
   let raw: string | null;
+  let legacy = false;
   try {
     raw = storage.getItem(STORAGE_KEY);
+    if (raw === null) {
+      raw = storage.getItem(LEGACY_STORAGE_KEY);
+      legacy = raw !== null;
+    }
   } catch {
     // Access can be revoked between the capability probe and the real read.
     // Starting with the fictional seed plus a visible warning is safer than
@@ -157,6 +163,9 @@ export function loadState(): LoadResult {
     }
     try {
       storage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      if (legacy) {
+        try { storage.removeItem(LEGACY_STORAGE_KEY); } catch { /* New key wins. */ }
+      }
       return { state: migrated, status: 'UCITANO', warning: null };
     } catch {
       return {
@@ -184,6 +193,15 @@ export function loadState(): LoadResult {
     };
   }
 
+  if (legacy && writable) {
+    try {
+      storage.setItem(STORAGE_KEY, raw);
+      try { storage.removeItem(LEGACY_STORAGE_KEY); } catch { /* New key wins. */ }
+    } catch {
+      return { state: parsed, status: 'SAMO_CITANJE', warning: WARNINGS.SAMO_CITANJE };
+    }
+  }
+
   return writable
     ? { state: parsed, status: 'UCITANO', warning: null }
     : { state: parsed, status: 'SAMO_CITANJE', warning: WARNINGS.SAMO_CITANJE };
@@ -200,6 +218,7 @@ export function saveState(state: AppState): SaveResult {
 
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try { storage.removeItem(LEGACY_STORAGE_KEY); } catch { /* New key wins. */ }
     return { ok: true };
   } catch {
     // Quota exceeded, or storage revoked mid-session. The in-memory state stays
@@ -208,10 +227,15 @@ export function saveState(state: AppState): SaveResult {
   }
 }
 
-/** Removes ONLY this prototype's own key. Nothing else in the browser is touched. */
+/** Removes only the current and legacy keys for this fictional prototype. */
 export function clearStoredState(): void {
   const storage = storageOrNull();
   if (!storage) return;
+  try {
+    storage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Still try the current key if only the old one was refused.
+  }
   try {
     storage.removeItem(STORAGE_KEY);
   } catch {

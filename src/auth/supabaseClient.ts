@@ -260,6 +260,21 @@ export async function registerWithEmail(
   }
 }
 
+/** A fresh confirmation link for a pending signup, without repeating registration. */
+export async function resendSignupConfirmation(email: string): Promise<AuthOutcome> {
+  try {
+    const { error } = await accountBackend().auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+    });
+    return error
+      ? { ok: false, unreachable: unreachable(error) }
+      : { ok: true };
+  } catch (thrown) {
+    return { ok: false, unreachable: unreachable(thrown) };
+  }
+}
+
 export async function completeOwnProfile(profile: RequiredProfile): Promise<AuthOutcome> {
   try {
     const { error } = await accountBackend().rpc('complete_own_profile', {

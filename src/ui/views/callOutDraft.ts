@@ -36,11 +36,12 @@
  * commander whose browser refuses storage must still get a working form.
  */
 
-export const DRAFT_STORAGE_KEY = 'dvd-tivat.callout-draft';
+export const DRAFT_STORAGE_KEY = 'boka-operativa.callout-draft';
+export const LEGACY_DRAFT_STORAGE_KEY = 'dvd-tivat.callout-draft';
 const DVD_ID = '00000000-0000-4000-8000-000000000001';
-function storageKey(organizationId?: string): string {
+function storageKey(organizationId?: string, prefix = DRAFT_STORAGE_KEY): string {
   return organizationId === undefined || organizationId === DVD_ID
-    ? DRAFT_STORAGE_KEY : `${DRAFT_STORAGE_KEY}:${organizationId}`;
+    ? prefix : `${prefix}:${organizationId}`;
 }
 
 export interface CallOutDraft {
@@ -88,8 +89,10 @@ function asString(value: unknown): string {
 export function readStoredDraft(organizationId?: string): CallOutDraft | null {
   try {
     const raw = window.localStorage.getItem(storageKey(organizationId));
-    if (raw === null) return null;
-    const parsed: unknown = JSON.parse(raw);
+    const legacy = raw === null ? window.localStorage.getItem(storageKey(organizationId, LEGACY_DRAFT_STORAGE_KEY)) : null;
+    const stored = raw ?? legacy;
+    if (stored === null) return null;
+    const parsed: unknown = JSON.parse(stored);
     if (typeof parsed !== 'object' || parsed === null) return null;
     const record = parsed as Record<string, unknown>;
     const draft: CallOutDraft = {
@@ -102,7 +105,16 @@ export function readStoredDraft(organizationId?: string): CallOutDraft | null {
     };
     // An entry holding nothing but a default kind is not a draft anybody wants
     // restored; it would only make the form look like it remembered something.
-    return draftHasContent(draft) ? draft : null;
+    if (!draftHasContent(draft)) return null;
+    if (legacy !== null) {
+      try {
+        window.localStorage.setItem(storageKey(organizationId), legacy);
+        window.localStorage.removeItem(storageKey(organizationId, LEGACY_DRAFT_STORAGE_KEY));
+      } catch {
+        // A read still succeeds when this browser refuses the key migration.
+      }
+    }
+    return draft;
   } catch {
     return null;
   }
@@ -112,10 +124,16 @@ export function readStoredDraft(organizationId?: string): CallOutDraft | null {
 export function storeDraft(draft: CallOutDraft, organizationId?: string): boolean {
   try {
     if (!draftHasContent(draft)) {
+      window.localStorage.removeItem(storageKey(organizationId, LEGACY_DRAFT_STORAGE_KEY));
       window.localStorage.removeItem(storageKey(organizationId));
       return true;
     }
     window.localStorage.setItem(storageKey(organizationId), JSON.stringify(draft));
+    try {
+      window.localStorage.removeItem(storageKey(organizationId, LEGACY_DRAFT_STORAGE_KEY));
+    } catch {
+      // The new key is committed and wins every future read.
+    }
     return true;
   } catch {
     return false;
@@ -124,9 +142,13 @@ export function storeDraft(draft: CallOutDraft, organizationId?: string): boolea
 
 export function clearDraft(organizationId?: string): void {
   try {
+    window.localStorage.removeItem(storageKey(organizationId, LEGACY_DRAFT_STORAGE_KEY));
+  } catch {
+    // Still attempt the new key independently.
+  }
+  try {
     window.localStorage.removeItem(storageKey(organizationId));
   } catch {
-    // Nothing to do and nothing to report: the draft is already on the server
-    // by the time this runs, so a browser that refuses to forget costs nothing.
+    // The draft is already on the server by the time this runs.
   }
 }

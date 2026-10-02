@@ -49,6 +49,13 @@ describe('the sound catalogue', () => {
 });
 
 describe('remembering the choice, per account, on this device', () => {
+  it('keeps the chosen tone from the old DVD-keyed build', () => {
+    const storage = memoryStorage();
+    storage._map.set('dvd-tivat.alarm-sound:user-1', 'siren');
+    expect(readAlarmSound(storage, 'user-1')).toBe('siren');
+    expect(storage._map.get('boka-operativa.alarm-sound:user-1')).toBe('siren');
+    expect(readAlarmSound(storage, 'user-2')).toBe(ALARM_SOUND_OFF);
+  });
   it('defaults to off when nothing is stored', () => {
     expect(readAlarmSound(memoryStorage(), 'user-1')).toBe(ALARM_SOUND_OFF);
   });

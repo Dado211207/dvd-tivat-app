@@ -1,5 +1,7 @@
 # DVD Tivat — internal mobilisation and intervention records
 
+> **Current status, 2026-09-30:** The isolated Free cloud phone test received a Web Push notification on the owner's locked iPhone. The selected in-app sound applies only while the web app is visible; iOS uses its system notification sound in the background. Read [current status and plan](docs/CURRENT_STATUS_AND_PLAN.md) and [phone test evidence](docs/CLOUD_PHONE_TEST.md). The draft PR and production are separate; this is not operational acceptance.
+
 An **internal** coordination system for a volunteer fire society: an authorised
 commander publishes an intervention with verified details and an exact location,
 approved firefighters receive it and respond, and the society keeps a reliable

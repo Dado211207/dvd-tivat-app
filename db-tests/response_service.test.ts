@@ -37,6 +37,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS, connect, createAccount } from './harness';
 
 const RESPONSES = 'supabase/migrations/202609250030_response_service.sql';
+// P7/D20 (202609290041) re-creates submit_response so a recipient-service member
+// can answer a joint call-out under their own member record. Its body is still
+// service-aware (asserted below), so the "no DVD shim" guarantee is preserved and
+// this file becomes the final definer.
+const JOINT_PARTICIPATION = 'supabase/migrations/202609290041_joint_participation.sql';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
@@ -684,11 +689,17 @@ describe('after P4c: an answer comes from the member the call-out was sent to', 
       expect(rows[0]!.body).not.toMatch(/current_member_id\(\)/);
     });
 
-    it('is re-created by no other migration, so no replay can put the DVD-only text back', () => {
+    it('is re-created only by P4c and P7/D20, and never with the DVD-only text', () => {
       const definers = MIGRATIONS.filter((file) =>
         /create\s+(or\s+replace\s+)?function\s+public\.submit_response\s*\(/i.test(sql(file)),
       );
-      expect(definers).toEqual(['supabase/migrations/202609090002_internal_operations.sql', RESPONSES]);
+      // 002 (origin), 030 (P4c, service-aware), 041 (P7/D20, still service-aware —
+      // the body assertion above pins that the final one holds no DVD shim).
+      expect(definers).toEqual([
+        'supabase/migrations/202609090002_internal_operations.sql',
+        RESPONSES,
+        JOINT_PARTICIPATION,
+      ]);
     });
 
     it('is a no-op to apply twice', async () => {
@@ -700,7 +711,9 @@ describe('after P4c: an answer comes from the member the call-out was sent to', 
         )).rows[0]!.h;
       const before = await body();
       await isolated(async () => {
-        await db.query(sql(RESPONSES));
+        // Re-applying the migration that now owns the final definition (P7/D20)
+        // is a no-op: create-or-replace lands the identical body and grants.
+        await db.query(sql(JOINT_PARTICIPATION));
         expect(await body()).toBe(before);
       });
     });

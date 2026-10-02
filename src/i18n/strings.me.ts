@@ -53,6 +53,7 @@ export const me = {
       INTERVAL_REJECTED: "Taj zapis je odbijen. Prvo ga vratite u cekanje.",
       INTERVAL_CONFIRMED: "Taj zapis je vec potvrdjen. Prvo povucite potvrdu.",
       REASON_REQUIRED: "Razlog je obavezan i mora imati najmanje dva znaka.",
+      REPORT_TOO_LONG: "Izvjestaj moze imati najvise 500 znakova.",
       VEHICLE_NOT_FOUND: "Vozilo vise ne postoji.",
       VEHICLE_NOT_IN_SERVICE: "Vozilo nije u upotrebi.",
       VEHICLE_ALREADY_OUT: "To vozilo je vec na terenu.",
@@ -69,8 +70,8 @@ export const me = {
       LOCATION_REQUIRED: "Lokacija je obavezna.",
       KIND_NOTE_REQUIRED: "Za vrstu \"Drugo\" upisite kratak opis.",
       IDEMPOTENCY_KEY_REQUIRED: "Nedostaje kljuc zahtjeva. Pokusajte ponovo.",
-      NO_RECIPIENTS: "Izaberite bar jednog clana.",
-      NO_ACTIVE_RECIPIENTS: "Nijedan izabrani clan nije aktivan.",
+      NO_RECIPIENTS: "Izaberite sluzbu kojoj saljete poziv.",
+      NO_ACTIVE_RECIPIENTS: "U izabranim sluzbama nema aktivnih operativaca koji mogu primiti poziv.",
       NO_INTERVALS: "Nema izabranih zapisa.",
       TOO_MANY_INTERVALS: "Previse zapisa odjednom. Podijelite na manje grupe.",
       AVAILABILITY_REQUIRED: "Izaberite dostupnost.",
@@ -93,6 +94,7 @@ export const me = {
       FULL_NAME_REQUIRED: "Ime i prezime moraju imati najmanje dva znaka.",
       NAME_REQUIRED: "Naziv je obavezan i mora imati najmanje dva znaka.",
       REASON_REQUIRED: "Razlog je obavezan i mora imati najmanje dva znaka.",
+      REPORT_TOO_LONG: "Izvjestaj moze imati najvise 500 znakova.",
     },
   },
 
@@ -119,6 +121,9 @@ export const me = {
     invalidEmail: 'Unesite ispravnu email adresu.', shortPassword: 'Lozinka mora imati najmanje 12 znakova.',
     wait: 'Molimo sacekajte...', noAccount: 'Nemam nalog', haveAccount: 'Vec imam nalog',
     requestReceived: 'Zahtjev je primljen. Ako je ovo nova adresa, provjerite email za potvrdu. Ako nalog vec postoji, prijavite se postojecom lozinkom.',
+    resendConfirmation: 'Posalji novi email za potvrdu',
+    confirmationResent: 'Zahtjev je primljen. Ako nalog ceka potvrdu, otvorite samo najnoviji email i njegov link. Stariji link vise ne koristite.',
+    confirmationSendFailed: 'Novi email trenutno nije poslat. Sacekajte prije ponovnog pokusaja ili otvorite najnoviji vec primljeni email za potvrdu.',
     profileRequired: 'Dopunite ime i prezime, broj telefona i datum rodjenja da bi vlasnik mogao provjeriti ko trazi pristup.',
     fullName: 'Ime i prezime', displayOnly: 'Prikazni podatak. Ne daje operativna prava.',
     saveProfile: 'Sacuvaj profil', saving: 'Cuvam...', signOut: 'Odjavi se',
@@ -458,6 +463,10 @@ export const me = {
     notConfigured: 'Push servis jos nije povezan sa ovom objavljenom verzijom.',
     denied: 'Notifikacije su odbijene u podesavanjima telefona. Dozvolite ih za Boka Operativa, pa otvorite aplikaciju ponovo.',
     failed: 'Notifikacija nije podesena. Provjerite vezu i pokusajte ponovo.',
+    browserSubscriptionFailed:
+      'Pregledac nije uspio napraviti push pretplatu. Zahtjev jos nije stigao do servera. Provjerite dozvolu za obavjestenja za ovaj sajt, pa pokusajte u drugom pregledacu ili na drugoj mrezi. Na poslovnom laptopu mreza ili pravila pregledaca mogu blokirati push servis.',
+    browserPermissionBlocked:
+      'Pregledac je blokirao pravljenje push pretplate. Provjerite dozvolu za obavjestenja za ovaj sajt i pravila pregledaca ili racunara.',
 
     /*
      * Svaki od ovih razloga se ranije prikazivao kao "provjerite vezu", pa je
@@ -659,7 +668,8 @@ export const me = {
     closed: 'Zatvoreno',
     stillRunning: 'jos traje',
     state: 'Stanje',
-    closeNote: 'Zabiljeska pri zatvaranju',
+    closeNote: 'Kratak izvjestaj',
+    cancelNote: 'Razlog otkazivanja',
     notClosedYet:
       'Ova intervencija jos nije zatvorena, pa zapis nije konacan. Prisustvo se jos moze prijaviti i potvrditi.',
 
@@ -741,6 +751,8 @@ export const me = {
     unavailable: 'Server trenutno nije dostupan. Prikaz nije osvjezen.',
     notSaved: 'Promjena nije sacuvana.',
     pickIntervention: 'Intervencija',
+    jointTargetedLabel: 'Zajednicka intervencija',
+    jointTargetedNotice: 'Intervenciju vodi druga sluzba. Ovdje vidite svoje clanove i potvrdjujete njihovo prisustvo. Promjene statusa i zatvaranje pripadaju sluzbi koja je objavila poziv.',
 
     newTitle: 'Nova priprema poziva',
     newSummary: 'Pripremi novi poziv',
@@ -756,6 +768,13 @@ export const me = {
     saving: 'Cuvanje...',
     saveDraft: 'Sacuvaj nacrt',
     draftSaved: 'Priprema poziva je sacuvana kao nacrt. Jos nije objavljena.',
+    quickReview: 'Pregledaj i objavi',
+    audienceTitle: 'Kome se salje',
+    audienceNote: 'Svi aktivni operativci izabrane sluzbe ulaze automatski. Spisak se odredjuje na serveru u trenutku objave.',
+    audienceBoth: '{own} i {other}',
+    audienceAtPublish: 'Poziv ide svim aktivnim operativcima izabranih sluzbi u trenutku objave. Nije potrebno birati clanove pojedinacno.',
+    publishDraftTitle: 'Objavi sacuvani nacrt',
+    publishDraftNote: 'Izaberite sluzbu. Server ce pozvati sve njene aktivne operativce.',
 
     /** The four steps of writing a call-out, in the order they are asked. */
     stepDetails: 'Sta se desilo',
@@ -784,6 +803,10 @@ export const me = {
     availableNo: 'Nije dostupan',
     availableUnknown: 'Nije izjasnjen',
     selectedCount: 'Izabrano',
+    alsoAlertService: 'Pozovi i cijelu sluzbu {service}',
+    alsoAlertServiceNote:
+      'Poziva se i svaki dostupan clan te sluzbe, u okviru svoje sluzbe. Svaka sluzba potom vidi i potvrdjuje samo svoje ljude.',
+    reviewAlsoService: 'Poziva se i cijela sluzba {service}.',
 
     publish: 'Objavi poziv',
     discardDraft: 'Odbaci nacrt',
@@ -792,7 +815,10 @@ export const me = {
     statusTitle: 'Stanje intervencije',
     statusChanged: 'Stanje je promijenjeno u',
     closeIntervention: 'Zatvori intervenciju',
-    closedWithNote: 'Zatvoreno',
+    closedWithNote: 'Kratak izvjestaj',
+    cancelReason: 'Razlog otkazivanja',
+    fieldReport: 'Sta je uradjeno (opciono)',
+    reportHint: 'Mozete kratko opisati intervenciju. Zatvaranje ne zahtijeva izvjestaj.',
     closedMessage: 'Intervencija je zatvorena.',
     cancelledMessage: 'Intervencija je otkazana.',
     noInterventionTitle: 'Nema nijedne intervencije',
@@ -923,7 +949,12 @@ export const me = {
     /** The one dominant action, named for the state it belongs to. */
     doAcknowledge: 'Vidio sam poziv',
     doAcknowledgeWhy: 'Javite komandiru da je poziv stigao do vas.',
+    ackOnlyHint: 'Jos ne znate odgovor? Mozete samo potvrditi prijem.',
+    receiptRetryTitle: 'Odgovor je vec sacuvan',
+    receiptRetryWhy: 'Jos samo potvrdite da ste vidjeli poziv.',
     doAnswer: 'Dolazite li?',
+    answerAlsoAcknowledges: 'Odgovorom ujedno potvrdjujete da ste vidjeli poziv.',
+    answerSavedReceiptRetry: 'Odgovor je sacuvan, ali potvrda prijema nije. Ako je poziv jos otvoren, ponovite potvrdu.',
     doAnswerWhy: 'Komandir ceka vas odgovor.',
     doMove: 'Javite gdje ste',
     doMoveWhy: 'Ne prijavljuje prisustvo - ni "Na licu mjesta".',

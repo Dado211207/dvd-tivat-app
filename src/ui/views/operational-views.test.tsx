@@ -105,6 +105,10 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     ...real,
     fetchOwnMemberId: vi.fn(async () => ({ ok: true, value: MEMBER_ID }) as const),
     fetchInterventions: vi.fn(async () => ({ ok: true, value: [INTERVENTION] }) as const),
+    fetchTargetedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
+    // A recipient's joint call-outs are merged in from here (P7); the single
+    // call-out these tests exercise already comes back from fetchInterventions.
+    fetchAddressedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
     // Who may be CALLED is the server's answer, not a filter over the roster.
     // Pero is on the roster below but is NOT here: he stands in for the
     // withdrawn member whose account can no longer sign in.
@@ -112,6 +116,8 @@ vi.mock('@/auth/operations', async (importOriginal) => {
       { memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac', role: 'FIREFIGHTER' as const, specialties: [] },
     ]),
     fetchRecipientFacts: vi.fn(async () => ({ ok: true, value: RECIPIENTS }) as const),
+    acknowledgeIntervention: vi.fn(async () => ({ ok: true }) as const),
+    submitResponse: vi.fn(async () => ({ ok: true }) as const),
     fetchAttendance: vi.fn(async () => ({ ok: true, value: [PENDING_INTERVAL] }) as const),
     // Null is "the chronology could not be read", which is what an older
     // project without the reading function answers. The screen must then fall
@@ -335,7 +341,7 @@ describe('the commander console renders on real data', () => {
    * Pero, the server's eligible list does not, and the picker must follow the
    * server rather than the roster.
    */
-  describe('the recipient picker offers only who the server says may be called', () => {
+  describe('automatic recipients follow server eligibility', () => {
     const DRAFT = { ...INTERVENTION, status: 'DRAFT' as const, publishedAt: null, version: 1 };
 
     async function showDraft(
@@ -351,17 +357,10 @@ describe('the commander console renders on real data', () => {
       return show(<CommandView />, 'COMMANDER');
     }
 
-    it('lists the server’s answer and not the roster', async () => {
+    it('does not offer a manual roster picker and allows publishing when the server finds eligible members', async () => {
       await showDraft([{ memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac' }]);
-      const picker = container.querySelector('[data-testid="recipient-picker"]');
-      expect(picker?.textContent).toContain('Ivo Vatrogasac');
-      // Pero IS in the roster mock and is NOT in the server's list. A screen
-      // filtering the roster itself would show him here - which is exactly how
-      // a withdrawn member reached the real picker.
-      expect(
-        picker?.textContent,
-        'a member the server does not offer must not appear',
-      ).not.toContain('Pero Vatrogasac');
+      expect(container.querySelector('[data-testid="recipient-picker"]')).toBeNull();
+      expect(container.querySelector<HTMLButtonElement>('[data-testid="publish"]')?.disabled).toBe(false);
     });
 
     it('says the list could not be read, rather than showing an empty one', async () => {
@@ -461,6 +460,63 @@ describe('the firefighter screen renders on real data', () => {
 
     await show(<MobilisationView />, 'FIREFIGHTER');
     expect(container.querySelector('[data-testid="acknowledge"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="answer-DOLAZIM"]')).not.toBeNull();
+  });
+
+  it('saves an immediate answer and then its separate receipt with one tap', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.submitResponse).mockClear();
+    vi.mocked(operations.acknowledgeIntervention).mockClear();
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce({ ok: true, value: [
+      { ...RECIPIENTS[0]!, acknowledgedAt: null, answer: null, answeredAt: null, journey: null, journeyAt: null },
+    ] });
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    await act(async () => {
+      (container.querySelector('[data-testid="answer-DOLAZIM"]') as HTMLButtonElement).click();
+    });
+    expect(operations.submitResponse).toHaveBeenCalledWith(INTERVENTION_ID, 'DOLAZIM', null, false);
+    expect(operations.acknowledgeIntervention).toHaveBeenCalledWith(INTERVENTION_ID);
+    expect(vi.mocked(operations.submitResponse).mock.invocationCallOrder[0]!).toBeLessThan(
+      vi.mocked(operations.acknowledgeIntervention).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('never records a receipt as part of a failed answer', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.submitResponse).mockReset().mockResolvedValueOnce({ ok: false, message: 'Server odbio odgovor.' });
+    vi.mocked(operations.acknowledgeIntervention).mockClear();
+    vi.mocked(operations.fetchRecipientFacts).mockResolvedValueOnce({ ok: true, value: [
+      { ...RECIPIENTS[0]!, acknowledgedAt: null, answer: null, answeredAt: null, journey: null, journeyAt: null },
+    ] });
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    await act(async () => {
+      (container.querySelector('[data-testid="answer-DOLAZIM"]') as HTMLButtonElement).click();
+    });
+    expect(operations.acknowledgeIntervention).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Server odbio odgovor.');
+    vi.mocked(operations.submitResponse).mockReset().mockResolvedValue({ ok: true });
+  });
+
+  it('keeps the saved answer visible and offers receipt retry when that request fails', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.submitResponse).mockReset().mockResolvedValue({ ok: true });
+    vi.mocked(operations.acknowledgeIntervention).mockReset()
+      .mockResolvedValueOnce({ ok: false, message: 'Potvrda prijema nije sacuvana.' });
+    const unanswered = { ...RECIPIENTS[0]!, acknowledgedAt: null, answer: null, answeredAt: null, journey: null, journeyAt: null };
+    const answered = { ...unanswered, answer: 'DOLAZIM' as const, answeredAt: '2026-09-13T08:05:00.000Z' };
+    vi.mocked(operations.fetchRecipientFacts)
+      .mockResolvedValueOnce({ ok: true, value: [unanswered] })
+      .mockResolvedValueOnce({ ok: true, value: [answered] });
+    await show(<MobilisationView />, 'FIREFIGHTER');
+    await act(async () => {
+      (container.querySelector('[data-testid="answer-DOLAZIM"]') as HTMLButtonElement).click();
+    });
+    expect(container.querySelector('[data-testid="fact-answered"]')?.getAttribute('data-mark')).toBe('YES');
+    expect(container.querySelector('[data-testid="fact-acknowledged"]')?.getAttribute('data-mark')).toBe('NO');
+    expect(container.querySelector('[data-testid="acknowledge"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="answer-DOLAZIM"]')).toBeNull();
+    expect(container.textContent).toContain('Odgovor je sacuvan, ali potvrda prijema nije.');
+    vi.mocked(operations.acknowledgeIntervention).mockReset().mockResolvedValue({ ok: true });
   });
 
   it('says in words that reporting movement is not reporting attendance', async () => {
@@ -1412,5 +1468,61 @@ describe('with nothing happening', () => {
     const text = await show(<ArchiveView />, 'COMMANDER');
     expect(text).not.toMatch(/Arhiva nije ucitana/);
     expect(text).toMatch(/Arhiva je prazna/i);
+  });
+});
+
+describe('P7 targeted service archive', () => {
+  it('lists an incident published by the other service without switching', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValueOnce({ ok: true, value: [] });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValueOnce({
+      ok: true, value: [{ ...INTERVENTION, title: 'SZS pozvao DVD' }],
+    });
+    await show(<ArchiveView />, 'COMMANDER');
+    expect(container.querySelector('[data-testid="archive-list"]')?.textContent).toContain('SZS pozvao DVD');
+  });
+});
+
+describe('P7 targeted service command', () => {
+  afterEach(async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [INTERVENTION] });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValue({ ok: true, value: [] });
+  });
+
+  it('lets the targeted commander manage their own attendance without controlling the publisher lifecycle', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({
+      ok: true,
+      value: [{ ...INTERVENTION, id: OTHER_ID, title: 'DVD nacrt', status: 'DRAFT' }],
+    });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValue({
+      ok: true, value: [{ ...INTERVENTION, title: 'SZS pozvao DVD' }],
+    });
+
+    await show(<CommandView />, 'COMMANDER');
+    expect(container.querySelector('[data-testid="intervention-picker"]')?.textContent)
+      .toContain('SZS pozvao DVD');
+    expect(container.querySelector('[data-testid="joint-command-scope"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="status-DEPLOYED"]')).toBeNull();
+    expect(container.querySelector('[data-testid="close-intervention"]')).toBeNull();
+
+    act(() => {
+      pressByText('Prisustvo');
+    });
+    await settle();
+    expect(container.querySelector(`[data-testid="toggle-presence-${MEMBER_ID}"]`)).not.toBeNull();
+    expect(container.querySelector('[data-testid="pending-list"]')?.textContent)
+      .toContain('Ivo Vatrogasac');
+  });
+
+  it('fails closed if the targeted incident read is refused', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValueOnce({
+      ok: false, reason: 'REFUSED',
+    });
+    await show(<CommandView />, 'COMMANDER');
+    expect(container.textContent).toContain('Server je odbio');
+    expect(container.querySelector('[data-testid="intervention-picker"]')).toBeNull();
   });
 });
