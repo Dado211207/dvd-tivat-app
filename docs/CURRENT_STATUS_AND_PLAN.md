@@ -16,8 +16,12 @@ DVD 2 podobna / 1 push, SZS 0 / 0 i zajedno 2 / 1 za postojece test podatke;
 neovlasceni nalog je odbijen, anoniman nema EXECUTE pravo. Nula poznatih
 primalaca blokira potvrdu, a nula push pretplata upozorava. Broj pretplata
 ne dokazuje dostavu, a prikaz nije jos objavljen na testnom sajtu. Naredni rad:
-CI provjera ovog koraka, vodjena priprema
-naloga, zatim pregled izgleda i javni materijali. Stari naziv u ovom naslovu
+Puna CI provjera ovog koraka je prosla u [run 37028798449](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37028798449),
+sa baznim, RLS i browser testovima. Vodjena priprema naloga je sada u narednoj
+izmjeni draft PR-a i ceka svoju CI: vlasnik bira sluzbu, postojeceg clana ili
+novi zapis iz potpunog profila, te ulogu, a serverska transakcija upisuje
+povezivanje i ulogu zajedno. To jos nije objavljeno. Zatim slijede pregled
+izgleda i javni materijali. Stari naziv u ovom naslovu
 oznacava trenutno objavljenu verziju.
 
 U draft PR #82 dodat je filter naloga bez aktivne DVD/SZS uloge, radi brzeg

@@ -123,7 +123,10 @@ obican HTTP redirect prenosi instaliranu PWA ili push dozvolu.
   podobnih naloga i aktivnih push pretplata u potvrdi slanja. Migracija je
   provjerena samo na izdvojenoj test bazi: DVD 2/1, SZS 0/0 i obje sluzbe
   2/1 na postojecim test podacima. Neovlasceni nalog je odbijen. To je
-  trenutni zbir, ne potvrda dostave; preostaju CI, vodjena priprema naloga,
+  trenutni zbir, ne potvrda dostave; puna CI provjera je prosla
+  ([run 37028798449](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37028798449)).
+  Vodjena priprema naloga je u narednoj izmjeni draft PR-a i ceka svoju CI;
+  preostaju njena provjera,
   zavrsni vizuelni pregled, sajt i videa.
 - U istom nacrtu vlasnik moze jednim izborom izdvojiti naloge bez aktivne
   DVD/SZS uloge. To skracuje trazenje novih gradjanskih naloga, ali ne mijenja

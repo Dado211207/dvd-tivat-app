@@ -1097,6 +1097,28 @@ fieldset {
   overflow-x: auto;
 }
 
+.member-preparation {
+  margin: 18px 0;
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 16px;
+  background: var(--c-surface-2);
+}
+
+.member-preparation h3 { margin: 0 0 8px; }
+.member-preparation .stack { gap: 16px; }
+.member-preparation label { display: grid; gap: 7px; }
+.member-preparation select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 11px;
+  font: inherit;
+  color: var(--c-ink);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 10px;
+}
+
 .account-table {
   width: 100%;
   min-width: 920px;
