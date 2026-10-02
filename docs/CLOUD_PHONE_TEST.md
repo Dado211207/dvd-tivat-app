@@ -1,15 +1,15 @@
 # Cloud test na telefonu
 
-Stanje 2026-10-01, poslije korisnicke potvrde prijema na zakljucanom iPhoneu i nove test objave. Aktuelni plan je u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Ovaj test je odvojen od postojece produkcije i ne trazi instalaciju niti cuvanje podataka na vlasnikovom Macu ili poslovnom laptopu.
+Stanje 2026-10-02, poslije prve probe brzog poziva sa testnim nalozima. Aktuelni plan je u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Ovaj test je odvojen od postojece produkcije i ne trazi instalaciju niti cuvanje podataka na vlasnikovom Macu ili poslovnom laptopu.
 
 ## Adrese i granica
 
 - Test aplikacija: <https://boka-operativa-phone-test.netlify.app/>
 - Test Supabase: `dvd-tivat-phone-test` (`zoipjcdtcfetqvcfmhxd`), Free plan; Netlify: `boka-operativa-phone-test`.
-- Kod: draft PR [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81), grana `codex/p7-p8-integration`. Novi commit na GitHubu sam po sebi ne objavljuje novi Netlify build. Test sajt je 2026-10-01 u 05:42 UTC zasebno objavljen iz commita `ac840f6` kao Netlify deploy `6abdf29b8db7f63eaf1ca3aa`.
+- Kod: draft PR [#81](https://github.com/Dado211207/dvd-tivat-app/pull/81), grana `codex/p7-p8-integration`. Novi commit na GitHubu sam po sebi ne objavljuje novi Netlify build. Trenutni testni frontend je objavljen iz kodnog commita `cf1c94d` kao Netlify deploy `6abe8e4f67afc951415aa1a4` (ready, 2026-10-01 u 16:46 UTC). Raniji deploy `6abdf29b8db7f63eaf1ca3aa` pripada prvoj iPhone probi.
 - Produkcioni Supabase `yskhdzrdbywrpfowckpn`, stari push worker i produkcioni GitHub Pages nijesu mijenjani u ovom testu.
 
-Test baza je podignuta od migracija iz PR-a, bez kopiranja produkcionih naloga ili intervencija. Poslije pocetnog postavljanja u njoj su napravljeni samo vlasnikov test nalog, vlasnikov DVD roster zapis i jedan fikcionalni testni pozar. Novi grant za worker je primijenjen **samo u test bazi** i sacuvan u repository migraciji `20260930190239_worker_joint_recipient_organization_read.sql`.
+Test baza je podignuta od migracija iz PR-a, bez kopiranja produkcionih naloga ili intervencija. U pocetnoj fazi napravljeni su vlasnikov test nalog, DVD roster zapis i jedan fikcionalni testni pozar; kasnije su dodati testni nalozi i pozivi za prihvat toka. Novi grant za worker je primijenjen **samo u test bazi** i sacuvan u repository migraciji `20260930190239_worker_joint_recipient_organization_read.sql`.
 
 ## Sta je provjereno
 
@@ -23,7 +23,21 @@ Test baza je podignuta od migracija iz PR-a, bez kopiranja produkcionih naloga i
 | Push dostava | Novi pokusaj za **isti** poziv Apple je prihvatio 2026-09-30 u 19:08 UTC (`ACCEPTED_SCHEDULED`). Vlasnik je potvrdio da se obavjestenje pojavilo na zakljucanom iPhoneu i da je cuo sistemski, a ne izabrani zvuk iz aplikacije. |
 | Zvuk | Izbor u aplikaciji vazi za otvorenu, vidljivu aplikaciju. Pri zakljucanom telefonu iOS bira zvuk Web Push obavjestenja. Foreground zvuk nije ovim testom posebno potvrdjen. |
 
-Providerovo `ACCEPTED` samo po sebi ne dokazuje prijem na telefonu; ovdje imamo i zasebnu korisnikovu potvrdu. Nijesmo izmjerili vrijeme od objave do prikaza na telefonu, provjerili tap/deep link, korisnikov odgovor, Focus/tihi rezim, Android ili vise korisnika. Testni pozar nije stvarna intervencija.
+Providerovo `ACCEPTED` samo po sebi ne dokazuje prijem na telefonu; za prvu probu imamo i zasebnu korisnikovu potvrdu. Tada nijesmo izmjerili vrijeme od objave do prikaza na telefonu, provjerili tap/deep link, korisnikov odgovor, Focus/tihi rezim, Android ili vise korisnika. Testni pozar nije stvarna intervencija.
+
+## Prva proba brzog poziva, 2. oktobar 2026
+
+Korisnik je javio da je izvrsio korake za probu sa testnim nalozima. Read-only pregled **izdvojene testne baze** potvrdio je sljedece za poziv `da0b8dda-12c9-4064-bedb-8fd4ea8e5eae`:
+
+| Dogadjaj | Serverski zapis (UTC) |
+| --- | --- |
+| Objavljen | 05:55:18; naslov `TEST – NIJE STVARNA INTERVENCIJA,`, vrsta `POZAR`, vodi DVD. |
+| Primaoci | Dva DVD primaoca; po jedan `IN_APP` red za svakog i jedan `WEB_PUSH` red za uredjaj sa pretplatom. |
+| Otvoren i odgovoreno | Jedan primalac otvorio u 05:55:32 i odgovorio `DOLAZIM` u 05:55:35. |
+| Push | Jedan pokusaj sa statusom `ACCEPTED_IMMEDIATE`; red ima `PROVIDER_ACCEPTED`. Ovo potvrdjuje prihvat kod push provajdera, ne vidljivost na ekranu. |
+| Zatvoren | 05:56:46 kao `CLOSED`, bez teksta razloga/izvjestaja. |
+
+Ovaj zapis potvrdjuje osnovni DVD tok u serveru, ukljucujuci automatski izbor dva primaoca, odgovor i zatvaranje bez razloga. Korisnicka poruka `odradio sam to` ne daje zasebne detalje o prikazu obavjestenja, zvuku, dubokom linku ili tome da li je odgovor vidio u komandnom pregledu. SZS, obje sluzbe, dvojno clanstvo i opcioni izvjestaj nijesu ovim pozivom potvrdjeni. Vrsta je bila `POZAR`, ali naslov izricito oznacava test; naredne probe birati kao `TEST` ili `VJEZBA`.
 
 ## Nova objava za ponovnu probu
 
@@ -36,6 +50,6 @@ Otvori aplikaciju preko ikonice dodate na pocetni ekran i prijavi se. U **Podesa
 ## Otvoreni poslovi
 
 1. Provjeriti duboki link iz notifikacije, prijem/odgovor na `Moj poziv`, otvoreni ekran sa izabranim zvukom i reset ponavljanja nakon otvaranja. Probu biljeziti sa stvarnim vremenima i okolnostima telefona.
-2. Pustiti CI na tacnom finalnom head SHA, pregledati draft PR #81 i provjeriti da su SQL grant, harness lista i push oznaka u istoj verziji. Testni Edge Function koristi ispravljeni izvorni kod bez privremene dijagnostike.
+2. CI za kodni commit `cf1c94d` i dokumentacioni commit `825c14e` je prosao; draft PR #81 ostaje otvoren. Testni Edge Function koristi ispravljeni izvorni kod bez privremene dijagnostike.
 3. Prosiriti zasebni test na DVD-only, SZS-only, dvojnu ulogu i Android, uz izmisljene podatke i odobrene testere.
 4. Za produkciju odvojeno ispuniti uslove iz [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md): kompatibilnost na produkcionoj kopiji, enkriptovani backup i vracanje, promjene u tacnom redosljedu, prava pristupa i prihvat DVD/SZS. Besplatan projekat nema automatski produkcioni backup.
