@@ -28,7 +28,8 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
   jednom ekranu provjerava profil, bira sluzbu, postojeci roster zapis ili
   novi zapis iz imena profila, i operativnu ulogu. Jedna serverska transakcija
   povezuje zapis i dodjeljuje ulogu, sa postojecim revizijskim tragovima.
-  Ceka CI i nije objavljena na testnom sajtu.
+  Puna CI provjera je prosla u [run 37039803188](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37039803188).
+  Nije objavljena na testnom sajtu.
 
 ## Naredne izmjene, po vrijednosti
 

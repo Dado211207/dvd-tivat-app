@@ -7,7 +7,8 @@ upisan prije izmjena. Draft PR #82 sada ima ispravku za poziv objema sluzbama
 kada sluzba komandira nema primalaca, dva uredjiva predloga uputstva za TEST
 i VJEZBU, vremena otvaranja/odgovora/kretanja na komandnom pregledu i nacrt
 identiteta **Boka Signal** sa novim SVG/PWA ikonama. Sve su to promjene u kodu,
-ne objavljene funkcije. Sajt i tri videa jos nijesu napravljeni. Ne traziti
+ne objavljene funkcije. Sajt je pripremljen u kodu; tri videa jos nijesu
+snimljena. Ne traziti
 novu probu na vlasnikovom telefonu tokom ove faze. U nacrtu je sada i pregled
 broja jedinstvenih podobnih naloga i naloga sa aktivnom Web Push pretplatom u
 potvrdi objave. Server daje zbir samo komandiru i ponovo racuna stvarne
@@ -15,13 +16,19 @@ primaoce pri slanju. U izdvojenoj testnoj Supabase bazi migracija je dala
 DVD 2 podobna / 1 push, SZS 0 / 0 i zajedno 2 / 1 za postojece test podatke;
 neovlasceni nalog je odbijen, anoniman nema EXECUTE pravo. Nula poznatih
 primalaca blokira potvrdu, a nula push pretplata upozorava. Broj pretplata
-ne dokazuje dostavu, a prikaz nije jos objavljen na testnom sajtu. Naredni rad:
-Puna CI provjera ovog koraka je prosla u [run 37028798449](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37028798449),
-sa baznim, RLS i browser testovima. Vodjena priprema naloga je sada u narednoj
-izmjeni draft PR-a i ceka svoju CI: vlasnik bira sluzbu, postojeceg clana ili
+ne dokazuje dostavu, a prikaz nije jos objavljen na testnom sajtu. Puna CI
+provjera ovog koraka je prosla u [run 37028798449](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37028798449),
+sa baznim, RLS i browser testovima. Vodjena priprema naloga je sada u draft
+PR-u: vlasnik bira sluzbu, postojeceg clana ili
 novi zapis iz potpunog profila, te ulogu, a serverska transakcija upisuje
-povezivanje i ulogu zajedno. To jos nije objavljeno. Zatim slijede pregled
-izgleda i javni materijali. Stari naziv u ovom naslovu
+povezivanje i ulogu zajedno. Puna CI provjera je prosla u
+[run 37039803188](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37039803188).
+CLI u ovom radnom okruzenju nije prijavljen na Netlify, a konektor ne bira
+PR granu za rucnu objavu. Zato taj kod jos nije na testnom sajtu. Zatim slijede pregled
+izgleda i javni materijali. Staticni izvor informativnog sajta je pripremljen u
+`site/`, sa instalacijom, ulogama i oznacenim video sekcijama u pripremi;
+scenariji za tri videa su u [VIDEO_PRODUCTION_SCRIPT.md](./VIDEO_PRODUCTION_SCRIPT.md).
+Sajt i videa jos nijesu objavljeni. Stari naziv u ovom naslovu
 oznacava trenutno objavljenu verziju.
 
 U draft PR #82 dodat je filter naloga bez aktivne DVD/SZS uloge, radi brzeg

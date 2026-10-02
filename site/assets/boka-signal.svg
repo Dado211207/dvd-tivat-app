@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Boka Signal">
+  <rect width="512" height="512" rx="112" fill="#071e2a"/>
+  <path d="M196 220a60 60 0 0 1 120 0M139 220a117 117 0 0 1 234 0"
+        fill="none" stroke="#6bd6d2" stroke-width="19"/>
+  <circle cx="256" cy="224" r="25" fill="#f1fbf8"/>
+  <path d="M108 333c49 24 99 24 148 0s99-24 148 0M108 389c49 24 99 24 148 0s99-24 148 0"
+        fill="none" stroke="#6bd6d2" stroke-width="22"/>
+</svg>

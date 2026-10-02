@@ -125,13 +125,18 @@ obican HTTP redirect prenosi instaliranu PWA ili push dozvolu.
   2/1 na postojecim test podacima. Neovlasceni nalog je odbijen. To je
   trenutni zbir, ne potvrda dostave; puna CI provjera je prosla
   ([run 37028798449](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37028798449)).
-  Vodjena priprema naloga je u narednoj izmjeni draft PR-a i ceka svoju CI;
-  preostaju njena provjera,
-  zavrsni vizuelni pregled, sajt i videa.
+  Vodjena priprema naloga je u narednoj izmjeni draft PR-a. I njena puna CI
+  provjera je prosla ([run 37039803188](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37039803188));
+  preostaju testna objava i pregled, zavrsni vizuelni pregled, objava sajta
+  i videa.
 - U istom nacrtu vlasnik moze jednim izborom izdvojiti naloge bez aktivne
   DVD/SZS uloge. To skracuje trazenje novih gradjanskih naloga, ali ne mijenja
-  rostersku vezu niti automatski dodjeljuje pristup. Vodjeni postupak pripreme
-  je i dalje poseban zadatak.
+  rostersku vezu niti automatski dodjeljuje pristup. Za to je sada pripremljen
+  zaseban vodjeni obrazac sa izricitom potvrdom vlasnika.
+- Informativni sajt je pripremljen kao statican izvor u `site/`: testni link,
+  iPhone/Android koraci, uloge i jasne granice Web Push-a. Video kartice su
+  oznacene `U pripremi`; sajt jos nije objavljen. Detaljni scenariji i kadrovi
+  za tri snimka su u [VIDEO_PRODUCTION_SCRIPT.md](./VIDEO_PRODUCTION_SCRIPT.md).
 
 Za svaku fazu upisati PR/commit, adresu testne objave, provjere i otvorene
 rizike u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Video i
