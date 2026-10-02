@@ -16,7 +16,7 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
   `Dolazim`; testni server je sacuvao odgovor i potvrdu prijema.
 - Ispravljena je blokada za slanje objema sluzbama kada sluzba komandira nema
   podobnih primalaca. Server i dalje odbija objavu ako ih nema ni u jednoj
-  sluzbi. Ova izmjena je u posebnoj grani i jos nije na testnoj adresi.
+  sluzbi. Ova izmjena je u draft PR #82 i jos nije na testnoj adresi.
 
 ## Naredne izmjene, po vrijednosti
 
