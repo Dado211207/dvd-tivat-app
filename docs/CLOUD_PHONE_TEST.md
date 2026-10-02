@@ -39,6 +39,8 @@ Korisnik je javio da je izvrsio korake za probu sa testnim nalozima. Read-only p
 
 Ovaj zapis potvrdjuje osnovni DVD tok u serveru, ukljucujuci automatski izbor dva primaoca, odgovor i zatvaranje bez razloga. Korisnicka poruka `odradio sam to` ne daje zasebne detalje o prikazu obavjestenja, zvuku, dubokom linku ili tome da li je odgovor vidio u komandnom pregledu. SZS, obje sluzbe, dvojno clanstvo i opcioni izvjestaj nijesu ovim pozivom potvrdjeni. Vrsta je bila `POZAR`, ali naslov izricito oznacava test; naredne probe birati kao `TEST` ili `VJEZBA`.
 
+Pregled spremnosti testne baze istog dana pokazuje dva aktivna, povezana DVD roster zapisa sa potpunim profilima i dvije aktivne DVD sluzbene uloge. SZS trenutno ima **nula roster zapisa i nula aktivnih sluzbenih uloga**. Prije probe slanja SZS-u treba povezati poseban test nalog sa SZS roster zapisom i dodijeliti mu operativnu ulogu kroz administraciju; za probu dvojnog clanstva treba zasebno pripremiti takav testni nalog. Ne dodjeljivati SZS clanstvo stvarnoj osobi samo radi ove provjere.
+
 ## Nova objava za ponovnu probu
 
 Netlify je potvrdio `ready`, a javna test adresa vraca novi CSS asset i JS konfiguraciju za **test** Supabase, bez produkcionog URL-a. U odvojenom cloud browseru pocetni ekran i prijava se otvaraju. To ne potvrdjuje prijem novog builda, skrol gestove ni ponovni push na vlasnikovom fizickom iPhoneu. Otvori instaliranu aplikaciju dok ima mreze; ako se pojavi dugme za osvjezavanje aplikacije, dovrsi rad na trenutnom ekranu pa ga pritisni. Ne brisi instalaciju zbog updatea jer bi to moglo ukloniti postojecu push pretplatu.
