@@ -2592,3 +2592,21 @@ this source branch for a build. No rename, new origin, deploy, production merge,
 production migration, alert, user creation or purchased service was performed.
 Next: full GitHub CI on this exact change, authenticated publication, final URL
 transition, public site and the three videos as described in the finishing plan.
+
+
+## 2026-10-02 — Retire simulation from regular FireNexa builds
+
+Regular builds no longer offer the historical simulation in Settings. Old
+simulation deep links resolve to the operational console, with its existing
+server authentication and role checks. Historical views are lazily compiled
+only when `VITE_PROTOTYPE_ENABLED=true` is explicitly set. The unconfigured
+Playwright review build opts in to preserve historical behavioral coverage;
+the configured operational fixture and hosted builds remain opted out.
+Removed technical server/fictional-data boilerplate from the operational footer.
+No domain, deployment, database or production permissions changed.
+
+Validation: lint, TypeScript and regular build passed; all 851 unit/component
+tests passed. All 22 selected desktop/mobile browser tests passed, covering
+retired deep links, settings, call-out audiences and historical navigation.
+Configured regular bundle contains no CitizenReportView chunk. Full GitHub CI
+must pass on the new commit before publication; hosted app still uses old deploy.

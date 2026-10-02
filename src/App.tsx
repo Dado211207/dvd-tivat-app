@@ -27,16 +27,9 @@
  * two look alike enough that afterwards nobody can say which they were looking
  * at.
  *
- * The prototype screens are reached from Settings now - deliberately somewhere
- * nobody passes through while running an intervention. Routes and code are
- * untouched: an old link still resolves, and every one of those screens still
- * opens on its own notice saying what it is. Deleting reviewed work to tidy a
- * menu would be a worse answer than not offering it.
- *
- * Citizen reporting is the same decision for a stronger reason. `dojava` is an
- * abandoned research prototype, and this application must never read as a way
- * to report a fire - the official emergency telephone number is the only one
- * that is. The route resolves and refuses; the destination is not offered.
+ * Historical simulation is compiled only with VITE_PROTOTYPE_ENABLED=true.
+ * Regular builds redirect old simulation links to the operational console.
+ * The reviewed source remains available for explicit development review.
  */
 
 import type { RoleId } from '@/domain/types';
@@ -52,17 +45,8 @@ import { LiveRegion, VisibleNotice } from './ui/components/LiveRegion';
 import { Notice } from './ui/components/primitives';
 import { NavIcon } from './ui/components/NavIcon';
 import { DEFAULT_ROUTE, hrefFor, useRoute, type Route } from './ui/router';
-import { DispatcherView } from './ui/views/DispatcherView';
-import { DisplayView } from './ui/views/DisplayView';
-import { HistoryView } from './ui/views/HistoryView';
-import { MemberView } from './ui/views/MemberView';
-import { RosterView } from './ui/views/RosterView';
 import { SettingsView } from './ui/views/SettingsView';
-import { VehiclesView } from './ui/views/VehiclesView';
 
-const CitizenReportView = lazy(() =>
-  import('./ui/views/CitizenReportView').then((module) => ({ default: module.CitizenReportView })),
-);
 const AccountsView = lazy(() =>
   import('./ui/views/AccountsView').then((module) => ({ default: module.AccountsView })),
 );
@@ -78,6 +62,28 @@ const MobilisationView = lazy(() =>
 const ArchiveView = lazy(() =>
   import('./ui/views/ArchiveView').then((module) => ({ default: module.ArchiveView })),
 );
+
+const CitizenReportView = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
+  ? lazy(() => import('./ui/views/CitizenReportView').then((module) => ({ default: module.CitizenReportView })))
+  : CommandView;
+const DispatcherView = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
+  ? lazy(() => import('./ui/views/DispatcherView').then((module) => ({ default: module.DispatcherView })))
+  : CommandView;
+const DisplayView = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
+  ? lazy(() => import('./ui/views/DisplayView').then((module) => ({ default: module.DisplayView })))
+  : CommandView;
+const HistoryView = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
+  ? lazy(() => import('./ui/views/HistoryView').then((module) => ({ default: module.HistoryView })))
+  : CommandView;
+const MemberView = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
+  ? lazy(() => import('./ui/views/MemberView').then((module) => ({ default: module.MemberView })))
+  : CommandView;
+const RosterView = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
+  ? lazy(() => import('./ui/views/RosterView').then((module) => ({ default: module.RosterView })))
+  : CommandView;
+const VehiclesView = import.meta.env.VITE_PROTOTYPE_ENABLED === 'true'
+  ? lazy(() => import('./ui/views/VehiclesView').then((module) => ({ default: module.VehiclesView })))
+  : CommandView;
 
 const VIEWS: Record<Route, ComponentType> = {
   poziv: CommandView,
@@ -371,13 +377,9 @@ export function App() {
           {t.app.name} - {t.app.subtitle}.
           {simulated
             ? ` ${t.shell.simulatedActor}: ${current?.name ?? '-'} (${ROLE_LABEL[state.simulation.viewRole]}).`
-            : backing === 'SERVER' ? ` ${t.shell.footerServer}` : ''}
+            : ''}
         </p>
-        <p>
-          {simulated
-            ? t.shell.footerLocalData
-            : backing === 'SERVER' ? t.shell.footerServerData : t.settings.lead}
-        </p>
+        {simulated ? <p>{t.shell.footerLocalData}</p> : null}
       </footer>
     </div>
   );

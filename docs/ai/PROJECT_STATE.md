@@ -1286,3 +1286,10 @@ eight accounts covering every role and state, seven members, two groups and
 three vehicles. There are no interventions between demonstrations. Every
 address is on the reserved `.invalid` domain, which cannot receive mail, and no
 password is in this repository.
+
+
+### Regular build simulation boundary (2026-10-02)
+Historical prototype screens are disabled by default, including direct links.
+Only explicit `VITE_PROTOTYPE_ENABLED=true` review builds expose them; never
+set this flag on a regular hosted app. Existing legacy browser coverage uses
+the opted-in unconfigured review build. Operational fixtures use default-off.

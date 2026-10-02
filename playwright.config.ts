@@ -48,7 +48,7 @@ export default defineConfig({
       // same tests then fail on their machine for a reason that has nothing to
       // do with their change. Pinning it makes the suite mean one thing
       // everywhere.
-      env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' },
+      env: { VITE_PROTOTYPE_ENABLED: 'true', VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '' },
       // Both sides pinned to 127.0.0.1. Left as "localhost", the server can bind
       // to ::1 while this probe hits 127.0.0.1, and the run dies on a bare
       // "timed out waiting for webServer" with nothing to go on.
