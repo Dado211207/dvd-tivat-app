@@ -15,7 +15,7 @@ import type {
   VehicleState,
 } from '@/domain/types';
 
-export const APP_NAME = 'Boka Operativa';
+export const APP_NAME = 'FireNexa';
 export const APP_SUBTITLE = 'Mobilizacija i evidencija';
 
 export const SIM_BANNER_TITLE = 'SIMULACIJA';

@@ -4,9 +4,117 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-09-22
+Last updated: 2026-10-03
 
-## Current delivery: the data-layer read contract
+## Resumed delivery checkpoint — 2026-10-03
+
+Read [the transition record](../FINAL_ORIGIN_TRANSITION.md) first.
+App `https://firenexa-app.netlify.app/` is live from source `5fe8380`, deploy
+`6ac09260869e05dc0999869c`. The guide `https://firenexa.netlify.app/` still
+has active deploy `6ac073dc9f7561fdc8a84961` and its public metadata points
+to the old app with `preview: true` (rechecked in this session).
+
+The previous conversation confirms the owner-approved exact new Auth redirect
+was saved at 05:33 UTC on 3 October; old Site URL was retained. Earlier text
+saying the redirect has not been added is stale. This session's dashboard
+requires sign-in, so that configuration has not been independently re-read.
+No completed email-confirmation/login round trip on the new origin is recorded.
+
+Final guide/QR plus three illustrated MP4 tutorials and transcripts are ready
+for review. Tests now cover both preview
+and final guides using isolated output directories; hosted smoke checks the
+new app and configurable draft guide plus publication metadata. The previous
+documentation commit `d1fe21c` has successful CI `37113888994`. This package
+passed local lint, typecheck, Node publication and four browser/axe guide
+checks; run its own CI after pushing. Deployed app source remains `5fe8380`.
+
+Immediate blocker: this new environment has no Netlify CLI login. Renew that
+login, upload only `dist-site` to the existing guide site as a draft, verify,
+then publish the same package and record active deploy/hash/QR evidence.
+Three video exports are complete; public guide upload remains. No new owner phone tests now; old installations
+stay available. No production migration, role change or alert was performed.
+
+## Detailed hosted review — 2026-10-03
+
+Application source `3ef2144` passed full CI 37093860429: 851 unit/component,
+960 database/RLS, 402 browser/accessibility and 16 review capture checks.
+Twelve credential-dependent hosted operation tests are skipped and excluded.
+Published correction deploy `6ac07b3e6f727b14a880c55c` is ready on the existing
+isolated app origin. Six shell/changed bundle files match the reviewed build.
+The final read-only hosted smoke passed **47 checks, zero failures** across
+five widths, retired routes, accessibility, offline/language and public guide.
+Accounts/Registry duplicate H1s are fixed, with a lazy-view-aware regression.
+The isolated host has RLS on all 34 public tables, no anonymous SELECT,
+no PUBLIC/anon execution of 87 SECURITY DEFINER functions and no client CREATE
+in public. Eleven sensitive-table HTTP reads were refused; Auth-settings
+positive control proved the public key valid. No real alerts/accounts/roles
+or database changes were performed. Read [the review record](../HOSTED_REVIEW_2026_10_03.md).
+Later documentation/test-only commits are not a new application deployment.
+
+## Hosted publication — 2026-10-03
+
+App: https://boka-operativa-phone-test.netlify.app/, source `3ef2144`, deploy
+`6ac07b3e6f727b14a880c55c`. Public guide: https://firenexa.netlify.app/,
+source `e94d4c2`, deploy `6ac073dc9f7561fdc8a84961`.
+Netlify authentication was approved and publication verified. Older statements
+below saying the CLI is unauthenticated or the app is unpublished are historical.
+Read [the publication record](../FIRENEXA_PUBLICATION.md) for exact hosts and
+remaining app-origin/Auth/video work. Guide QR targets the existing app origin
+and is marked preview. Professional app origin with Auth/email redirect
+configuration and three video exports remain. Physical-device/signed-in hosted
+acceptance and production release gates are separate; no new phone tests now.
+
+## Current delivery: FireNexa and the finishing plan
+
+Resume from `codex/callout-readiness`, draft PR #82, with #83 providing combined
+CI against `main`; #81 holds the preceding P7/P8 integration. At this handoff
+`main` is `4403fca`, #81 is `fa38031`, and #82/#83 started at `1ab25d0`.
+CI run `37044135976` passed on that starting head. Do not use the old September
+sections below as the current release checklist.
+
+Owner decisions carried into Work on 2 October:
+
+- **FireNexa** is the selected product name; tagline **Fire & Rescue Response Platform**.
+- Finish the app, branding and public guide, then deliver three videos: iPhone
+  installation, Android installation and usage for commander/firefighter.
+- No new owner phone exercises during this finishing phase. Automated checks
+  and fixture browser review can continue independently.
+- Commander selects DVD, SZS or both; server calls all eligible operational
+  accounts once per person. A commander in one service may call the other
+  from that command context. Response, acknowledgement, movement and confirmed
+  attendance remain separate facts. Normal closing has an optional report;
+  cancellation keeps its reason.
+- Citizen-first registration; owner assigns DVD/SZS/both and the roster link.
+  The owner's isolated-cloud account already has OWNER rights and DVD member
+  standing, according to the prior hosted record. Do not recreate people.
+- Free services only, cloud-only user workflow. The owner does not want local
+  software, backups or rehearsal work on their computers.
+- Final app/site links must have a professional name without `test`; preserve
+  the old origin until login, installation and push transition are validated.
+
+The current candidate includes readiness totals before publish, two editable
+TEST/VJEZBA instruction templates, response timestamps, unassigned-account
+filter and an atomic guided roster/role preparation RPC. The new FireNexa
+change covers both language bundles, HTML, manifest, push/offline text, SVG,
+launcher icons, public guide and video scripts. Existing storage keys and PWA
+scope remain stable; no database migration accompanies this identity change.
+
+**Hosted boundary:** the last recorded phone-test deployment is
+`6abf5e819e860ed014fdf8d3` on `boka-operativa-phone-test.netlify.app`, backed by
+isolated project `zoipjcdtcfetqvcfmhxd`. Production project
+`yskhdzrdbywrpfowckpn` remains separate and has not received P7/P8. Never call a
+GitHub commit a deployed feature. Free Netlify CLI authentication must be
+verified before attempting publication; connector deploy does not select this
+PR branch. No final URL, purchased domain or exported video exists yet.
+
+Current authoritative documents:
+[finishing plan](../APP_FINISH_AND_ONBOARDING_PLAN.md),
+[status](../CURRENT_STATUS_AND_PLAN.md), [identity](../NAME_OPTIONS.md),
+[cloud evidence](../CLOUD_PHONE_TEST.md),
+[release gates](../P7_P8_RELEASE_PREP.md),
+[video script](../VIDEO_PRODUCTION_SCRIPT.md).
+
+## Historical delivery: the data-layer read contract
 
 `ReadResult<T>` replaces every read that answered a refusal with `[]`. The
 owner chose a result over a throw for one reason: the compiler enforces it.
@@ -1236,3 +1344,20 @@ eight accounts covering every role and state, seven members, two groups and
 three vehicles. There are no interventions between demonstrations. Every
 address is on the reserved `.invalid` domain, which cannot receive mail, and no
 password is in this repository.
+
+
+### Regular build simulation boundary (2026-10-02)
+Historical prototype screens are disabled by default, including direct links.
+Only explicit `VITE_PROTOTYPE_ENABLED=true` review builds expose them; never
+set this flag on a regular hosted app. Existing legacy browser coverage uses
+the opted-in unconfigured review build. Operational fixtures use default-off.
+
+
+### Public guide publication (2026-10-03)
+Use `npm run build:site -- --app-url <verified HTTPS application address>` and
+publish `dist-site` separately. `build:site:preview` builds the known current
+isolated address with a clearly marked preview QR. SVG, PNG and every app link
+share one argument; final mode refuses a test hostname. `publication.json`
+records the target and preview status. Never print the preview QR as permanent.
+CI on `bf33d49` passed (run 37057440226), including all prior application checks.
+Hosted app still uses old deploy; Netlify CLI authentication remains required.

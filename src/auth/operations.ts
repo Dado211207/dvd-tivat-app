@@ -157,6 +157,12 @@ export interface EligibleRecipient {
   readonly specialties: readonly string[];
 }
 
+export interface CalloutReadiness {
+  readonly eligibleCount: number;
+  readonly pushReadyCount: number;
+  readonly checkedAt: string;
+}
+
 export interface RecipientFacts {
   readonly memberId: string;
   readonly memberName: string;
@@ -444,6 +450,34 @@ export async function fetchEligibleRecipients(organizationId?: string): Promise<
   }
 }
 
+/** Counts unique accounts at this instant; publish_intervention resolves again. */
+export async function fetchCalloutReadiness(
+  publisherOrganization: string,
+  includeOwn: boolean,
+  recipientOrganizationIds: readonly string[],
+): Promise<CalloutReadiness | null> {
+  try {
+    const { data, error } = await accountBackend().rpc('callout_readiness', {
+      publisher_organization: publisherOrganization,
+      include_own: includeOwn,
+      recipient_organization_ids: recipientOrganizationIds,
+    });
+    if (error || !Array.isArray(data) || data.length !== 1) return null;
+    const row = data[0] as Record<string, unknown>;
+    const eligibleCount = row.eligible_count;
+    const pushReadyCount = row.push_ready_count;
+    const checkedAt = row.checked_at;
+    if (!Number.isInteger(eligibleCount) || !Number.isInteger(pushReadyCount) ||
+        (eligibleCount as number) < 0 || (pushReadyCount as number) < 0 ||
+        (pushReadyCount as number) > (eligibleCount as number) || typeof checkedAt !== 'string') {
+      return null;
+    }
+    return { eligibleCount: eligibleCount as number, pushReadyCount: pushReadyCount as number, checkedAt };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The recorded chronology of one intervention.
  *
@@ -509,34 +543,102 @@ export async function fetchOwnMemberId(
   return ok((data as string | null) ?? null);
 }
 
+const INTERVENTION_COLUMNS =
+  'id, kind, other_kind_note, title, instructions, incident_location, assembly_point,' +
+  ' latitude, longitude, status, version, published_at, closed_at, close_reason, created_at';
+
+const mapInterventionRow = (row: InterventionRow): Intervention => ({
+  id: row.id,
+  kind: row.kind as InterventionKind,
+  otherKindNote: (row.other_kind_note as string | null) ?? null,
+  title: row.title as string,
+  instructions: row.instructions as string,
+  incidentLocation: row.incident_location as string,
+  assemblyPoint: (row.assembly_point as string | null) ?? null,
+  latitude: (row.latitude as number | null) ?? null,
+  longitude: (row.longitude as number | null) ?? null,
+  status: row.status as InterventionStatus,
+  version: row.version as number,
+  publishedAt: (row.published_at as string | null) ?? null,
+  closedAt: (row.closed_at as string | null) ?? null,
+  closeReason: (row.close_reason as string | null) ?? null,
+  createdAt: row.created_at as string,
+});
+
 /** Only a successful empty read means there are no visible interventions. */
 export async function fetchInterventions(organizationId?: string): Promise<ReadResult<readonly Intervention[]>> {
-  let query = accountBackend()
-    .from('interventions')
-    .select(
-      'id, kind, other_kind_note, title, instructions, incident_location, assembly_point,' +
-        ' latitude, longitude, status, version, published_at, closed_at, close_reason, created_at',
-    );
+  let query = accountBackend().from('interventions').select(INTERVENTION_COLUMNS);
   if (organizationId !== undefined) query = query.eq('organization_id', organizationId);
   const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
   if (error || !Array.isArray(data)) return readFailure(error);
-  return ok((data as unknown as InterventionRow[]).map((row) => ({
-    id: row.id,
-    kind: row.kind as InterventionKind,
-    otherKindNote: (row.other_kind_note as string | null) ?? null,
-    title: row.title as string,
-    instructions: row.instructions as string,
-    incidentLocation: row.incident_location as string,
-    assemblyPoint: (row.assembly_point as string | null) ?? null,
-    latitude: (row.latitude as number | null) ?? null,
-    longitude: (row.longitude as number | null) ?? null,
-    status: row.status as InterventionStatus,
-    version: row.version as number,
-    publishedAt: (row.published_at as string | null) ?? null,
-    closedAt: (row.closed_at as string | null) ?? null,
-    closeReason: (row.close_reason as string | null) ?? null,
-    createdAt: row.created_at as string,
-  })));
+  return ok((data as unknown as InterventionRow[]).map(mapInterventionRow));
+}
+
+/**
+ * The call-outs a member was actually PAGED for in one service, whatever service
+ * OWNS them (P7). On a joint call-out a member of a targeted service holds a
+ * recipient row scoped to their OWN service (migration 040), while the call-out
+ * itself belongs to the publishing service. `fetchInterventions(org)` filters on
+ * the call-out's owning service, so it cannot surface such a call-out to the
+ * recipient; this reads the member's own recipient rows in `organizationId` and
+ * returns the interventions embedded through them. Row level security allows both
+ * halves - `recipients_self_read` for the recipient row (member is the caller's
+ * own member in that service) and `interventions_recipient_read` for the embedded
+ * call-out (is_recipient_of) - so it can never surface a call-out the member was
+ * not paged for, in any service.
+ *
+ * Used to merge joint call-outs into the recipient view; a single-service call-out
+ * comes back here too and is de-duplicated by id against `fetchInterventions`.
+ */
+export async function fetchAddressedInterventions(
+  organizationId: string,
+  memberId: string,
+): Promise<ReadResult<readonly Intervention[]>> {
+  const { data, error } = await accountBackend()
+    .from('intervention_recipients')
+    .select(`interventions!inner(${INTERVENTION_COLUMNS})`)
+    .eq('organization_id', organizationId)
+    .eq('member_id', memberId)
+    .order('added_at', { ascending: false })
+    .limit(100);
+  if (error || !Array.isArray(data)) return readFailure(error);
+  const rows = data as unknown as { interventions: InterventionRow | InterventionRow[] | null }[];
+  const seen = new Set<string>();
+  const out: Intervention[] = [];
+  for (const row of rows) {
+    const embedded = Array.isArray(row.interventions) ? row.interventions[0] : row.interventions;
+    if (embedded && !seen.has(embedded.id)) {
+      seen.add(embedded.id);
+      out.push(mapInterventionRow(embedded));
+    }
+  }
+  return ok(out);
+}
+
+/**
+ * Joint call-outs targeting the selected service, including closed ones. The
+ * recipient-service archive cannot use fetchInterventions(org): those records
+ * are owned by the publishing service. The embedded parent is still checked by
+ * interventions RLS; the targeting row is checked by its own RLS policy. A
+ * refusal remains a refusal, never an empty archive.
+ */
+export async function fetchTargetedInterventions(
+  organizationId: string,
+): Promise<ReadResult<readonly Intervention[]>> {
+  const { data, error } = await accountBackend()
+    .from('intervention_recipient_organizations')
+    .select(`interventions!inner(${INTERVENTION_COLUMNS})`)
+    .eq('organization_id', organizationId)
+    .order('added_at', { ascending: false })
+    .limit(100);
+  if (error || !Array.isArray(data)) return readFailure(error);
+  const rows = data as unknown as { interventions: InterventionRow | InterventionRow[] | null }[];
+  const byId = new Map<string, Intervention>();
+  for (const row of rows) {
+    const embedded = Array.isArray(row.interventions) ? row.interventions[0] : row.interventions;
+    if (embedded) byId.set(embedded.id, mapInterventionRow(embedded));
+  }
+  return ok([...byId.values()]);
 }
 
 /**
@@ -856,10 +958,19 @@ export const discardDraft = (interventionId: string, reason: string) =>
     requested_reason: reason,
   });
 
-export const publishIntervention = (interventionId: string, memberIds: readonly string[]) =>
+/** NULL means all eligible members of the publishing service at publication.
+ * An empty array means only the additional services. Explicit member arrays
+ * remain supported for older clients. The server resolves and de-duplicates.
+ */
+export const publishIntervention = (
+  interventionId: string,
+  memberIds: readonly string[] | null,
+  organizationIds: readonly string[] = [],
+) =>
   commandReturning<string>('publish_intervention', {
     target_intervention: interventionId,
     recipient_member_ids: memberIds,
+    recipient_organization_ids: organizationIds,
   });
 
 export const setInterventionStatus = (

@@ -66,6 +66,7 @@ afterEach(async () => {
   // otherwise take React's teardown down with it, and every later test in the
   // file would fail for a reason that has nothing to do with what it asserts.
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   await act(async () => root.unmount());
   container.remove();
   resetLanguageForTests();
@@ -105,7 +106,7 @@ describe('choosing a language', () => {
   it('remembers the choice on this device', async () => {
     await show();
     await click(languageRadio('en'));
-    expect(window.localStorage.getItem('dvd-tivat.language')).toBe('en');
+    expect(window.localStorage.getItem('boka-operativa.language')).toBe('en');
     expect(container.querySelector('[data-testid="language-saved"]')).not.toBeNull();
   });
 
@@ -160,7 +161,15 @@ describe('what the screen promises and does not promise', () => {
     expect(container.textContent).toContain(me.settings.aboutFallback);
   });
 
-  it('keeps the simulation closed, warned, and free of citizen reporting', async () => {
+  it('does not offer simulation in a regular build', async () => {
+    vi.stubEnv('VITE_PROTOTYPE_ENABLED', undefined);
+    await show();
+    expect(container.querySelector('[aria-labelledby="settings-prototype"]')).toBeNull();
+    expect(languageRadio('me')).not.toBeNull();
+  });
+
+  it('keeps the simulation closed, warned, and free of citizen reporting in a review build', async () => {
+    vi.stubEnv('VITE_PROTOTYPE_ENABLED', 'true');
     await show();
     const details = container.querySelector('details');
     expect(details, 'the simulation must be behind a disclosure').not.toBeNull();

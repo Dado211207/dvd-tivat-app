@@ -67,6 +67,14 @@ export const MIGRATIONS = [
   'supabase/migrations/202609250037_service_role_trigger_grants.sql',
   'supabase/migrations/202609250038_retire_dvd_role_mirror.sql',
   'supabase/migrations/202609270039_attendance_credit_service.sql',
+  'supabase/migrations/202609290040_joint_callouts.sql',
+  'supabase/migrations/202609290041_joint_participation.sql',
+  'supabase/migrations/202609290042_joint_delivery_and_acknowledgement.sql',
+  'supabase/migrations/202609290043_joint_archive.sql',
+  'supabase/migrations/20260930190239_worker_joint_recipient_organization_read.sql',
+  'supabase/migrations/20261001134812_automatic_service_callouts_and_optional_report.sql',
+  'supabase/migrations/20261002134634_callout_readiness_counts.sql',
+  'supabase/migrations/20261002163200_owner_prepare_service_member.sql',
 ];
 
 export const DATABASE_URL =

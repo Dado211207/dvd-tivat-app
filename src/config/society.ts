@@ -6,7 +6,9 @@
  * permissions and formal adoption are separate decisions. No private person,
  * phone number, registration plate, address or credential belongs here.
  */
-export const SOCIETY_PROFILE = {
+import type { OrganizationCode } from '@/auth/directory';
+
+const DVD_PROFILE = {
   displayName: 'DVD Tivat',
   fullName: 'Dobrovoljno vatrogasno drustvo Tivat',
   confirmedMemberCount: 52,
@@ -16,3 +18,25 @@ export const SOCIETY_PROFILE = {
   supportedPhoneFamilies: ['iPhone', 'Android'] as const,
   confirmation: 'Operativne podatke potvrdio clan DVD Tivat.',
 } as const;
+
+/** Only the DVD operating facts have been confirmed by its member. */
+export const SERVICE_PROFILES = {
+  DVD: DVD_PROFILE,
+  SZS: {
+    displayName: 'SZS Tivat',
+    fullName: 'Sluzba zastite i spasavanja Tivat',
+    confirmedMemberCount: null,
+    assemblyPoint: null,
+    operatingModel: null,
+    currentFallbackChannel: null,
+    supportedPhoneFamilies: null,
+    confirmation: null,
+  },
+} as const;
+
+export function serviceProfile(service: OrganizationCode) {
+  return SERVICE_PROFILES[service];
+}
+
+/** The local fictional prototype models DVD only; its confirmed facts stay DVD. */
+export const SOCIETY_PROFILE = SERVICE_PROFILES.DVD;

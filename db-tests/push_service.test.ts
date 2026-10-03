@@ -1005,7 +1005,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       expect(Object.keys(sent.payload).sort()).toEqual(['interventionId', 'publishedAt', 'repeat']);
       expect(sent.payload.repeat).toBe(false);
       expect(sent.payload.publishedAt).toBe(publishedAt.get(String(sent.payload.interventionId)));
-      expect(sent.options).toEqual({ TTL: 180, urgency: 'high', topic: `dvd-${String(sent.payload.interventionId).slice(0, 20)}` });
+      expect(sent.options).toEqual({ TTL: 180, urgency: 'high', topic: String(sent.payload.interventionId).replaceAll('-', '') });
     }
   });
 

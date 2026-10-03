@@ -1,4 +1,12 @@
-# DVD Tivat — internal mobilisation and intervention records
+# FireNexa — Fire & Rescue Response Platform
+
+> **Current status, 2026-09-30:** The isolated Free cloud phone test received a Web Push notification on the owner's locked iPhone. The selected in-app sound applies only while the web app is visible; iOS uses its system notification sound in the background. Read [current status and plan](docs/CURRENT_STATUS_AND_PLAN.md) and [phone test evidence](docs/CLOUD_PHONE_TEST.md). The draft PR and production are separate; this is not operational acceptance.
+
+> **Current work, 2 October 2026:** FireNexa is the owner-selected name. The
+> finishing candidate is on `codex/callout-readiness` (draft #82, combined CI
+> #83). Read [the finishing plan](docs/APP_FINISH_AND_ONBOARDING_PLAN.md) and
+> [current status](docs/CURRENT_STATUS_AND_PLAN.md) for deployment facts; the
+> older prototype descriptions below record the September implementation.
 
 An **internal** coordination system for a volunteer fire society: an authorised
 commander publishes an intervention with verified details and an exact location,

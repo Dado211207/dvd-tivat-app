@@ -365,7 +365,7 @@ export function explainCommandError(raw: string): string {
   if (raw.includes('CANNOT_CHANGE_OWN_ROLE') || raw.includes('CANNOT_CHANGE_OWN_ACCESS')) {
     return messages.ownAccount;
   }
-  if (raw.includes('OWNER_ACCOUNT_PROTECTED') || raw.includes('ACCOUNT_NOT_ASSIGNABLE')) {
+  if (raw.includes('OWNER_ACCOUNT_PROTECTED') || raw.includes('ACCOUNT_NOT_ASSIGNABLE') || raw.includes('PROTECTED_ACCOUNT')) {
     return messages.protectedAccount;
   }
   if (raw.includes('ROLE_NOT_ASSIGNABLE')) {
@@ -380,7 +380,35 @@ export function explainCommandError(raw: string): string {
   if (raw.includes('ORGANIZATION_NOT_FOUND')) {
     return messages.organizationNotFound;
   }
+  if (raw.includes('PROFILE_REQUIRED')) return messages.profileRequired;
+  if (raw.includes('ACCOUNT_SUSPENDED')) return messages.accountSuspended;
+  if (raw.includes('ORGANIZATION_MISMATCH')) return messages.organizationMismatch;
+  if (raw.includes('MEMBER_INACTIVE')) return messages.memberInactive;
+  if (raw.includes('MEMBER_ALREADY_LINKED') || raw.includes('ACCOUNT_ALREADY_LINKED')) {
+    return messages.memberAlreadyLinked;
+  }
+  if (raw.includes('MEMBER_NOT_FOUND')) return messages.memberNotFound;
   return messages.generic;
+}
+
+/** Atomic owner command: create/link one service roster row and grant its role. */
+export async function prepareServiceMember(
+  targetUserId: string,
+  organization: OrganizationCode,
+  role: MembershipRole,
+  memberId: string | null,
+): Promise<CommandOutcome> {
+  try {
+    const { error } = await accountBackend().rpc('owner_prepare_service_member', {
+      target_user: targetUserId,
+      organization_code: organization,
+      requested_role: role,
+      selected_member: memberId,
+    });
+    return error ? { ok: false, message: explainCommandError(error.message) } : { ok: true };
+  } catch (error) {
+    return { ok: false, message: explainCommandError(String(error)) };
+  }
 }
 
 export async function setOrganizationMembership(

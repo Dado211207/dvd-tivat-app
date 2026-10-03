@@ -1,0 +1,22 @@
+{
+  "name": "firenexa-video-tutorials",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render:iphone": "remotion render src/index.ts Iphone out/iphone.mp4 --codec h264 --crf 22",
+    "render:android": "remotion render src/index.ts Android out/android.mp4 --codec h264 --crf 22",
+    "render:usage": "remotion render src/index.ts Usage out/usage.mp4 --codec h264 --crf 22"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.532",
+    "remotion": "4.0.532",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/react": "18.3.28"
+  }
+}

@@ -1,7 +1,7 @@
 {
-  "name": "Boka Operativa",
-  "short_name": "Boka Operativa",
-  "description": "Operativna aplikacija za pozive, odzive i evidenciju DVD Tivat.",
+  "name": "FireNexa",
+  "short_name": "FireNexa",
+  "description": "Fire & Rescue Response Platform - pozivi, odzivi i evidencija sluzbi.",
   "lang": "sr-Latn",
   "dir": "ltr",
   "start_url": "./",

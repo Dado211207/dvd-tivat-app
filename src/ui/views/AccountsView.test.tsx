@@ -48,6 +48,7 @@ const SZS_ORG = '00000000-0000-4000-8000-000000000002';
 const env = vi.hoisted(() => ({
   flag: false as boolean,
   data: {} as Record<string, Record<string, unknown>[]>,
+  calls: [] as { name: string; args: Record<string, unknown> }[],
   rpc: null as
     | null
     | ((name: string, args: Record<string, unknown>) => { data?: unknown; error: unknown }),
@@ -56,9 +57,15 @@ const env = vi.hoisted(() => ({
 vi.mock('@/auth/supabaseClient', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/auth/supabaseClient')>();
   function table(name: string) {
-    const result = () => ({ data: env.data[name] ?? [], error: null });
+    let constraint: { column: string; value: unknown } | null = null;
+    const result = () => ({
+      data: (env.data[name] ?? []).filter((row) => !constraint ||
+        row[constraint.column] === constraint.value),
+      error: null,
+    });
     const chain = {
       select: () => chain,
+      eq: (column: string, value: unknown) => { constraint = { column, value }; return chain; },
       order: () => chain,
       limit: () => chain,
       then: (onF: (value: unknown) => unknown, onR?: (reason: unknown) => unknown) =>
@@ -75,8 +82,10 @@ vi.mock('@/auth/supabaseClient', async (importOriginal) => {
     accountBackend: () =>
       ({
         from: (name: string) => table(name),
-        rpc: async (name: string, args: Record<string, unknown>) =>
-          env.rpc ? env.rpc(name, args) : { data: [], error: null },
+        rpc: async (name: string, args: Record<string, unknown>) => {
+          env.calls.push({ name, args });
+          return env.rpc ? env.rpc(name, args) : { data: [], error: null };
+        },
       }) as unknown as ReturnType<typeof real.accountBackend>,
   } satisfies Partial<typeof import('@/auth/supabaseClient')>;
 });
@@ -124,6 +133,7 @@ let root: Root;
 beforeEach(() => {
   env.flag = false;
   env.data = {};
+  env.calls = [];
   env.rpc = (name, args) => {
     if (name === 'owner_set_organization_membership') {
       const organization = ORGANIZATIONS.find((o) => o.code === args.organization_code);
@@ -143,6 +153,47 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+});
+
+describe('guided preparation on one owner screen', () => {
+  it('reviews an existing roster record and submits one atomic command', async () => {
+    env.flag = true;
+    env.data = {
+      profiles: [profile(OWNER_ID, 'Nadzornik Naloga', 'owner@example.invalid'),
+        profile(TARGET_ID, 'Ciljni Nalog', 'clan@example.invalid')],
+      access_grants: [grant(OWNER_ID, 'OWNER'), grant(TARGET_ID, 'CITIZEN')],
+      organizations: ORGANIZATIONS,
+      organization_memberships: [],
+      members: [{ id: 'member-szs', organization_id: SZS_ORG, full_name: 'Ciljni Nalog',
+        specialties: [], active: true, user_id: null }],
+    };
+    await renderAccounts();
+    await act(async () => container.querySelector<HTMLButtonElement>(`[data-testid="prepare-${TARGET_ID}"]`)?.click());
+    await flush();
+    const service = container.querySelector<HTMLSelectElement>('#member-preparation select')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!;
+      setter.call(service, 'SZS');
+      service.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flush();
+    const choices = container.querySelectorAll<HTMLSelectElement>('#member-preparation select');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!;
+      setter.call(choices[1], 'member-szs');
+      choices[1]!.dispatchEvent(new Event('change', { bubbles: true }));
+      setter.call(choices[2], 'COMMANDER');
+      choices[2]!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flush();
+    await act(async () => container.querySelector<HTMLButtonElement>('#member-preparation button[type="submit"]')?.click());
+    await flush();
+    expect(env.calls.filter((call) => call.name === 'owner_prepare_service_member')).toEqual([{
+      name: 'owner_prepare_service_member',
+      args: { target_user: TARGET_ID, organization_code: 'SZS',
+        requested_role: 'COMMANDER', selected_member: 'member-szs' },
+    }]);
+  });
 });
 
 afterEach(() => {
@@ -256,6 +307,19 @@ describe('AccountsView: role search follows active memberships, not the inert gr
     const text = container.textContent ?? '';
     expect(text).toMatch(/Ana Prva/);
     expect(text).not.toMatch(/Boris Drugi/);
+  });
+
+  it('shows accounts without an active service role in one tap', async () => {
+    await renderAccounts();
+    const filter = container.querySelector<HTMLButtonElement>('[data-testid="unassigned-filter"]');
+    expect(filter?.textContent).toContain('(1)');
+    await act(async () => filter?.click());
+    const rows = container.querySelectorAll('.account-table tbody tr');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.textContent).toContain('Boris Drugi');
+    expect(filter?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => filter?.click());
+    expect(container.querySelectorAll('.account-table tbody tr')).toHaveLength(3);
   });
 
   it('still finds the owner by the OWNER label', async () => {

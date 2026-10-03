@@ -2,7 +2,7 @@
  * Minimal hash router.
  *
  * Hash routing keeps the build a plain static folder - no server rewrite rules,
- * so the prototype works on a local HTTP server or static host. Views stay
+ * so the app works on a local HTTP server or static host. Operational views stay
  * deep-linkable, which browser tests and a live demonstration both need.
  */
 
@@ -41,9 +41,18 @@ export type Route = (typeof ROUTES)[number];
  */
 export const DEFAULT_ROUTE: Route = 'poziv';
 
-function readHash(): Route {
-  const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0] ?? '';
-  return (ROUTES as readonly string[]).includes(raw) ? (raw as Route) : DEFAULT_ROUTE;
+/** Historical simulation is available only in explicitly opted-in review builds. */
+export const prototypeEnabled = (): boolean => import.meta.env.VITE_PROTOTYPE_ENABLED === 'true';
+
+export const PROTOTYPE_ROUTES: readonly Route[] = [
+  'dojava', 'dezurni', 'clan', 'vozila', 'prikaz', 'clanovi', 'istorija',
+];
+
+export function resolveRoute(hash: string): Route {
+  const raw = hash.replace(/^#\/?/, '').split('?')[0] ?? '';
+  if (!(ROUTES as readonly string[]).includes(raw)) return DEFAULT_ROUTE;
+  if (!prototypeEnabled() && PROTOTYPE_ROUTES.includes(raw as Route)) return DEFAULT_ROUTE;
+  return raw as Route;
 }
 
 /** Reads a non-secret draft hint from the hash. It is never an authority check. */
@@ -53,10 +62,10 @@ export function readRouteParam(name: string): string | null {
 }
 
 export function useRoute(): Route {
-  const [route, setRoute] = useState<Route>(() => readHash());
+  const [route, setRoute] = useState<Route>(() => resolveRoute(window.location.hash));
 
   useEffect(() => {
-    const onChange = () => setRoute(readHash());
+    const onChange = () => setRoute(resolveRoute(window.location.hash));
     window.addEventListener('hashchange', onChange);
     return () => window.removeEventListener('hashchange', onChange);
   }, []);

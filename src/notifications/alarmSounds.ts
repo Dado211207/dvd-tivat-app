@@ -145,9 +145,10 @@ export function asAlarmSoundId(value: string | null | undefined): string {
  * wrapped: a private window, cleared site data or a browser that refuses storage
  * must degrade to the silent default, never throw.
  */
-const STORAGE_PREFIX = 'dvd-tivat.alarm-sound:';
+const STORAGE_PREFIX = 'boka-operativa.alarm-sound:';
+const LEGACY_STORAGE_PREFIX = 'dvd-tivat.alarm-sound:';
 
-type MaybeStorage = Pick<Storage, 'getItem' | 'setItem'> | null;
+type MaybeStorage = (Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem'>>) | null;
 
 /**
  * Same-tab notification that the stored choice changed.
@@ -169,7 +170,16 @@ export function subscribeAlarmSoundChange(listener: () => void): () => void {
 
 export function readAlarmSound(storage: MaybeStorage, userId: string): string {
   try {
-    return asAlarmSoundId(storage?.getItem(STORAGE_PREFIX + userId));
+    const current = storage?.getItem(STORAGE_PREFIX + userId);
+    if (current !== null && current !== undefined) return asAlarmSoundId(current);
+    const old = storage?.getItem(LEGACY_STORAGE_PREFIX + userId);
+    if (old !== null && old !== undefined) {
+      try {
+        storage?.setItem(STORAGE_PREFIX + userId, asAlarmSoundId(old));
+        storage?.removeItem?.(LEGACY_STORAGE_PREFIX + userId);
+      } catch { /* Keep reading the legacy preference if migration is refused. */ }
+    }
+    return asAlarmSoundId(old);
   } catch {
     return ALARM_SOUND_OFF;
   }
@@ -178,6 +188,7 @@ export function readAlarmSound(storage: MaybeStorage, userId: string): string {
 export function writeAlarmSound(storage: MaybeStorage, userId: string, soundId: string): void {
   try {
     storage?.setItem(STORAGE_PREFIX + userId, asAlarmSoundId(soundId));
+    try { storage?.removeItem?.(LEGACY_STORAGE_PREFIX + userId); } catch { /* New key wins. */ }
   } catch {
     /* Storage refused; the choice simply is not remembered on this device. */
   }

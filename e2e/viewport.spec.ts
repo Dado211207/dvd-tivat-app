@@ -305,22 +305,8 @@ test.describe('a form field is usable on a narrow screen', () => {
     const disclosure = page.getByTestId('new-call-out-disclosure');
     if (await disclosure.count()) await disclosure.locator(':scope > summary').click();
 
-    // The two fields now sit on the two steps of the compose sequence, so each
-    // is measured on the step it belongs to. A hidden step has no box at all,
-    // which is why walking it matters rather than querying both at once.
-    const steps = [
-      { id: 'new-title', reach: async () => undefined },
-      {
-        id: 'new-location',
-        reach: async () => {
-          await page.getByTestId('new-title').fill('Izmisljeni naslov za mjerenje');
-          await page.getByTestId('wizard-next').click();
-        },
-      },
-    ];
-
-    for (const { id, reach } of steps) {
-      await reach();
+    // The quick form keeps both fields on one screen.
+    for (const id of ['new-title', 'new-location']) {
       const field = page.getByTestId(id);
       const box = await field.boundingBox();
       expect(box, `${id} must be rendered`).not.toBeNull();

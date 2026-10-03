@@ -347,7 +347,11 @@ export function createLiveProject(): LiveProject {
       row['status'] = 'PUBLISHED';
       row['published_at'] = at;
       row['version'] = Number(row['version'] ?? 1) + 1;
-      for (const memberId of (args['recipient_member_ids'] as string[]) ?? []) {
+      const ownRecipients = args['recipient_member_ids'] === null
+        ? store.members.filter((member) => member['active'] === true && member['user_id'] !== null)
+          .map((member) => member['id'] as string)
+        : (args['recipient_member_ids'] as string[]) ?? [];
+      for (const memberId of ownRecipients) {
         const member = store.members.find((m) => m['id'] === memberId);
         store.intervention_recipients.push({
           intervention_id: row['id'],
@@ -358,7 +362,7 @@ export function createLiveProject(): LiveProject {
       }
       audit('INTERVENTION_PUBLISHED', who, {
         intervention_id: row['id'],
-        recipient_count: (args['recipient_member_ids'] as string[])?.length ?? 0,
+        recipient_count: ownRecipients.length,
       });
       broadcast('interventions', { id: row['id'], status: 'PUBLISHED' }, row['id'] as string);
       broadcast('intervention_recipients', { intervention_id: row['id'] }, row['id'] as string);

@@ -16,7 +16,16 @@ Also set:
 
 - `VAPID_PUBLIC_KEY`
 - `VAPID_SUBJECT` — the public application URL is suitable
-- `ALLOWED_ORIGIN=https://dado211207.github.io`
+- `ALLOWED_ORIGIN` — optional extra app origin for this installation. The
+  deployed FireNexa app (`https://firenexa-app.netlify.app`), original installed
+  Netlify app (`https://boka-operativa-phone-test.netlify.app`) and legacy
+  Pages app (`https://dado211207.github.io`) are explicitly allowed in source.
+  An existing value set to the Pages origin may remain during the transition.
+
+Redeploy this function to the isolated app project to activate an origin change;
+publishing a static app or changing its Auth redirect does not deploy Edge code.
+The CORS allowlist only admits the browser request: a user wake-up still needs
+a signed-in commander of the stored call-out's publishing service.
 
 Deploy `send-web-push` with the repository's `supabase/config.toml`. JWT
 verification is disabled at the gateway because a scheduled invocation has no

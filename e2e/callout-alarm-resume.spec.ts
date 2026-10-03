@@ -25,21 +25,9 @@ async function publishToFirefighter(commander: Page, title: string): Promise<voi
     if (!isOpen) await disclosure.locator(':scope > summary').click();
   }
   await commander.getByTestId('new-title').fill(title);
-  await commander.getByTestId('wizard-next').click();
   await commander.getByTestId('new-location').fill('Poligon (izmisljena lokacija)');
   await commander.getByTestId('new-instructions').fill('Okupljanje u bazi.');
-  await commander.getByTestId('create-draft').click();
-  const picker = commander.getByTestId('intervention-picker');
-  await expect(picker.locator('option', { hasText: title })).toHaveCount(1, { timeout: 10_000 });
-  const value = await picker.locator('option', { hasText: title }).getAttribute('value');
-  await picker.selectOption(value ?? '');
-  await commander
-    .getByTestId('recipient-picker')
-    .locator('li', { hasText: FIREFIGHTER.name })
-    .getByRole('checkbox')
-    .check();
-  await commander.getByTestId('to-review').click();
-  await commander.getByTestId('publish').click();
+  await commander.getByTestId('quick-review').click();
   await commander.getByRole('button', { name: 'Objavi', exact: true }).click();
 }
 

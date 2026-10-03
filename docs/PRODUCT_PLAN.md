@@ -1,5 +1,7 @@
 # DVD Tivat — Product plan
 
+> **Aktuelno stanje (2026-09-30):** Ovaj dokument cuva izvorni plan iz septembra; sekcije koje govore da nema servera, naloga, Web Push-a ili dvije sluzbe odnose se na raniju fazu prototipa. Trenutni izolovani test, stvarni prijem push obavjestenja na zakljucanom iPhoneu, ogranicenje izabranog zvuka i prioriteti rada su u [CURRENT_STATUS_AND_PLAN.md](./CURRENT_STATUS_AND_PLAN.md). Pravila DVD/SZS i operativne kapije su u [MULTI_ORG_PLAN.md](./MULTI_ORG_PLAN.md) i [P7_P8_RELEASE_PREP.md](./P7_P8_RELEASE_PREP.md). Produkciona spremnost se ne izvodi iz ovog istorijskog plana.
+
 Status: **operating baseline confirmed by a DVD Tivat firefighter-rescuer; product rules remain a
 draft for an authorised decision.**
 Written 7 September 2026. Documentation language: English. Application labels: local language,

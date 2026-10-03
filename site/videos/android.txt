@@ -1,0 +1,11 @@
+FireNexa: instalacija na Android (ilustrovano video uputstvo)
+
+1. Otvori firenexa.netlify.app u Chromeu i dodirni „Otvori aplikaciju”.
+2. Dodirni tri tačke u uglu Chromea.
+3. Izaberi „Instaliraj aplikaciju” ili „Dodaj na početni ekran”. Naziv zavisi od uređaja.
+4. Potvrdi prikazane korake, pa otvori novu FireNexa ikonu.
+5. Unesi svoj nalog koji je povezan sa službom i ulogom.
+6. U Podesavanjima aplikacije uključi obavještenja i prihvati dozvolu telefona.
+7. Dostava zavisi od Chromea, mreže, uređaja i dozvola. Koristi i službeni kanal.
+
+Ekran telefona u videu je ilustracija, a ne snimak stvarnog uređaja.

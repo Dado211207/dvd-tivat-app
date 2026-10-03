@@ -31,13 +31,17 @@ vi.mock('./supabaseClient', async (importOriginal) => ({
           return Promise.resolve({ data: [], error: null });
         },
       };
+      if (name === 'callout_readiness') return Promise.resolve({
+        data: [{ eligible_count: 5, push_ready_count: 3, checked_at: '2026-10-02T13:00:00Z' }],
+        error: null,
+      });
       return Promise.resolve({ data: name.startsWith('eligible_') ? [] : 'id', error: null });
     },
   }),
 }));
 
 import {
-  createDraft, fetchAvailability, fetchEligibleRecipients, fetchInterventions,
+  createDraft, fetchAvailability, fetchCalloutReadiness, fetchEligibleRecipients, fetchInterventions,
   fetchParticipationTotals, fetchVehicleMovements, setOwnAvailability,
 } from './operations';
 
@@ -78,6 +82,16 @@ describe('operational data asks for the selected service', () => {
     });
     expect(recorded.rpcs[1]?.name).toBe('create_intervention_draft_in');
     expect(recorded.rpcs[1]?.args?.target_organization).toBe(SZS);
+  });
+
+  it('asks the server for aggregate readiness without reading another service roster', async () => {
+    expect(await fetchCalloutReadiness(DVD, true, [SZS])).toEqual({
+      eligibleCount: 5, pushReadyCount: 3, checkedAt: '2026-10-02T13:00:00Z',
+    });
+    expect(recorded.rpcs).toEqual([{ name: 'callout_readiness', args: {
+      publisher_organization: DVD, include_own: true, recipient_organization_ids: [SZS],
+    } }]);
+    expect(recorded.reads).toEqual([]);
   });
 
   it('writes availability to the chosen member record, including for a dual-service user', async () => {
