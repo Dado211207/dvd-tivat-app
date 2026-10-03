@@ -2610,3 +2610,24 @@ tests passed. All 22 selected desktop/mobile browser tests passed, covering
 retired deep links, settings, call-out audiences and historical navigation.
 Configured regular bundle contains no CitizenReportView chunk. Full GitHub CI
 must pass on the new commit before publication; hosted app still uses old deploy.
+
+
+## 2026-10-03 — Public guide build and one application address
+
+Added a separate `dist-site` build with an explicit verified HTTPS app URL.
+All app links, SVG QR, downloadable PNG QR and publication metadata share that
+address. Preview QR is visibly marked as unsuitable for permanent printing;
+final mode refuses a test hostname. No final domain or completed video is
+invented. The public guide remains separate from the PWA and its SW scope.
+Two Node publication tests are part of CI. Public-guide browser review now
+uses the built output, including QR loading and compact-width accessibility.
+Netlify connector still reports deploy `6abf5e819e860ed014fdf8d3`; CLI is not
+logged in. An agent login ticket was requested for the already verified app
+publication on the existing origin. No hosted changes have been made.
+
+Validation: both Node publication tests passed, lint passed, all four selected
+mobile/desktop guide browser checks passed, no width overflow at
+320/390/768/1440 px and no axe WCAG findings. The generated PNG was decoded
+with an independent temporary QR decoder and matched the configured URL.
+Production dependency audit found zero vulnerabilities. No decoder or browser
+binary is committed. Full CI is required on the new guide commit.

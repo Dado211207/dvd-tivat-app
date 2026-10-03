@@ -4,7 +4,7 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-10-02
+Last updated: 2026-10-03
 
 ## Current delivery: FireNexa and the finishing plan
 
@@ -1293,3 +1293,13 @@ Historical prototype screens are disabled by default, including direct links.
 Only explicit `VITE_PROTOTYPE_ENABLED=true` review builds expose them; never
 set this flag on a regular hosted app. Existing legacy browser coverage uses
 the opted-in unconfigured review build. Operational fixtures use default-off.
+
+
+### Public guide publication (2026-10-03)
+Use `npm run build:site -- --app-url <verified HTTPS application address>` and
+publish `dist-site` separately. `build:site:preview` builds the known current
+isolated address with a clearly marked preview QR. SVG, PNG and every app link
+share one argument; final mode refuses a test hostname. `publication.json`
+records the target and preview status. Never print the preview QR as permanent.
+CI on `bf33d49` passed (run 37057440226), including all prior application checks.
+Hosted app still uses old deploy; Netlify CLI authentication remains required.

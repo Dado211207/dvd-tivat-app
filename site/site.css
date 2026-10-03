@@ -110,3 +110,9 @@ h3 { margin: 0; font-size: 1.4rem; line-height: 1.2; letter-spacing: -.025em; }
 @media (prefers-reduced-motion: reduce) {
   :root { scroll-behavior: auto; }
 }
+
+.app-qr { display: flex; align-items: center; gap: 20px; margin-top: 26px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; }
+.app-qr img { width: 148px; height: 148px; flex: 0 0 auto; background: white; border-radius: 8px; }
+.app-qr p { margin: 6px 0; color: var(--muted); font-size: .9rem; }
+.app-qr a { overflow-wrap: anywhere; }
+@media (max-width: 480px) { .app-qr { align-items: flex-start; flex-direction: column; } }

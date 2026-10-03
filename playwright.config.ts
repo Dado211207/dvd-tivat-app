@@ -41,7 +41,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npm run build && npm run preview',
+      command: 'npm run build:site:preview && npm run build && npm run preview',
       // Explicitly UNCONFIGURED, not merely unconfigured by accident. Most of
       // this suite asserts what the application says when no project is set up,
       // and CI happens to have no `.env.local` - but a developer does, and the
