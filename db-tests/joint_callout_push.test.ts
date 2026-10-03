@@ -122,7 +122,7 @@ describe('automatic joint call-out through Web Push', () => {
       'https://push.example.test/joint/dvd',
       'https://push.example.test/joint/dual',
       'https://push.example.test/joint/szs',
-    ]);
+    ].sort());
     expect(sent.every((item) => item.interventionId === id && item.options.topic === id.replaceAll('-', ''))).toBe(true);
   });
 
