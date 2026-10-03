@@ -1,19 +1,14 @@
-> **3 October 2026 app address preparation:** the free `firenexa-app` Netlify
-> project is live at <https://firenexa-app.netlify.app/> (deploy `6ac09260869e05dc0999869c`).
-> The old app remains live and the public guide still targets it. Sign-up/resend now specify their own origin
-> for confirmation (two tests pass). Read
-> [FINAL_ORIGIN_TRANSITION.md](./FINAL_ORIGIN_TRANSITION.md) for the exact
-> deployment, Auth and guide sequence. The new QR candidate is not published pending Auth redirect verification.
-
-> **3 October 2026 detailed review:** corrected app source `3ef2144` passed
-> CI 37093860429 (851 unit, 960 DB/RLS, 402 browser tests) and is published on
-> the existing isolated app host. The final hosted smoke passed 47/47 checks.
-> Accounts/Registry duplicate main headings are fixed. Twelve authenticated
-> hosted operation checks remain skipped; no real alerts or account changes.
-> Read [HOSTED_REVIEW_2026_10_03.md](./HOSTED_REVIEW_2026_10_03.md) and
-> [FIRENEXA_PUBLICATION.md](./FIRENEXA_PUBLICATION.md). Public guide remains at
-> <https://firenexa.netlify.app/>; professional app origin/Auth and videos remain.
-> Older unpublished/CLI login limitations below are historical.
+> **3 October 2026 resumed checkpoint:** app <https://firenexa-app.netlify.app/>
+> is live (`5fe8380`, deploy `6ac09260869e05dc0999869c`). The guide still
+> points to the old app; its live publication metadata was checked again.
+> The previous conversation confirms the exact new Auth redirect was saved
+> after owner approval; the old Site URL remains. Do not repeat that change.
+> Final guide/QR is prepared, with new preview/final browser checks. Local
+> lint, typecheck and publication checks pass; browser CI is pending.
+> Netlify CLI needs a new login before the prepared guide can be uploaded.
+> [Exact next steps and evidence](./FINAL_ORIGIN_TRANSITION.md).
+> Three videos and authenticated/device acceptance remain. Earlier dated
+> sections below are historical and do not override this checkpoint.
 
 # FireNexa - trenutno stanje i plan
 

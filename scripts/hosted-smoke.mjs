@@ -7,8 +7,9 @@ import { writeFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const APP = 'https://boka-operativa-phone-test.netlify.app/';
-const GUIDE = 'https://firenexa.netlify.app/';
+// Explicit targets let a draft guide be checked before it replaces the live guide.
+const APP = process.env.FIRENEXA_SMOKE_APP_URL ?? 'https://firenexa-app.netlify.app/';
+const GUIDE = process.env.FIRENEXA_SMOKE_GUIDE_URL ?? 'https://firenexa.netlify.app/';
 const widths = [320, 390, 768, 1112, 1440];
 const routes = ['poziv', 'mobilizacija', 'arhiva', 'evidencija', 'nalozi', 'podesavanja'];
 const report = { app: APP, guide: GUIDE, checkedAt: new Date().toISOString(), checks: [], errors: [] };
@@ -122,6 +123,16 @@ try {
   });
   const guideContext = await browser.newContext({ ignoreHTTPSErrors: proxyCaException });
   const guide = await guideContext.newPage();
+  await check('guide publication metadata targets the reviewed app', async () => {
+    const response = await guideContext.request.get(new URL('publication.json', GUIDE).href);
+    assert.equal(response.status(), 200);
+    const publication = await response.json();
+    assert.equal(publication.appUrl, APP);
+    assert.equal(publication.qrTarget, APP);
+    if (new URL(APP).hostname === 'firenexa-app.netlify.app') {
+      assert.equal(publication.preview, false);
+    }
+  });
   for (const width of widths) {
     await check(`guide width ${width}`, async () => {
       await guide.setViewportSize({ width, height: 900 });

@@ -1,60 +1,93 @@
 # FireNexa app origin transition — 3 October 2026
 
-## Current verified state
+## Current checkpoint
 
-- Current working application: `https://boka-operativa-phone-test.netlify.app/`,
-  source `3ef2144`, Netlify deploy `6ac07b3e6f727b14a880c55c`.
-- Public guide: `https://firenexa.netlify.app/`, still linking to the working
-  application with a visibly temporary QR.
-- A separate free Starter Netlify project named `firenexa-app` was created,
-  ID `04c0d262-53e1-48b4-a49a-d2f3db286316`. Its intended URL is
-  `https://firenexa-app.netlify.app/`. The app is now live there: source `5fe8380`, active deploy
-  `6ac09260869e05dc0999869c`, after a preview deploy
-  `6ac091ec9615914bc61b3a9a`. Do not print its final QR until Auth
-  redirects and the separate public guide are updated.
-- The app bundle from `5fe8380` was rebuilt with the same public configuration
-  in an isolated output directory. Full CI 37098669572 passed on that source:
-  853 unit/component, 960 database/RLS, 402 browser/accessibility and 16
-  capture checks. Twelve credential-dependent hosted operation tests skipped.
-  The bundle scan found no secret key in 23 files. Five live shell/changed
-  bundle files match this build byte-for-byte. Signed-out Accounts loaded on
-  the new main origin.
-- A final guide candidate was built separately with this exact intended app
-  URL. `publication.json`, links and QR agree, and the temporary address copy
-  is absent. It remains unpublished pending Auth redirect verification.
+- App: <https://firenexa-app.netlify.app/>, application source `5fe8380`,
+  active Netlify deploy `6ac09260869e05dc0999869c` on site
+  `04c0d262-53e1-48b4-a49a-d2f3db286316`. Rechecked through the Netlify
+  connector and public HTTPS on 3 October in the resumed session.
+- Guide: <https://firenexa.netlify.app/>, active deploy
+  `6ac073dc9f7561fdc8a84961` on site
+  `6dcc0123-3287-43a5-98a2-0ee25d33b5f2`. Its public `publication.json`
+  still targets `https://boka-operativa-phone-test.netlify.app/` with
+  `preview: true`. The new guide/QR has **not** been published.
+- Original app remains available for existing installations and subscriptions.
+- Resume branch: `codex/callout-readiness`, PR #82, combined CI via PR #83.
+  Starting head `4b0b9b81e0d8731c2cb598ac90008b1194fb76cf` has successful
+  CI run `37100044844`. This is distinct from the deployed application source.
 
-## Registration and Auth
+## Auth: completed configuration recovered from the previous conversation
 
-The application uses email/password. Sign-up and resend now supply
-`emailRedirectTo` from the current application origin, so a confirmation
-initiated at either address can return to that same address. The test covers
-both origins. This client change requires the **isolated** Supabase project
-`zoipjcdtcfetqvcfmhxd` to allow both exact HTTPS origins in Auth URL
-Configuration. The dashboard currently shows Site URL
-`https://boka-operativa-phone-test.netlify.app` and **no additional Redirect
-URLs**. Its default sign-up email template uses `{{ .ConfirmationURL }}`. Add
-`https://firenexa-app.netlify.app/` as an exact Redirect URL; keep the old
-Site URL while existing pending confirmations and installations migrate. A
-later Site URL switch needs the old address in the allowlist, and its email
-impact must be verified before changing it. Password login is not itself
-a redirect flow. Password recovery remains disabled pending SMTP and template
-verification. Do not change the separate production Supabase project.
+The owner explicitly approved adding the exact Redirect URL
+`https://firenexa-app.netlify.app/` to isolated Supabase project
+`zoipjcdtcfetqvcfmhxd`. The previous session recorded the saved dashboard
+showing exactly one additional allowed URL at 05:33 UTC on 3 October.
+The Site URL remained `https://boka-operativa-phone-test.netlify.app`.
+[Source conversation](https://chatgpt.com/share/6ac0ca52-ddb8-83eb-ad5a-995007ce93e1).
 
-## Publication sequence
+The earlier version of this document stopped before that save and was stale.
+Do not add the redirect again or ask for the same approval. In the resumed
+session the dashboard redirected to sign-in, so its current configuration was
+not independently re-read. A completed email-confirmation/login round trip
+on the new origin is not recorded. The twelve credential-dependent hosted
+operation tests remain unverified; fixture tests do not replace them.
 
-1. Add the new exact Redirect URL on the isolated Supabase project while
-   keeping the old Site URL. Verify the saved configuration in the dashboard.
-2. Verify confirmation and login without creating a real person or incident.
-   A fixture or approved demonstration account can be used for the signed-in
-   check; do not turn a fixture pass into a physical-device claim.
-3. Publish the prepared final guide build only after the new app is verified.
-   Its links and both QR formats must target the exact same new address. Keep
-   the original site available for existing installations and push subscriptions.
-4. Complete the three reviewed videos with final URL and device-accurate
-   installation footage. A new origin needs separate installation, sign-in and
-   notification permission on each phone. Real delivery acceptance remains a
-   later DVD/SZS gate.
+Sign-up and resend request `emailRedirectTo` from the current application
+origin; both original and new origins are covered by tests. The previous
+session verified the default signup template uses `{{ .ConfirmationURL }}`.
+Password recovery remains disabled pending SMTP/template verification.
+Do not change the separate production project `yskhdzrdbywrpfowckpn`.
 
-Source: `docs/APP_FINISH_AND_ONBOARDING_PLAN.md` and current Supabase Auth
-redirect documentation. No real alert, account, role, email or database change
-was made while preparing this transition.
+## Prepared guide and checks
+
+Build the final guide without modifying the application build:
+
+```sh
+npm run build:site -- --app-url https://firenexa-app.netlify.app/
+```
+
+`dist-site/publication.json` must contain `preview: false`, and both `appUrl`
+and `qrTarget` must equal `https://firenexa-app.netlify.app/`. All four app
+links and SVG/PNG QR assets are generated from this address. Videos remain
+honestly marked `U pripremi`.
+
+Browser tests now generate separate temporary preview and final packages for
+each worker. They check all app links, final/preview copy, widths and WCAG axe;
+they never overwrite the package awaiting deployment. Local lint, typecheck,
+Node publication checks and smoke-script syntax passed in the resumed session.
+Local Chromium download returned an invalid archive; new browser checks must
+be validated by CI before publication. No new application, database or worker
+behavior is changed by these test/documentation changes.
+
+The hosted smoke accepts `FIRENEXA_SMOKE_APP_URL` and
+`FIRENEXA_SMOKE_GUIDE_URL`; defaults are the new app and the public guide.
+It now also validates publication metadata against the reviewed app. Before
+guide publication it will correctly fail the old guide/new app mismatch.
+To check a draft guide, set its exact reviewed HTTPS URL in the guide variable.
+To review the previous pairing, explicitly set the old app URL.
+
+## Next action and access blocker
+
+The resumed Netlify CLI reports **Not logged in**. The connected plugin can
+read both sites, but its deploy operation cannot upload `dist-site` or select
+a draft deploy. Do not trigger an unrelated repository build or claim a new
+publication. CLI authentication must be renewed for the already-authorized
+upload to the existing `firenexa` guide site. No new site or paid plan is needed.
+
+After authentication:
+
+1. Publish only the reviewed `dist-site` directory to a draft on the existing
+   guide site, with no app build or functions. Check its page, links and QR.
+2. Promote/publish the same reviewed package to the existing public guide.
+3. Verify active deploy ID, live file hashes, publication metadata, both QR
+   targets and hosted smoke; record those concrete results here and in the
+   project status. Preserve the old app origin.
+4. Complete the three video exports from `VIDEO_PRODUCTION_SCRIPT.md`.
+   Physical-device installation footage is still missing; label any illustrated
+   screens explicitly. Do not request new owner phone exercises at this stage.
+
+A new origin needs separate installation, sign-in and notification permission.
+Guide publication is not operational acceptance: signed-in hosted checks,
+SZS/dual membership, Android/iPhone delivery and the production release gates
+remain separate. No real alert, account, role or database mutation was made
+in the resumed session.

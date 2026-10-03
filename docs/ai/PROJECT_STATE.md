@@ -6,21 +6,32 @@ describes.**
 
 Last updated: 2026-10-03
 
-## Professional app origin preparation — 2026-10-03
+## Resumed delivery checkpoint — 2026-10-03
 
-Read [the transition record](../FINAL_ORIGIN_TRANSITION.md). A separate free
-Netlify project `firenexa-app` (`04c0d262-53e1-48b4-a49a-d2f3db286316`)
-was created for `https://firenexa-app.netlify.app/` and now has active deploy
-`6ac09260869e05dc0999869c` from app source `5fe8380`. Five live files match
-the reviewed build; signed-out Accounts loads. The old app stays available and
-the public guide still points to it. A final guide/QR candidate exists locally
-but is not published pending Auth redirect verification. Sign-up/resend code now requests confirmation
-back to the initiating origin, covered for old and new origins by two tests.
-Full CI 37098669572 passed on `5fe8380`. Supabase dashboard confirms old
-Site URL, no Redirect URLs, and default signup email uses ConfirmationURL.
-Netlify CLI was reauthorized; the app was published separately. Next: add the
-new exact Auth redirect, verify, switch guide links/QR, and complete three
-device-accurate videos. Do not call the onboarding transition complete yet.
+Read [the transition record](../FINAL_ORIGIN_TRANSITION.md) first.
+App `https://firenexa-app.netlify.app/` is live from source `5fe8380`, deploy
+`6ac09260869e05dc0999869c`. The guide `https://firenexa.netlify.app/` still
+has active deploy `6ac073dc9f7561fdc8a84961` and its public metadata points
+to the old app with `preview: true` (rechecked in this session).
+
+The previous conversation confirms the owner-approved exact new Auth redirect
+was saved at 05:33 UTC on 3 October; old Site URL was retained. Earlier text
+saying the redirect has not been added is stale. This session's dashboard
+requires sign-in, so that configuration has not been independently re-read.
+No completed email-confirmation/login round trip on the new origin is recorded.
+
+Final guide/QR is rebuilt and ready for review. Tests now cover both preview
+and final guides using isolated output directories; hosted smoke checks the
+new app and configurable draft guide plus publication metadata. Local lint,
+typecheck and Node publication checks passed; local Chromium download failed.
+Run CI for these new checks before publication. Starting head `4b0b9b8` has
+successful CI `37100044844`; deployed app source remains `5fe8380`.
+
+Immediate blocker: this new environment has no Netlify CLI login. Renew that
+login, upload only `dist-site` to the existing guide site as a draft, verify,
+then publish the same package and record active deploy/hash/QR evidence.
+Three video exports remain. No new owner phone tests now; old installations
+stay available. No production migration, role change or alert was performed.
 
 ## Detailed hosted review — 2026-10-03
 

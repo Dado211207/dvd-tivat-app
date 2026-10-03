@@ -30,9 +30,18 @@ notification permission again. See `docs/APP_FINISH_AND_ONBOARDING_PLAN.md`.
 Videos remain in preparation until reviewed and exported. Contact details
 must come from the society; no personal address or phone is invented.
 
-The guide is not published yet. Installation footage must show the reviewed
-device/browser steps; see `docs/VIDEO_PRODUCTION_SCRIPT.md`.
+The guide is published at <https://firenexa.netlify.app/>. Its active version
+still links to the old app with a temporary QR. The new app is already live at
+<https://firenexa-app.netlify.app/>, and the previous session recorded the
+approved Auth redirect save. The final guide build is prepared, not published.
 
-The separate `firenexa-app` project was published on 3 October 2026 and
-is serving the application, but Auth redirects and the guide transition remain. A final guide candidate can be generated with
-`node scripts/build-site.mjs --app-url https://firenexa-app.netlify.app/ --out-dir /tmp/firenexa-guide-final-candidate`; do not deploy it before the new app and Auth settings are verified. See `docs/FINAL_ORIGIN_TRANSITION.md`.
+The resumed CLI needs authentication before uploading to the existing guide
+site `6dcc0123-3287-43a5-98a2-0ee25d33b5f2`. Upload **only `dist-site`**,
+with `--no-build`; first review a draft, then publish the same files. Do not run
+the application build or upload the repository root as the public guide.
+See [the transition checkpoint](../docs/FINAL_ORIGIN_TRANSITION.md).
+
+Both preview and final builds have browser checks in `e2e/public-site.spec.ts`.
+For hosted review, `scripts/hosted-smoke.mjs` accepts `FIRENEXA_SMOKE_APP_URL`
+and `FIRENEXA_SMOKE_GUIDE_URL` so the new app can be checked against a draft
+before the public guide is replaced. Publication metadata must match the app.
