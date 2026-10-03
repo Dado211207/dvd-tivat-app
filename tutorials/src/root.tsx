@@ -9,8 +9,8 @@ const iphone: Shot[] = [
   {heading: 'Dodaj na početni ekran', body: 'Izaberi „Dodaj na početni ekran”. Meni se može razlikovati po verziji iOS-a.', screen: 'Safari • meni', detail: '＋  Dodaj na početni ekran', seconds: 9},
   {heading: 'Potvrdi instalaciju', body: 'Ako se ponudi „Otvori kao web aplikaciju”, ostavi uključeno i dodirni „Dodaj”.', screen: 'Početni ekran', detail: 'FireNexa     Dodaj', seconds: 9},
   {heading: 'Otvori novu ikonu', body: 'Pokreni FireNexa ikonu sa početnog ekrana i prijavi se svojim nalogom.', screen: 'FireNexa • prijava', detail: 'Prijavi se', seconds: 8},
-  {heading: 'Uključi obavještenja', body: 'U aplikaciji otvori Podesavanja, uključi obavještenja i prihvati dozvolu iPhonea.', screen: 'FireNexa • Podesavanja', detail: 'Uključi obavještenja', seconds: 9},
-  {heading: 'Provjeri status', body: 'Za aktivne pozive prati i dogovoreni službeni kanal. Web Push zavisi od mreže i dozvola.', screen: 'FireNexa • status', detail: 'Obavještenja uključena', seconds: 8},
+  {heading: 'Uključi obavještenja', body: 'U aplikaciji otvori Podesavanja, uključi obavještenja i prihvati dozvolu iPhonea.', screen: 'FireNexa • Podesavanja', detail: 'Ukljuci operativne notifikacije', seconds: 9},
+  {heading: 'Provjeri status', body: 'Za aktivne pozive prati i dogovoreni službeni kanal. Web Push zavisi od mreže i dozvola.', screen: 'FireNexa • status', detail: 'Ukljucene', seconds: 8},
 ];
 
 const android: Shot[] = [
@@ -19,8 +19,8 @@ const android: Shot[] = [
   {heading: 'Izaberi instalaciju', body: 'Izaberi „Instaliraj aplikaciju” ili „Dodaj na početni ekran”. Naziv zavisi od uređaja.', screen: 'Chrome • meni', detail: '＋  Instaliraj aplikaciju', seconds: 9},
   {heading: 'Potvrdi korake', body: 'Potvrdi prikazane korake, pa otvori novu FireNexa ikonu.', screen: 'Android • instalacija', detail: 'Instaliraj', seconds: 8},
   {heading: 'Prijavi se', body: 'Unesi svoj nalog koji je povezan sa službom i ulogom.', screen: 'FireNexa • prijava', detail: 'Prijavi se', seconds: 8},
-  {heading: 'Dozvoli obavještenja', body: 'U Podesavanjima aplikacije uključi obavještenja i prihvati dozvolu telefona.', screen: 'FireNexa • Podesavanja', detail: 'Uključi obavještenja', seconds: 9},
-  {heading: 'Provjeri status', body: 'Dostava zavisi od Chromea, mreže, uređaja i dozvola. Koristi i službeni kanal.', screen: 'FireNexa • status', detail: 'Obavještenja uključena', seconds: 8},
+  {heading: 'Dozvoli obavještenja', body: 'U Podesavanjima aplikacije uključi obavještenja i prihvati dozvolu telefona.', screen: 'FireNexa • Podesavanja', detail: 'Ukljuci operativne notifikacije', seconds: 9},
+  {heading: 'Provjeri status', body: 'Dostava zavisi od Chromea, mreže, uređaja i dozvola. Koristi i službeni kanal.', screen: 'FireNexa • status', detail: 'Ukljucene', seconds: 8},
 ];
 
 const usage: Shot[] = [
