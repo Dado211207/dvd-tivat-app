@@ -92,6 +92,12 @@ After authentication:
    at this stage.
 
 A new origin needs separate installation, sign-in and notification permission.
+The Edge worker's existing single-origin CORS guard can reject the new app's
+immediate push wake-up even if Auth redirect succeeds. The branch now includes
+the FireNexa and original app origins in the `send-web-push` allowlist; deploy
+that reviewed Edge function to the isolated project and verify a fictional
+commander wake-up before relying on immediate delivery. A source change alone
+does not update the hosted worker. Retain the scheduler as a fallback.
 Guide publication is not operational acceptance: signed-in hosted checks,
 SZS/dual membership, Android/iPhone delivery and the production release gates
 remain separate. No real alert, account, role or database mutation was made
