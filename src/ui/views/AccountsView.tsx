@@ -48,12 +48,10 @@ import { useText } from '@/i18n/useText';
 import { hrefFor } from '@/ui/router';
 
 export function AccountsView() {
-  const t = useText();
   const { access } = useAccess();
 
   return (
     <>
-      <h1 className="sr-only">{t.accounts.pageTitle}</h1>
       <AccountAccessSetup />
       {/*
         Nothing at all for anybody but the owner.

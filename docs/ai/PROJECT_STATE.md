@@ -6,6 +6,17 @@ describes.**
 
 Last updated: 2026-10-03
 
+## Detailed hosted review — 2026-10-03
+
+Read [the review record](../HOSTED_REVIEW_2026_10_03.md). Read-only checks
+confirmed RLS/anonymous refusal on the isolated host. The review found duplicate
+H1s on Accounts and Registry; the finishing branch removes them and adds a
+one-heading regression check plus a reproducible read-only hosted smoke script.
+No real alert, account or permission changes were performed. Verify the new
+candidate CI and publish the heading correction before counting the full
+hosted smoke as passing. Existing published source remains `e94d4c2` until
+that deploy is verified.
+
 ## Hosted publication — 2026-10-03
 
 FireNexa source `e94d4c2` is now live on the existing isolated app origin,
