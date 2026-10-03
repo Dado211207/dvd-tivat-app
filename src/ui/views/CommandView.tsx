@@ -33,6 +33,7 @@ import {
   fetchAvailability,
   fetchInterventionAudit,
   fetchInterventions,
+  fetchTargetedInterventions,
   fetchEligibleRecipients,
   fetchRecipientFacts,
   fetchVehicleMovements,
@@ -57,7 +58,8 @@ import {
   type VehicleMovement,
 } from '@/auth/operations';
 import { useLiveOperations } from '@/auth/live';
-import { isPermissionDenied } from '@/auth/supabaseClient';
+import { isPermissionDenied, MULTI_SERVICE_ADMIN_AVAILABLE } from '@/auth/supabaseClient';
+import { ORGANIZATION_CODES } from '@/auth/directory';
 import { requestPushDelivery } from '@/notifications/push';
 import { formatDurationMs } from '@/auth/duration';
 import { recipientTimings, summarise } from '@/auth/metrics';
@@ -65,7 +67,7 @@ import { OperationalSummary, ResponseTimings } from '../components/timings';
 import { loadRoster, loadVehicles, type RosterMember, type RosterVehicle } from '@/auth/roster';
 import { OperationalGate, type OperationalContext } from '../components/OperationalGate';
 import { ActingServiceBadge } from '../components/ActingServiceBadge';
-import { organizationIdOf } from '@/auth/serviceContext';
+import { organizationCodeOf, organizationIdOf } from '@/auth/serviceContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IncidentCard } from '../components/IncidentCard';
 import {
@@ -127,6 +129,8 @@ export function CommandView() {
 
 interface ConsoleData {
   interventions: readonly Intervention[];
+  /** Joint incidents published elsewhere, read here solely as a targeted service. */
+  targetedIds: ReadonlySet<string>;
   members: readonly RosterMember[];
   /**
    * Who may be CALLED, answered by the server.
@@ -163,6 +167,7 @@ interface ConsoleData {
 
 const EMPTY: ConsoleData = {
   interventions: [],
+  targetedIds: new Set(),
   members: [],
   eligible: null,
   vehicles: [],
@@ -219,9 +224,10 @@ function CommandConsole({ context }: { context: OperationalContext }) {
         setLoadError(reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
       };
       try {
-        const [interventionsRead, members, eligible, vehicles, availabilityRead, movementsRead] =
+        const [interventionsRead, targetedRead, members, eligible, vehicles, availabilityRead, movementsRead] =
           await Promise.all([
             fetchInterventions(organizationId),
+            fetchTargetedInterventions(organizationId),
             loadRoster(organizationId),
             fetchEligibleRecipients(organizationId),
             loadVehicles(organizationId),
@@ -235,10 +241,13 @@ function CommandConsole({ context }: { context: OperationalContext }) {
          * a silently empty availability board, or an empty vehicle list, would
          * invite a decision made on information the server declined to give.
          */
-        const refused = [interventionsRead, availabilityRead, movementsRead].find((r) => !r.ok);
+        const refused = [interventionsRead, targetedRead, availabilityRead, movementsRead].find((r) => !r.ok);
         if (refused && !refused.ok) return failed(ticket, refused.reason);
-        if (!interventionsRead.ok || !availabilityRead.ok || !movementsRead.ok) return;
-        const interventions = interventionsRead.value;
+        if (!interventionsRead.ok || !targetedRead.ok || !availabilityRead.ok || !movementsRead.ok) return;
+        const ownIds = new Set(interventionsRead.value.map((item) => item.id));
+        const targetedIds = new Set(targetedRead.value.filter((item) => !ownIds.has(item.id)).map((item) => item.id));
+        const interventions = [...interventionsRead.value, ...targetedRead.value.filter((item) => targetedIds.has(item.id))]
+          .sort((a, b) => a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0);
 
         // The newest call-out that is still open is what a commander wants on
         // opening the screen; falling back to the newest of any kind means the
@@ -273,7 +282,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
 
         if (!mounted.current || ticket !== generation.current) return;
         setData({
-          interventions, members, eligible, vehicles,
+          interventions, targetedIds, members, eligible, vehicles,
           availability: availabilityRead.value,
           movements: movementsRead.value,
           recipients, attendance, audit,
@@ -367,6 +376,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
 
       <InterventionPicker
         interventions={data.interventions}
+        targetedIds={data.targetedIds}
         selectedId={selectedId}
         onSelect={(id) => {
           setSelectedId(id);
@@ -402,6 +412,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
               organizationId={organizationId}
               data={data}
               selected={selected}
+              targeted={selected !== null && data.targetedIds.has(selected.id)}
               onDone={after}
               onRefresh={() => void refresh(selectedId)}
             />
@@ -410,7 +421,7 @@ function CommandConsole({ context }: { context: OperationalContext }) {
           {id === 'prisustvo' ? (
             <AttendanceTab data={data} selected={selected} onDone={after} context={context} />
           ) : null}
-          {id === 'vozila' ? <VehiclesTab data={data} selected={selected} onDone={after} /> : null}
+          {id === 'vozila' ? <VehiclesTab data={data} selected={selected} targeted={selected !== null && data.targetedIds.has(selected.id)} onDone={after} /> : null}
         </div>
       ))}
 
@@ -436,10 +447,12 @@ function CommandConsole({ context }: { context: OperationalContext }) {
 
 function InterventionPicker({
   interventions,
+  targetedIds,
   selectedId,
   onSelect,
 }: {
   interventions: readonly Intervention[];
+  targetedIds: ReadonlySet<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -471,6 +484,7 @@ function InterventionPicker({
       >
         {interventions.map((i) => (
           <option key={i.id} value={i.id}>
+            {targetedIds.has(i.id) ? `${t.command.jointTargetedLabel} - ` : ''}
             {t.vocabulary.interventionStatus[i.status] ?? i.status} - {i.title}
           </option>
         ))}
@@ -487,12 +501,14 @@ function CallOutTab({
   organizationId,
   data,
   selected,
+  targeted,
   onDone,
   onRefresh,
 }: {
   organizationId: string;
   data: ConsoleData;
   selected: Intervention | null;
+  targeted: boolean;
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
   onRefresh: () => void;
 }) {
@@ -534,6 +550,16 @@ function CallOutTab({
   const idempotencyKey = useRef(`ui-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const [selectedMembers, setSelectedMembers] = useState<ReadonlySet<string>>(new Set());
+  // P7/D18/D19: a commander may also alert the WHOLE other service. Only offered
+  // when service assignment is enabled (otherwise the other service has no
+  // members and the toggle would page nobody), keeping a DVD-only deployment
+  // byte-identical. The acting service comes from the console's organizationId.
+  const [targetWholeOther, setTargetWholeOther] = useState(false);
+  const actingService = organizationCodeOf(organizationId);
+  const otherService = actingService
+    ? ORGANIZATION_CODES.find((code) => code !== actingService) ?? null
+    : null;
+  const canTargetOther = MULTI_SERVICE_ADMIN_AVAILABLE && otherService !== null;
   const [confirming, setConfirming] = useState<null | 'PUBLISH' | 'CLOSE' | 'CANCEL'>(null);
   const [closeReason, setCloseReason] = useState('');
 
@@ -590,13 +616,16 @@ function CallOutTab({
     if (!selected) return;
     setBusy(true);
     try {
-      const result = await publishIntervention(selected.id, [...selectedMembers]);
+      const organizationIds =
+        canTargetOther && targetWholeOther && otherService ? [organizationIdOf(otherService)] : [];
+      const result = await publishIntervention(selected.id, [...selectedMembers], organizationIds);
       const workerReached = result.ok ? await requestPushDelivery(result.value) : false;
       await onDone(
         result.ok ? { ok: true } : { ok: false, message: result.message },
         workerReached ? t.command.publishedWorkerReached : t.command.publishedWorkerQueued,
       );
       setSelectedMembers(new Set());
+      setTargetWholeOther(false);
     } finally {
       setBusy(false);
       setConfirming(null);
@@ -865,6 +894,9 @@ function CallOutTab({
             the same description of it.
           */}
           <IncidentCard intervention={selected} testId="selected" />
+          {targeted ? (
+            <Notice tone="info" testId="joint-command-scope">{t.command.jointTargetedNotice}</Notice>
+          ) : null}
 
           {/*
             WHO IS COMING, second, on the tab the commander lands on.
@@ -880,7 +912,7 @@ function CallOutTab({
               note has no recipients to pick, no status to set and nothing to
               close, and an empty bordered card below the incident would read as
               a panel that failed to load. */}
-          {isDraft || isOpenStatus(selected.status) || selected.closeReason ? (
+          {isDraft || (!targeted && isOpenStatus(selected.status)) || selected.closeReason ? (
           <section className="panel" data-testid="intervention-actions">
           {isDraft ? (
             <>
@@ -970,12 +1002,28 @@ function CallOutTab({
               <p className="muted small" data-testid="selected-recipient-count">
                 {t.command.selectedCount}: {selectedMembers.size}
               </p>
+              {canTargetOther && otherService ? (
+                <div className="joint-target" data-testid="joint-target">
+                  <label className="pick">
+                    <input
+                      type="checkbox"
+                      data-testid="target-other-service"
+                      checked={targetWholeOther}
+                      onChange={(event) => setTargetWholeOther(event.target.checked)}
+                    />
+                    <span className="pick__name">
+                      {t.command.alsoAlertService.replace('{service}', t.accounts.organizationLabel[otherService])}
+                    </span>
+                  </label>
+                  <p className="muted small">{t.command.alsoAlertServiceNote}</p>
+                </div>
+              ) : null}
               <div className="row-actions">
                 <button
                   type="button"
                   className="btn btn--primary"
                   data-testid="to-review"
-                  disabled={selectedMembers.size === 0}
+                  disabled={selectedMembers.size === 0 && !targetWholeOther}
                   onClick={() => setPublishStep('REVIEW')}
                 >
                   {t.command.wizardToReview}
@@ -1022,6 +1070,14 @@ function CallOutTab({
                 <p className="review__count" data-testid="review-count">
                   <strong>{selectedMembers.size}</strong> {t.command.reviewRecipients}
                 </p>
+                {canTargetOther && targetWholeOther && otherService ? (
+                  <p className="review__joint" data-testid="review-joint">
+                    {t.command.reviewAlsoService.replace(
+                      '{service}',
+                      t.accounts.organizationLabel[otherService],
+                    )}
+                  </p>
+                ) : null}
                 <ul className="review__names" data-testid="review-names">
                   {eligible
                     .filter((m) => selectedMembers.has(m.memberId))
@@ -1045,7 +1101,7 @@ function CallOutTab({
                     type="button"
                     className="btn btn--danger btn--big"
                     data-testid="publish"
-                    disabled={busy || selectedMembers.size === 0}
+                    disabled={busy || (selectedMembers.size === 0 && !targetWholeOther)}
                     onClick={() => setConfirming('PUBLISH')}
                   >
                     {t.command.publish}
@@ -1055,7 +1111,7 @@ function CallOutTab({
             </>
           ) : null}
 
-          {isOpenStatus(selected.status) ? (
+          {!targeted && isOpenStatus(selected.status) ? (
             <>
               <h3>{t.command.statusTitle}</h3>
               <div className="row-actions">
@@ -1781,10 +1837,12 @@ function AttendanceTab({
 function VehiclesTab({
   data,
   selected,
+  targeted,
   onDone,
 }: {
   data: ConsoleData;
   selected: Intervention | null;
+  targeted: boolean;
   onDone: (outcome: { ok: boolean; message?: string }, text: string) => Promise<void>;
 }) {
   const t = useText();
@@ -1839,8 +1897,8 @@ function VehiclesTab({
                       } else {
                         const result = await recordVehicleDeparture(
                           vehicle.id,
-                          selected && isOpenStatus(selected.status) ? selected.id : null,
-                          selected && isOpenStatus(selected.status) ? selected.title : null,
+                          selected && !targeted && isOpenStatus(selected.status) ? selected.id : null,
+                          selected && !targeted && isOpenStatus(selected.status) ? selected.title : null,
                         );
                         await onDone(
                           result.ok ? { ok: true } : { ok: false, message: result.message },

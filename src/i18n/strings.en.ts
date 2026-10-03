@@ -681,6 +681,8 @@ export const en: Strings = {
     unavailable: 'The server is not available at the moment. The view was not refreshed.',
     notSaved: 'The change was not saved.',
     pickIntervention: 'Intervention',
+    jointTargetedLabel: 'Joint intervention',
+    jointTargetedNotice: 'The other service runs this intervention. Here you see your members and confirm their attendance. Status changes and closure belong to the service that published the call-out.',
 
     newTitle: 'New call-out',
     newSummary: 'Prepare a new call-out',
@@ -723,6 +725,10 @@ export const en: Strings = {
     availableNo: 'Not available',
     availableUnknown: 'Has not said',
     selectedCount: 'Selected',
+    alsoAlertService: 'Also alert the whole {service}',
+    alsoAlertServiceNote:
+      'Every available member of that service is called as well, under their own service. Each service then sees and confirms only its own people.',
+    reviewAlsoService: 'Also alerting the whole {service}.',
 
     publish: 'Publish the call-out',
     discardDraft: 'Discard draft',

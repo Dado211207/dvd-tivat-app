@@ -851,15 +851,52 @@ describe('after P4b: a call-out belongs to the service that ran it', () => {
       'acknowledge_intervention',
       'is_recipient_of',
     ];
+    // P7 (202609290040, D18/D19) intentionally re-creates two of these: publish_
+    // intervention (to resolve additional recipient services) and is_recipient_of
+    // (so a member paged by another service's joint call-out is recognised as a
+    // recipient of their own service's row). Both re-creations are allowed here and
+    // asserted below to keep P4b's isolation; every other guarded function must
+    // still be untouched by any later migration.
+    const P7_JOINT = 'supabase/migrations/202609290040_joint_callouts.sql';
+    const P7_ALLOWED = new Set(['publish_intervention', 'is_recipient_of']);
+    const P7_ACK = 'supabase/migrations/202609290042_joint_delivery_and_acknowledgement.sql';
     for (const file of later) {
       const body = sql(file);
       for (const name of guarded) {
+        if (file === P7_JOINT && P7_ALLOWED.has(name)) continue;
+        if (file === P7_ACK && name === 'acknowledge_intervention') continue;
         expect(
           new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(body),
           `${file} re-creates ${name} after P4b secured it`,
         ).toBe(false);
       }
     }
+
+    // P7's publish_intervention adds recipient organisations without weakening the
+    // isolation P4b secured: it still refuses to publish another service's call-out
+    // and still refuses an own-selection member from another service. And its
+    // is_recipient_of is still strictly recipient-only — it resolves the caller's
+    // own member (current_member_id_in), never a blanket read.
+    const p7 = sql(P7_JOINT);
+    expect(
+      /is_command_in\(publisher_org\)/.test(p7),
+      'P7 publish_intervention still checks the publishing service command',
+    ).toBe(true);
+    expect(
+      /organization_id is distinct from publisher_org/.test(p7) && /ORGANIZATION_MISMATCH/.test(p7),
+      'P7 publish_intervention still refuses a cross-service own-selection',
+    ).toBe(true);
+    expect(
+      /is_recipient_of[\s\S]*current_member_id_in\(recipient\.organization_id\)/.test(p7),
+      'P7 is_recipient_of stays recipient-only, resolved in the row’s own service',
+    ).toBe(true);
+    const p7Ack = sql(P7_ACK);
+    expect(
+      /recipient\.member_id = public\.current_member_id_in\(recipient\.organization_id\)/.test(p7Ack)
+        && /is_staff_in\(acting_service\)/.test(p7Ack)
+        && /is_recipient_of\(target_intervention\)/.test(p7Ack),
+      'P7 acknowledgement selects the caller’s frozen recipient in their own service',
+    ).toBe(true);
   });
 });
 
@@ -1754,14 +1791,19 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
     }
   }, 120_000);
 
-  it('derives the fifteen tables a call-out reaches', async () => {
-    // Pinned so that a sixteenth is looked at by whoever adds it: the two
+  it('derives the sixteen tables a call-out reaches', async () => {
+    // Pinned so that a seventeenth is looked at by whoever adds it: the two
     // assertions below cover it automatically, but somebody should know.
+    // The sixteenth is intervention_recipient_organizations (P7, 202609290040):
+    // the additional services a joint call-out targets. It carries organization_id
+    // (the targeted service) and a service-scoped SELECT policy, so the isolation
+    // and no-DVD-only-policy assertions below cover it like the rest.
     const { rows } = await db.query<{ tbl: string }>(REACHABLE_TABLES);
     expect(rows.map((row) => row.tbl).sort()).toEqual(
       [
         'interventions',
         'intervention_recipients',
+        'intervention_recipient_organizations',
         'intervention_updates',
         'intervention_acknowledgements',
         'operational_audit',
@@ -1845,9 +1887,15 @@ describe('after P4b and anything that sorts after it: asked of the catalogue, no
     // names a service. Its only writers of such rows are the two vehicle
     // commands, which now always do - asserted by behaviour above, both
     // services. Pinned so a second table with a DVD fallback is noticed.
+    // P7/D20 (202609290041) moved this fallback out of the shared
+    // enforce_organization_from_parent 'dvd-if-orphaned' argument and into a
+    // dedicated enforce_audit_organization() trigger, because member-action audit
+    // rows now carry the acting member's service (D21) rather than the call-out's;
+    // the DVD orphan default lives in that function's body, so match it too.
     const { rows } = await db.query<{ relname: string }>(
       `select c.relname::text from pg_trigger t join pg_class c on c.oid = t.tgrelid
-        where not t.tgisinternal and pg_get_triggerdef(t.oid) ~ 'dvd-if-orphaned'
+        where not t.tgisinternal
+          and pg_get_triggerdef(t.oid) ~ 'dvd-if-orphaned|enforce_audit_organization'
           and c.relname in (${REACHABLE_TABLES})
         order by 1`,
     );

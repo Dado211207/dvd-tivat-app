@@ -105,6 +105,10 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     ...real,
     fetchOwnMemberId: vi.fn(async () => ({ ok: true, value: MEMBER_ID }) as const),
     fetchInterventions: vi.fn(async () => ({ ok: true, value: [INTERVENTION] }) as const),
+    fetchTargetedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
+    // A recipient's joint call-outs are merged in from here (P7); the single
+    // call-out these tests exercise already comes back from fetchInterventions.
+    fetchAddressedInterventions: vi.fn(async () => ({ ok: true, value: [] }) as const),
     // Who may be CALLED is the server's answer, not a filter over the roster.
     // Pero is on the roster below but is NOT here: he stands in for the
     // withdrawn member whose account can no longer sign in.
@@ -1412,5 +1416,61 @@ describe('with nothing happening', () => {
     const text = await show(<ArchiveView />, 'COMMANDER');
     expect(text).not.toMatch(/Arhiva nije ucitana/);
     expect(text).toMatch(/Arhiva je prazna/i);
+  });
+});
+
+describe('P7 targeted service archive', () => {
+  it('lists an incident published by the other service without switching', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValueOnce({ ok: true, value: [] });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValueOnce({
+      ok: true, value: [{ ...INTERVENTION, title: 'SZS pozvao DVD' }],
+    });
+    await show(<ArchiveView />, 'COMMANDER');
+    expect(container.querySelector('[data-testid="archive-list"]')?.textContent).toContain('SZS pozvao DVD');
+  });
+});
+
+describe('P7 targeted service command', () => {
+  afterEach(async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({ ok: true, value: [INTERVENTION] });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValue({ ok: true, value: [] });
+  });
+
+  it('lets the targeted commander manage their own attendance without controlling the publisher lifecycle', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchInterventions).mockResolvedValue({
+      ok: true,
+      value: [{ ...INTERVENTION, id: OTHER_ID, title: 'DVD nacrt', status: 'DRAFT' }],
+    });
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValue({
+      ok: true, value: [{ ...INTERVENTION, title: 'SZS pozvao DVD' }],
+    });
+
+    await show(<CommandView />, 'COMMANDER');
+    expect(container.querySelector('[data-testid="intervention-picker"]')?.textContent)
+      .toContain('SZS pozvao DVD');
+    expect(container.querySelector('[data-testid="joint-command-scope"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="status-DEPLOYED"]')).toBeNull();
+    expect(container.querySelector('[data-testid="close-intervention"]')).toBeNull();
+
+    act(() => {
+      pressByText('Prisustvo');
+    });
+    await settle();
+    expect(container.querySelector(`[data-testid="toggle-presence-${MEMBER_ID}"]`)).not.toBeNull();
+    expect(container.querySelector('[data-testid="pending-list"]')?.textContent)
+      .toContain('Ivo Vatrogasac');
+  });
+
+  it('fails closed if the targeted incident read is refused', async () => {
+    const operations = await import('@/auth/operations');
+    vi.mocked(operations.fetchTargetedInterventions).mockResolvedValueOnce({
+      ok: false, reason: 'REFUSED',
+    });
+    await show(<CommandView />, 'COMMANDER');
+    expect(container.textContent).toContain('Server je odbio');
+    expect(container.querySelector('[data-testid="intervention-picker"]')).toBeNull();
   });
 });

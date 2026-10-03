@@ -93,7 +93,7 @@ export function canSwitchService(available: readonly OrganizationCode[]): boolea
  * (to the default) rather than break the app. This is a per-viewer convenience,
  * not authority - losing it only resets the default service, it grants nothing.
  */
-const STORAGE_PREFIX = 'dvd-tivat.acting-service:';
+const STORAGE_PREFIX = 'boka-operativa.acting-service:';
 
 export function rememberedServiceKey(userId: string): string {
   return `${STORAGE_PREFIX}${userId}`;

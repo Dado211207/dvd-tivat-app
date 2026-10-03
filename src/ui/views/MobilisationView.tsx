@@ -27,9 +27,11 @@ import {
   checkIn,
   checkOut,
   ETA_BANDS,
+  fetchAddressedInterventions,
   fetchAttendance,
   fetchAvailability,
   fetchInterventions,
+  fetchOwnMemberId,
   fetchRecipientFacts,
   isOpenStatus,
   JOURNEY_STEPS,
@@ -128,6 +130,26 @@ function requestedInterventionId(): string | null {
     : null;
 }
 
+/**
+ * Merge call-outs the member was paged for in the acting service. The owner
+ * query can also return an incident a dual-service person received THROUGH
+ * their other service. For such an account, admit owner-query rows only when
+ * the acting service's recipient read confirms them. Single-service screens
+ * keep their established behavior. This ties actions to the displayed member
+ * identity (D14), even when the publisher owns the incident here.
+ */
+function mergeInterventionsById(
+  owned: readonly Intervention[],
+  addressed: readonly Intervention[],
+): readonly Intervention[] {
+  const byId = new Map<string, Intervention>();
+  for (const item of owned) byId.set(item.id, item);
+  for (const item of addressed) if (!byId.has(item.id)) byId.set(item.id, item);
+  return [...byId.values()].sort((a, b) =>
+    a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+  );
+}
+
 function Mobilisation({ context, memberId }: { context: OperationalContext; memberId: string }) {
   const t = useText();
   const { availableServices, setActingService } = useAccess();
@@ -172,8 +194,15 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         setLoadError(reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
       };
       try {
-        const [interventionsRead, availabilityRead, members] = await Promise.all([
+        const [interventionsRead, addressedRead, availabilityRead, members] = await Promise.all([
           fetchInterventions(organizationId),
+          // A joint call-out (P7) is OWNED by the publishing service, so
+          // `fetchInterventions(organizationId)` - which filters on the owning
+          // service - cannot surface it to a member of a TARGETED service. Read
+          // the member's own recipient rows in this service too, and merge, so a
+          // DVD member paged by an SZS call-out sees it here without switching.
+          // An owner has no member id and no recipient rows, so skip it for them.
+          memberId ? fetchAddressedInterventions(organizationId, memberId) : null,
           fetchAvailability(organizationId),
           loadRoster(organizationId),
         ]);
@@ -188,7 +217,16 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
          */
         if (!interventionsRead.ok) return failed(ticket, interventionsRead.reason);
         if (!availabilityRead.ok) return failed(ticket, availabilityRead.reason);
-        const interventions = interventionsRead.value;
+        // A refused addressed read must not silently drop a joint call-out.
+        if (addressedRead && !addressedRead.ok) return failed(ticket, addressedRead.reason);
+        const addressed = addressedRead && addressedRead.ok ? addressedRead.value : [];
+        const addressedIds = new Set(addressed.map((item) => item.id));
+        const interventions = mergeInterventionsById(
+          availableServices.length > 1
+            ? interventionsRead.value.filter((item) => addressedIds.has(item.id))
+            : interventionsRead.value,
+          addressed,
+        );
 
         // Row level security already limits this to call-outs this member was
         // sent, so there is nothing to filter client-side - and filtering here
@@ -232,7 +270,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
-    [memberId, organizationId],
+    [memberId, organizationId, availableServices.length],
   );
 
   useEffect(() => {
@@ -270,10 +308,15 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     let live = true;
     void (async () => {
       for (const other of others) {
-        const read = await fetchInterventions(organizationIdOf(other));
+        const otherOrganizationId = organizationIdOf(other);
+        const member = await fetchOwnMemberId(otherOrganizationId);
         if (!live) return;
-        // Only a call-out the person is genuinely a recipient of in that service
-        // comes back (RLS narrows it); anything else leaves the prompt unshown.
+        if (!member.ok || member.value === null) continue;
+        const read = await fetchAddressedInterventions(otherOrganizationId, member.value);
+        if (!live) return;
+        // An incident may be visible through command rights or ownership while
+        // the person was paged through another service. Only an actual recipient
+        // row there justifies switching their operational identity.
         if (read.ok && read.value.some((item) => item.id === requested)) {
           setCrossServiceLink(other);
           return;

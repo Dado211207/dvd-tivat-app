@@ -145,7 +145,7 @@ export function asAlarmSoundId(value: string | null | undefined): string {
  * wrapped: a private window, cleared site data or a browser that refuses storage
  * must degrade to the silent default, never throw.
  */
-const STORAGE_PREFIX = 'dvd-tivat.alarm-sound:';
+const STORAGE_PREFIX = 'boka-operativa.alarm-sound:';
 
 type MaybeStorage = Pick<Storage, 'getItem' | 'setItem'> | null;
 

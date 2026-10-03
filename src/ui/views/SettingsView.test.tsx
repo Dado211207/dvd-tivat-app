@@ -105,7 +105,7 @@ describe('choosing a language', () => {
   it('remembers the choice on this device', async () => {
     await show();
     await click(languageRadio('en'));
-    expect(window.localStorage.getItem('dvd-tivat.language')).toBe('en');
+    expect(window.localStorage.getItem('boka-operativa.language')).toBe('en');
     expect(container.querySelector('[data-testid="language-saved"]')).not.toBeNull();
   });
 
