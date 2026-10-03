@@ -36,7 +36,7 @@
  * commander whose browser refuses storage must still get a working form.
  */
 
-export const DRAFT_STORAGE_KEY = 'dvd-tivat.callout-draft';
+export const DRAFT_STORAGE_KEY = 'boka-operativa.callout-draft';
 const DVD_ID = '00000000-0000-4000-8000-000000000001';
 function storageKey(organizationId?: string): string {
   return organizationId === undefined || organizationId === DVD_ID

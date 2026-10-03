@@ -57,7 +57,7 @@ export const LANGUAGE_TAG: Record<Language, string> = {
   en: 'en-GB',
 };
 
-const STORAGE_KEY = 'dvd-tivat.language';
+const STORAGE_KEY = 'boka-operativa.language';
 
 export function normaliseLanguage(value: unknown): Language | null {
   return (LANGUAGES as readonly unknown[]).includes(value) ? (value as Language) : null;

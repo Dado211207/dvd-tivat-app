@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { applyStoredLanguage } from './i18n/language';
+import { migrateLegacyStorageKeys } from './storage/legacyKeyMigration';
 import { AccessProvider } from './auth/AccessProvider';
 import { CallOutAlarm } from './notifications/CallOutAlarm';
 import { registerServiceWorker } from './pwa';
@@ -9,6 +10,11 @@ import { AppStateProvider } from './state/AppStateContext';
 import './styles/global.css';
 import './styles/workspace.css';
 import 'leaflet/dist/leaflet.css';
+
+// Before anything reads a stored key: move this device's call-out draft,
+// acting-service, alarm-sound and language off the legacy `dvd-tivat` prefix (P8),
+// so an upgrading member keeps all of them under the neutral name.
+migrateLegacyStorageKeys();
 
 // Before the first render, so nothing paints in one language and re-paints in
 // the other, and so `<html lang>` is right for a screen reader from the start.

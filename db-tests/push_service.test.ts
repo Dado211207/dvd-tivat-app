@@ -53,8 +53,8 @@
  * service is a recording fake.
  *
  * Deliberately NOT here: one alert per PERSON across services (P7 - a joint
- * call-out does not exist yet, so two call-outs are two alerts), and the topic
- * prefix `dvd-` (P8's rename).
+ * call-out does not exist yet, so two call-outs are two alerts). The topic
+ * prefix is `boka-` since P8 renamed it off the service name.
  */
 
 import { readFileSync } from 'node:fs';
@@ -1005,7 +1005,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       expect(Object.keys(sent.payload).sort()).toEqual(['interventionId', 'publishedAt', 'repeat']);
       expect(sent.payload.repeat).toBe(false);
       expect(sent.payload.publishedAt).toBe(publishedAt.get(String(sent.payload.interventionId)));
-      expect(sent.options).toEqual({ TTL: 180, urgency: 'high', topic: `dvd-${String(sent.payload.interventionId).slice(0, 20)}` });
+      expect(sent.options).toEqual({ TTL: 180, urgency: 'high', topic: `boka-${String(sent.payload.interventionId).slice(0, 20)}` });
     }
   });
 

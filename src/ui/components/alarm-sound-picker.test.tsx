@@ -140,7 +140,7 @@ describe('the alarm-sound picker', () => {
 
   it('shows the new account\'s own choice when the account changes in place', async () => {
     const storage = memoryStorage();
-    storage.setItem('dvd-tivat.alarm-sound:user-1', 'siren');
+    storage.setItem('boka-operativa.alarm-sound:user-1', 'siren');
     let userId = 'user-1';
     let context: AccessContextValue | undefined;
     const gateway = signedInGateway();

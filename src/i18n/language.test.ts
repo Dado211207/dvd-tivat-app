@@ -29,7 +29,7 @@ import {
   subscribeToLanguage,
 } from './language';
 
-const KEY = 'dvd-tivat.language';
+const KEY = 'boka-operativa.language';
 
 function withStorage(store: Storage): void {
   vi.stubGlobal('window', { ...window, localStorage: store });
