@@ -20,17 +20,18 @@ saying the redirect has not been added is stale. This session's dashboard
 requires sign-in, so that configuration has not been independently re-read.
 No completed email-confirmation/login round trip on the new origin is recorded.
 
-Final guide/QR is rebuilt and ready for review. Tests now cover both preview
+Final guide/QR plus three illustrated MP4 tutorials and transcripts are ready
+for review. Tests now cover both preview
 and final guides using isolated output directories; hosted smoke checks the
-new app and configurable draft guide plus publication metadata. Local lint,
-typecheck and Node publication checks passed; local Chromium download failed.
-Run CI for these new checks before publication. Starting head `4b0b9b8` has
-successful CI `37100044844`; deployed app source remains `5fe8380`.
+new app and configurable draft guide plus publication metadata. The previous
+documentation commit `d1fe21c` has successful CI `37113888994`. This package
+passed local lint, typecheck, Node publication and four browser/axe guide
+checks; run its own CI after pushing. Deployed app source remains `5fe8380`.
 
 Immediate blocker: this new environment has no Netlify CLI login. Renew that
 login, upload only `dist-site` to the existing guide site as a draft, verify,
 then publish the same package and record active deploy/hash/QR evidence.
-Three video exports remain. No new owner phone tests now; old installations
+Three video exports are complete; public guide upload remains. No new owner phone tests now; old installations
 stay available. No production migration, role change or alert was performed.
 
 ## Detailed hosted review — 2026-10-03

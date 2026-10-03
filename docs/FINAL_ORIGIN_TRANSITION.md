@@ -48,16 +48,20 @@ npm run build:site -- --app-url https://firenexa-app.netlify.app/
 
 `dist-site/publication.json` must contain `preview: false`, and both `appUrl`
 and `qrTarget` must equal `https://firenexa-app.netlify.app/`. All four app
-links and SVG/PNG QR assets are generated from this address. Videos remain
-honestly marked `U pripremi`.
+links and SVG/PNG QR assets are generated from this address. The guide now
+includes three illustrated MP4 tutorials (59 s iPhone, 58 s Android, 123 s
+command/member), their transcripts, and an explicit illustration label. The
+render source is under `tutorials/`; device footage and device-specific menu
+review remain future work.
 
 Browser tests now generate separate temporary preview and final packages for
 each worker. They check all app links, final/preview copy, widths and WCAG axe;
-they never overwrite the package awaiting deployment. Local lint, typecheck,
-Node publication checks and smoke-script syntax passed in the resumed session.
-Local Chromium download returned an invalid archive; new browser checks must
-be validated by CI before publication. No new application, database or worker
-behavior is changed by these test/documentation changes.
+they may overwrite `dist-site` through the preview web server, so rebuild the
+final package after running them. The earlier commit `d1fe21c` passed full CI
+37113888994. The video/site package passed local lint, typecheck, Node site
+checks and four desktop Playwright/axe guide tests using a local Chromium.
+Its own CI must pass after pushing. No application, database or worker behavior
+is changed by this package.
 
 The hosted smoke accepts `FIRENEXA_SMOKE_APP_URL` and
 `FIRENEXA_SMOKE_GUIDE_URL`; defaults are the new app and the public guide.
@@ -82,9 +86,10 @@ After authentication:
 3. Verify active deploy ID, live file hashes, publication metadata, both QR
    targets and hosted smoke; record those concrete results here and in the
    project status. Preserve the old app origin.
-4. Complete the three video exports from `VIDEO_PRODUCTION_SCRIPT.md`.
-   Physical-device installation footage is still missing; label any illustrated
-   screens explicitly. Do not request new owner phone exercises at this stage.
+4. Recheck playback and transcript URLs on the published guide. Physical-device
+   installation footage is still missing; the current video screens are
+   explicitly labeled illustrations. Do not request new owner phone exercises
+   at this stage.
 
 A new origin needs separate installation, sign-in and notification permission.
 Guide publication is not operational acceptance: signed-in hosted checks,

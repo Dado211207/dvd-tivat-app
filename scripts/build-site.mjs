@@ -27,6 +27,7 @@ export async function buildSite({ appUrl, preview = false, outDir = 'dist-site' 
   await mkdir(resolve(output, 'assets'), { recursive: true });
   await cp('site/site.css', resolve(output, 'site.css'));
   await cp('site/assets/firenexa.svg', resolve(output, 'assets/firenexa.svg'));
+  await cp('site/videos', resolve(output, 'videos'), { recursive: true });
   const options = { errorCorrectionLevel: 'M', margin: 4, width: 512 };
   await QRCode.toFile(resolve(output, 'assets/app-qr.svg'), address, { ...options, type: 'svg' });
   await QRCode.toFile(resolve(output, 'assets/app-qr.png'), address, options);

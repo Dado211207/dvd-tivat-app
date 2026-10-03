@@ -82,7 +82,8 @@ h3 { margin: 0; font-size: 1.4rem; line-height: 1.2; letter-spacing: -.025em; }
 .video-card span { color: var(--cyan); font-weight: 800; font-variant-numeric: tabular-nums; }
 .video-card h3 { margin: 17px 0 6px; font-size: 1.25rem; }
 .video-card p { color: var(--muted); margin: 0 0 20px; }
-.video-card strong { color: var(--amber); margin-top: auto; font-size: .88rem; }
+.video-card video { display: block; width: 100%; max-height: 390px; margin-top: auto; border-radius: 10px; background: #071d2a; }
+.video-card a { display: inline-block; margin-top: 14px; color: var(--cyan); font-weight: 700; }
 .footer { background: #06151d; border-top: 1px solid #294758; }
 .footer-inner { display: flex; justify-content: space-between; gap: 50px; padding-block: 40px; }
 .footer-inner > * { max-width: 50ch; }

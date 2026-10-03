@@ -27,7 +27,9 @@ the existing PWA path or change its service worker boundaries. The existing app
 origin stays available during migration; a new origin requires login and
 notification permission again. See `docs/APP_FINISH_AND_ONBOARDING_PLAN.md`.
 
-Videos remain in preparation until reviewed and exported. Contact details
+Three illustrated MP4 videos and transcripts are now part of `dist-site`.
+They are labeled illustrations and require a real-device menu review before
+being treated as device demonstrations. Contact details
 must come from the society; no personal address or phone is invented.
 
 The guide is published at <https://firenexa.netlify.app/>. Its active version

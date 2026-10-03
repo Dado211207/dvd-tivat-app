@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -25,7 +25,14 @@ test('one configured address replaces every app link and supplies both QR assets
     assert.ok(!html.includes('<!-- APP_QR -->'));
     assert.ok(!html.includes('testnu aplikaciju'));
     assert.ok(!html.includes('Zavrsna adresa i izdanje'));
-    assert.ok(html.includes('U pripremi')); // unfinished videos stay honest
+    assert.ok(html.includes('./videos/iphone.mp4'));
+    assert.ok(html.includes('./videos/android.mp4'));
+    assert.ok(html.includes('./videos/usage.mp4'));
+    for (const name of ['iphone', 'android', 'usage']) {
+      const video = join(directory, 'videos', `${name}.mp4`);
+      assert.ok((await stat(video)).size > 100_000, `${name} video must be included in the package`);
+      assert.ok((await readFile(join(directory, 'videos', `${name}.txt`), 'utf8')).includes('ilustracija'));
+    }
     assert.equal(html.split(`href="${address}"`).length - 1, 4);
     assert.ok(html.includes('data-testid="app-qr"'));
     assert.deepEqual(JSON.parse(await readFile(join(directory, 'publication.json'), 'utf8')),

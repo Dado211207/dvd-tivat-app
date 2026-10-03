@@ -1,7 +1,11 @@
 # Tri video uputstva za FireNexa
 
-Radni scenario, 2. oktobar 2026. Video snimci jos nijesu izvezeni ni objavljeni.
-Snimati tek na zavrsnoj testnoj verziji i provjerenoj adresi. U kadru su samo
+Radni scenario za buduce snimke na fizickim uredjajima, 2. oktobar 2026.
+Tri ilustrovana MP4 uputstva iz `tutorials/` izvezena su 3. oktobra i ukljucena
+u lokalni paket javnog vodica, ali vodic jos nije objavljen sa njima. Izvoz je
+bez zvucne naracije, uz tekst na ekranu i transkripte u `site/videos/`.
+Snimati stvarne uredjaje tek na zavrsnoj testnoj verziji i provjerenoj adresi.
+U kadru su samo
 fiktivni test nalozi, TEST pozivi i lokacije; bez stvarnih imena, emailova,
 brojeva telefona, push tokena ili aktivnih intervencija. Svaki kadar sa
 simuliranim ekranom mora imati oznaku `Ilustracija`.

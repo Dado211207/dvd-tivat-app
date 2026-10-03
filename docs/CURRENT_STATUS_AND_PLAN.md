@@ -3,11 +3,14 @@
 > points to the old app; its live publication metadata was checked again.
 > The previous conversation confirms the exact new Auth redirect was saved
 > after owner approval; the old Site URL remains. Do not repeat that change.
-> Final guide/QR is prepared, with new preview/final browser checks. Local
-> lint, typecheck and publication checks pass; browser CI is pending.
+> Final guide/QR and three illustrated video tutorials with transcripts are
+> prepared. The previous documentation commit `d1fe21c` passed full
+> [CI 37113888994](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37113888994).
+> The current video/site package passed local lint, typecheck, site tests and
+> four desktop browser/axe checks; its own CI is pending publication to GitHub.
 > Netlify CLI needs a new login before the prepared guide can be uploaded.
 > [Exact next steps and evidence](./FINAL_ORIGIN_TRANSITION.md).
-> Three videos and authenticated/device acceptance remain. Earlier dated
+> The three exported videos still need public guide deployment. Authenticated/device acceptance remains. Earlier dated
 > sections below are historical and do not override this checkpoint.
 
 # FireNexa - trenutno stanje i plan
