@@ -8,27 +8,33 @@ Last updated: 2026-10-03
 
 ## Detailed hosted review — 2026-10-03
 
-Read [the review record](../HOSTED_REVIEW_2026_10_03.md). Read-only checks
-confirmed RLS/anonymous refusal on the isolated host. The review found duplicate
-H1s on Accounts and Registry; the finishing branch removes them and adds a
-one-heading regression check plus a reproducible read-only hosted smoke script.
-No real alert, account or permission changes were performed. Verify the new
-candidate CI and publish the heading correction before counting the full
-hosted smoke as passing. Existing published source remains `e94d4c2` until
-that deploy is verified.
+Application source `3ef2144` passed full CI 37093860429: 851 unit/component,
+960 database/RLS, 402 browser/accessibility and 16 review capture checks.
+Twelve credential-dependent hosted operation tests are skipped and excluded.
+Published correction deploy `6ac07b3e6f727b14a880c55c` is ready on the existing
+isolated app origin. Six shell/changed bundle files match the reviewed build.
+The final read-only hosted smoke passed **47 checks, zero failures** across
+five widths, retired routes, accessibility, offline/language and public guide.
+Accounts/Registry duplicate H1s are fixed, with a lazy-view-aware regression.
+The isolated host has RLS on all 34 public tables, no anonymous SELECT,
+no PUBLIC/anon execution of 87 SECURITY DEFINER functions and no client CREATE
+in public. Eleven sensitive-table HTTP reads were refused; Auth-settings
+positive control proved the public key valid. No real alerts/accounts/roles
+or database changes were performed. Read [the review record](../HOSTED_REVIEW_2026_10_03.md).
+Later documentation/test-only commits are not a new application deployment.
 
 ## Hosted publication — 2026-10-03
 
-FireNexa source `e94d4c2` is now live on the existing isolated app origin,
-active deploy `6ac07368c460951867388882`. The separate public guide is live at
-https://firenexa.netlify.app/, deploy `6ac073dc9f7561fdc8a84961`.
-Full CI 37092085664 passed on exact source `e94d4c2`. Netlify authentication
-was approved and publication completed. Older statements below saying the
-CLI is unauthenticated or the app is unpublished are historical.
-Read [the publication record](../FIRENEXA_PUBLICATION.md) for exact hosts,
-verification and remaining app-origin/Auth/video work. Guide QR still targets
-the existing app origin and is marked preview; production acceptance remains
-separate. No phone tests, real alerts or production database changes occurred.
+App: https://boka-operativa-phone-test.netlify.app/, source `3ef2144`, deploy
+`6ac07b3e6f727b14a880c55c`. Public guide: https://firenexa.netlify.app/,
+source `e94d4c2`, deploy `6ac073dc9f7561fdc8a84961`.
+Netlify authentication was approved and publication verified. Older statements
+below saying the CLI is unauthenticated or the app is unpublished are historical.
+Read [the publication record](../FIRENEXA_PUBLICATION.md) for exact hosts and
+remaining app-origin/Auth/video work. Guide QR targets the existing app origin
+and is marked preview. Professional app origin with Auth/email redirect
+configuration and three video exports remain. Physical-device/signed-in hosted
+acceptance and production release gates are separate; no new phone tests now.
 
 ## Current delivery: FireNexa and the finishing plan
 

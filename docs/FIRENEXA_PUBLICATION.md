@@ -2,7 +2,7 @@
 
 ## Published source and evidence
 
-Application and public guide were built from
+The original application and the currently active public guide were built from
 `e94d4c27f0a12fd984d95a473cf68267855e6a60` on
 `codex/callout-readiness`. Full CI run
 [37092085664](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37092085664)
@@ -14,9 +14,13 @@ Netlify CLI login was approved by the owner. No credentials are in this record.
 
 - URL: https://boka-operativa-phone-test.netlify.app/
 - Netlify site: `49a6863e-0b66-4e72-b179-f5b90cdbea9a`.
-- Active deploy: `6ac07368c460951867388882`.
-- Preview checked first: `6ac07216f2a450028fb1020b`.
-- Previous active deploy: `6abf5e819e860ed014fdf8d3`.
+- Active application source: `3ef2144f5fc7cac56efc08df9199155a9594616d`.
+- Active deploy: `6ac07b3e6f727b14a880c55c`.
+- Preview checked first: `6ac07a2a4f568a532295e175`.
+- Previous active deploy: `6ac07368c460951867388882`.
+- Full correction CI: [37093860429](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37093860429).
+- Correction removes duplicate Accounts/Registry H1s. Live HTML, SW, manifest,
+  main, Accounts and Registry bundles match the separate reviewed build exactly.
 - Connected isolated Supabase project: `zoipjcdtcfetqvcfmhxd`.
 
 FireNexa identity, icons, SW v9, faster call-out/member preparation and

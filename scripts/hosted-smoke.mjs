@@ -52,9 +52,16 @@ try {
         await page.getByTestId(`nav-${route}`).waitFor();
         assert.equal(await page.getByTestId(`nav-${route}`).getAttribute('aria-current'), 'page');
         await page.locator('main h1').waitFor({ state: 'attached' });
-        if (!['nalozi', 'podesavanja'].includes(route)) {
+        if (route === 'evidencija') {
+          await page.locator('#registry-refused-h').waitFor();
+        } else if (route === 'nalozi') {
+          await page.locator('#accountEmail').waitFor();
+        } else if (route === 'podesavanja') {
+          await page.getByTestId('language-me').waitFor();
+        } else {
           await page.locator('main a[href="#/nalozi"]').waitFor();
         }
+        assert.equal(await page.locator('main h1').count(), 1);
         assert.equal(await page.title(), 'FireNexa');
         assert.equal(await page.locator('[data-testid^="prototype-"]').count(), 0);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));

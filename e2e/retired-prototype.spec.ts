@@ -21,6 +21,7 @@ test('regular screens have one page heading supplied by the app shell', async ({
   for (const route of ['poziv', 'mobilizacija', 'arhiva', 'evidencija', 'nalozi', 'podesavanja']) {
     await page.goto(`http://127.0.0.1:4174/#/${route}`);
     await expect(page.getByTestId(`nav-${route}`)).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('main h2').first()).toBeVisible();
     await expect(page.locator('main h1')).toHaveCount(1);
   }
 });

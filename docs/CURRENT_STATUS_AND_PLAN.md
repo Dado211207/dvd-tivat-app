@@ -1,9 +1,12 @@
-> **3 October 2026 publication:** FireNexa source `e94d4c2` passed full CI
-> 37092085664 and is live on the existing isolated application host. Public
-> guide: <https://firenexa.netlify.app/>. Read
-> [FIRENEXA_PUBLICATION.md](./FIRENEXA_PUBLICATION.md) for active deploys and
-> remaining professional app-origin/Auth/video work. Older unpublished/CLI
-> login limitations below have been resolved; production acceptance is separate.
+> **3 October 2026 detailed review:** corrected app source `3ef2144` passed
+> CI 37093860429 (851 unit, 960 DB/RLS, 402 browser tests) and is published on
+> the existing isolated app host. The final hosted smoke passed 47/47 checks.
+> Accounts/Registry duplicate main headings are fixed. Twelve authenticated
+> hosted operation checks remain skipped; no real alerts or account changes.
+> Read [HOSTED_REVIEW_2026_10_03.md](./HOSTED_REVIEW_2026_10_03.md) and
+> [FIRENEXA_PUBLICATION.md](./FIRENEXA_PUBLICATION.md). Public guide remains at
+> <https://firenexa.netlify.app/>; professional app origin/Auth and videos remain.
+> Older unpublished/CLI login limitations below are historical.
 
 # FireNexa - trenutno stanje i plan
 

@@ -4,9 +4,10 @@
 
 Published app: https://boka-operativa-phone-test.netlify.app/
 Public guide: https://firenexa.netlify.app/
-The base reviewed source is `e94d4c2`, documented on `6c5417b`.
-CI 37092825208 passed on `6c5417b`: 851 unit/component tests, 960 database/RLS
-tests, 400 browser/accessibility tests and 16 review captures. Twelve hosted
+The corrected application source is `3ef2144`, active Netlify deploy
+`6ac07b3e6f727b14a880c55c`. CI 37093860429 passed on that exact source:
+851 unit/component tests, 960 database/RLS tests, 402 browser/accessibility
+tests and 16 review captures. The public guide remains on source `e94d4c2`. Twelve hosted
 operation tests were skipped because real demonstration credentials were not
 provided. They are excluded from the passing count.
 
@@ -18,6 +19,9 @@ Read-only checks on isolated Supabase `zoipjcdtcfetqvcfmhxd` confirmed:
 - Actual anonymous HTTP reads of profiles, grants, memberships, roster,
   interventions, recipients, responses, attendance, push subscriptions,
   outbox and delivery attempts were refused with HTTP 401 (11 endpoints).
+- The same publishable key successfully read Auth settings as a positive
+  control. Protected profiles returned SQL privilege error `42501`, so these
+  refusals are permission checks rather than invalid-key failures.
 - Repository-only migration consistency passed: 48 files, 48 harness entries.
 
 No user rows, credentials or push endpoints were read. No account was created,
@@ -63,5 +67,19 @@ tests passed. Thirty-two browser checks passed in the broad selection; the new
 heading check initially used a commander fixture, whose navigation correctly
 omits Registry. With the owner fixture, all four heading/retired-link checks
 passed on desktop and mobile (34 unique selected browser cases covered).
-Full candidate CI and publication must be verified before the new hosted
-review is recorded as passing.
+Full correction CI passed. Mobile preview checks confirmed exactly one H1
+on Accounts and Registry. Publication used a separate immutable build directory
+after cancelling a first upload that overlapped a local test rebuild. Netlify
+confirmed the previous deploy remained active until the corrected publication.
+The active deploy is ready and six live shell/changed bundle files match
+that reviewed build byte-for-byte. The strengthened heading regression waits
+for each lazy-loaded view; all four desktop/mobile cases passed.
+
+Final hosted run on the active correction: **47 checks passed, zero failed**.
+This includes all six routes at five widths with exactly one rendered main H1,
+seven retired routes, signed-out accessibility, offline reload/language,
+no private API cache, no JavaScript crashes or attempted live writes, and
+the public guide at five widths with loaded QR and working local anchors.
+The harness correctly waits for Registry's refused section rather than
+assuming a sign-in link exists on that page. Test/documentation changes after
+`3ef2144` do not change the published application bundle.
