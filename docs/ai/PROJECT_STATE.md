@@ -6,6 +6,19 @@ describes.**
 
 Last updated: 2026-10-03
 
+## Hosted publication — 2026-10-03
+
+FireNexa source `e94d4c2` is now live on the existing isolated app origin,
+active deploy `6ac07368c460951867388882`. The separate public guide is live at
+https://firenexa.netlify.app/, deploy `6ac073dc9f7561fdc8a84961`.
+Full CI 37092085664 passed on exact source `e94d4c2`. Netlify authentication
+was approved and publication completed. Older statements below saying the
+CLI is unauthenticated or the app is unpublished are historical.
+Read [the publication record](../FIRENEXA_PUBLICATION.md) for exact hosts,
+verification and remaining app-origin/Auth/video work. Guide QR still targets
+the existing app origin and is marked preview; production acceptance remains
+separate. No phone tests, real alerts or production database changes occurred.
+
 ## Current delivery: FireNexa and the finishing plan
 
 Resume from `codex/callout-readiness`, draft PR #82, with #83 providing combined

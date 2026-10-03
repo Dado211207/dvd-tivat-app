@@ -1,3 +1,10 @@
+> **3 October 2026 publication:** FireNexa source `e94d4c2` passed full CI
+> 37092085664 and is live on the existing isolated application host. Public
+> guide: <https://firenexa.netlify.app/>. Read
+> [FIRENEXA_PUBLICATION.md](./FIRENEXA_PUBLICATION.md) for active deploys and
+> remaining professional app-origin/Auth/video work. Older unpublished/CLI
+> login limitations below have been resolved; production acceptance is separate.
+
 # FireNexa - trenutno stanje i plan
 
 ## Nastavak razvoja u Work okruzenju (2. oktobar 2026)
