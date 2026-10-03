@@ -141,9 +141,17 @@ try {
       const qr = guide.getByTestId('app-qr').getByRole('img');
       assert.ok(await qr.evaluate((image) => image.complete && image.naturalWidth > 0));
       assert.ok(await guide.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-      assert.equal(await guide.locator('video').count(), 0);
+      assert.equal(await guide.locator('video').count(), 3);
     });
   }
+  await check('guide videos and transcripts', async () => {
+    for (const [index, name] of ['iphone', 'android', 'usage'].entries()) {
+      assert.equal(await guide.locator('video').nth(index).getAttribute('src'), `./videos/${name}.mp4`);
+      const response = await guideContext.request.get(new URL(`videos/${name}.txt`, GUIDE).href);
+      assert.equal(response.status(), 200);
+      assert.match(await response.text(), /ilustracija/i);
+    }
+  });
   await check('guide accessibility and all local anchors resolve', async () => {
     const results = await new AxeBuilder({ page: guide }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
     assert.deepEqual(results.violations.map((v) => ({ id: v.id, nodes: v.nodes.length })), []);

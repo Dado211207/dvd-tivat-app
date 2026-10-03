@@ -26,6 +26,8 @@ for (const preview of [true, false]) {
     test('the public guide loads and fits mobile and desktop widths', async ({ page }) => {
       await page.goto(pathToFileURL(resolve(directory, 'index.html')).href);
       await expect(page.getByRole('heading', { name: 'Instalacija na telefon' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Pozovi ekipu' })).toBeVisible();
+      await expect(page.locator('.role-card').first()).toContainText('Otvori Poziv');
       await expect(page.getByRole('link', { name: 'Otvori aplikaciju' }))
         .toHaveAttribute('href', address);
       await expect(page.getByTestId('app-qr').getByRole('img')).toBeVisible();
@@ -44,6 +46,7 @@ for (const preview of [true, false]) {
       await page.getByRole('link', { name: 'Koriscenje', exact: true }).click();
       await expect(page).toHaveURL(/#koriscenje$/);
       await expect(page.getByRole('heading', { name: 'Kako se koristi' })).toBeVisible();
+      await expect(page.locator('video')).toHaveCount(3);
     });
 
 

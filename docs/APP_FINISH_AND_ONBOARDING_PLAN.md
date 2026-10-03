@@ -5,6 +5,21 @@ organizovati nove probe na njegovom telefonu. Prvo pojednostaviti i dovrsiti
 aplikaciju, zatim identitet, javni informativni sajt i tri uputstva u videu.
 Razvoj i interne automatske provjere mogu ici bez novih radnji vlasnika.
 
+## Trenutno stanje, 3. oktobar
+
+- FireNexa aplikacija je na <https://firenexa-app.netlify.app/>; informativni
+  vodic sa QR kodom i tri ilustrovana videa je na
+  <https://firenexa.netlify.app/>. Tacni deploy ID-ovi i javne provjere su u
+  [zapisu prelaza](./FINAL_ORIGIN_TRANSITION.md).
+- Draft PR #83 sadrzi novije zajednicke DVD/SZS funkcije od objavljene
+  aplikacije. Zeleni CI na PR-u ne dokazuje da su te izmjene objavljene.
+- Potrebni su prijavljeni hosted testovi sa odgovarajucim probnim nalozima,
+  iPhone/Android prijem i odaziv za DVD, SZS i dvojnog clana, te odvojene
+  produkcione kapije za kompatibilnost, backup/restore i prihvat sluzbi.
+  Nema operativnog oslanjanja na aplikaciju prije tih provjera.
+
+Stariji odjeljci ispod cuvaju redosljed i istoriju rada iz 2. oktobra.
+
 ## Polazno stanje i granice
 
 - Izdvojena test aplikacija je na <https://boka-operativa-phone-test.netlify.app/>.

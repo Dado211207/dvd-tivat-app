@@ -1,17 +1,15 @@
-> **3 October 2026 resumed checkpoint:** app <https://firenexa-app.netlify.app/>
-> is live (`5fe8380`, deploy `6ac09260869e05dc0999869c`). The guide still
-> points to the old app; its live publication metadata was checked again.
-> The previous conversation confirms the exact new Auth redirect was saved
-> after owner approval; the old Site URL remains. Do not repeat that change.
-> Final guide/QR and three illustrated video tutorials with transcripts are
-> prepared. The previous documentation commit `d1fe21c` passed full
-> [CI 37113888994](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37113888994).
-> The current video/site package passed local lint, typecheck, site tests and
-> four desktop browser/axe checks; its own CI is pending publication to GitHub.
-> Netlify CLI needs a new login before the prepared guide can be uploaded.
-> [Exact next steps and evidence](./FINAL_ORIGIN_TRANSITION.md).
-> The three exported videos still need public guide deployment. Authenticated/device acceptance remains. Earlier dated
-> sections below are historical and do not override this checkpoint.
+> **3 October 2026 checkpoint:** app <https://firenexa-app.netlify.app/>
+> is live from source `5fe8380`, deploy `6ac09260869e05dc0999869c`.
+> The guide <https://firenexa.netlify.app/> is public from verified deploy
+> `6ac15ece1e8fab8653e75379`: final QR and four links target the new app;
+> three illustrated videos and transcripts are available. PR #83 remains a
+> draft release candidate; its preceding head `b873be9` passed full
+> [CI 37150600124](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37150600124).
+> The new Auth redirect was recorded as saved after owner approval; the old
+> Site URL remains. Do not repeat that change. Signed-in hosted operation,
+> SZS/dual roles, physical iPhone/Android push and production recovery gates
+> remain unverified. [Exact evidence and limits](./FINAL_ORIGIN_TRANSITION.md).
+> Earlier dated sections below are historical and do not override this checkpoint.
 
 # FireNexa - trenutno stanje i plan
 

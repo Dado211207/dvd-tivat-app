@@ -1,9 +1,21 @@
 # Tri video uputstva za FireNexa
 
 Radni scenario za buduce snimke na fizickim uredjajima, 2. oktobar 2026.
-Tri ilustrovana MP4 uputstva iz `tutorials/` izvezena su 3. oktobra i ukljucena
-u lokalni paket javnog vodica, ali vodic jos nije objavljen sa njima. Izvoz je
-bez zvucne naracije, uz tekst na ekranu i transkripte u `site/videos/`.
+Tri ilustrovana MP4 uputstva iz `tutorials/` izvezena su 3. oktobra i
+objavljena na javnom vodicu. Sadasnji izvoz je bez zvucne naracije, uz tekst
+na ekranu i transkripte u `site/videos/`.
+
+Vlasnik je 3. oktobra trazio da zavrsni videi budu blizi ranijoj filmskoj
+prezentaciji aplikacije. Prvi video nije sacuvan u ovom repozitorijumu;
+[radni zapis](./ai/WORK_LOG.md) biljezi da se zeljela prirodnija naracija i
+prikaz modernijeg interfejsa. Zato sljedeci montazni prolaz treba da koristi
+stvarne ekrane sadasnjeg FireNexa prikaza sa fiktivnim podacima, povezane
+pokretom kamere, kracim naslovima i jasnim vizuelnim fokusom na radnju. Ne
+prikazivati genericki nacrt telefona kao da je pravi ekran. Ako korak
+instalacije nije snimljen na uredjaju, mora ostati oznacen kao ilustracija.
+Za svaku verziju uporediti snimljene nazive ekrana i dugmadi sa aktuelnim UI,
+odrzati titlove i transkripte, a novu objavu vodica uraditi tek nakon pregleda
+sva tri izvezena MP4. Ne predstavljati ove nacrte kao originalni film.
 Snimati stvarne uredjaje tek na zavrsnoj testnoj verziji i provjerenoj adresi.
 U kadru su samo
 fiktivni test nalozi, TEST pozivi i lokacije; bez stvarnih imena, emailova,
@@ -44,7 +56,7 @@ browseru i verziji u kadru. [Google uputstvo](https://support.google.com/chrome/
 ### Komandir, poglavlje 1 (oko 100 sekundi)
 
 1. Otvoriti testni nalog komandira, prikazati aktivnu sluzbu u zaglavlju.
-2. U `Komanda` izabrati `TEST` ili `VJEZBA`, unijeti naslov `TEST - nije stvarna intervencija`,
+2. U `Poziv` izabrati `TEST` ili `VJEZBA`, unijeti naslov `TEST - nije stvarna intervencija`,
    fiktivnu lokaciju i po potrebi urediti predlozeno uputstvo.
 3. Pokazati izbor DVD, SZS ili obje sluzbe samo ako testni nalozi imaju prava.
    Naglasiti da se ljudi ne biraju rucno; server bira operativne clanove.
