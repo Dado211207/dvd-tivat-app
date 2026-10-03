@@ -12,26 +12,35 @@ Produkciona upotreba i dalje zavisi od kapija u `P7_P8_RELEASE_PREP.md`.
   `Vidio sam poziv` ostaje za clana koji jos ne zna odgovor. Ako potvrda
   prijema ne uspije poslije sacuvanog odgovora, ekran to kaze i nudi retry.
   Kod i automatski testovi su na PR #81, a testni Netlify deploy
-  `6abf5e819e860ed014fdf8d3` je spreman; fizicki telefon jos nije prihvatio
-  ovaj novi ekran.
+  `6abf5e819e860ed014fdf8d3` je spreman. Vlasnik je na telefonu pritisnuo
+  `Dolazim`; testni server je sacuvao odgovor i potvrdu prijema.
+- Ispravljena je blokada za slanje objema sluzbama kada sluzba komandira nema
+  podobnih primalaca. Server i dalje odbija objavu ako ih nema ni u jednoj
+  sluzbi. Ova izmjena je u posebnoj grani i jos nije na testnoj adresi.
+- U draft PR #82 dodati su uredjivi predlozi TEST/VJEZBA za komandira i
+  vremena pojedinacnog otvaranja, odgovora i kretanja u komandnom pregledu.
+  Sve je samo u kodu; testna aplikacija i dalje prikazuje prethodno izdanje.
+- Pregled pred objavu broji jedinstvene podobne naloge i naloge sa aktivnom
+  push pretplatom. Migracija je provjerena u izdvojenoj testnoj bazi, a puna
+  CI provjera (baza/RLS i browser) je prosla u [run 37028798449](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37028798449).
+  Nije objavljeno na testnoj adresi; broj pretplata nije potvrda dostave.
+- Vodjena priprema naloga je u narednoj izmjeni draft PR #82: vlasnik na
+  jednom ekranu provjerava profil, bira sluzbu, postojeci roster zapis ili
+  novi zapis iz imena profila, i operativnu ulogu. Jedna serverska transakcija
+  povezuje zapis i dodjeljuje ulogu, sa postojecim revizijskim tragovima.
+  Puna CI provjera je prosla u [run 37039803188](https://github.com/Dado211207/dvd-tivat-app/actions/runs/37039803188).
+  Nije objavljena na testnom sajtu.
 
 ## Naredne izmjene, po vrijednosti
 
-1. **Spremnost prije objave.** Na pregledu poziva prikazati broj operativnih
-   naloga u izabranim sluzbama i broj naloga sa aktivnom push pretplatom.
-   Komandir mora vidjeti ako je, na primjer, pozvano dvoje, ali samo jedan
-   uredjaj ima push. Ovo je pregled trenutnog stanja, ne obecanje dostave;
-   server ponovo odredjuje primaoce pri objavi. Posebno provjeriti SZS bez
-   operativaca i dvostruko clanstvo bez duplog broja.
-2. **Jednostavna priprema SZS testera.** U administraciji objediniti provjeru
-   naloga, potpun profil, povezivanje roster zapisa i operativnu ulogu u jedan
-   vodjeni postupak. Novi nalog i dalje pocinje kao gradjanin, a promjenu
-   izvrsava ovlasceni administrator uz trag u reviziji.
-3. **Kratki predlosci uputstva.** Ponuditi nekoliko tekstova za vjezbu i
-   intervenciju koje komandir moze urediti. Lokacija i naslov ostaju obavezni
-   za svaki novi poziv; predlozak nikada sam ne objavljuje poziv. Predloske
-   potvrditi sa DVD/SZS prije operativne upotrebe.
-4. **Mjeriti stvarno kasnjenje.** Na testnim pozivima prikazati vremena objave,
+1. **Prihvat poslije objave.** Na izdvojenom testnom sajtu pregledati
+   spremnost za DVD, SZS i obje sluzbe sa stvarnim test nalozima. Na uredjajima
+   kasnije potvrditi da pozvani clan dobija i otvara poziv. Ovaj korak ne trazi
+   novu radnju vlasnika sada.
+2. **Predlosci za stvarnu intervenciju.** TEST/VJEZBA su pripremljeni. Tekst
+   za stvarnu intervenciju usaglasiti sa DVD/SZS prije dodavanja; lokacija,
+   naslov i potvrda objave ostaju obavezni.
+3. **Mjeriti stvarno kasnjenje.** Na testnim pozivima prikazati vremena objave,
    prihvata push provajdera, otvaranja i odgovora. Odvojiti serverski prihvat
    od prikaza na telefonu; ako problem bude u mrezi ili pretplati, komandir
    ne smije dobiti lazno `dostavljeno`.

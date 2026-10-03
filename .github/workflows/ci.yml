@@ -68,6 +68,9 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      - name: Public guide publication checks
+        run: npm run test:site
+
       - name: Read-only capture safeguards
         run: npm run test:capture
 

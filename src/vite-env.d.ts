@@ -8,6 +8,8 @@
  * visitor. The Supabase SECRET key must never be given a `VITE_` name.
  */
 interface ImportMetaEnv {
+  /** Historical local simulation; omit in all regular hosted builds. */
+  readonly VITE_PROTOTYPE_ENABLED?: string;
   /** Enable after SMTP and the recovery OTP template pass hosted acceptance. */
   readonly VITE_PASSWORD_RESET_ENABLED?: string;
   /** Enable only after migrations 013 and 015 pass on the hosted project. */

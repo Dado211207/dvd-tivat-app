@@ -5,18 +5,24 @@
  * shape is reviewable: an icon is the one asset nobody can diff. Run
  * `node scripts/make-icons.mjs` after changing anything below.
  *
- * The mark is an original bell on the project's teal. **No DVD Tivat logo or
- * emblem is used**, and the shape is deliberately not a fire-service cross or
- * anything that could be mistaken for an official insignia - this is a
- * prototype and must not dress itself as the society's own badge.
+ * The FireNexa mark combines F/N initials and a signal accent. It uses no DVD
+ * or SZS emblem, emergency number or official insignia. The SVG masthead and
+ * raster launcher icons depict the same original symbol.
  */
 
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-const TEAL = [7, 118, 135];
+const NAVY = [7, 30, 42];
+const AQUA = [107, 214, 210];
 const WHITE = [255, 255, 255];
+const AMBER = [255, 182, 104];
+const F = [[120, 148], [238, 148], [238, 190], [162, 190], [162, 238],
+  [224, 238], [224, 280], [162, 280], [162, 364], [120, 364]];
+const N = [[254, 148], [294, 148], [350, 276], [350, 148], [392, 148],
+  [392, 364], [352, 364], [296, 236], [296, 364], [254, 364]];
+const PULSE = [[120, 108], [196, 108], [196, 120], [120, 120]];
 
 /** Coverage of one shape at a point, sampled 4x4 for a smooth edge. */
 function coverage(x, y, size, inside) {
@@ -31,16 +37,16 @@ function coverage(x, y, size, inside) {
   return hits / 16;
 }
 
-const inCircle = (u, v, cx, cy, r) => (u - cx) ** 2 + (v - cy) ** 2 <= r * r;
-
-function inTriangle(u, v, [ax, ay], [bx, by], [cx, cy]) {
-  const sign = (px, py, qx, qy, rx, ry) => (px - rx) * (qy - ry) - (qx - rx) * (py - ry);
-  const d1 = sign(u, v, ax, ay, bx, by);
-  const d2 = sign(u, v, bx, by, cx, cy);
-  const d3 = sign(u, v, cx, cy, ax, ay);
-  const neg = d1 < 0 || d2 < 0 || d3 < 0;
-  const pos = d1 > 0 || d2 > 0 || d3 > 0;
-  return !(neg && pos);
+function inPolygon(x, y, points) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, yi] = points[i];
+    const [xj, yj] = points[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 /** Rounded square, so the icon has a shape of its own on a plain background. */
@@ -51,39 +57,20 @@ function inRoundedSquare(u, v, radius) {
   return dx * dx + dy * dy <= radius * radius;
 }
 
-const inRect = (u, v, x0, y0, x1, y1) => u >= x0 && u <= x1 && v >= y0 && v <= y1;
-
-const inQuad = (u, v, a, b, c, d) => inTriangle(u, v, a, b, c) || inTriangle(u, v, a, c, d);
-
 /**
- * The mark is a bell, not a flame.
- *
- * Two earlier attempts at a flame - a circle drawn up to a point - both read as
- * a droplet or a keyhole at icon size, which is what that silhouette actually
- * is. A bell survives 32 pixels, and it is the truer sign for this application:
- * the product is a CALL-OUT, not a fire. What it does is ring.
- *
- * `shrink` pulls the mark towards the centre for the maskable variant, where a
- * launcher may crop up to 20% off every edge.
+ * Block initials stay legible at phone icon sizes. Maskable launchers keep
+ * the complete symbol inside the central safe circle.
  */
-function bell(u, v, shrink) {
-  const x = 0.5 + (u - 0.5) / shrink;
-  const y = 0.5 + (v - 0.5) / shrink;
-  return (
-    // Crown, then the body flaring out to the rim.
-    (inCircle(x, y, 0.5, 0.44, 0.2) && y <= 0.44) ||
-    inQuad(x, y, [0.3, 0.42], [0.7, 0.42], [0.78, 0.65], [0.22, 0.65]) ||
-    inRect(x, y, 0.17, 0.65, 0.83, 0.715) ||
-    // The handle it hangs from, and the clapper swinging below.
-    inCircle(x, y, 0.5, 0.225, 0.05) ||
-    inCircle(x, y, 0.5, 0.79, 0.062)
-  );
+function signal(u, v, shrink) {
+  const x = (0.5 + (u - 0.5) / shrink) * 512;
+  const y = (0.5 + (v - 0.5) / shrink) * 512;
+  return { aqua: inPolygon(x, y, F), white: inPolygon(x, y, N), amber: inPolygon(x, y, PULSE) };
 }
 
 function render(size, { maskable = false, transparent = false } = {}) {
   // Maskable icons keep the mark inside the safe zone; a plain icon may use
   // the full square and gets rounded corners of its own.
-  const scale = maskable ? 0.64 : 1;
+  const scale = maskable ? 0.7 : 1;
   const pixels = Buffer.alloc(size * size * 4);
 
   for (let y = 0; y < size; y += 1) {
@@ -93,18 +80,18 @@ function render(size, { maskable = false, transparent = false } = {}) {
       const plate = maskable
         ? 1
         : coverage(x, y, size, (u, v) => inRoundedSquare(u, v, 0.22));
-      const mark = coverage(x, y, size, (u, v) => bell(u, v, scale));
+      const aqua = coverage(x, y, size, (u, v) => signal(u, v, scale).aqua);
+      const white = coverage(x, y, size, (u, v) => signal(u, v, scale).white);
+      const amber = coverage(x, y, size, (u, v) => signal(u, v, scale).amber);
 
       const alpha = transparent ? plate : 1;
-      const base = transparent && plate === 0 ? [0, 0, 0] : TEAL;
+      const base = transparent && plate === 0 ? [0, 0, 0] : NAVY;
+      const withSignal = base.map((c, i) =>
+        ((c * (1 - aqua) + AQUA[i] * aqua) * (1 - white) + WHITE[i] * white) * (1 - amber) + AMBER[i] * amber);
 
-      // A plain white silhouette. An attempt at shading inside the body only
-      // added noise at the sizes this is actually seen at.
-      const withBell = base.map((c, i) => c * (1 - mark) + WHITE[i] * mark);
-
-      pixels[offset] = Math.round(withBell[0]);
-      pixels[offset + 1] = Math.round(withBell[1]);
-      pixels[offset + 2] = Math.round(withBell[2]);
+      pixels[offset] = Math.round(withSignal[0]);
+      pixels[offset + 1] = Math.round(withSignal[1]);
+      pixels[offset + 2] = Math.round(withSignal[2]);
       pixels[offset + 3] = Math.round(alpha * 255);
     }
   }
@@ -158,6 +145,17 @@ const outputs = [
   ['public/icons/apple-touch-icon.png', 180, {}],
   ['public/icons/favicon-32.png', 32, { transparent: true }],
 ];
+
+// SVG and PNG share the same coordinates; neither asset is edited separately.
+const polygon = (points, colour) =>
+  `  <polygon points="${points.map((point) => point.join(',')).join(' ')}" fill="${colour}"/>`;
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FireNexa">\n` +
+  `  <rect width="512" height="512" rx="112" fill="#071e2a"/>\n` +
+  [polygon(F, '#6bd6d2'), polygon(N, '#ffffff'), polygon(PULSE, '#ffb668')].join('\n') + '\n</svg>\n';
+for (const path of ['public/icons/firenexa.svg', 'site/assets/firenexa.svg']) {
+  mkdirSync(dirname(resolve(path)), { recursive: true });
+  writeFileSync(resolve(path), svg);
+}
 
 for (const [path, size, options] of outputs) {
   const file = resolve(process.cwd(), path);

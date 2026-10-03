@@ -173,6 +173,8 @@ export interface FixtureOptions {
    */
   readonly memberships?: readonly FixtureMembership[];
   readonly owner?: boolean;
+  /** Simulate one service having no eligible call-out recipients. */
+  readonly emptyEligibleServices?: readonly ('DVD' | 'SZS')[];
 }
 
 const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
@@ -651,6 +653,7 @@ export async function installFixtureProject(
           return json(route, memberships.find((m) => m.memberId)?.memberId ?? null);
         }
         if (name === 'eligible_recipients_in') {
+          if (options.emptyEligibleServices?.includes(orgService(target()) ?? 'DVD')) return json(route, []);
           return json(route, multi.eligibleByOrg[target() ?? ''] ?? []);
         }
       }

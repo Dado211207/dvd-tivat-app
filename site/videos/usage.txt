@@ -1,0 +1,21 @@
+FireNexa: rad komandira i člana (ilustrovano video uputstvo)
+
+Komandir
+1. Prijavi se kao komandir i provjeri aktivnu službu u zaglavlju.
+2. Za vježbu izaberi VJEŽBA i upiši „TEST – nije stvarna intervencija”.
+3. Upiši izmišljenu lokaciju i jasno uputstvo za okupljanje.
+4. Prema svojim pravima izaberi DVD, SZS ili obje službe. Podobne članove bira server.
+5. Provjeri broj podobnih naloga i aktivnih push pretplata. To nije potvrda dostave.
+6. Potvrdi tek kad su vrsta, lokacija, uputstvo i služba ispravni.
+7. Pregledaj Dolazim, Dolazim kasnije, Ne mogu i članove bez odgovora.
+8. Pri normalnom završetku opis je opcioni. Otkazivanje traži razlog.
+
+Vatrogasac
+9. Otvori obavještenje i pročitaj naslov, lokaciju i uputstvo.
+10. Dodirni „Dolazim”. Aplikacija čuva odgovor i posebno potvrđuje prijem.
+11. Izaberi „Dolazim kasnije” i vrijeme, ili „Ne mogu”. Ovo su zasebni izbori.
+12. Prijava kretanja i potvrda prisustva su dva odvojena koraka.
+13. Svoje odgovore i učešće možeš naknadno pregledati u Arhivi.
+
+Ekran telefona u videu je ilustracija, a ne snimak stvarnog uređaja. Za testni
+poziv koristiti samo izolovanu testnu bazu i fikcionalne naloge.

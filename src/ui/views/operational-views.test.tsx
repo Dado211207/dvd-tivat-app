@@ -21,7 +21,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessGateway, OperationalRole } from '@/auth/access';
 import { AccessProvider } from '@/auth/AccessProvider';
 import { LANGUAGES } from '@/i18n/language';
@@ -34,6 +34,21 @@ declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom lacks native <dialog> methods. Keep the browser component unchanged;
+// these two test shims only let its actual confirmation UI render here.
+const nativeShowModal = HTMLDialogElement.prototype.showModal;
+const nativeClose = HTMLDialogElement.prototype.close;
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
+});
+afterAll(() => {
+  if (nativeShowModal) HTMLDialogElement.prototype.showModal = nativeShowModal;
+  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;
+  if (nativeClose) HTMLDialogElement.prototype.close = nativeClose;
+  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
+});
 
 const MEMBER_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_ID = '22222222-2222-4222-8222-222222222222';
@@ -115,6 +130,9 @@ vi.mock('@/auth/operations', async (importOriginal) => {
     fetchEligibleRecipients: vi.fn(async () => [
       { memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac', role: 'FIREFIGHTER' as const, specialties: [] },
     ]),
+    fetchCalloutReadiness: vi.fn(async () => ({
+      eligibleCount: 2, pushReadyCount: 1, checkedAt: '2026-10-02T13:00:00.000Z',
+    })),
     fetchRecipientFacts: vi.fn(async () => ({ ok: true, value: RECIPIENTS }) as const),
     acknowledgeIntervention: vi.fn(async () => ({ ok: true }) as const),
     submitResponse: vi.fn(async () => ({ ok: true }) as const),
@@ -282,6 +300,21 @@ describe('title, location and assembly point are not confused with each other', 
 });
 
 describe('the commander console renders on real data', () => {
+  it('fills an editable TEST instruction without publishing or guessing the location', async () => {
+    await show(<CommandView />, 'COMMANDER');
+    const preset = container.querySelector<HTMLButtonElement>('[data-testid="preset-test"]');
+    expect(preset).not.toBeNull();
+    act(() => preset?.click());
+    const instructions = container.querySelector<HTMLTextAreaElement>('[data-testid="new-instructions"]');
+    const kind = container.querySelector<HTMLSelectElement>('[data-testid="new-kind"]');
+    expect(instructions?.value).toContain('Ne izlazite na teren');
+    expect(instructions?.readOnly).toBe(false);
+    expect(kind?.value).toBe('TEST');
+    expect(container.querySelector<HTMLInputElement>('[data-testid="new-title"]')?.value).toBe('');
+    expect(container.querySelector<HTMLInputElement>('[data-testid="new-location"]')?.value).toBe('');
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="quick-review"]')?.disabled).toBe(true);
+  });
+
   it('shows the call-out and does not fail to render', async () => {
     const text = await show(<CommandView />, 'COMMANDER');
     expect(text).not.toMatch(/Ova kopija nije povezana|nije za vasu ulogu/);
@@ -300,6 +333,11 @@ describe('the commander console renders on real data', () => {
     const headings = [...(table?.querySelectorAll('thead th') ?? [])].map((h) => h.textContent);
     // Opened, answered, moving and present are four different things.
     expect(headings).toEqual(['Clan', 'Otvorio', 'Odgovor', 'Kretanje', 'Prisustvo']);
+    const first = table?.querySelector('tbody tr');
+    expect(first?.querySelectorAll('.response-time')).toHaveLength(3);
+    expect(first?.querySelector('td:nth-child(2) .response-time')?.textContent).toMatch(/\d{2}:\d{2}/);
+    expect(first?.querySelector('td:nth-child(3) .response-time')?.textContent).toMatch(/\d{2}:\d{2}/);
+    expect(first?.querySelector('td:nth-child(4) .response-time')?.textContent).toMatch(/\d{2}:\d{2}/);
   });
 
   it('never reads a journey report as attendance', async () => {
@@ -386,6 +424,33 @@ describe('the commander console renders on real data', () => {
       const publish = container.querySelector<HTMLButtonElement>('[data-testid="publish"]');
       expect(publish, 'the button still exists so the screen is not mysterious').not.toBeNull();
       expect(publish?.disabled).toBe(true);
+    });
+
+    it('shows current unique recipients and push-ready accounts before confirmation', async () => {
+      await showDraft([{ memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac' }]);
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-testid="publish"]')?.click();
+      });
+      const counts = container.querySelector('[data-testid="readiness-counts"]');
+      expect(counts?.textContent).toMatch(/Podobnih naloga: 2.*pretplatom: 1/);
+      expect(container.textContent).toContain('ponovo odredjuje primaoce pri objavi');
+      const operations = await import('@/auth/operations');
+      expect(operations.fetchCalloutReadiness).toHaveBeenCalledWith(
+        '00000000-0000-4000-8000-000000000001', true, [],
+      );
+    });
+
+    it('blocks zero known recipients at confirmation', async () => {
+      const operations = await import('@/auth/operations');
+      vi.mocked(operations.fetchCalloutReadiness).mockResolvedValueOnce({
+        eligibleCount: 0, pushReadyCount: 0, checkedAt: '2026-10-02T13:00:00.000Z',
+      });
+      await showDraft([{ memberId: MEMBER_ID, fullName: 'Ivo Vatrogasac' }]);
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[data-testid="publish"]')?.click();
+      });
+      expect(container.querySelector('[data-testid="readiness-empty"]')).not.toBeNull();
+      expect(container.querySelector<HTMLButtonElement>('dialog .dialog__foot button:last-child')?.disabled).toBe(true);
     });
   });
 });

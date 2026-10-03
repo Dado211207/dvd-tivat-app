@@ -244,6 +244,9 @@ export async function registerWithEmail(
       email: email.trim().toLowerCase(),
       password,
       options: {
+        // Confirmation must return to the address where registration started.
+        // Both the existing and the new app origin need to be allowed in Auth.
+        emailRedirectTo: `${window.location.origin}/`,
         data: {
           full_name: profile.fullName.trim(),
           phone: profile.phone,
@@ -266,6 +269,7 @@ export async function resendSignupConfirmation(email: string): Promise<AuthOutco
     const { error } = await accountBackend().auth.resend({
       type: 'signup',
       email: email.trim().toLowerCase(),
+      options: { emailRedirectTo: `${window.location.origin}/` },
     });
     return error
       ? { ok: false, unreachable: unreachable(error) }
