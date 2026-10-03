@@ -10,16 +10,17 @@ Last updated: 2026-10-03
 
 Read [the transition record](../FINAL_ORIGIN_TRANSITION.md). A separate free
 Netlify project `firenexa-app` (`04c0d262-53e1-48b4-a49a-d2f3db286316`)
-was created for `https://firenexa-app.netlify.app/`, but it has no successful
-deploy. The working application and public guide remain on their existing URLs.
-A reviewed application build and final guide/QR candidate exist locally; no
-new address or QR is published. Sign-up/resend code now requests confirmation
+was created for `https://firenexa-app.netlify.app/` and now has active deploy
+`6ac09260869e05dc0999869c` from app source `5fe8380`. Five live files match
+the reviewed build; signed-out Accounts loads. The old app stays available and
+the public guide still points to it. A final guide/QR candidate exists locally
+but is not published pending Auth redirect verification. Sign-up/resend code now requests confirmation
 back to the initiating origin, covered for old and new origins by two tests.
-The isolated Supabase Auth allowlist/templates have not been changed. Netlify
-CLI authentication in this execution workspace is absent; connector-provided
-proxy deployment failed at fetch. Do not claim the final link works yet.
-Next: deploy to the separate app site, verify live assets and Auth settings,
-then switch guide links/QR and complete three device-accurate videos.
+Full CI 37098669572 passed on `5fe8380`. Supabase dashboard confirms old
+Site URL, no Redirect URLs, and default signup email uses ConfirmationURL.
+Netlify CLI was reauthorized; the app was published separately. Next: add the
+new exact Auth redirect, verify, switch guide links/QR, and complete three
+device-accurate videos. Do not call the onboarding transition complete yet.
 
 ## Detailed hosted review — 2026-10-03
 

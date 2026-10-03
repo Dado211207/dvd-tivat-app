@@ -1,9 +1,9 @@
 > **3 October 2026 app address preparation:** the free `firenexa-app` Netlify
-> project is reserved, but has no successful deploy. The old app and public
-> guide are still the working URLs. Sign-up/resend now specify their own origin
+> project is live at <https://firenexa-app.netlify.app/> (deploy `6ac09260869e05dc0999869c`).
+> The old app remains live and the public guide still targets it. Sign-up/resend now specify their own origin
 > for confirmation (two tests pass). Read
 > [FINAL_ORIGIN_TRANSITION.md](./FINAL_ORIGIN_TRANSITION.md) for the exact
-> deployment, Auth and guide sequence. The new QR candidate is not published.
+> deployment, Auth and guide sequence. The new QR candidate is not published pending Auth redirect verification.
 
 > **3 October 2026 detailed review:** corrected app source `3ef2144` passed
 > CI 37093860429 (851 unit, 960 DB/RLS, 402 browser tests) and is published on
