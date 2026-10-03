@@ -92,12 +92,16 @@ After authentication:
    at this stage.
 
 A new origin needs separate installation, sign-in and notification permission.
-The Edge worker's existing single-origin CORS guard can reject the new app's
-immediate push wake-up even if Auth redirect succeeds. The branch now includes
-the FireNexa and original app origins in the `send-web-push` allowlist; deploy
-that reviewed Edge function to the isolated project and verify a fictional
-commander wake-up before relying on immediate delivery. A source change alone
-does not update the hosted worker. Retain the scheduler as a fallback.
+The isolated project's `send-web-push` v9 still had a single-origin CORS guard
+that excluded the new app. On 3 October, the reviewed source was deployed as
+v10 to isolated project `zoipjcdtcfetqvcfmhxd`, preserving `verify_jwt=false`
+and the worker's explicit scheduler-secret/commander authorization. The hosted
+`index.ts`, `origin.ts`, `deliver.ts` and `policy.ts` match the reviewed source.
+Read-only HTTP checks returned `204` and the matching origin for FireNexa and
+the old installed Netlify app; an unknown origin got no matching CORS header.
+An unauthenticated POST from FireNexa returned `401`, with no alert sent.
+This verifies CORS and unauthenticated refusal; a signed-in fictional commander
+wake-up and actual device delivery still require credential/device acceptance.
 Guide publication is not operational acceptance: signed-in hosted checks,
 SZS/dual membership, Android/iPhone delivery and the production release gates
 remain separate. No real alert, account, role or database mutation was made
