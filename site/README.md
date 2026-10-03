@@ -32,3 +32,7 @@ must come from the society; no personal address or phone is invented.
 
 The guide is not published yet. Installation footage must show the reviewed
 device/browser steps; see `docs/VIDEO_PRODUCTION_SCRIPT.md`.
+
+The separate `firenexa-app` project was reserved on 3 October 2026 but is not
+yet serving an application. A final guide candidate can be generated with
+`node scripts/build-site.mjs --app-url https://firenexa-app.netlify.app/ --out-dir /tmp/firenexa-guide-final-candidate`; do not deploy it before the new app and Auth settings are verified. See `docs/FINAL_ORIGIN_TRANSITION.md`.
