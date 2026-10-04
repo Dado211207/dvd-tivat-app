@@ -141,15 +141,17 @@ try {
       const qr = guide.getByTestId('app-qr').getByRole('img');
       assert.ok(await qr.evaluate((image) => image.complete && image.naturalWidth > 0));
       assert.ok(await guide.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-      assert.equal(await guide.locator('video').count(), 3);
+      assert.equal(await guide.locator('video').count(), 1);
     });
   }
-  await check('guide videos and transcripts', async () => {
-    for (const [index, name] of ['iphone', 'android', 'usage'].entries()) {
-      assert.equal(await guide.locator('video').nth(index).getAttribute('src'), `./videos/${name}.mp4`);
-      const response = await guideContext.request.get(new URL(`videos/${name}.txt`, GUIDE).href);
+  await check('guide video and written tutorials', async () => {
+    assert.equal(await guide.locator('video').getAttribute('src'), './videos/iphone.mp4');
+    for (const path of ['videos/iphone.mp4', 'videos/iphone.txt', 'android.html', 'koriscenje.html']) {
+      const response = await guideContext.request.get(new URL(path, GUIDE).href);
       assert.equal(response.status(), 200);
-      assert.match(await response.text(), /ilustracija/i);
+    }
+    for (const path of ['android.html', 'koriscenje.html']) {
+      assert.equal(await guide.locator(`a[href="./${path}"]`).count(), 1);
     }
   });
   await check('guide accessibility and all local anchors resolve', async () => {

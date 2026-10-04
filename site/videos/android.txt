@@ -1,11 +1,65 @@
-FireNexa: instalacija na Android (ilustrovano video uputstvo)
+Instalacija na Android
 
-1. Otvori firenexa.netlify.app u Chromeu i dodirni „Otvori aplikaciju”.
-2. Dodirni tri tačke u uglu Chromea.
-3. Izaberi „Instaliraj aplikaciju” ili „Dodaj na početni ekran”. Naziv zavisi od uređaja.
-4. Potvrdi prikazane korake, pa otvori novu FireNexa ikonu.
-5. Unesi svoj nalog koji je povezan sa službom i ulogom.
-6. U Podesavanjima aplikacije uključi obavještenja i prihvati dozvolu telefona.
-7. Dostava zavisi od Chromea, mreže, uređaja i dozvola. Koristi i službeni kanal.
+1. Otvorite aplikaciju u Chromeu
 
-Ekran telefona u videu je ilustracija, a ne snimak stvarnog uređaja.
+Na Android telefonu otvorite Chrome i stranicu firenexa.netlify.app. Dodirnite Otvori aplikaciju. Provjerite da je adresa aplikacije firenexa-app.netlify.app prije instalacije. Instalirajte aplikaciju, a ne ovu informativnu stranicu.
+
+Ako je link otvoren unutar Vibera ili druge aplikacije, otvorite ga u Chromeu.
+
+
+
+
+2. Instalirajte FireNexa
+
+Dodirnite Chrome meni ⋮ pored adresne trake.
+
+Prema aktuelnom Google uputstvu izaberite Install and create shortcut, zatim Install.
+
+U drugim verzijama Chromea opcija moze biti nazvana Install app / Instaliraj aplikaciju ili Add to Home screen / Dodaj na pocetni ekran. Pratite ponudjene korake za instalaciju.
+
+Potvrdite instalaciju i otvorite FireNexa ikonu.
+
+Ako Chrome nudi izbor izmedju instalacije i obicne precice, odaberite instalaciju aplikacije.
+
+Provjereno 4. oktobra 2026: Google Chrome Help — Use web apps. Nazivi menija zavise od jezika i verzije Chromea.
+
+
+
+
+3. Prijava i pristup sluzbi
+
+Prijavite se svojim nalogom. Ako se prvi put registrujete, zavrsite potvrdu emaila prema poruci koju dobijete. Novi nalog nema automatski pristup operativnim pozivima: vlasnik povezuje nalog sa clanom, sluzbom i ulogom.
+
+Ako ste prijavljeni, a ne vidite operativne ekrane, obratite se vlasniku sistema. Ponovna instalacija ne dodjeljuje prava.
+
+
+
+
+4. Ukljucite obavjestenja
+
+U FireNexa otvorite Podesavanja.
+
+Izaberite Ukljuci operativne notifikacije.
+
+Prihvatite dozvolu koju prikaze telefon ili pregledac.
+
+Provjerite poruku o uspjehu u aplikaciji. Samo zatvaranje prozora nije potvrda da su obavjestenja ukljucena.
+
+Ako je dozvola ranije odbijena, provjerite dozvolu za obavjestenja za FireNexa u podesavanjima telefona i za ovaj sajt u Chromeu. Vratite se u aplikaciju i ponovite ukljucivanje.
+
+
+
+
+Ako nesto ne radi
+
+Nema opcije za instalaciju: provjerite da ste u Chromeu na adresi aplikacije, pregledajte cijeli meni i provjerite postoji li FireNexa vec medju aplikacijama.
+
+Nema poziva: provjerite prijavu, aktivnu sluzbu i clanstvo. Poziv mora biti upucen vama.
+
+Obavjestenje nije stiglo: otvorite aplikaciju i provjerite poziv i stanje veze. Koristite dogovoreni kanal svoje sluzbe; push nije garantovan alarm.
+
+Nastavite na detaljan vodic kroz aplikaciju.
+
+
+
+FireNexa · Fire & Rescue Response Platform

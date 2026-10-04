@@ -1,11 +1,7 @@
-FireNexa: instalacija na iPhone (ilustrovano video uputstvo)
-
-1. Otvori firenexa.netlify.app i dodirni „Otvori aplikaciju”.
-2. U Safariju dodirni ikonu Dijeli na traci preglednika.
-3. Izaberi „Dodaj na početni ekran”. Meni se može razlikovati po verziji iOS-a.
-4. Ako se ponudi „Otvori kao web aplikaciju”, ostavi uključeno i dodirni „Dodaj”.
-5. Pokreni FireNexa ikonu sa početnog ekrana i prijavi se svojim nalogom.
-6. U aplikaciji otvori Podesavanja, uključi obavještenja i prihvati dozvolu iPhonea.
-7. Za aktivne pozive prati i dogovoreni službeni kanal. Web Push zavisi od mreže i dozvola.
-
-Ekran telefona u videu je ilustracija, a ne snimak stvarnog uređaja.
+FireNexa — instalacija na iPhone
+Stvarni snimak Safarija, sa sakrivenim privatnim podacima.
+1. Na FireNexa sajtu dodirnite Otvori aplikaciju.
+2. U Safariju otvorite meni, pa Share.
+3. Izaberite Add to Home Screen.
+4. Potvrdite Add.
+Video zavrsava na dugmetu Add, bez prikaza privatnog pocetnog ekrana.
