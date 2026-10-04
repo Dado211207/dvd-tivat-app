@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -41,6 +41,21 @@ test('one configured address replaces every app link and supplies both QR assets
       { appUrl: address, preview: false, qrTarget: address });
     assert.ok((await readFile(join(directory, 'assets/app-qr.svg'), 'utf8')).includes('<svg'));
     assert.equal((await readFile(join(directory, 'assets/app-qr.png'))).subarray(1, 4).toString(), 'PNG');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a rebuild purges stale files so a dropped video is never republished', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'firenexa-site-'));
+  try {
+    await mkdir(join(directory, 'videos'), { recursive: true });
+    await writeFile(join(directory, 'videos/android.mp4'), 'stale rejected illustrated tutorial');
+    await writeFile(join(directory, 'stale.html'), 'leftover');
+    await buildSite({ appUrl: 'https://example.invalid/firenexa/', outDir: directory });
+    await assert.rejects(stat(join(directory, 'videos/android.mp4')), 'a dropped video must not survive a rebuild');
+    await assert.rejects(stat(join(directory, 'stale.html')), 'a dropped page must not survive a rebuild');
+    assert.ok((await stat(join(directory, 'videos/iphone.mp4'))).size > 100_000);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
