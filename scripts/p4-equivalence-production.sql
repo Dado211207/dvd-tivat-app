@@ -61,6 +61,15 @@
 --      under-captures: the id lists gathered below with no JWT set, and the
 --      exported rows, are RLS-filtered, so the gate later fails its fidelity
 --      step rather than naming the missing privilege.
+--
+--      SECURITY: no such role is read-only, and none should be created for
+--      this. Membership in `authenticated` lets the holder set its own JWT
+--      claims and act as any account, owner included; inherited with
+--      BYPASSRLS it also writes past row policies. `set transaction read
+--      only` below protects this batch, not the credential. Run this file
+--      only where writes are harmless or the credential is already the
+--      owner's own: see db-tests/capture_role_privileges.test.ts and the
+--      2026-10-04 evening checkpoint in docs/P7_P8_RELEASE_PREP.md.
 --   2. Save the single returned row as a .json object OUTSIDE the repository.
 --      It is pseudonymised, but still production-derived. Name it
 --      `*.production-export.json`: .gitignore covers that suffix, as a

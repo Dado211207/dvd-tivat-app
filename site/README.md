@@ -35,7 +35,12 @@ must come from the society; no personal address or phone is invented.
 The guide is published at <https://firenexa.netlify.app/>. Its active version
 still links to the old app with a temporary QR. The new app is already live at
 <https://firenexa-app.netlify.app/>, and the previous session recorded the
-approved Auth redirect save. The final guide build is prepared, not published.
+approved Auth redirect save.
+
+**4 October 2026:** the final guide is published as deploy
+`6ac2a05f9fa3f188e860c23c` (see `docs/FIRENEXA_PUBLICATION.md`). Its QR targets
+the app connected to the isolated test Supabase project: do not distribute it for
+member sign-up before the production cutover.
 
 The resumed CLI needs authentication before uploading to the existing guide
 site `6dcc0123-3287-43a5-98a2-0ee25d33b5f2`. Upload **only `dist-site`**,

@@ -1,8 +1,13 @@
 /**
- * Run the production equivalence capture over a direct, read-only database
- * connection and keep the result outside this repository. No SQL result or
- * connection string is printed. The source SQL begins with SET TRANSACTION
- * READ ONLY; it must be sent as one simple-query batch, not through psql -f.
+ * Run the production equivalence capture in a read-only transaction and keep
+ * the result outside this repository. No SQL result or connection string is
+ * printed. The source SQL begins with SET TRANSACTION READ ONLY; it must be
+ * sent as one simple-query batch, not through psql -f.
+ *
+ * The transaction is read-only; the credential is not. sourceUrl() accepts only
+ * the project's `postgres` user, so DVD_READONLY_DATABASE_URL is a
+ * full-privilege URL despite its name. Never store it as a CI or cloud
+ * environment secret. See docs/P7_P8_RELEASE_PREP.md (2026-10-04 evening).
  *
  * DVD_READONLY_DATABASE_URL='postgresql://...' \
  *   node scripts/p4-capture-production.mjs /private/path/capture.production-export.json
