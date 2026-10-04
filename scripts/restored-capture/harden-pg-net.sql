@@ -1,4 +1,17 @@
 -- ===========================================================================
+-- MUST RUN AS supabase_admin / a superuser - NOT the project owner.
+--
+-- Verified 2026-10-04 on the isolated project: net.http_request_queue and
+-- net._http_response are owned by `supabase_admin`, and the project owner
+-- login `postgres` is NOT a superuser and cannot SET ROLE supabase_admin, so
+-- `REVOKE ... FROM PUBLIC` run as `postgres` (the dashboard SQL editor's role)
+-- silently no-ops - PUBLIC keeps every privilege. Removing PUBLIC's grants on
+-- pg_net therefore requires supabase_admin, which Supabase does not expose to
+-- customers: it is a Supabase SUPPORT action, or must be accepted as a
+-- documented residual (see docs/RESTORED_CAPTURE_REHEARSAL.md). The dump
+-- workflow's verify-role refuses while PUBLIC still holds these, so run this
+-- (or accept the residual) before creating the dump role.
+--
 -- PREREQUISITE before ANY new login role exists on the project, the dump role
 -- included. Review before running; it is a production change.
 --
