@@ -13,9 +13,18 @@
  * net.http_request_queue and net._http_response (measured 2026-10-04 on the
  * isolated project, and read-only on production). TRIGGER there lets any login
  * role run its own code as `postgres` when the push cron enqueues; SELECT and
- * UPDATE expose and redirect the push-worker secret. Each is a problem, and
- * scripts/restored-capture/harden-pg-net.sql must be applied before the dump
- * role is created.
+ * UPDATE expose and redirect the push-worker secret. Each is a problem, so
+ * classify() reports them and verify-role refuses the dump while they stand.
+ *
+ * Removing them (scripts/restored-capture/harden-pg-net.sql) needs
+ * `supabase_admin` - the project owner's `postgres` login cannot (verified
+ * 2026-10-04: it is not a superuser and cannot SET ROLE supabase_admin, so its
+ * REVOKE FROM PUBLIC no-ops). So this refusal clears only after a Supabase
+ * support action, or an explicit documented acceptance of the pg_net residual
+ * (docs/RESTORED_CAPTURE_REHEARSAL.md). A rolled-back probe on the real
+ * isolated project confirms pg_net is the ONLY residual write path: no role
+ * membership, no SECURITY DEFINER functions, no public/auth/vault/pgsodium
+ * writes.
  */
 
 import { readFileSync } from 'node:fs';

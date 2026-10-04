@@ -1,0 +1,94 @@
+# Manual, owner-triggered rehearsal of the restored-copy P4 capture on a cloud
+# runner (GitHub Actions ubuntu-latest). It NEVER runs on push or pull_request
+# and NEVER uploads a dump, a capture or a log artifact: the dump and capture
+# live only in the runner's ephemeral $RUNNER_TEMP and the job prints pass/fail.
+#
+# This exists because the Claude cloud session cannot open a raw PostgreSQL
+# connection (its egress proxy carries HTTPS only), and this account's GitHub
+# token cannot create a Codespace. A GitHub Actions runner has ordinary IPv4
+# egress and reaches Supabase's session pooler, so it is the smallest auditable
+# cloud runner. A Codespace opened by the owner on this repo works the same way
+# (run scripts/restored-capture/reachability.mjs and the commands in
+# docs/RESTORED_CAPTURE_REHEARSAL.md).
+#
+# mode: reachability  -> only a TCP connect to the pooler. No secret, no data.
+# mode: full          -> verify-role, dump, restore into a throwaway PG17
+#                        service, capture, and the P4 gate, all on the runner.
+#                        Requires the repository secret DVD_DUMP_DATABASE_URL
+#                        (the dump role's session-pooler URL). It will refuse
+#                        at verify-role while PUBLIC still holds pg_net (see the
+#                        doc); that refusal is the signal, not a bug.
+name: Supabase dump rehearsal (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: reachability (no secret) or full (needs DVD_DUMP_DATABASE_URL)
+        type: choice
+        options: [reachability, full]
+        default: reachability
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    services:
+      restore_target:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reachability only: a TCP connect to the session pooler (5432) and the
+      # transaction pooler (6543). No credential is sent, no row is read.
+      - name: Pooler reachability (no credentials)
+        run: node scripts/restored-capture/reachability.mjs aws-0-eu-west-1.pooler.supabase.com 5432 6543
+
+      - name: Stop here unless full
+        if: ${{ inputs.mode != 'full' }}
+        run: echo "Reachability-only run complete."
+
+      - name: Use Node 22
+        if: ${{ inputs.mode == 'full' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: PostgreSQL 17 client (pg_dump) from PGDG
+        if: ${{ inputs.mode == 'full' }}
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Install dependencies
+        if: ${{ inputs.mode == 'full' }}
+        run: npm ci --no-audit --no-fund
+
+      # DVD_DUMP_DATABASE_URL is a repository secret; Actions masks it in logs and
+      # the scripts print no URL, no row and no password. The dump and capture are
+      # written under $RUNNER_TEMP and are never uploaded; the runner is discarded.
+      - name: verify-role, dump, restore, capture, gate (nothing uploaded)
+        if: ${{ inputs.mode == 'full' }}
+        env:
+          DVD_DUMP_DATABASE_URL: ${{ secrets.DVD_DUMP_DATABASE_URL }}
+          DVD_RESTORE_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          PG_DUMP: /usr/lib/postgresql/17/bin/pg_dump
+          PSQL: /usr/lib/postgresql/17/bin/psql
+        run: |
+          if [ -z "$DVD_DUMP_DATABASE_URL" ]; then
+            echo "::error::mode=full needs the repository secret DVD_DUMP_DATABASE_URL (the dump role's session-pooler URL)."
+            exit 1
+          fi
+          node scripts/p4-restored-capture.mjs verify-role
+          node scripts/p4-restored-capture.mjs run --work "$RUNNER_TEMP/rc" --out "$RUNNER_TEMP/capture.production-export.json"
+          DVD_TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres" npm run gate:p4 -- "$RUNNER_TEMP/capture.production-export.json"
+          echo "Rehearsal finished on the runner; no dump or capture was uploaded."
