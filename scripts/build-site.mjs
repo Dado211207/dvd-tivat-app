@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
@@ -23,6 +23,10 @@ export function appAddress(input, preview = false) {
 export async function buildSite({ appUrl, preview = false, outDir = 'dist-site' }) {
   const address = appAddress(appUrl, preview);
   const output = resolve(outDir);
+  // Start from an empty output so a rebuild over an existing dist-site never
+  // republishes files the source dropped - e.g. the rejected illustrated
+  // tutorial videos. The guide is uploaded as-is, so a stale file would ship.
+  await rm(output, { recursive: true, force: true });
   // Copy only the public guide, never the app bundle or operational data.
   await mkdir(resolve(output, 'assets'), { recursive: true });
   await cp('site/site.css', resolve(output, 'site.css'));
