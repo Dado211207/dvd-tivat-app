@@ -382,7 +382,11 @@ describe('at 202609250035: the service role writes the current answer, journey s
 
   it('holds every write privilege on the three tables', async () => {
     const { rows } = await db.query<{ table: string; acl: string }>(
-      `select relname::text as table, array_to_string(relacl, ' ') as acl from pg_class
+      // Strip the MAINTAIN ('m') privilege letter so the ACL reads the same on
+      // PostgreSQL 16 (CI) and 17 (production/hosted). MAINTAIN is new in PG17,
+      // is deliberately not revoked (see migration 037), and the gate normalises
+      // it the same way; the no-write invariant is checked via has_table_privilege.
+      `select relname::text as table, regexp_replace(array_to_string(relacl, ' '), 'm/', '/', 'g') as acl from pg_class
         where relnamespace = 'public'::regnamespace and relname = any($1) order by 1`,
       [[...TABLES]],
     );
@@ -509,7 +513,8 @@ describe('after 202609250036: the service role reads them, and only the commands
 
   it('leaves the service role SELECT, REFERENCES and TRIGGER on the three tables, and every other role as it was', async () => {
     const { rows } = await db.query<{ table: string; acl: string }>(
-      `select relname::text as table, array_to_string(relacl, ' ') as acl from pg_class
+      // regexp_replace strips PG17's MAINTAIN ('m') letter so the ACL matches on PG16 and 17 (see migration 037).
+      `select relname::text as table, regexp_replace(array_to_string(relacl, ' '), 'm/', '/', 'g') as acl from pg_class
         where relnamespace = 'public'::regnamespace and relname = any($1) order by 1`,
       [[...TABLES]],
     );

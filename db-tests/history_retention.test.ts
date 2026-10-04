@@ -714,7 +714,8 @@ describe('after 202609250034: history is written once, and a published call-out 
       'member_availability_history.member_availability_history_organization_id_fkey -> organizations NO ACTION',
     ]);
     const { rows: acl } = await db.query<{ table: string; acl: string }>(
-      `select relname::text as table, array_to_string(relacl, ' ') as acl from pg_class
+      // regexp_replace strips PG17's MAINTAIN ('m') letter so the ACL matches on PG16 and 17 (see migration 037).
+      `select relname::text as table, regexp_replace(array_to_string(relacl, ' '), 'm/', '/', 'g') as acl from pg_class
         where relnamespace = 'public'::regnamespace and relname = any($1) order by 1`,
       [[...HISTORY]],
     );
