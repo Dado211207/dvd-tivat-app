@@ -1,3 +1,5 @@
+> **4 October 2026:** the guide now serves deploy `6ac2a05f9fa3f188e860c23c` (real iPhone video, written Android and usage guides); `6ac15ece…` below is the previous deploy. Its QR targets the app on the isolated test Supabase project — not for member sign-up before production cutover. See [FIRENEXA_PUBLICATION.md](./FIRENEXA_PUBLICATION.md).
+>
 > **3 October 2026 checkpoint:** app <https://firenexa-app.netlify.app/>
 > is live from source `5fe8380`, deploy `6ac09260869e05dc0999869c`.
 > The guide <https://firenexa.netlify.app/> is public from verified deploy
