@@ -92,3 +92,10 @@ jobs:
           node scripts/p4-restored-capture.mjs run --work "$RUNNER_TEMP/rc" --out "$RUNNER_TEMP/capture.production-export.json"
           DVD_TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres" npm run gate:p4 -- "$RUNNER_TEMP/capture.production-export.json"
           echo "Rehearsal finished on the runner; no dump or capture was uploaded."
+
+      # Defence in depth: the runner is ephemeral and nothing is uploaded, but
+      # remove the dump, the capture and the work dir regardless of outcome so a
+      # leftover can never be picked up by a later step or a reused runner.
+      - name: Remove dump, capture and work dir
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/rc" "$RUNNER_TEMP/capture.production-export.json"
