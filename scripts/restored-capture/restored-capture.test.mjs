@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import net from 'node:net';
+import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 import { canonicalizeConstraintDef, canonicalizeConstraintDefs } from './canonical-constraint.mjs';
 import { classify } from './privileges.mjs';
@@ -126,4 +129,53 @@ test('differences compares constraints by canonical form, and reports real diver
 test('scramVerifier produces a PostgreSQL SCRAM-SHA-256 verifier', () => {
   const v = scramVerifier('a-password');
   assert.match(v, /^SCRAM-SHA-256\$4096:[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$/);
+});
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(HERE, '../..');
+
+function runReachability(args) {
+  return new Promise((done) => {
+    const child = spawn(process.execPath, [resolve(HERE, 'reachability.mjs'), ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('close', (code) => done({ code, out }));
+  });
+}
+
+test('reachability reports a listening port reachable and a closed port not', async () => {
+  const server = net.createServer();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const open = server.address().port;
+  try {
+    const ok = await runReachability(['127.0.0.1', String(open)]);
+    assert.equal(ok.code, 0, ok.out);
+    assert.match(ok.out, /REACHABLE\s+127\.0\.0\.1:/);
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+  // The port is closed now: a local closed port refuses at once -> unreachable, non-zero exit.
+  const bad = await runReachability(['127.0.0.1', String(open)]);
+  assert.equal(bad.code, 1, bad.out);
+  assert.match(bad.out, /UNREACHABLE/);
+});
+
+test('the rehearsal workflow is manual-only, uploads nothing, and never puts the secret on a command line', async () => {
+  const wf = await readFile(resolve(REPO, '.github/workflows/supabase-dump-rehearsal.yml'), 'utf8');
+  // Triggered only by hand.
+  assert.match(wf, /on:\s*\n\s*workflow_dispatch:/);
+  assert.doesNotMatch(wf, /^\s*(push|pull_request):/m);
+  // Never uploads an artifact (no dump/capture leaves the runner).
+  assert.doesNotMatch(wf, /upload-artifact/);
+  // Least privilege, and a cleanup that always runs.
+  assert.match(wf, /permissions:\s*\n\s*contents:\s*read/);
+  assert.match(wf, /if:\s*\$\{\{\s*always\(\)\s*\}\}/);
+  // The secret is referenced only as an env value, never interpolated into a run: line.
+  assert.match(wf, /DVD_DUMP_DATABASE_URL:\s*\$\{\{\s*secrets\.DVD_DUMP_DATABASE_URL\s*\}\}/);
+  for (const line of wf.split('\n')) {
+    if (/secrets\.DVD_DUMP_DATABASE_URL/.test(line)) {
+      assert.match(line, /^\s*DVD_DUMP_DATABASE_URL:\s*\$\{\{\s*secrets\.DVD_DUMP_DATABASE_URL\s*\}\}\s*$/, `secret used off the env line: ${line}`);
+    }
+  }
 });
