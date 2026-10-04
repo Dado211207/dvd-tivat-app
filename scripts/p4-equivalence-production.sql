@@ -50,7 +50,17 @@
 --
 --   1. Run this whole file against the hosted project over a READ-ONLY path,
 --      as one batch. It needs to read the public schema, auth.users and
---      supabase_migrations.schema_migrations.
+--      supabase_migrations.schema_migrations. The connection role must be able
+--      to read EVERY row and enumerate EVERY account, not merely hold SELECT:
+--      it needs (a) USAGE on public+auth and SELECT on all public tables and
+--      auth.users; (b) membership in `authenticated` (for EXECUTE on the reader
+--      functions and for `set local role authenticated` - a plain GRANT confers
+--      both INHERIT and SET on PostgreSQL 16+); and (c) RLS bypass (the
+--      BYPASSRLS attribute, or an owner/superuser connection such as Supabase's
+--      `postgres`). Without RLS bypass the batch still succeeds but silently
+--      under-captures: the id lists gathered below with no JWT set, and the
+--      exported rows, are RLS-filtered, so the gate later fails its fidelity
+--      step rather than naming the missing privilege.
 --   2. Save the single returned row as a .json object OUTSIDE the repository.
 --      It is pseudonymised, but still production-derived. Name it
 --      `*.production-export.json`: .gitignore covers that suffix, as a
