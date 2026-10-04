@@ -210,7 +210,11 @@ async function dumpSource(source, work) {
     const result = await client.query(attestationSql(captureSql));
     const attestation = (Array.isArray(result) ? result.at(-1) : result).rows[0];
     const { rows: [{ environment }] } = await client.query(ENVIRONMENT_SQL);
-    const { rows: users } = await client.query('select id, email_confirmed_at, created_at from auth.users order by id');
+    // Timestamps as text: a JS Date keeps only milliseconds, but PostgreSQL
+    // timestamptz carries microseconds, and losing them would change the
+    // restored rows and so the export digest. Text round-trips exactly.
+    const { rows: users } = await client.query(
+      'select id::text as id, email_confirmed_at::text as email_confirmed_at, created_at::text as created_at from auth.users order by id');
     const { rows: ledger } = await client.query('select version, name from supabase_migrations.schema_migrations order by version');
 
     const pgDump = process.env.PG_DUMP ?? 'pg_dump';
@@ -249,7 +253,6 @@ async function dumpSource(source, work) {
 // ---------------------------------------------------------------------------
 
 const ident = (name) => `"${String(name).replace(/"/g, '""')}"`;
-const literal = (text) => `'${String(text).replace(/'/g, "''")}'`;
 
 /** Roles the dump names as owner, grantor or grantee. */
 export function rolesNamedIn(sql) {

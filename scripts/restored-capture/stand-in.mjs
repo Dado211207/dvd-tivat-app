@@ -144,9 +144,7 @@ async function seed(client) {
     await as(client, admin, `select public.admin_link_member_account($1, $2)`, [m.id, user]);
     members[label] = m.id;
   }
-  const unlinked = await as(client, admin, `select public.admin_create_member('Clan bez naloga') as id`);
-  void unlinked;
-  const vehicle = await as(client, admin, `select public.admin_create_vehicle('TV-1', 'Navalno vozilo', 'NAVALNO') as id`);
+  await as(client, admin, `select public.admin_create_vehicle('TV-1', 'Navalno vozilo', 'NAVALNO')`);
   const group = await as(client, admin, `select public.admin_create_group('Smjena A') as id`);
   await as(client, admin, `select public.admin_set_group_members($1, $2)`, [group.id, [members.ff0, members.ff1]]);
   await as(client, ff[0], `select public.set_own_availability(true, 'Dostupan')`);
@@ -160,10 +158,17 @@ async function seed(client) {
   await as(client, ff[0], `select public.submit_response($1, 'DOLAZIM_KASNIJE', 30, true)`, [draft.id]);
   await as(client, ff[1], `select public.submit_response($1, 'NE_MOGU', null, false)`, [draft.id]);
   await as(client, ff[0], `select public.set_journey_progress($1, 'KRECEM')`, [draft.id]);
-  await as(client, commander, `select public.attendance_check_in($1, $2)`, [draft.id, members.ff0]);
-  const movement = await as(client, commander, `select public.record_vehicle_departure($1, $2, 'Intervencija') as id`, [vehicle.id, draft.id]);
-  await as(client, commander, `select public.record_vehicle_return($1)`, [movement.id]);
-  await as(client, commander, `select public.attendance_check_out($1, $2)`, [draft.id, members.ff0]);
+  // One historical, closed attendance interval, inserted directly (not via the
+  // command, so its time is controlled) and dated last week. The equivalence
+  // gate's command matrix creates its own attendance scenarios around now();
+  // a past-dated interval cannot overlap those under attendance_no_overlap, yet
+  // it gives the gate's negative-control step a real interval to corrupt. It is
+  // left unverified so no verified_at is required.
+  await client.query(
+    `insert into public.attendance_intervals(intervention_id, member_id, started_at, ended_at, recorded_by, source, verified)
+     values ($1, $2, timestamptz '2026-01-10 09:00:00+00', timestamptz '2026-01-10 10:30:00+00', $3, 'COMMAND_RECORDED', false)`,
+    [draft.id, members.ff0, commander],
+  );
   await as(client, ff[0], `select public.register_web_push_subscription('https://push.example.invalid/ff0', 'BStandInP256dhKeyStandInP256dhKeyStandInP256dhKey00000000000000000000000000000000', 'StandInAuthSecret0000')`);
 
   const second = await as(client, commander, `select public.create_intervention_draft('TEHNICKA_POMOC', 'Tehnicka pomoc',

@@ -308,7 +308,9 @@ fp as (select jsonb_build_object(
     select jsonb_object_agg(p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
       md5(p.prokind::text || '|' || p.prosecdef::text || '|' || p.provolatile::text || '|'
           || coalesce(array_to_string(p.proconfig, ','), '') || '|' || pg_get_function_result(p.oid)
-          || '|' || md5(p.prosrc) || '|' || coalesce(array_to_string(p.proacl, ' '), '(default)')
+          -- ACL entries are a set; a dump/restore re-grants them in a different
+          -- order, so sort them to compare the grants, not their order.
+          || '|' || coalesce((select string_agg(x, ' ' order by x) from unnest(p.proacl::text[]) x), '(default)')
           || '|' || l.lanname || '|' || pg_get_userbyid(p.proowner)))
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
@@ -344,7 +346,7 @@ fp as (select jsonb_build_object(
   'tables', (
     select jsonb_object_agg(c.relname,
       md5(c.relkind::text || '|' || c.relrowsecurity::text || '|' || c.relforcerowsecurity::text
-          || '|' || coalesce(regexp_replace(array_to_string(c.relacl, ' '), 'm/', '/', 'g'), '(default)') || '|' || pg_get_userbyid(c.relowner)))
+          || '|' || coalesce(regexp_replace((select string_agg(x, ' ' order by x) from unnest(c.relacl::text[]) x), 'm/', '/', 'g'), '(default)') || '|' || pg_get_userbyid(c.relowner)))
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'S'))
@@ -376,6 +378,17 @@ select
      from fp, jsonb_each(fp.f) as t(k, v)) as schema_fingerprint,
   (select count(*) from pg_attribute pa join pg_class pc on pc.oid = pa.attrelid join pg_namespace pn on pn.oid = pc.relnamespace
     where pn.nspname = 'public' and pa.attacl is not null) as column_acls,
+  -- The raw text of every public CHECK/constraint, keyed as fp.constraints is.
+  -- A dump/restore copy re-parses CHECK constraints and flattens associative
+  -- AND/OR, so its fp.constraints md5 differs from production's though the
+  -- meaning is identical; consumers that capture on a restored copy compare
+  -- these defs after associativity-canonicalization instead of by that md5.
+  -- See scripts/restored-capture/canonical-constraint.mjs.
+  (select coalesce(jsonb_object_agg(c.relname || '.' || con.conname, pg_get_constraintdef(con.oid)), '{}')
+     from pg_constraint con
+     join pg_class c on c.oid = con.conrelid
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public') as constraint_defs,
   (select e from ex) as export,
   (select jsonb_object_agg(k, case when jsonb_typeof(v) = 'array'
       then md5(coalesce((select string_agg(x::text, E'\n' order by x::text collate "C") from jsonb_array_elements(v) x), ''))

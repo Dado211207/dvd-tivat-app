@@ -30,11 +30,13 @@
 
 import { createHash } from 'node:crypto';
 
+import { canonicalizeConstraintDefs } from './canonical-constraint.mjs';
+
 export const DUMP_ROLE = 'dvd_release_dump';
 
 const LOOP = /\n {2}for k in 0 \.\. n - 1 loop\n[\s\S]*?\n {2}end loop;\n/;
 const COUNT = "  perform set_config('gate.n', n::text, true);";
-const TABLE_ACL = "array_to_string(c.relacl, ' ')";
+const TABLE_ACL = "(select string_agg(x, ' ' order by x) from unnest(c.relacl::text[]) x)";
 
 /**
  * The capture SQL without its impersonation loop, with the dump role's own
@@ -52,12 +54,19 @@ export function attestationSql(captureSql, role = DUMP_ROLE) {
   if (loops.length !== 1 || !captureSql.includes(COUNT) || acls !== 1) {
     throw new Error('scripts/p4-equivalence-production.sql changed shape; update restored-capture/fidelity.mjs with it');
   }
-  const stripped = `(select array_to_string(case
-      when kept is null then null
+  // The same sorted rendering the capture uses, but with the dump role's own
+  // grants removed first: production carries them on every table (and every
+  // sequence) it reads, the copy never does. If removing them leaves the
+  // owner's default, the table reads as the default it was - matching a copy
+  // whose relacl is still null. The surrounding regexp_replace/coalesce in the
+  // capture then applies to this result exactly as to the copy's.
+  const stripped = `(select case
+      when c.relacl is null then null
+      when cardinality(kept) = 0 then null
       when kept = acldefault(case when c.relkind = 'S' then 's'::"char" else 'r'::"char" end, c.relowner) then null
-      else kept end, ' ')
-    from (select case when c.relacl is null then null
-      else array(select x from unnest(c.relacl) x where x::text !~ '^"?${role}"?=') end as kept) k)`;
+      else (select string_agg(y, ' ' order by y) from unnest(kept::text[]) y)
+    end
+    from (select array(select a from unnest(c.relacl) a where a::text !~ '^"?${role}"?=') as kept) s)`;
   return captureSql
     .replace(LOOP, '\n')
     .replace(COUNT, "  perform set_config('gate.n', '0', true);")
@@ -119,6 +128,9 @@ export function attestationRecord({ attestation, environment, takenAt, source })
     read_only: attestation.read_only,
     applied_migrations: attestation.applied_migrations,
     schema_fingerprint: attestation.schema_fingerprint,
+    // The constraints category is compared from these canonical defs, not from
+    // its fingerprint md5, which a dump/restore flattens; see differences().
+    constraint_defs: canonicalizeConstraintDefs(attestation.constraint_defs),
     column_acls: String(attestation.column_acls),
     export_digest: attestation.export_digest,
     environment_digest: digestOf(comparableEnvironment(environment)),
@@ -135,7 +147,19 @@ export function differences(record, capture, copyEnvironment = null) {
   if (capture.read_only !== 'on') out.push('the copy capture was not taken in a read-only transaction');
   if (stable(record.applied_migrations) !== stable(capture.applied_migrations)) out.push('applied_migrations');
   for (const category of new Set([...Object.keys(record.schema_fingerprint ?? {}), ...Object.keys(capture.schema_fingerprint ?? {})])) {
+    // Constraints are compared below from canonicalized defs, because a
+    // dump/restore re-parses CHECK constraints and flattens associative AND/OR,
+    // changing this md5 without changing meaning.
+    if (category === 'constraints') continue;
     if (stable(record.schema_fingerprint?.[category]) !== stable(capture.schema_fingerprint?.[category])) out.push(`schema_fingerprint.${category}`);
+  }
+  // Canonicalize both sides: the record is usually already canonical (from
+  // attestationRecord), but canonicalizing again is idempotent and guards a
+  // record built some other way.
+  const recordDefs = canonicalizeConstraintDefs(record.constraint_defs);
+  const copyDefs = canonicalizeConstraintDefs(capture.constraint_defs);
+  for (const name of new Set([...Object.keys(recordDefs), ...Object.keys(copyDefs)])) {
+    if (recordDefs[name] !== copyDefs[name]) out.push(`constraints.${name}`);
   }
   for (const table of new Set([...Object.keys(record.export_digest ?? {}), ...Object.keys(capture.export_digest ?? {})])) {
     if (record.export_digest?.[table] !== capture.export_digest?.[table]) out.push(`export_digest.${table}`);

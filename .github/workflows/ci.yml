@@ -74,6 +74,9 @@ jobs:
       - name: Read-only capture safeguards
         run: npm run test:capture
 
+      - name: Restored-copy capture safeguards
+        run: npm run test:restored-capture
+
       - name: Check local release rehearsal syntax
         run: bash -n scripts/release-preflight.sh && node --check scripts/release-preflight.mjs
 
