@@ -49,6 +49,10 @@ export async function buildSite({ appUrl, preview = false, outDir = 'dist-site' 
     );
   }
   await writeFile(resolve(output, 'index.html'), html);
+  for (const name of ['android.html', 'koriscenje.html']) {
+    const guide = (await readFile(`site/${name}`, 'utf8')).replaceAll(PREVIOUS_APP_URL, safeAddress);
+    await writeFile(resolve(output, name), guide);
+  }
   await writeFile(resolve(output, 'publication.json'), JSON.stringify({
     appUrl: address, preview, qrTarget: address,
   }, null, 2) + '\n');

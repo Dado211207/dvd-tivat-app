@@ -46,7 +46,7 @@ for (const preview of [true, false]) {
       await page.getByRole('link', { name: 'Koriscenje', exact: true }).click();
       await expect(page).toHaveURL(/#koriscenje$/);
       await expect(page.getByRole('heading', { name: 'Kako se koristi' })).toBeVisible();
-      await expect(page.locator('video')).toHaveCount(3);
+      await expect(page.locator('video')).toHaveCount(1);
     });
 
 
