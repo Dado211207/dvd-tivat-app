@@ -110,8 +110,11 @@ async function everyMemberOn(client, owner, key, ended) {
     [id, DVD],
   );
   await client.query(
-    `insert into public.notification_outbox(intervention_id, member_id, channel, dedupe_key)
-     select $1, m.id, 'WEB_PUSH', $3 || ':' || m.id from public.members m where m.organization_id = $2`,
+    // user_id is NOT NULL and carries no default; publish_intervention() always
+    // writes it from the member's account (202609290040 line 322), so the
+    // simulation must too, or the insert fails for every member.
+    `insert into public.notification_outbox(intervention_id, member_id, user_id, channel, dedupe_key)
+     select $1, m.id, m.user_id, 'WEB_PUSH', $3 || ':' || m.id from public.members m where m.organization_id = $2`,
     [id, DVD, key],
   );
   if (ended) {
