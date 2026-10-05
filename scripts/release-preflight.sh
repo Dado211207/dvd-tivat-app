@@ -24,13 +24,17 @@ fi
 [[ "$mode" == run ]] || fail 'Usage: bash scripts/release-preflight.sh [check|run]'
 [[ -z "$(git -C "$REPO" status --porcelain)" ]] || fail 'The release checkout has uncommitted files. Use a clean candidate commit.'
 candidate_sha="$(git -C "$REPO" rev-parse HEAD)"
-[[ -n "${DVD_PRODUCTION_DB_URL:-}" ]] || fail 'DVD_PRODUCTION_DB_URL is missing.'
+# The password-bearing URL arrives on file descriptor 3 from release-preflight.mjs
+# (or in DVD_PRODUCTION_DB_URL when run by hand) and stays an unexported shell
+# variable: only the passfile writer and the capture below are given it.
+production_url="${DVD_PRODUCTION_DB_URL:-}"
+unset DVD_PRODUCTION_DB_URL
+[[ -n "$production_url" ]] || { IFS= read -r production_url <&3 || true; } 2>/dev/null
+exec 3<&-
+[[ -n "$production_url" ]] || fail 'DVD_PRODUCTION_DB_URL is missing.'
 [[ -n "${DVD_BACKUP_RECIPIENT:-}" && "$DVD_BACKUP_RECIPIENT" == age1* ]] || fail 'Set DVD_BACKUP_RECIPIENT to an age public recipient.'
 [[ -n "${DVD_BACKUP_DIR:-}" && "$DVD_BACKUP_DIR" == /* ]] || fail 'DVD_BACKUP_DIR must be an existing absolute directory outside the repository.'
 
-export DVD_READONLY_DATABASE_URL="$DVD_PRODUCTION_DB_URL"
-node --input-type=module -e "import { sourceUrl } from './scripts/p4-capture-production.mjs'; sourceUrl(process.env.DVD_READONLY_DATABASE_URL)" \
-  >/dev/null 2>&1 || fail 'The database URL is not for the expected DVD Tivat project.'
 backup_dir="$(cd "$DVD_BACKUP_DIR" && pwd -P)" || fail 'Backup directory does not exist.'
 case "$backup_dir/" in "$REPO/"*) fail 'Backup directory cannot be inside the repository.';; esac
 
@@ -46,18 +50,20 @@ mkdir -p "$work/dump" "$work/local"
 # The password reaches psql and Supabase CLI (and through it pg_dump) only via
 # a private libpq passfile inside $work, removed with it on exit: a URL in a
 # command's arguments is visible to other processes (ps, /proc/<pid>/cmdline).
-# db_url is the same URL without its password.
+# db_url is the same URL without its password. Exit 3: not the DVD Tivat project.
 export PGPASSFILE="$work/pgpass"
-db_url="$(node --input-type=module -e '
+db_url="$(DVD_PRODUCTION_DB_URL="$production_url" node --input-type=module -e '
   import { writeFileSync } from "node:fs";
-  const url = new URL(process.env.DVD_PRODUCTION_DB_URL);
+  import { sourceUrl } from "./scripts/p4-capture-production.mjs";
+  let url;
+  try { url = sourceUrl(process.env.DVD_PRODUCTION_DB_URL); } catch { process.exit(3); }
   const field = (s) => s.replace(/[\\:]/g, (c) => "\\" + c);
   const entry = [url.hostname, url.port || "5432", decodeURIComponent(url.pathname.slice(1)),
     decodeURIComponent(url.username), decodeURIComponent(url.password)].map(field).join(":");
   writeFileSync(process.env.PGPASSFILE, `${entry}\n`, { mode: 0o600, flag: "wx" });
   url.password = "";
   process.stdout.write(url.toString());
-')" || fail 'Could not prepare the private password file.'
+')" || { [[ $? == 3 ]] && fail 'The database URL is not for the expected DVD Tivat project.'; fail 'Could not prepare the private password file.'; }
 
 # Keep all database/CLI diagnostics private. They can include account data or
 # the connection string; a failing run prints a generic stage and leaves no
@@ -137,7 +143,9 @@ printf 'Independent PostgreSQL 17 restore counts match.\n'
 # The gate creates/drops its own databases on the local server, not production.
 cd "$REPO"
 capture="$work/fresh.production-export.json"
-run_private 'Production read-only equivalence capture' npm run capture:p4 -- "$capture"
+DVD_READONLY_DATABASE_URL="$production_url" run_private 'Production read-only equivalence capture' \
+  node scripts/p4-capture-production.mjs "$capture"
+unset production_url
 export DVD_TEST_DATABASE_URL="$local_url"
 run_private 'Production-copy migration equivalence gate' npm run gate:p4 -- "$capture" --report "$work/gate-report.json"
 [[ -s "$work/gate-report.json" ]] || fail 'The gate produced no report.'
