@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,7 +72,8 @@ test('work and output paths must be outside the repository', async () => {
   await assert.rejects(outsideRepository(resolve('x.json'), '--out'), /outside the repository/);
   const outside = await mkdtemp(join(tmpdir(), 'boka-rc-'));
   try {
-    assert.equal(await outsideRepository(join(outside, 'x.json'), '--out'), join(outside, 'x.json'));
+    // outsideRepository resolves symlinks; macOS's tmpdir() is under /var -> /private/var.
+    assert.equal(await outsideRepository(join(outside, 'x.json'), '--out'), join(await realpath(outside), 'x.json'));
     await symlink(resolve('.'), join(outside, 'repo-link'));
     await assert.rejects(outsideRepository(join(outside, 'repo-link', 'x.json'), '--out'), /outside the repository/);
   } finally {
