@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -19,8 +19,9 @@ test('the capture can only be saved outside the source tree', async () => {
   await assert.rejects(outputPath(resolve('capture.production-export.json')), /outside the repository/);
   const outside = await mkdtemp(join(tmpdir(), 'boka-capture-'));
   try {
-    const target = join(outside, 'capture.production-export.json');
-    assert.equal(await outputPath(target), target);
+    // outputPath resolves symlinks; macOS's tmpdir() is under /var -> /private/var.
+    assert.equal(await outputPath(join(outside, 'capture.production-export.json')),
+      join(await realpath(outside), 'capture.production-export.json'));
     await symlink(resolve('.'), join(outside, 'source-link'));
     await assert.rejects(outputPath(join(outside, 'source-link', 'capture.production-export.json')), /outside the repository/);
   } finally {
