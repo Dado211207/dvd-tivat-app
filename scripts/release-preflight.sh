@@ -43,6 +43,22 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$work/dump" "$work/local"
 
+# The password reaches psql and Supabase CLI (and through it pg_dump) only via
+# a private libpq passfile inside $work, removed with it on exit: a URL in a
+# command's arguments is visible to other processes (ps, /proc/<pid>/cmdline).
+# db_url is the same URL without its password.
+export PGPASSFILE="$work/pgpass"
+db_url="$(node --input-type=module -e '
+  import { writeFileSync } from "node:fs";
+  const url = new URL(process.env.DVD_PRODUCTION_DB_URL);
+  const field = (s) => s.replace(/[\\:]/g, (c) => "\\" + c);
+  const entry = [url.hostname, url.port || "5432", decodeURIComponent(url.pathname.slice(1)),
+    decodeURIComponent(url.username), decodeURIComponent(url.password)].map(field).join(":");
+  writeFileSync(process.env.PGPASSFILE, `${entry}\n`, { mode: 0o600, flag: "wx" });
+  url.password = "";
+  process.stdout.write(url.toString());
+')" || fail 'Could not prepare the private password file.'
+
 # Keep all database/CLI diagnostics private. They can include account data or
 # the connection string; a failing run prints a generic stage and leaves no
 # plaintext dump behind. The encrypted backup is retained even if restore fails.
@@ -58,25 +74,25 @@ run_private() {
 
 source_counts_sql="select (select count(*) from auth.users), (select count(*) from public.members), (select count(*) from public.interventions), (select count(*) from storage.objects), (select count(*) from storage.buckets), (select count(*) from supabase_migrations.schema_migrations)"
 custom_sql="select (select count(*) from pg_trigger where tgrelid='auth.users'::regclass and tgname='create_dvd_account'), (select count(*) from pg_policies where schemaname='storage' and tablename='objects' and policyname in ('report_objects_create_own','report_objects_read_authorized')), md5(coalesce((select pg_get_triggerdef(oid) from pg_trigger where tgrelid='auth.users'::regclass and tgname='create_dvd_account'),'') || '|' || coalesce((select string_agg(policyname || '|' || cmd || '|' || roles::text || '|' || coalesce(qual,'') || '|' || coalesce(with_check,''), E'\\n' order by policyname) from pg_policies where schemaname='storage' and tablename='objects' and policyname in ('report_objects_create_own','report_objects_read_authorized')),''))"
-source_before="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$source_counts_sql" 2>"$work/stage.log")" \
+source_before="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$source_counts_sql" 2>"$work/stage.log")" \
   || fail 'Production read-only count failed. Check the existing password and session connection.'
-custom_before="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$custom_sql" 2>"$work/stage.log")" \
+custom_before="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$custom_sql" 2>"$work/stage.log")" \
   || fail 'Production auth/storage definition check failed.'
 [[ "$custom_before" == 1\|2\|* ]] || fail 'Expected app-owned auth trigger and two Storage policies are missing.'
 
 cd "$work/dump"
-run_private 'Roles dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f roles.sql --role-only
-run_private 'Schema dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f schema.sql
-run_private 'Data dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f data.sql --use-copy --data-only -x storage.buckets_vectors -x storage.vector_indexes
-run_private 'Migration history schema dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f history_schema.sql --schema supabase_migrations
-run_private 'Migration history data dump' supabase db dump --db-url "$DVD_PRODUCTION_DB_URL" -f history_data.sql --use-copy --data-only --schema supabase_migrations
+run_private 'Roles dump' supabase db dump --db-url "$db_url" -f roles.sql --role-only
+run_private 'Schema dump' supabase db dump --db-url "$db_url" -f schema.sql
+run_private 'Data dump' supabase db dump --db-url "$db_url" -f data.sql --use-copy --data-only -x storage.buckets_vectors -x storage.vector_indexes
+run_private 'Migration history schema dump' supabase db dump --db-url "$db_url" -f history_schema.sql --schema supabase_migrations
+run_private 'Migration history data dump' supabase db dump --db-url "$db_url" -f history_data.sql --use-copy --data-only --schema supabase_migrations
 for file in roles.sql schema.sql data.sql history_schema.sql history_data.sql; do [[ -s "$file" ]] || fail "$file is empty."; done
 cp "$REPO/scripts/restore-supabase-custom.sql" custom_auth_storage.sql
 
-source_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$source_counts_sql" 2>"$work/stage.log")" \
+source_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$source_counts_sql" 2>"$work/stage.log")" \
   || fail 'Final production read-only count failed.'
 [[ "$source_before" == "$source_after" ]] || fail 'Production row counts changed during backup; take another snapshot in a quiet window.'
-custom_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$DVD_PRODUCTION_DB_URL" -c "$custom_sql" 2>"$work/stage.log")" \
+custom_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$custom_sql" 2>"$work/stage.log")" \
   || fail 'Final production auth/storage definition check failed.'
 [[ "$custom_before" == "$custom_after" ]] || fail 'Production auth/storage definitions changed during backup.'
 printf 'Candidate: %s\nCaptured at %s UTC; auth users | members | interventions | storage objects | buckets | migration entries: %s\n' \

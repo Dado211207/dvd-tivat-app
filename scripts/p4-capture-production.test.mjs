@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -38,4 +38,17 @@ test('a capture must include a read-only transaction and the real migration ledg
   assert.throws(() => captureResult({ rows: [{ ...valid, read_only: 'off' }] }), /not read-only/);
   assert.throws(() => captureResult({ rows: [{ ...valid, applied_migrations: null }] }), /missing applied_migrations/);
   assert.throws(() => captureResult({ rows: [] }), /exactly one row/);
+});
+
+test('the release rehearsal never puts the database password on a command line', async () => {
+  const script = await readFile(resolve('scripts/release-preflight.sh'), 'utf8');
+  // The password-bearing URL is only validated, exported for the capture, and
+  // read by the passfile writer from the environment - never a command argument.
+  for (const line of script.split('\n').filter((l) => /"\$(DVD_PRODUCTION_DB_URL|DVD_READONLY_DATABASE_URL)"/.test(l))) {
+    assert.equal(line, 'export DVD_READONLY_DATABASE_URL="$DVD_PRODUCTION_DB_URL"', `password URL used as an argument: ${line}`);
+  }
+  assert.match(script, /^export PGPASSFILE="\$work\/pgpass"$/m);
+  assert.match(script, /mode: 0o600, flag: "wx"/);
+  assert.equal(script.match(/--dbname "\$db_url"/g)?.length, 4);
+  assert.equal(script.match(/--db-url "\$db_url"/g)?.length, 5);
 });
