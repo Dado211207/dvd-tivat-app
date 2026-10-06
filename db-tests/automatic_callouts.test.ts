@@ -4,10 +4,13 @@ import {
   asUserCommitted, completeProfile, connect, createAccount, createMember,
   grantRole, resetSchema, type TestAccount,
 } from './harness';
+// @ts-ignore JavaScript gate helper is exercised against the real DB fixture here.
+import { pushDecisions } from '../scripts/p4-gate/push.mjs';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
 let db: Client;
+let gateOwner: TestAccount;
 let dvdCommander: TestAccount;
 let szsCommander: TestAccount;
 let dvdMember: TestAccount;
@@ -56,6 +59,10 @@ beforeAll(async () => {
   db = await connect();
   await resetSchema(db);
 
+  gateOwner = await createAccount(db, 'auto-gate-owner@example.invalid');
+  await completeProfile(db, gateOwner.userId, 'Gate Owner');
+  await grantRole(db, gateOwner.userId, 'OWNER');
+
   dvdCommander = await createAccount(db, 'auto-dvd-command@example.invalid');
   await completeProfile(db, dvdCommander.userId, 'DVD Komandir');
   await grantRole(db, dvdCommander.userId, 'COMMANDER');
@@ -81,9 +88,28 @@ beforeAll(async () => {
   await grantRole(db, dual.userId, 'FIREFIGHTER');
   dualDvdMember = await createMember(db, 'Dvojni Clan', dual.userId);
   dualSzsMember = await join(SZS, dual, 'FIREFIGHTER', 'Dvojni Clan');
+
+  // A real roster can include an active member without a linked login. The
+  // gate's push simulation must not create an outbox row for that person.
+  await createMember(db, 'Roster-only DVD member');
 });
 
 afterAll(async () => { await db?.end(); });
+
+describe('P4 push decision simulation', () => {
+  it('skips an active roster-only member with no linked account', async () => {
+    const { rows: rosterOnly } = await db.query<{ user_id: string | null }>(
+      `select user_id from public.members where full_name = 'Roster-only DVD member'`,
+    );
+    expect(rosterOnly).toHaveLength(1);
+    expect(rosterOnly[0]!.user_id).toBeNull();
+
+    const result = await pushDecisions(db);
+    expect(result.everyMember.compared).toBeGreaterThan(0);
+    expect(result.everyMember.differing).toEqual([]);
+    expect(result.everyMemberEnded.differing).toEqual([]);
+  });
+});
 
 describe('automatic service audience at publication', () => {
   it('freezes every currently eligible DVD member, including one added after the draft', async () => {
