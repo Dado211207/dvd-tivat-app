@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { canonicalizeConstraintDef, canonicalizeConstraintDefs } from './canonical-constraint.mjs';
 import { classify } from './privileges.mjs';
 import { attestationSql, differences } from './fidelity.mjs';
-import { dumpSourceUrl, outsideRepository, restoreAdminUrl, rolesNamedIn, scramVerifier, withoutDumpRoleGrants } from '../p4-restored-capture.mjs';
+import { PRODUCTION_PROJECT_REF, dumpSourceUrl, outsideRepository, restoreAdminUrl, rolesNamedIn, scramVerifier, withoutDumpRoleGrants } from '../p4-restored-capture.mjs';
 
 const NESTED = "CHECK ((((char_length(auth_secret) >= 8) AND (char_length(auth_secret) <= 100)) AND (auth_secret ~ '^[A-Za-z0-9_-]+$'::text)))";
 const FLAT = "CHECK (((char_length(auth_secret) >= 8) AND (char_length(auth_secret) <= 100) AND (auth_secret ~ '^[A-Za-z0-9_-]+$'::text)))";
@@ -66,6 +66,30 @@ test('the dump source must be the dump role, never the owner, and the target mus
   assert.throws(() => restoreAdminUrl('postgresql://postgres@127.0.0.1:55437/postgres', loop), /separate server/);
   assert.equal(restoreAdminUrl('postgresql://postgres@127.0.0.1:55438/postgres', loop).port, '55438');
   assert.throws(() => restoreAdminUrl('postgresql://postgres@db.x.supabase.co:5432/postgres', loop), /loopback/);
+});
+
+test('a hosted dump source must be the FireNexa production project; loopback stand-ins stay allowed', () => {
+  assert.equal(PRODUCTION_PROJECT_REF, 'yskhdzrdbywrpfowckpn');
+  // The production project, directly and through the session pooler.
+  const direct = dumpSourceUrl('postgresql://dvd_release_dump:pw@db.yskhdzrdbywrpfowckpn.supabase.co:5432/postgres');
+  assert.deepEqual([direct.projectRef, direct.loopback], ['yskhdzrdbywrpfowckpn', false]);
+  const pooler = dumpSourceUrl('postgresql://dvd_release_dump.yskhdzrdbywrpfowckpn:pw@aws-0-eu-west-1.pooler.supabase.com:5432/postgres');
+  assert.deepEqual([pooler.projectRef, pooler.loopback], ['yskhdzrdbywrpfowckpn', false]);
+  // Any other Supabase project - the isolated test project included - is refused, both ways.
+  for (const other of [
+    'postgresql://dvd_release_dump:pw@db.zoipjcdtcfetqvcfmhxd.supabase.co:5432/postgres',
+    'postgresql://dvd_release_dump.zoipjcdtcfetqvcfmhxd:pw@aws-0-eu-west-1.pooler.supabase.com:5432/postgres',
+    'postgresql://dvd_release_dump:pw@db.abcdefghijklmnopqrst.supabase.co:5432/postgres',
+  ]) {
+    assert.throws(() => dumpSourceUrl(other), /must be the FireNexa production project \(yskhdzrdbywrpfowckpn\), not [a-z0-9]{20}/);
+  }
+  // A look-alike host is not a Supabase project and not loopback.
+  assert.throws(() => dumpSourceUrl('postgresql://dvd_release_dump:pw@db.yskhdzrdbywrpfowckpn.supabase.co.example.com:5432/postgres'), /Supabase project host or a loopback stand-in/);
+  // The loopback synthetic stand-ins the restored-copy fixtures use remain accepted.
+  for (const loopback of ['postgresql://dvd_release_dump:pw@127.0.0.1:55433/standin_source', 'postgresql://dvd_release_dump:pw@localhost:55433/standin_source']) {
+    const source = dumpSourceUrl(loopback);
+    assert.deepEqual([source.projectRef, source.loopback], [null, true]);
+  }
 });
 
 test('work and output paths must be outside the repository', async () => {

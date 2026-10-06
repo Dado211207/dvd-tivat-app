@@ -58,9 +58,13 @@ export class Refused extends Error {
   }
 }
 
+/** The FireNexa production project: the only hosted source a dump may come from. */
+export const PRODUCTION_PROJECT_REF = 'yskhdzrdbywrpfowckpn';
+
 /**
- * The source: a hosted Supabase project reached as the dump role, or a
- * loopback stand-in for one. Refuses the owner's `postgres` login outright.
+ * The source: the production Supabase project reached as the dump role, or a
+ * loopback stand-in for one. Refuses the owner's `postgres` login outright, and
+ * any other hosted project.
  */
 export function dumpSourceUrl(raw) {
   if (!raw) throw new Refused('Set DVD_DUMP_DATABASE_URL to the dump role\'s connection URL.');
@@ -82,6 +86,9 @@ export function dumpSourceUrl(raw) {
   }
   if (!url.password) throw new Refused('DVD_DUMP_DATABASE_URL has no password.');
   if (!projectRef && !LOOPBACK.has(host)) throw new Refused('The source must be a Supabase project host or a loopback stand-in.');
+  if (projectRef && projectRef !== PRODUCTION_PROJECT_REF) {
+    throw new Refused(`The source must be the FireNexa production project (${PRODUCTION_PROJECT_REF}), not ${projectRef}.`);
+  }
   return { url, projectRef, loopback: LOOPBACK.has(host) };
 }
 
