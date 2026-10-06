@@ -1010,7 +1010,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     }
   });
 
-  it('repeats an unanswered alert once, after ninety seconds, and never again', async () => {
+  it('reminds an unopened alert once, after thirty seconds, and never again', async () => {
     await resetQueue();
     const start = Date.now();
     const at = (seconds: number) => () => start + seconds * 1000;
@@ -1023,8 +1023,12 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     await deliverQueued({ service, send: early.send, scheduler: true, now: at(1) });
     expect(early.sent, 'nothing is repeated a second later').toHaveLength(0);
 
+    const beforeDue = fakePush();
+    await deliverQueued({ service, send: beforeDue.send, scheduler: true, now: at(29) });
+    expect(beforeDue.sent, 'the reminder is not due before thirty seconds').toHaveLength(0);
+
     const repeat = fakePush();
-    await deliverQueued({ service, send: repeat.send, scheduler: true, now: at(91) });
+    await deliverQueued({ service, send: repeat.send, scheduler: true, now: at(30) });
     expect(repeat.sent.map((s) => s.endpoint).sort()).toEqual(first.sent.map((s) => s.endpoint).sort());
     expect(repeat.sent.every((s) => s.payload.repeat === true)).toBe(true);
     expect(await stateOf(await alertOf('szsFirefighter', szsCallout))).toEqual({
@@ -1032,8 +1036,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     });
 
     const third = fakePush();
-    await deliverQueued({ service, send: third.send, scheduler: true, now: at(182) });
-    expect(third.sent, 'the initial alert and one repeat, never a third').toHaveLength(0);
+    await deliverQueued({ service, send: third.send, scheduler: true, now: at(61) });
+    expect(third.sent, 'the initial alert and one reminder, never a third').toHaveLength(0);
   });
 
   it('sends each alert once when two workers race for the same queue', async () => {
