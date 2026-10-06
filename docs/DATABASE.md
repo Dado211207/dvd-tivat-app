@@ -574,24 +574,23 @@ it is separate from a device receipt, a human opening and a human answer.
 The worker also claims a row only when its current state and attempt count still
 match, so two simultaneous invocations cannot both send it. The Web Push worker
 is deliberately bounded at two attempts: the immediate alert and one reminder
-after a 30-second threshold, only while the member has not opened the
+after a 30-second threshold, only while the member has not answered the
 intervention. The scheduler runs once a minute, so the reminder is sent on its
 next tick after the threshold, normally 30-90 seconds after the initial push.
-When an opening is found, the row receives `delivery_closed_at` and
-`delivery_close_reason = 'MEMBER_OPENED'`; it no longer enters scheduled scans.
-That closure is not described as a device delivery receipt — the authoritative
-opening remains the separate `intervention_acknowledgements` row.
+Opening the call-out alone does not stop the reminder. Once a response is
+recorded, the row receives `delivery_close_reason = 'MEMBER_RESPONDED'` and no
+longer enters scheduled scans. The authoritative answer remains the separate
+`intervention_responses` row.
 
-**The opening is checked before every attempt, including the first.** Review
-found the check running only before a repeat, which left a real hole on the
-recovery path: a `QUEUED` row whose immediate wake-up failed can sit for minutes
-while the member opens the call-out through the in-app path, and the next
-scheduled scan would then raise an alarm about something they were already
-looking at.
+**The response is checked before every attempt, including the first.** A
+read receipt in `intervention_acknowledgements` means the call-out was opened;
+it does not mean the firefighter has chosen `DOLAZIM`, `DOLAZIM_KASNIJE` or
+`NE_MOGU`. Until an answer is saved in `intervention_responses`, one reminder
+remains eligible.
 
 `delivery_close_reason` is constrained to the reasons the schema recognises, so
-a closure cannot be recorded for a reason nobody can audit later: `MEMBER_OPENED`,
-and since `202609250032` `CALLOUT_NOT_OPEN` — the call-out ended before the alert
+a closure cannot be recorded for a reason nobody can audit later:
+`MEMBER_RESPONDED`, and since `202609250032` `CALLOUT_NOT_OPEN` — the call-out ended before the alert
 (or its repeat) went out — and, for rows no command writes, `SERVICE_MISMATCH` —
 the alert's call-out and member are not in its service — and `NOT_A_RECIPIENT` —
 its member is not on the call-out's recipient list. Each is set aside unsent and
@@ -603,7 +602,7 @@ queued) is fixed once written, and a delivery attempt is never updated.
 Whether a queued alert may still be sent is decided by
 `push_delivery_verdict(outbox)`, a caller-rights function only the service role
 may run. From the STORED alert, call-out, recipient list and member it answers,
-first answer wins: `SERVICE_MISMATCH`; `NOT_A_RECIPIENT`; `OPENED`;
+first answer wins: `SERVICE_MISMATCH`; `NOT_A_RECIPIENT`; `RESPONDED`;
 `CALLOUT_NOT_OPEN` unless the call-out is `PUBLISHED`, `ASSEMBLING`, `DEPLOYED` or
 `CONTAINED` (a list of what may be sent: `close_intervention` changes the
 call-out and nothing queued under it); `INELIGIBLE`; or `DELIVER` with the account
@@ -614,7 +613,7 @@ what it sends.
 
 What the worker sweeps is `push_delivery_queue(accepted_before, claimed_before)`:
 the open Web Push alerts that are **due** by the worker's clock — queued or
-refused at once, accepted once its ninety-second repeat wait is over, claimed
+refused at once, accepted once its thirty-second reminder wait is over, claimed
 once its worker is presumed dead after thirty — less any whose stored service
 contradicts its call-out's. Both exclusions come before the worker's
 fifty-alert limit: fifty alerts waiting out their repeat used to fill the sweep
