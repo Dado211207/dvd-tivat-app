@@ -1039,7 +1039,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       await resetQueue();
       const start = Date.now();
       const first = fakePush();
-      await deliverQueued({ service, send: first.send, scheduler: false, now: () => start }, dvdCallout);
+      await deliverQueued({ service, send: first.send, scheduler: true, now: () => start }, dvdCallout);
       expect(first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
 
       expect(await act(people.dvdFirefighter.user, 'select public.acknowledge_intervention($1)', [dvdCallout])).toBe('OK');
