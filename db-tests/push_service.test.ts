@@ -367,9 +367,12 @@ beforeAll(async () => {
     (['szsFirefighter', 'szsOther', 'szsSuspended', 'dual', 'dualSzsWithdrawn'] as const).map((who) => people[who].szs),
   ]);
 
-  // One recipient in each service has already opened their call-out.
+  // One recipient in each service has opened AND answered their call-out.
+  // Opening alone is not a response and must not suppress the reminder.
   await committed(people.dvdOther.user, 'select public.acknowledge_intervention($1)', [dvdCallout]);
+  await committed(people.dvdOther.user, "select public.submit_response($1, 'NE_MOGU', null, false)", [dvdCallout]);
   await committed(people.szsOther.user, 'select public.acknowledge_intervention($1)', [szsCallout]);
+  await committed(people.szsOther.user, "select public.submit_response($1, 'NE_MOGU', null, false)", [szsCallout]);
 
   // Two rows no command writes. Only the service role or a superuser can: this
   // is what a bug, a hand-run repair or an import would leave behind.
@@ -800,12 +803,12 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       const verdict = new Map(verdicts.map((row) => [row.id, row.verdict]));
       const expected: [Label, string, string][] = [
         ['dvdFirefighter', dvdCallout, 'DELIVER'],
-        ['dvdOther', dvdCallout, 'OPENED'],
+        ['dvdOther', dvdCallout, 'RESPONDED'],
         ['dvdSuspended', dvdCallout, 'INELIGIBLE'],
         ['dual', dvdCallout, 'DELIVER'],
         ['dualSzsWithdrawn', dvdCallout, 'DELIVER'],
         ['szsFirefighter', szsCallout, 'DELIVER'],
-        ['szsOther', szsCallout, 'OPENED'],
+        ['szsOther', szsCallout, 'RESPONDED'],
         ['szsSuspended', szsCallout, 'INELIGIBLE'],
         ['dual', szsCallout, 'DELIVER'],
         ['dualSzsWithdrawn', szsCallout, 'INELIGIBLE'],
@@ -923,8 +926,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       // Its delivery still moves - every write the worker makes.
       expect(await raw(`update public.notification_outbox set state = 'SENT_TO_PROVIDER', attempt_count = 1, updated_at = now() where id = $1`, [alert])).toBe('OK');
       expect(await raw(`update public.notification_outbox set state = 'PROVIDER_ACCEPTED', updated_at = now() where id = $1`, [alert])).toBe('OK');
-      expect(await raw(`update public.notification_outbox set delivery_closed_at = now(), delivery_close_reason = 'MEMBER_OPENED' where id = $1`, [alert])).toBe('OK');
-      for (const reason of ['SERVICE_MISMATCH', 'NOT_A_RECIPIENT', 'CALLOUT_NOT_OPEN']) {
+      expect(await raw(`update public.notification_outbox set delivery_closed_at = now(), delivery_close_reason = 'MEMBER_RESPONDED' where id = $1`, [alert])).toBe('OK');
+      for (const reason of ['SERVICE_MISMATCH', 'NOT_A_RECIPIENT', 'CALLOUT_NOT_OPEN', 'MEMBER_RESPONDED']) {
         expect(await raw(`update public.notification_outbox set delivery_close_reason = $2 where id = $1`, [alert, reason]), reason).toBe('OK');
       }
       expect(await raw(`update public.notification_outbox set delivery_close_reason = 'BECAUSE_I_SAID_SO' where id = $1`, [alert])).toMatch(/check constraint|violates/);
@@ -961,7 +964,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     expect(alerted).toEqual(
       ['dvdFirefighter@DVD', 'dual@DVD', 'dualSzsWithdrawn@DVD', 'szsFirefighter@SZS', 'dual@SZS'].sort(),
     );
-    // Five sent; three refused; two already opened and one set aside. The row
+    // Five sent; three refused; two already answered and one set aside. The row
     // that can be neither sent nor set aside is not handed to the worker at all
     // - see "behind rows nobody can close" below - and is counted instead.
     expect(tally).toEqual({ accepted: 5, rejected: 3, skipped: 3, failed: 0, mislabelled: 1 });
@@ -976,7 +979,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     }
     for (const [who, callout] of [['dvdOther', dvdCallout], ['szsOther', szsCallout]] as const) {
       expect(await stateOf(await alertOf(who, callout)), who).toEqual({
-        state: 'QUEUED', attempt_count: 0, delivery_close_reason: 'MEMBER_OPENED', attempts: '',
+        state: 'QUEUED', attempt_count: 0, delivery_close_reason: 'MEMBER_RESPONDED', attempts: '',
       });
     }
     // Set aside without an attempt: nothing was tried, and nothing counts against it.
@@ -1010,7 +1013,23 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     }
   });
 
-  it('reminds an unopened alert once, after thirty seconds, and never again', async () => {
+  it('sends the reminder when the member opened the call-out but has not answered', async () => {
+    await isolated(async () => {
+      await resetQueue();
+      const start = Date.now();
+      const first = fakePush();
+      await deliverQueued({ service, send: first.send, scheduler: false, now: () => start });
+      expect(first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
+
+      expect(await act(people.dvdFirefighter.user, 'select public.acknowledge_intervention($1)', [dvdCallout])).toBe('OK');
+      const reminder = fakePush();
+      await deliverQueued({ service, send: reminder.send, scheduler: true, now: () => start + 30_000 }, dvdCallout);
+      expect(reminder.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
+      expect(reminder.sent.filter((item) => item.endpoint === endpointOf('dvdFirefighter')).every((item) => item.payload.repeat)).toBe(true);
+    });
+  });
+
+  it('reminds an unanswered alert once, after thirty seconds, and never again', async () => {
     await resetQueue();
     const start = Date.now();
     const at = (seconds: number) => () => start + seconds * 1000;
