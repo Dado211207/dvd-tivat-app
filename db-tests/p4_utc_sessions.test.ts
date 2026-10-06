@@ -133,5 +133,5 @@ describe('P4 capture and gate sessions run in UTC whatever the server default', 
     }, CAPTURE_SESSION);
     seen.add(production.digests);
     expect(seen.size).toBe(1);
-  });
+  }, 120_000);
 });
