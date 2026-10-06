@@ -1,0 +1,18 @@
+# Separate phone-test hosting. These values are public browser configuration:
+# the publishable key is intentionally embedded in the client bundle. No
+# database password or privileged key belongs in this file.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  VITE_SUPABASE_URL = "https://zoipjcdtcfetqvcfmhxd.supabase.co"
+  VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_CQ6WaUSVGnmEFMgMD1U11w_J5P5LRmF"
+  VITE_MULTI_SERVICE_ADMIN_ENABLED = "true"
+  VITE_WEB_PUSH_PUBLIC_KEY = "BGtUfssmZkaCbR52jLUfgJSrpG0wM7q4JR1UsXzDKmyodLNZ4c1az9rYBwWJ4X1buphcp8UQF6kGndGrfXXQgE0"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"

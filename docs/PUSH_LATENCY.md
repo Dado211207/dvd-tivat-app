@@ -199,9 +199,14 @@ service's time excluded.
 
 The commander's browser is not reaching the Edge Function. Check, in order:
 
-1. **`ALLOWED_ORIGIN`** on the Edge Function must exactly equal the origin the
-   application is served from (`https://dado211207.github.io`). A mismatch
-   returns 403 to the browser and nothing else anywhere.
+1. **The Edge Function's origin allowlist** must contain the app's exact
+   origin. The reviewed source permits the FireNexa app
+   (`https://firenexa-app.netlify.app`), the original installed Netlify app
+   (`https://boka-operativa-phone-test.netlify.app`), the legacy Pages app
+   (`https://dado211207.github.io`), and one optional `ALLOWED_ORIGIN` value.
+   Verify that this version of the function has actually been deployed: an
+   older worker with `ALLOWED_ORIGIN` set to Pages still rejects FireNexa's
+   immediate wake-up with 403.
 2. **The browser console on the commander's device** at the moment of
    publishing. A CORS failure or a 401 shows there and nowhere else — the
    function's own logs never see a request that was refused before it arrived.

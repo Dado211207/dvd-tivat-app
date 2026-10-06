@@ -53,6 +53,7 @@ import {
   Databases, Unrunnable, applyMigrations, captureWith, checkForeignKeys, completeProfiles,
   exportDigestOf, loadExport, localAdminUrl, migrationsFromHarness, productionBoundary,
 } from './p4-gate/database.mjs';
+import { canonicalizeConstraintDefs } from './restored-capture/canonical-constraint.mjs';
 import { accountsOf, commandMatrix, compareMatrices, findTargets, publicColumns } from './p4-gate/commands.mjs';
 import { P4E, PUSH_EXPECTED, RUNNING, pushDecisions } from './p4-gate/push.mjs';
 import { runExtension, serviceVisibility, visibilityExpectation } from './p4-gate/szs.mjs';
@@ -214,7 +215,18 @@ async function main() {
     console.log('\n=== 4. the copy reproduces production ===');
     const preCapture = await captureWith(client, CAPTURE_SQL);
     const categories = Object.keys(capture.schema_fingerprint);
-    const sameSchema = categories.filter((c) => JSON.stringify(preCapture.schema_fingerprint[c]) === JSON.stringify(capture.schema_fingerprint[c]));
+    // A capture taken on a restored copy has CHECK constraints the restore
+    // flattened (associative AND/OR), so its `constraints` fingerprint md5
+    // differs from this fresh-migration copy's though the meaning is identical.
+    // When both captures carry the raw defs, compare that category from the
+    // associativity-canonical defs instead of the md5; otherwise fall back to
+    // the md5 (an older, direct-production capture keeps exact behaviour).
+    const canonicalConstraintsMatch = capture.constraint_defs && preCapture.constraint_defs
+      && JSON.stringify(canonicalizeConstraintDefs(preCapture.constraint_defs))
+         === JSON.stringify(canonicalizeConstraintDefs(capture.constraint_defs));
+    const sameSchema = categories.filter((c) => (c === 'constraints' && (capture.constraint_defs || preCapture.constraint_defs)
+      ? canonicalConstraintsMatch
+      : JSON.stringify(preCapture.schema_fingerprint[c]) === JSON.stringify(capture.schema_fingerprint[c])));
     check(`schema fingerprint, per category`, sameSchema.length === categories.length,
       `${sameSchema.length}/${categories.length} identical (${categories.map((c) => `${c} ${capture.schema_fingerprint[c].n}`).join(', ')})`);
     const sameRows = tables.filter((t) => preCapture.export_digest[t] === capture.export_digest[t]);

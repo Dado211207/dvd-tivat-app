@@ -93,32 +93,45 @@ export function canSwitchService(available: readonly OrganizationCode[]): boolea
  * (to the default) rather than break the app. This is a per-viewer convenience,
  * not authority - losing it only resets the default service, it grants nothing.
  */
-const STORAGE_PREFIX = 'dvd-tivat.acting-service:';
+const STORAGE_PREFIX = 'boka-operativa.acting-service:';
+const LEGACY_STORAGE_PREFIX = 'dvd-tivat.acting-service:';
 
 export function rememberedServiceKey(userId: string): string {
   return `${STORAGE_PREFIX}${userId}`;
 }
 
 export function readRememberedService(
-  storage: Pick<Storage, 'getItem'> | null | undefined,
+  storage: Pick<Storage, 'getItem'> & Partial<Pick<Storage, 'setItem' | 'removeItem'>> | null | undefined,
   userId: string,
 ): string | null {
   if (!storage) return null;
   try {
-    return storage.getItem(rememberedServiceKey(userId));
+    const current = storage.getItem(rememberedServiceKey(userId));
+    if (current !== null) return current;
+    const old = storage.getItem(`${LEGACY_STORAGE_PREFIX}${userId}`);
+    if (old !== null) {
+      try {
+        if (storage.setItem) {
+          storage.setItem(rememberedServiceKey(userId), old);
+          storage.removeItem?.(`${LEGACY_STORAGE_PREFIX}${userId}`);
+        }
+      } catch { /* The old choice is still readable on the next load. */ }
+    }
+    return old;
   } catch {
     return null;
   }
 }
 
 export function writeRememberedService(
-  storage: Pick<Storage, 'setItem'> | null | undefined,
+  storage: Pick<Storage, 'setItem'> & Partial<Pick<Storage, 'removeItem'>> | null | undefined,
   userId: string,
   service: OrganizationCode,
 ): void {
   if (!storage) return;
   try {
     storage.setItem(rememberedServiceKey(userId), service);
+    try { storage.removeItem?.(`${LEGACY_STORAGE_PREFIX}${userId}`); } catch { /* New key wins. */ }
   } catch {
     /* Per-viewer convenience only; a write that cannot happen is not an error. */
   }

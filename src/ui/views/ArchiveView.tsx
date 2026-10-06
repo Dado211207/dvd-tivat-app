@@ -26,6 +26,7 @@ import {
   fetchAttendance,
   fetchInterventionAudit,
   fetchInterventions,
+  fetchTargetedInterventions,
   fetchParticipationTotals,
   fetchRecipientFacts,
   fetchVehicleMovements,
@@ -115,8 +116,9 @@ function Archive({ organizationId }: { organizationId: string }) {
     setLoading(true);
     setLoadError(null);
     try {
-      const [listRead, movesRead, roster] = await Promise.all([
+      const [listRead, targetedRead, movesRead, roster] = await Promise.all([
         fetchInterventions(organizationId),
+        fetchTargetedInterventions(organizationId),
         fetchVehicleMovements(organizationId),
         loadRoster(organizationId),
       ]);
@@ -131,15 +133,20 @@ function Archive({ organizationId }: { organizationId: string }) {
        * Making it from a refused read would tell a commander no intervention
        * had ever been recorded.
        */
-      const refused = [listRead, movesRead, sumsRead].find((r) => !r.ok);
+      const refused = [listRead, targetedRead, movesRead, sumsRead].find((r) => !r.ok);
       if (refused && !refused.ok) {
         if (mounted.current && ticket === generation.current) {
           setLoadError(refused.reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
         }
         return;
       }
-      if (!listRead.ok || !movesRead.ok || !sumsRead.ok) return;
-      const list = listRead.value;
+      if (!listRead.ok || !targetedRead.ok || !movesRead.ok || !sumsRead.ok) return;
+      const byId = new Map<string, Intervention>();
+      for (const row of listRead.value) byId.set(row.id, row);
+      for (const row of targetedRead.value) if (!byId.has(row.id)) byId.set(row.id, row);
+      const list = [...byId.values()].sort((a, b) =>
+        a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+      );
       if (!mounted.current || ticket !== generation.current) return;
       setInterventions(list);
       setMovements(movesRead.value);
@@ -390,7 +397,7 @@ function InterventionRecord({
         </dl>
         {record.closeReason ? (
           <p className="small">
-            <strong>{t.archive.closeNote}:</strong> {record.closeReason}
+            <strong>{record.status === 'CANCELLED' ? t.archive.cancelNote : t.archive.closeNote}:</strong> {record.closeReason}
           </p>
         ) : null}
         {closed ? null : (

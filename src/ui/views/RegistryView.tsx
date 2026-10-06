@@ -57,7 +57,6 @@ export function RegistryView() {
 
   return (
     <>
-      <h1 className="sr-only">{t.registry.pageTitle}</h1>
       <RequireRole
         allow={['OWNER', 'ADMIN']}
         refused={

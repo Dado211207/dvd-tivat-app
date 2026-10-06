@@ -22,17 +22,9 @@ import { PushNotificationPanel } from '../components/PushNotificationPanel';
 import { AlarmSoundPicker } from '../components/AlarmSoundPicker';
 import { ServiceSwitcher } from '../components/ServiceSwitcher';
 import { Notice } from '../components/primitives';
-import { hrefFor, type Route } from '../router';
+import { hrefFor, prototypeEnabled, type Route } from '../router';
 
-/**
- * The simulation screens, in the order they make sense to look at.
- *
- * `dojava` is NOT here and must not be added. It is an abandoned research
- * prototype for citizen reporting, and this application must never read as a
- * way to report a fire - the official emergency telephone number is the only
- * one that is. The route still resolves for anybody holding an old link, and
- * opens on its own refusal.
- */
+/** Historical review links, shown only in an explicitly opted-in build. */
 const PROTOTYPE_ROUTES: readonly Route[] = ['prikaz', 'dezurni', 'clan', 'clanovi', 'vozila', 'istorija'];
 
 export function SettingsView() {
@@ -137,12 +129,10 @@ export function SettingsView() {
         Where the simulation lives now.
 
         It used to be a group in the main rail, one tap from a real call-out.
-        Not deleted - the routes resolve, the code is intact, and every one of
-        those screens still opens on its own notice - but moved somewhere nobody
-        passes through while running an intervention, and closed by default so
-        that reaching it is a decision rather than a mis-tap.
+        Review-only simulation. Regular hosted builds omit this section and
+        route old simulation links to the operational console.
       */}
-      <section className="panel" aria-labelledby="settings-prototype">
+      {prototypeEnabled() ? <section className="panel" aria-labelledby="settings-prototype">
         <h2 className="panel__title" id="settings-prototype">{t.settings.prototypeTitle}</h2>
         <details className="disclosure">
           <summary className="disclosure__summary">{t.settings.prototypeSummary}</summary>
@@ -159,7 +149,7 @@ export function SettingsView() {
             </ul>
           </div>
         </details>
-      </section>
+      </section> : null}
 
       <section className="panel" aria-labelledby="settings-about">
         <h2 className="panel__title" id="settings-about">{t.settings.aboutTitle}</h2>

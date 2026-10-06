@@ -624,7 +624,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
 
   it('keeps every grant on the three tables and the two device commands', async () => {
     const { rows } = await db.query<{ what: string; acl: string }>(
-      `select c.relname::text as what, array_to_string(c.relacl, ' ') as acl from pg_class c
+      // regexp_replace strips PG17's MAINTAIN ('m') letter so the ACL matches on PG16 and 17 (see migration 037).
+      `select c.relname::text as what, regexp_replace(array_to_string(c.relacl, ' '), 'm/', '/', 'g') as acl from pg_class c
         where c.relnamespace = 'public'::regnamespace
           and c.relname in ('web_push_subscriptions', 'notification_outbox', 'notification_delivery_attempts')
        union all
@@ -1005,7 +1006,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       expect(Object.keys(sent.payload).sort()).toEqual(['interventionId', 'publishedAt', 'repeat']);
       expect(sent.payload.repeat).toBe(false);
       expect(sent.payload.publishedAt).toBe(publishedAt.get(String(sent.payload.interventionId)));
-      expect(sent.options).toEqual({ TTL: 180, urgency: 'high', topic: `dvd-${String(sent.payload.interventionId).slice(0, 20)}` });
+      expect(sent.options).toEqual({ TTL: 180, urgency: 'high', topic: String(sent.payload.interventionId).replaceAll('-', '') });
     }
   });
 

@@ -1,0 +1,144 @@
+Kako se koristi FireNexa
+
+1. Prvi ulazak i izbor sluzbe
+
+Otvorite FireNexa ikonu na telefonu ili aplikaciju u pregledacu na racunaru.
+
+Prijavite se preko ekrana Nalozi. Novi korisnik prvo registruje svoj nalog i potvrdi email ako se to zatrazi.
+
+Vlasnik zatim povezuje nalog sa evidencijom clana i dodjeljuje DVD, SZS ili obje sluzbe i odgovarajucu ulogu.
+
+Ako pripadate objema sluzbama, provjerite aktivnu sluzbu u zaglavlju. Izaberite sluzbu u kojoj sada postupate.
+
+Ekrani i mogucnosti zavise od vase uloge. Clan nema ista prava kao komandir ili vlasnik. Na racunaru se navigacija prikazuje drugacije nego na telefonu, ali oznake i znacenje radnji ostaju isti.
+
+
+
+
+2. Podesavanja i obavjestenja
+
+Otvorite Podesavanja → Ukljuci operativne notifikacije i prihvatite dozvolu pregledaca ili telefona. Na iPhoneu prvo instalirajte aplikaciju i otvorite je sa pocetnog ekrana. Obavjestenja podesite na svakom uredjaju koji koristite.
+
+Zvuk izabran u aplikaciji sluzi za otvorenu aplikaciju. U pozadini telefon koristi sistemsko obavjestenje. Uspjesna push pretplata nije dokaz da je poziv stigao, da je telefon zazvonio ili da je clan odgovorio.
+
+
+
+
+3. Clan ekipe: od poziva do prisustva
+
+Otvorite i procitajte poziv
+
+Otvorite obavjestenje ili ekran Moj poziv. Procitajte vrstu, naslov, lokaciju, mjesto okupljanja i uputstvo. Lokacija dogadjaja i mjesto okupljanja mogu biti razliciti; postupajte po uputstvu komandira. Ako aplikacija nudi prelazak u drugu sluzbu, prvo provjerite koju sluzbu poziv trazi.
+
+Posaljite odgovor
+
+Dolazim: dodir odmah pokrece cuvanje odgovora.
+
+Dolazim kasnije: izaberite ponudjeno vrijeme dolaska; tek tim izborom saljete odgovor sa procjenom.
+
+Ne mogu: dodir odmah pokrece cuvanje odgovora.
+
+Sacekajte poruku da je odgovor zabiljezen na serveru. Ako vidite gresku ili Nije sacuvano, ne smatrajte odgovor poslatim. Dok je poziv otvoren, odgovor mozete promijeniti.
+
+Vidio sam poziv je samo potvrda prijema. Ona ne znaci da dolazite. Aplikacija odvojeno evidentira prijem i odgovor; provjerite poruke ako jedna radnja uspije, a druga ne.
+
+Prijavite kretanje
+
+Koristite ponudjene radnje Krecem, U putu, Na licu mjesta ili Odustajem prema stvarnom stanju. Kretanje ne prijavljuje prisustvo automatski, ni kada odaberete Na licu mjesta.
+
+Prijavite i zavrsite prisustvo
+
+Kada treba evidentirati pocetak zadatka, izaberite Prijavi prisustvo.
+
+Provjerite da je prijava zabiljezena. Samostalna prijava ceka potvrdu komandira i do tada se ne racuna kao potvrdjeno ucesce.
+
+Po zavrsetku izaberite Odjavi se ako je ponudjeno i provjerite vrijeme zavrsetka.
+
+Moja opsta dostupnost je zaseban podatak o tome jeste li uopste na raspolaganju. Nije odgovor na konkretan poziv.
+
+
+
+
+4. Komandir: priprema i slanje poziva
+
+Provjerite aktivnu sluzbu, zatim otvorite Poziv.
+
+U pripremi novog poziva izaberite odgovarajucu vrstu. Vjezbu oznacite kao vjezbu, a stvarnu intervenciju prema stvarnom dogadjaju.
+
+Unesite jasan naslov, lokaciju dogadjaja, mjesto okupljanja i kratko uputstvo. Provjerite unaprijed ponudjeni tekst prije slanja.
+
+Pod Kome se salje izaberite ponudjene sluzbe. Za zajednicki poziv provjerite da su obuhvacene obje sluzbe. Pojedinacne clanove ne birate: sistem odredjuje aktivne operativce pri objavi.
+
+Izaberite Pregledaj i objavi. Provjerite sadrzaj, ciljane sluzbe, podobne naloge i aktivne push pretplate.
+
+Potvrdite Objavi tek kada je sve tacno. Provjerite poruku da je poziv objavljen.
+
+Sacuvaj nacrt cuva pripremu i nikoga ne poziva. Broj push pretplata prikazuje spremnost za obavjestavanje, a ne broj primljenih obavjestenja. Osoba koja je clan obje sluzbe ne treba da dobije dupli poziv zbog dvojnog clanstva.
+
+
+
+
+5. Komandir: odzivi, vozila i zavrsetak
+
+Pratite ljude
+
+Pregledajte ko je vidio poziv, ko dolazi, ko kasni, ko ne moze i ko nije odgovorio. Vrijeme odgovora, kretanje i prisustvo predstavljaju razlicite dogadjaje. Ne zakljucujte da je osoba na terenu samo zato sto je odgovorila Dolazim.
+
+U dijelu za prisustvo pregledajte samostalne prijave i potvrdite ili odbijte zapis prema stvarnom stanju. Kod zajednickog DVD/SZS poziva svaka sluzba vodi svoje ljude; zajednicki dogadjaj ne daje automatski pristup licnim zapisima druge sluzbe.
+
+Vozila
+
+U prikazu vozila evidentirajte stvarni izlazak i povratak dostupnim komandama. Vozila imaju zasebnu evidenciju; odgovor clana ne mijenja stanje vozila.
+
+Zatvorite ili otkazite
+
+Kada je rad zavrsen, izaberite Zatvori intervenciju.
+
+Polje Sta je uradjeno (opciono) mozete popuniti kratkim izvjestajem. Izvjestaj nije obavezan za zatvaranje.
+
+Provjerite upozorenje ako su neka prisustva jos otvorena. Zatvaranje ne treba tumaciti kao automatsko evidentiranje stvarnog vremena odjave svih clanova.
+
+Potvrdite Zatvori.
+
+Otkazivanje je posebna radnja i zahtijeva razlog. Kod zajednickog poziva status i zatvaranje vodi sluzba koja ga je objavila.
+
+
+
+
+6. Arhiva i provjera zapisa
+
+Otvorite Arhiva, izaberite intervenciju i pregledajte dostupnu hronologiju, vremena, odgovore i potvrdjeno ucesce. Prikaz zavisi od vase uloge i sluzbe. Aktivan zapis jos nije konacan: prisustvo i drugi dogadjaji mogu se dopunjavati dok je poziv otvoren.
+
+Nepostojece vrijeme nije isto sto i nula minuta. Ako se pojavi greska ucitavanja, ne tumacite je kao praznu evidenciju.
+
+
+
+
+7. Vlasnik: priprema operativnog clana
+
+Osoba prvo kreira svoj nalog i popuni potrebne podatke.
+
+U Nalozi pronadjite odgovarajuci nalog i otvorite Pripremi clana.
+
+Provjerite profil i pristup, izaberite sluzbu, povezite zapis clana iz evidencije i izaberite odgovarajucu ulogu.
+
+Pregledajte pripremu i potvrdite je. Za clanstvo u obje sluzbe provjerite dodjelu u svakoj sluzbi.
+
+Provjerite da je clan operativan i da ima aktivan pristup prije nego sto ocekujete da automatski ulazi u primaoce.
+
+
+
+
+8. Kada radnja ne uspije
+
+Nema poziva: provjerite da ste prijavljeni, u pravoj sluzbi i da je poziv upucen vama.
+
+Nije sacuvano / nema veze: procitajte gresku, provjerite vezu i ponovite radnju kada se veza vrati. Provjerite rezultat prije ponovnog objavljivanja poziva.
+
+Nemate pravo pristupa: obratite se vlasniku da provjeri nalog, clanstvo i ulogu.
+
+Obavjestenje nije stiglo: provjerite poziv u aplikaciji i dozvole na uredjaju. Za operativno pozivanje koristite i dogovoreni rezervni kanal.
+
+
+
+FireNexa · Fire & Rescue Response Platform

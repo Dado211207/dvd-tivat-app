@@ -37,6 +37,8 @@ const PUSH_FAILURES: readonly PushFailure[] = [
   'PUSH_DEVICE_REJECTED',
   'PUSH_SERVER_REFUSED',
   'PUSH_UNREACHABLE',
+  'PUSH_BROWSER_PERMISSION_BLOCKED',
+  'PUSH_BROWSER_SUBSCRIPTION_FAILED',
 ];
 
 /** One sentence per reason, so nobody is sent to check a working connection. */
@@ -54,6 +56,10 @@ function failureText(t: Strings, failure: PushFailure | null): string {
       return t.push.serverRefused;
     case 'PUSH_UNREACHABLE':
       return t.push.unreachable;
+    case 'PUSH_BROWSER_PERMISSION_BLOCKED':
+      return t.push.browserPermissionBlocked;
+    case 'PUSH_BROWSER_SUBSCRIPTION_FAILED':
+      return t.push.browserSubscriptionFailed;
     default:
       return t.push.failed;
   }
@@ -88,8 +94,12 @@ export function PushNotificationPanel({ variant = 'full' }: PushNotificationPane
         await repairWebPushRegistration();
         const subscription = await currentPushSubscription();
         if (active) setState(subscription ? 'ON' : Notification.permission === 'denied' ? 'DENIED' : 'OFF');
-      } catch {
-        if (active) setState('ERROR');
+      } catch (error) {
+        if (active) {
+          const reason = String(error);
+          setFailure(PUSH_FAILURES.find((value) => reason.includes(value)) ?? null);
+          setState('ERROR');
+        }
       }
     })();
     return () => {

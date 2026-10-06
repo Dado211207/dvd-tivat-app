@@ -317,16 +317,10 @@ describe('status transitions', () => {
 });
 
 describe('closing', () => {
-  it('requires a reason and keeps the record', async () => {
+  it('allows a normal closure without a reason and keeps the record', async () => {
     const id = await published();
-    expect(
-      await expectRefused(db, commander, (client) =>
-        client.query('select public.close_intervention($1, $2, $3)', [id, 'CLOSED', ' ']),
-      ),
-    ).toContain('REASON_REQUIRED');
-
     await asUserCommitted(db, commander, (client) =>
-      client.query('select public.close_intervention($1, $2, $3)', [id, 'CLOSED', 'Zavrseno.']),
+      client.query('select public.close_intervention($1, $2, $3)', [id, 'CLOSED', ' ']),
     );
     const { rows } = await db.query(
       'select status, close_reason, closed_by from public.interventions where id = $1',
@@ -334,7 +328,7 @@ describe('closing', () => {
     );
     expect(rows[0]).toMatchObject({
       status: 'CLOSED',
-      close_reason: 'Zavrseno.',
+      close_reason: null,
       closed_by: commander,
     });
   });

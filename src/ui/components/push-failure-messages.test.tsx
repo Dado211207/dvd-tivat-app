@@ -22,6 +22,7 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const enableWebPush = vi.fn();
+const repairWebPushRegistration = vi.fn(async () => false);
 
 vi.mock('@/notifications/push', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/notifications/push')>();
@@ -30,6 +31,7 @@ vi.mock('@/notifications/push', async (importOriginal) => {
     pushCapability: () => 'AVAILABLE' as const,
     currentPushSubscription: async () => null,
     enableWebPush: () => enableWebPush(),
+    repairWebPushRegistration: () => repairWebPushRegistration(),
     disableWebPush: async () => undefined,
   };
 });
@@ -39,6 +41,8 @@ let root: Root;
 
 beforeEach(() => {
   enableWebPush.mockReset();
+  repairWebPushRegistration.mockReset();
+  repairWebPushRegistration.mockResolvedValue(false);
   setActiveLanguage('me');
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -67,6 +71,16 @@ async function pressEnable(): Promise<string> {
 }
 
 describe('the screen says why notifications did not turn on', () => {
+  it('explains a browser failure found while checking the current device', async () => {
+    repairWebPushRegistration.mockRejectedValueOnce(new Error('PUSH_BROWSER_SUBSCRIPTION_FAILED'));
+    await act(async () => {
+      root.render(<PushNotificationPanel />);
+    });
+
+    expect(container.querySelector('[data-testid="push-failure"] > div')?.textContent)
+      .toBe(me.push.browserSubscriptionFailed);
+  });
+
   it('tells an unlinked account to add and link its member record', async () => {
     enableWebPush.mockRejectedValue(new Error('PUSH_MEMBER_REQUIRED'));
 
@@ -103,6 +117,21 @@ describe('the screen says why notifications did not turn on', () => {
 
     expect(shown).toBe(me.push.unreachable);
     expect(shown).toMatch(/provjerite vezu/i);
+  });
+
+  it('explains a browser failure without claiming the server rejected the device', async () => {
+    enableWebPush.mockRejectedValue(new Error('PUSH_BROWSER_SUBSCRIPTION_FAILED'));
+
+    const shown = await pressEnable();
+
+    expect(shown).toBe(me.push.browserSubscriptionFailed);
+    expect(shown).not.toMatch(/server je odbio|provjerite vezu/i);
+  });
+
+  it('explains a browser policy refusal separately', async () => {
+    enableWebPush.mockRejectedValue(new Error('PUSH_BROWSER_PERMISSION_BLOCKED'));
+
+    expect(await pressEnable()).toBe(me.push.browserPermissionBlocked);
   });
 
   it('keeps the old wording for a throw that carries no reason at all', async () => {

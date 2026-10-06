@@ -95,7 +95,7 @@ async function compareOn(client, only = null) {
   return { compared: before.length, answered: after.length, differing, expected, tally };
 }
 
-/** A DVD call-out as `publish_intervention` leaves it, to every DVD member of the copy, then optionally closed. */
+/** A DVD call-out as `publish_intervention` leaves it, to every eligible DVD person, then optionally closed. */
 async function everyMemberOn(client, owner, key, ended) {
   const { rows: callout } = await client.query(
     `insert into public.interventions(kind, title, instructions, incident_location, created_by, idempotency_key,
@@ -104,16 +104,38 @@ async function everyMemberOn(client, owner, key, ended) {
     [owner, key, DVD],
   );
   const id = callout[0].id;
-  await client.query(
-    `insert into public.intervention_recipients(intervention_id, member_id, recipient_version, member_name_at_publication)
-     select $1, m.id, 1, m.full_name from public.members m where m.organization_id = $2`,
-    [id, DVD],
+  // Match publish_intervention(): only active, linked, currently eligible members
+  // become recipients, and one member record per person is selected.
+  const { rows: candidates } = await client.query(
+    `select member_id from (
+       select m.id as member_id,
+              row_number() over (
+                partition by m.user_id
+                order by (m.organization_id = $1) desc, m.organization_id
+              ) as rn
+         from public.members m
+        where m.organization_id = $1
+          and m.active
+          and m.user_id is not null
+          and public.recipient_is_eligible_in(m.id, m.organization_id)
+     ) ranked
+      where rn = 1
+      order by member_id`,
+    [DVD],
   );
-  await client.query(
-    `insert into public.notification_outbox(intervention_id, member_id, channel, dedupe_key)
-     select $1, m.id, 'WEB_PUSH', $3 || ':' || m.id from public.members m where m.organization_id = $2`,
-    [id, DVD, key],
-  );
+  for (const { member_id: memberId } of candidates) {
+    await client.query(
+      `insert into public.intervention_recipients(intervention_id, member_id, recipient_version, member_name_at_publication)
+       select $1, m.id, 1, m.full_name from public.members m where m.id = $2`,
+      [id, memberId],
+    );
+    await client.query(
+      `insert into public.notification_outbox(intervention_id, member_id, user_id, channel, dedupe_key)
+       select $1, m.id, m.user_id, 'WEB_PUSH', $3 || ':' || m.id
+         from public.members m where m.id = $2`,
+      [id, memberId, key],
+    );
+  }
   if (ended) {
     // What close_intervention() writes - and nothing under the call-out.
     await client.query(
@@ -127,7 +149,7 @@ async function everyMemberOn(client, owner, key, ended) {
 
 /**
  * Old rule against verdict on `client` (a migrated copy): first every alert
- * already queued, then one new alert per member on a running DVD call-out,
+ * already queued, then one new alert per eligible person on a running DVD call-out,
  * then the same on one that was closed before any worker reached it.
  */
 export async function pushDecisions(client) {

@@ -27,8 +27,9 @@ name: Deploy demonstration build
 # Without them this workflow fails early and loudly rather than publishing a
 # copy that looks right and refuses every operational screen.
 #
-# Deployment is manual (`workflow_dispatch`) or on a push to main that has
-# already passed CI. It never runs from a pull request, so a fork cannot publish.
+# Deployment is manual (`workflow_dispatch`) on main or follows a successful
+# main push CI. Both paths require the exact current main commit to have passed
+# CI. It never runs from a pull request, so a fork cannot publish.
 #
 # P6 release latch: until the production-copy gate, database migrations and
 # release approval are complete, leave the repository Actions variable
@@ -45,6 +46,7 @@ on:
     branches: [main]
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -63,11 +65,36 @@ jobs:
     # The P6 release latch also applies to manual dispatch.
     if: >-
       vars.P6_PAGES_RELEASE_READY == 'true' &&
-      (github.event_name == 'workflow_dispatch' ||
-       github.event.workflow_run.conclusion == 'success')
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.conclusion == 'success'))
+    env:
+      DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     steps:
+      - name: Require the current main commit and its successful CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          if [ "$DEPLOY_SHA" != "$current" ]; then
+            echo "::error::The CI commit is no longer main HEAD; refusing a stale deploy."
+            exit 1
+          fi
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$DEPLOY_SHA" -f branch=main -f event=push -f status=success \
+            | jq -e --arg sha "$DEPLOY_SHA" \
+                'any(.workflow_runs[]; .head_sha == $sha and .head_branch == "main" and .event == "push" and .conclusion == "success")' \
+            >/dev/null || {
+              echo "::error::No successful main push CI exists for this exact commit."
+              exit 1
+            }
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - uses: actions/setup-node@v4
         with:

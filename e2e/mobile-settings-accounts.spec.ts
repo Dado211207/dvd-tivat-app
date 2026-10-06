@@ -192,5 +192,27 @@ for (const phone of PHONES) {
         phone.width * 0.75,
       );
     });
+
+    test('editable controls do not trigger iOS focus zoom', async ({ page }) => {
+      await openOperational(page, 'nalozi', { role: 'OWNER', longText: true });
+      await expect(page.locator('.account-search input')).toBeVisible();
+
+      for (const route of ['nalozi', 'evidencija']) {
+        if (route === 'evidencija') {
+          await page.goto('http://127.0.0.1:4174/#/evidencija');
+          await expect(page.locator('.registry input').first()).toBeVisible();
+        }
+
+        const smallControls = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+            'input:not([type="checkbox"]):not([type="radio"]), select, textarea',
+          )]
+            .filter((control) => control.getBoundingClientRect().width > 0)
+            .filter((control) => Number.parseFloat(getComputedStyle(control).fontSize) < 16)
+            .map((control) => `${control.tagName.toLowerCase()}#${control.id || '-'}: ${getComputedStyle(control).fontSize}`),
+        );
+        expect(smallControls, `${route} has controls below Safari's 16px focus threshold`).toEqual([]);
+      }
+    });
   });
 }

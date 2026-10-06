@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { GROUPS, MEMBERS, VEHICLES } from '@/domain/seed';
 import { composeMessage } from '@/domain/message';
-import { SOCIETY_PROFILE } from './society';
+import { SERVICE_PROFILES, SOCIETY_PROFILE, serviceProfile } from './society';
 
 describe('public-safe DVD Tivat operating profile', () => {
+  it('keeps DVD facts separate and leaves unconfirmed SZS operating facts unknown', () => {
+    expect(serviceProfile('DVD')).toBe(SOCIETY_PROFILE);
+    expect(serviceProfile('SZS')).toBe(SERVICE_PROFILES.SZS);
+    expect(SERVICE_PROFILES.SZS.fullName).toBe('Sluzba zastite i spasavanja Tivat');
+    expect(SERVICE_PROFILES.SZS.assemblyPoint).toBeNull();
+    expect(SERVICE_PROFILES.SZS.confirmedMemberCount).toBeNull();
+    expect(SERVICE_PROFILES.SZS.currentFallbackChannel).toBeNull();
+  });
   it('models the member-confirmed scale without storing real identities', () => {
     expect(SOCIETY_PROFILE.confirmedMemberCount).toBe(52);
     expect(MEMBERS).toHaveLength(52);

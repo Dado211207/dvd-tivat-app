@@ -1037,6 +1037,8 @@ fieldset {
 
 .account-steps li {
   display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
   align-content: start;
   min-height: 144px;
   padding: 15px;
@@ -1090,7 +1092,31 @@ fieldset {
 }
 
 .account-table-wrap {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+}
+
+.member-preparation {
+  margin: 18px 0;
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 16px;
+  background: var(--c-surface-2);
+}
+
+.member-preparation h3 { margin: 0 0 8px; }
+.member-preparation .stack { gap: 16px; }
+.member-preparation label { display: grid; gap: 7px; }
+.member-preparation select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 11px;
+  font: inherit;
+  color: var(--c-ink);
+  background: var(--c-surface);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 10px;
 }
 
 .account-table {
@@ -1314,6 +1340,8 @@ fieldset {
 }
 
 .table-wrap {
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--c-line);
   border-radius: 13px;
@@ -1787,6 +1815,13 @@ dialog {
   display: none;
 }
 
+.response-time {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--c-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .masthead__mark {
   padding: 0;
   background: transparent;
@@ -2008,6 +2043,32 @@ dialog {
     font-size: 0.8rem;
     text-align: center;
   }
+}
+
+/* Table and long account values may overflow inside their own scroll regions,
+   never make the whole page wider than a phone or an in-between tablet. */
+.registry,
+.account-directory {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Roster tables can be wider than the phone, but their labelled scroll region
+   remains inside the card. A native table's intrinsic width must not make the
+   document itself draggable sideways. */
+.registry {
+  overflow-x: clip;
+}
+
+.registry .table-wrap {
+  /* Keep the visually hidden table caption inside the clipped scroll box. */
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  /* The table's intrinsic width belongs to this local scroll region. */
+  contain: inline-size;
+  overflow-x: auto;
 }
 
 .registry .stack {
@@ -3128,6 +3189,12 @@ dialog {
   border-top: 1px solid var(--c-line);
 }
 
+.act__receipt-only {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--c-line);
+}
+
 /* The minute bands and the movement steps are short words, so two across a
    phone keeps them large without wasting a whole row each. */
 .act__choices--eta,
@@ -3398,3 +3465,12 @@ dialog {
 .response-cell--no { border-top: 3px solid var(--c-no); }
 .response-cell--unknown { border-top: 3px solid var(--c-unknown); }
 .response-cell--accent { border-top: 3px solid var(--c-accent); }
+
+/* iOS enlarges the visual viewport when a focused form control uses text below
+   16px, then can leave the PWA enlarged after the keyboard closes. Keep every
+   editable control legible on touch-sized screens without disabling pinch zoom. */
+@media (max-width: 899px) {
+  :is(input:not([type='checkbox']):not([type='radio']), select, textarea) {
+    font-size: max(16px, 1rem);
+  }
+}

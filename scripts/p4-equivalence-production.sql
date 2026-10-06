@@ -50,7 +50,26 @@
 --
 --   1. Run this whole file against the hosted project over a READ-ONLY path,
 --      as one batch. It needs to read the public schema, auth.users and
---      supabase_migrations.schema_migrations.
+--      supabase_migrations.schema_migrations. The connection role must be able
+--      to read EVERY row and enumerate EVERY account, not merely hold SELECT:
+--      it needs (a) USAGE on public+auth and SELECT on all public tables and
+--      auth.users; (b) membership in `authenticated` (for EXECUTE on the reader
+--      functions and for `set local role authenticated` - a plain GRANT confers
+--      both INHERIT and SET on PostgreSQL 16+); and (c) RLS bypass (the
+--      BYPASSRLS attribute, or an owner/superuser connection such as Supabase's
+--      `postgres`). Without RLS bypass the batch still succeeds but silently
+--      under-captures: the id lists gathered below with no JWT set, and the
+--      exported rows, are RLS-filtered, so the gate later fails its fidelity
+--      step rather than naming the missing privilege.
+--
+--      SECURITY: no such role is read-only, and none should be created for
+--      this. Membership in `authenticated` lets the holder set its own JWT
+--      claims and act as any account, owner included; inherited with
+--      BYPASSRLS it also writes past row policies. `set transaction read
+--      only` below protects this batch, not the credential. Run this file
+--      only where writes are harmless or the credential is already the
+--      owner's own: see db-tests/capture_role_privileges.test.ts and the
+--      2026-10-04 evening checkpoint in docs/P7_P8_RELEASE_PREP.md.
 --   2. Save the single returned row as a .json object OUTSIDE the repository.
 --      It is pseudonymised, but still production-derived. Name it
 --      `*.production-export.json`: .gitignore covers that suffix, as a
@@ -289,7 +308,9 @@ fp as (select jsonb_build_object(
     select jsonb_object_agg(p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
       md5(p.prokind::text || '|' || p.prosecdef::text || '|' || p.provolatile::text || '|'
           || coalesce(array_to_string(p.proconfig, ','), '') || '|' || pg_get_function_result(p.oid)
-          || '|' || md5(p.prosrc) || '|' || coalesce(array_to_string(p.proacl, ' '), '(default)')
+          -- ACL entries are a set; a dump/restore re-grants them in a different
+          -- order, so sort them to compare the grants, not their order.
+          || '|' || coalesce((select string_agg(x, ' ' order by x) from unnest(p.proacl::text[]) x), '(default)')
           || '|' || l.lanname || '|' || pg_get_userbyid(p.proowner)))
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
@@ -325,7 +346,7 @@ fp as (select jsonb_build_object(
   'tables', (
     select jsonb_object_agg(c.relname,
       md5(c.relkind::text || '|' || c.relrowsecurity::text || '|' || c.relforcerowsecurity::text
-          || '|' || coalesce(regexp_replace(array_to_string(c.relacl, ' '), 'm/', '/', 'g'), '(default)') || '|' || pg_get_userbyid(c.relowner)))
+          || '|' || coalesce(regexp_replace((select string_agg(x, ' ' order by x) from unnest(c.relacl::text[]) x), 'm/', '/', 'g'), '(default)') || '|' || pg_get_userbyid(c.relowner)))
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p', 'S'))
@@ -357,6 +378,17 @@ select
      from fp, jsonb_each(fp.f) as t(k, v)) as schema_fingerprint,
   (select count(*) from pg_attribute pa join pg_class pc on pc.oid = pa.attrelid join pg_namespace pn on pn.oid = pc.relnamespace
     where pn.nspname = 'public' and pa.attacl is not null) as column_acls,
+  -- The raw text of every public CHECK/constraint, keyed as fp.constraints is.
+  -- A dump/restore copy re-parses CHECK constraints and flattens associative
+  -- AND/OR, so its fp.constraints md5 differs from production's though the
+  -- meaning is identical; consumers that capture on a restored copy compare
+  -- these defs after associativity-canonicalization instead of by that md5.
+  -- See scripts/restored-capture/canonical-constraint.mjs.
+  (select coalesce(jsonb_object_agg(c.relname || '.' || con.conname, pg_get_constraintdef(con.oid)), '{}')
+     from pg_constraint con
+     join pg_class c on c.oid = con.conrelid
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public') as constraint_defs,
   (select e from ex) as export,
   (select jsonb_object_agg(k, case when jsonb_typeof(v) = 'array'
       then md5(coalesce((select string_agg(x::text, E'\n' order by x::text collate "C") from jsonb_array_elements(v) x), ''))

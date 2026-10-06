@@ -14,22 +14,20 @@ test('SZS commander publishes, answers, attends, confirms, closes and archives t
   await expect(page.getByText('DVD poziv koji SZS ne smije vidjeti')).toHaveCount(0);
 
   await page.getByTestId('new-title').fill('SZS vježba spašavanja');
-  await page.getByTestId('wizard-next').click();
   await page.getByTestId('new-location').fill('Tivat');
   await page.getByTestId('new-instructions').fill('Okupljanje na poligonu');
-  await page.getByTestId('create-draft').click();
-  await expect(page.getByText('SZS vježba spašavanja').first()).toBeVisible();
-
-  await page.getByTestId('recipient-picker').getByRole('checkbox').first().check();
-  await page.getByTestId('to-review').click();
-  await page.getByTestId('publish').click();
+  await page.getByTestId('quick-review').click();
+  await expect(page.getByRole('dialog')).toContainText('SZS vježba spašavanja');
   await page.getByRole('dialog').getByRole('button', { name: /objavi|pozovi|potvrdi/i }).click();
   await expect(page.getByTestId('intervention-actions')).toBeVisible();
 
   await page.goto('http://127.0.0.1:4174/#/mobilizacija');
   await expect(page.getByTestId('callout-title')).toContainText('SZS vježba spašavanja');
-  await page.getByTestId('acknowledge').click();
+  // A decision is one tap: answer first, then record receipt without asking
+  // for a second button. Both remain separate facts on the member's screen.
   await page.getByTestId('answer-DOLAZIM').click();
+  await expect(page.getByTestId('fact-acknowledged')).toHaveAttribute('data-mark', 'YES');
+  await expect(page.getByTestId('fact-answered')).toHaveAttribute('data-mark', 'YES');
   await page.getByTestId('journey-NA_LICU_MJESTA').click();
   await page.getByTestId('check-in').click();
   await page.getByTestId('check-out').click();
@@ -40,7 +38,6 @@ test('SZS commander publishes, answers, attends, confirms, closes and archives t
   await page.getByTestId('confirm-many').click();
   await page.getByRole('tab', { name: 'Poziv' }).click();
   await page.getByTestId('close-intervention').click();
-  await page.getByTestId('close-reason').fill('Vježba završena');
   await page.getByRole('dialog').getByRole('button', { name: /zatvori|potvrdi/i }).click();
 
   await page.goto('http://127.0.0.1:4174/#/arhiva');

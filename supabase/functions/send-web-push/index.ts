@@ -1,14 +1,15 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import webpush from 'npm:web-push@3.6.7';
 import { authoriseWake, deliverQueued, type Database } from './deliver.ts';
+import { isAllowedOrigin, responseOrigin } from './origin.ts';
 
-const allowedOrigin = Deno.env.get('ALLOWED_ORIGIN') ?? 'https://dado211207.github.io';
+const configuredOrigin = Deno.env.get('ALLOWED_ORIGIN')?.trim();
 
 function headers(request: Request): Record<string, string> {
   const origin = request.headers.get('origin');
   return {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': origin === allowedOrigin ? origin : allowedOrigin,
+    'Access-Control-Allow-Origin': responseOrigin(origin, configuredOrigin),
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-push-worker-secret',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     Vary: 'Origin',
@@ -48,7 +49,8 @@ function isUuid(value: unknown): value is string {
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: headers(request) });
   if (request.method !== 'POST') return response(request, 405, { error: 'METHOD_NOT_ALLOWED' });
-  if (request.headers.get('origin') && request.headers.get('origin') !== allowedOrigin) {
+  const origin = request.headers.get('origin');
+  if (origin !== null && !isAllowedOrigin(origin, configuredOrigin)) {
     return response(request, 403, { error: 'ORIGIN_NOT_ALLOWED' });
   }
 

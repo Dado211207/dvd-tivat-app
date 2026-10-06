@@ -27,9 +27,11 @@ import {
   checkIn,
   checkOut,
   ETA_BANDS,
+  fetchAddressedInterventions,
   fetchAttendance,
   fetchAvailability,
   fetchInterventions,
+  fetchOwnMemberId,
   fetchRecipientFacts,
   isOpenStatus,
   JOURNEY_STEPS,
@@ -128,6 +130,26 @@ function requestedInterventionId(): string | null {
     : null;
 }
 
+/**
+ * Merge call-outs the member was paged for in the acting service. The owner
+ * query can also return an incident a dual-service person received THROUGH
+ * their other service. For such an account, admit owner-query rows only when
+ * the acting service's recipient read confirms them. Single-service screens
+ * keep their established behavior. This ties actions to the displayed member
+ * identity (D14), even when the publisher owns the incident here.
+ */
+function mergeInterventionsById(
+  owned: readonly Intervention[],
+  addressed: readonly Intervention[],
+): readonly Intervention[] {
+  const byId = new Map<string, Intervention>();
+  for (const item of owned) byId.set(item.id, item);
+  for (const item of addressed) if (!byId.has(item.id)) byId.set(item.id, item);
+  return [...byId.values()].sort((a, b) =>
+    a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+  );
+}
+
 function Mobilisation({ context, memberId }: { context: OperationalContext; memberId: string }) {
   const t = useText();
   const { availableServices, setActingService } = useAccess();
@@ -172,8 +194,15 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         setLoadError(reason === 'REFUSED' ? 'REFUSED_READ' : 'UNAVAILABLE');
       };
       try {
-        const [interventionsRead, availabilityRead, members] = await Promise.all([
+        const [interventionsRead, addressedRead, availabilityRead, members] = await Promise.all([
           fetchInterventions(organizationId),
+          // A joint call-out (P7) is OWNED by the publishing service, so
+          // `fetchInterventions(organizationId)` - which filters on the owning
+          // service - cannot surface it to a member of a TARGETED service. Read
+          // the member's own recipient rows in this service too, and merge, so a
+          // DVD member paged by an SZS call-out sees it here without switching.
+          // An owner has no member id and no recipient rows, so skip it for them.
+          memberId ? fetchAddressedInterventions(organizationId, memberId) : null,
           fetchAvailability(organizationId),
           loadRoster(organizationId),
         ]);
@@ -188,7 +217,16 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
          */
         if (!interventionsRead.ok) return failed(ticket, interventionsRead.reason);
         if (!availabilityRead.ok) return failed(ticket, availabilityRead.reason);
-        const interventions = interventionsRead.value;
+        // A refused addressed read must not silently drop a joint call-out.
+        if (addressedRead && !addressedRead.ok) return failed(ticket, addressedRead.reason);
+        const addressed = addressedRead && addressedRead.ok ? addressedRead.value : [];
+        const addressedIds = new Set(addressed.map((item) => item.id));
+        const interventions = mergeInterventionsById(
+          availableServices.length > 1
+            ? interventionsRead.value.filter((item) => addressedIds.has(item.id))
+            : interventionsRead.value,
+          addressed,
+        );
 
         // Row level security already limits this to call-outs this member was
         // sent, so there is nothing to filter client-side - and filtering here
@@ -232,7 +270,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
         if (mounted.current && ticket === generation.current && !silent) setLoading(false);
       }
     },
-    [memberId, organizationId],
+    [memberId, organizationId, availableServices.length],
   );
 
   useEffect(() => {
@@ -270,10 +308,15 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     let live = true;
     void (async () => {
       for (const other of others) {
-        const read = await fetchInterventions(organizationIdOf(other));
+        const otherOrganizationId = organizationIdOf(other);
+        const member = await fetchOwnMemberId(otherOrganizationId);
         if (!live) return;
-        // Only a call-out the person is genuinely a recipient of in that service
-        // comes back (RLS narrows it); anything else leaves the prompt unshown.
+        if (!member.ok || member.value === null) continue;
+        const read = await fetchAddressedInterventions(otherOrganizationId, member.value);
+        if (!live) return;
+        // An incident may be visible through command rights or ownership while
+        // the person was paged through another service. Only an actual recipient
+        // row there justifies switching their operational identity.
         if (read.ok && read.value.some((item) => item.id === requested)) {
           setCrossServiceLink(other);
           return;
@@ -343,7 +386,7 @@ function Mobilisation({ context, memberId }: { context: OperationalContext; memb
     setBusy(true);
     const outcome = await run();
     if (outcome.ok) {
-      setMessage({ tone: 'info', text: successText });
+      setMessage({ tone: 'info', text: outcome.message ?? successText });
       await refresh(activeId);
     } else {
       setMessage({ tone: 'error', text: outcome.message ?? t.mobilisation.notSaved });
@@ -659,9 +702,9 @@ function CallOutCard({
 /**
  * The one thing to do now, at the size of the one thing to do now.
  *
- * Each branch writes exactly ONE fact, which is the rule the whole schema rests
- * on: opening is not answering, answering is not arriving, arriving is not
- * attendance, and none of these buttons quietly records another.
+ * The answer shortcut writes two separate facts: the answer first, then a
+ * receipt that the member saw the call-out. Neither is confused with arrival
+ * or attendance. Receipt alone remains a separate choice.
  */
 function NextAction({
   step,
@@ -678,6 +721,20 @@ function NextAction({
 }) {
   const t = useText();
   const [wantsEta, setWantsEta] = useState(false);
+
+  // An answer is the time-critical fact the commander needs. Save it first;
+  // once it succeeds, record the separate receipt fact with the same tap.
+  // If that second request fails, the answer remains saved and the receipt
+  // button reappears after refresh. Never claim that a failed answer succeeded.
+  const answerWithReceipt = async (
+    answer: 'DOLAZIM' | 'DOLAZIM_KASNIJE' | 'NE_MOGU',
+    eta: number | null,
+  ) => {
+    const response = await submitResponse(intervention.id, answer, eta, false);
+    if (!response.ok || state.acknowledged) return response;
+    const receipt = await acknowledgeIntervention(intervention.id);
+    return receipt.ok ? response : { ok: true, message: t.callout.answerSavedReceiptRetry };
+  };
 
   if (step === 'DONE') {
     const why = !state.open
@@ -696,35 +753,28 @@ function NextAction({
 
   return (
     <section className="act" data-testid="next-action" data-step={step}>
-      {/* On every step, so the card is recognisable as THE card before anybody
-          has read a word of it. Three of the six steps are a single button and
-          used to open straight onto their caveat, which reads as a note rather
-          than as the thing being asked for. */}
+      {/* On every step, so the card is recognisable as THE next action. */}
       <p className="act__eyebrow">{t.callout.nextLabel}</p>
 
-      {step === 'ACKNOWLEDGE' ? (
+      {step === 'ACKNOWLEDGE' && state.answer !== null ? (
         <>
-          <p className="act__why">{t.callout.doAcknowledgeWhy}</p>
-          <button
-            type="button"
-            className="act__button act__button--primary"
-            data-testid="acknowledge"
-            disabled={busy}
-            onClick={() =>
-              void onAct(
-                () => acknowledgeIntervention(intervention.id),
-                t.mobilisation.ackSaved,
-              )
-            }
-          >
+          <p className="act__title">{t.callout.receiptRetryTitle}</p>
+          <p className="act__why">{t.callout.receiptRetryWhy}</p>
+          <button type="button" className="act__button act__button--primary"
+            data-testid="acknowledge" disabled={busy}
+            onClick={() => void onAct(
+              () => acknowledgeIntervention(intervention.id),
+              t.mobilisation.ackSaved,
+            )}>
             {t.callout.doAcknowledge}
           </button>
         </>
       ) : null}
 
-      {step === 'ANSWER' ? (
+      {step === 'ANSWER' || (step === 'ACKNOWLEDGE' && state.answer === null) ? (
         <>
           <p className="act__title">{t.callout.doAnswer}</p>
+          {step === 'ACKNOWLEDGE' ? <p className="act__why">{t.callout.answerAlsoAcknowledges}</p> : null}
           {/*
             One tap is the answer.
             
@@ -747,7 +797,7 @@ function NextAction({
               disabled={busy}
               onClick={() =>
                 void onAct(
-                  () => submitResponse(intervention.id, 'DOLAZIM', null, false),
+                  () => answerWithReceipt('DOLAZIM', null),
                   t.mobilisation.answerSaved,
                 )
               }
@@ -771,7 +821,7 @@ function NextAction({
               disabled={busy}
               onClick={() =>
                 void onAct(
-                  () => submitResponse(intervention.id, 'NE_MOGU', null, false),
+                  () => answerWithReceipt('NE_MOGU', null),
                   t.mobilisation.answerSaved,
                 )
               }
@@ -792,7 +842,7 @@ function NextAction({
                     disabled={busy}
                     onClick={() =>
                       void onAct(
-                        () => submitResponse(intervention.id, 'DOLAZIM_KASNIJE', band, false),
+                        () => answerWithReceipt('DOLAZIM_KASNIJE', band),
                         t.mobilisation.answerSaved,
                       )
                     }
@@ -801,6 +851,25 @@ function NextAction({
                   </button>
                 ))}
               </div>
+            </div>
+          ) : null}
+          {step === 'ACKNOWLEDGE' ? (
+            <div className="act__receipt-only">
+              <p className="act__why">{t.callout.ackOnlyHint}</p>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                data-testid="acknowledge"
+                disabled={busy}
+                onClick={() =>
+                  void onAct(
+                    () => acknowledgeIntervention(intervention.id),
+                    t.mobilisation.ackSaved,
+                  )
+                }
+              >
+                {t.callout.doAcknowledge}
+              </button>
             </div>
           ) : null}
         </>

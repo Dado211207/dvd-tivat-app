@@ -24,6 +24,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const signIn = vi.fn();
 const register = vi.fn();
+const resend = vi.fn();
 
 vi.mock('@/auth/supabaseClient', async (importOriginal) => {
   // The messages themselves are the real ones, so this cannot pass against a
@@ -38,6 +39,7 @@ vi.mock('@/auth/supabaseClient', async (importOriginal) => {
     signInWithEmail: (email: string, password: string) => signIn(email, password),
     registerWithEmail: (email: string, password: string, profile: RequiredProfile) =>
       register(email, password, profile),
+    resendSignupConfirmation: (email: string) => resend(email),
   } satisfies Partial<typeof import('@/auth/supabaseClient')>;
 });
 
@@ -55,6 +57,7 @@ let root: Root;
 beforeEach(() => {
   signIn.mockReset();
   register.mockReset();
+  resend.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -181,6 +184,33 @@ describe('when the request never reaches the server', () => {
 });
 
 describe('account registration', () => {
+  it('requests a fresh confirmation without repeating signup or showing account status', async () => {
+    resend.mockResolvedValue({ ok: true });
+    await openForm();
+    const button = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((candidate) => /Posalji novi email za potvrdu/i.test(candidate.textContent ?? ''));
+    expect(button).not.toBeUndefined();
+
+    await act(async () => button?.click());
+    await settle();
+
+    expect(resend).toHaveBeenCalledWith('komandir@example.invalid');
+    expect(register).not.toHaveBeenCalled();
+    expect(container.textContent).toMatch(/Ako nalog ceka potvrdu/i);
+  });
+
+  it('does not blame the password when confirmation email delivery is refused', async () => {
+    resend.mockResolvedValue({ ok: false });
+    await openForm();
+    const button = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((candidate) => /Posalji novi email za potvrdu/i.test(candidate.textContent ?? ''));
+    await act(async () => button?.click());
+    await settle();
+
+    expect(container.textContent).toMatch(/Novi email trenutno nije poslat/i);
+    expect(container.textContent).not.toMatch(/Provjerite email i lozinku/i);
+  });
+
   it('submits all required profile fields with a normalized telephone', async () => {
     register.mockResolvedValue({ ok: true, sessionStarted: false });
     await openForm();

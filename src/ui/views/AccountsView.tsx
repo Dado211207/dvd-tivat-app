@@ -12,7 +12,7 @@
  * zero rows to one, and that a suspension without a reason is refused outright.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useAccess } from '@/auth/AccessProvider';
 import {
   MEMBERSHIP_ROLES,
@@ -20,6 +20,7 @@ import {
   loadOrganizationMembershipAudit,
   loadRoleAudit,
   loadStatusAudit,
+  prepareServiceMember,
   roleSearchTerms,
   setAccountActive,
   setOrganizationMembership,
@@ -32,6 +33,8 @@ import {
   type StatusAuditEntry,
 } from '@/auth/directory';
 import { requestRecoveryCode } from '@/auth/passwordRecovery';
+import { loadRoster, type RosterMember } from '@/auth/roster';
+import { organizationIdOf } from '@/auth/serviceContext';
 import {
   MULTI_SERVICE_ADMIN_AVAILABLE,
   PASSWORD_RESET_AVAILABLE,
@@ -45,12 +48,10 @@ import { useText } from '@/i18n/useText';
 import { hrefFor } from '@/ui/router';
 
 export function AccountsView() {
-  const t = useText();
   const { access } = useAccess();
 
   return (
     <>
-      <h1 className="sr-only">{t.accounts.pageTitle}</h1>
       <AccountAccessSetup />
       {/*
         Nothing at all for anybody but the owner.
@@ -80,6 +81,8 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
   const [statusAudit, setStatusAudit] = useState<StatusAuditEntry[]>([]);
   const [membershipAudit, setMembershipAudit] = useState<OrganizationMembershipAuditEntry[]>([]);
   const [query, setQuery] = useState('');
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [preparingUserId, setPreparingUserId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -118,8 +121,11 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    if (!needle || accounts === null) return accounts ?? [];
+    if (accounts === null) return [];
     return accounts.filter((account) =>
+      (!unassignedOnly || (account.role !== 'OWNER' &&
+        !account.memberships.DVD && !account.memberships.SZS)) &&
+      (!needle ||
       `${account.fullName ?? ''} ${account.email} ${account.phone ?? ''} ${account.dateOfBirth ?? ''} ${roleSearchTerms(
         account,
         t.accounts.roleLabel,
@@ -127,16 +133,20 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
         t.accounts.statusLabel[statusOf(account)]
       } ${t.accounts.organizationLabel.DVD} ${t.accounts.organizationLabel.SZS} DVD SZS`
         .toLocaleLowerCase()
-        .includes(needle),
+        .includes(needle)),
     );
   }, [
     accounts,
     query,
+    unassignedOnly,
     t.accounts.organizationLabel.DVD,
     t.accounts.organizationLabel.SZS,
     t.accounts.roleLabel,
     t.accounts.statusLabel,
   ]);
+
+  const unassignedCount = accounts?.filter((account) =>
+    account.role !== 'OWNER' && !account.memberships.DVD && !account.memberships.SZS).length ?? 0;
 
   async function changeMembership(
     account: DirectoryAccount,
@@ -266,14 +276,33 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
             disabled={loading || accounts === null || loadFailed}
           />
         </label>
+        <button type="button" className="btn btn--ghost" data-testid="unassigned-filter"
+          aria-pressed={unassignedOnly} disabled={loading || accounts === null || loadFailed}
+          onClick={() => setUnassignedOnly((current) => !current)}>
+          {unassignedOnly ? t.accounts.showAllAccounts :
+            t.accounts.showUnassigned.replace('{count}', String(unassignedCount))}
+        </button>
+
+        {preparingUserId && accounts?.find((account) => account.userId === preparingUserId) ? (
+          <MemberPreparation
+            key={preparingUserId}
+            account={accounts.find((account) => account.userId === preparingUserId)!}
+            onClose={() => setPreparingUserId(null)}
+            onDone={async () => { await refresh(); setPreparingUserId(null); }}
+          />
+        ) : null}
 
         {loading ? (
           <p role="status">{t.accounts.loading}</p>
         ) : loadFailed || accounts === null ? null : filtered.length === 0 ? (
-          <EmptyState title={t.accounts.noResults}>
+          <EmptyState title={unassignedOnly && !query.trim()
+            ? t.accounts.noUnassigned
+            : t.accounts.noResults}>
             {accounts.length === 0
               ? t.accounts.noAccounts
-              : t.accounts.changeSearch}
+              : unassignedOnly && !query.trim()
+                ? t.accounts.showAllAccounts
+                : t.accounts.changeSearch}
           </EmptyState>
         ) : (
           <div className="account-table-wrap table-wrap--cards">
@@ -312,6 +341,16 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
                             <a href={hrefFor('evidencija')}>{t.accounts.openRoster}</a>
                           </small>
                         )}
+                        {!locked ? (
+                          <button type="button" className="btn btn--ghost"
+                            data-testid={`prepare-${account.userId}`}
+                            aria-expanded={preparingUserId === account.userId}
+                            aria-controls="member-preparation"
+                            onClick={() => setPreparingUserId((current) =>
+                              current === account.userId ? null : account.userId)}>
+                            {t.accounts.prepareMember}
+                          </button>
+                        ) : null}
                       </th>
                       <td data-label={t.accounts.status}>
                         <Chip
@@ -475,6 +514,143 @@ function OwnerDirectory({ ownUserId }: { readonly ownUserId: string }) {
         </details>
       </section>
     </>
+  );
+}
+
+function MemberPreparation({ account, onClose, onDone }: {
+  readonly account: DirectoryAccount;
+  readonly onClose: () => void;
+  readonly onDone: () => Promise<void>;
+}) {
+  const t = useText();
+  const { announce } = useApp();
+  const [service, setService] = useState<OrganizationCode>('DVD');
+  const [role, setRole] = useState<MembershipRole>('FIREFIGHTER');
+  const [roster, setRoster] = useState<RosterMember[] | null>(null);
+  const [rosterFailed, setRosterFailed] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [choice, setChoice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    document.getElementById('member-preparation-h')?.focus();
+  }, []);
+
+  useEffect(() => {
+    setRole(account.memberships[service] ?? 'FIREFIGHTER');
+  }, [account.memberships, service]);
+
+  useEffect(() => {
+    let current = true;
+    setRoster(null);
+    setRosterFailed(false);
+    setChoice('');
+    void loadRoster(organizationIdOf(service)).then((members) => {
+      if (current) setRoster(members);
+    }).catch(() => {
+      if (current) setRosterFailed(true);
+    });
+    return () => { current = false; };
+  }, [service, reload]);
+
+  const linked = roster?.find((member) => member.userId === account.userId);
+  const available = roster?.filter((member) => member.active && member.userId === null) ?? [];
+  const duplicate = choice === 'NEW' && available.some((member) =>
+    member.fullName.trim().toLocaleLowerCase() === account.fullName?.trim().toLocaleLowerCase());
+  const selected = linked?.id ?? choice;
+  const ready = account.active && account.profileComplete && !!account.fullName?.trim() &&
+    !rosterFailed && roster !== null && !duplicate && (linked ? linked.active : !!selected);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!ready || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const outcome = await prepareServiceMember(
+        account.userId, service, role, selected === 'NEW' ? null : selected,
+      );
+      if (!outcome.ok) {
+        const message = outcome.message ?? t.accounts.changeFailed;
+        setError(message);
+        announce(message, 'error');
+        return;
+      }
+      announce(t.accounts.prepareDone);
+      await onDone();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section id="member-preparation" className="member-preparation" aria-labelledby="member-preparation-h">
+      <h3 id="member-preparation-h" tabIndex={-1}>{t.accounts.prepareTitle}</h3>
+      <p className="muted">{t.accounts.prepareIntro}</p>
+      <form className="stack" onSubmit={(event) => void submit(event)}>
+        <div>
+          <strong>{t.accounts.prepareProfile}</strong>
+          <p>{account.fullName ?? t.accounts.noName} · {account.email}</p>
+          <p>{t.accounts.statusLabel[statusOf(account)]}</p>
+          {!account.profileComplete || !account.active ? (
+            <Notice tone="warn">{!account.active
+              ? t.accounts.commandErrors.accountSuspended
+              : t.accounts.commandErrors.profileRequired}</Notice>
+          ) : null}
+        </div>
+        <label>
+          <strong>{t.accounts.prepareRoster}</strong>
+          <span className="sr-only">{t.accounts.prepareRoster}</span>
+          <select value={service} disabled={busy} onChange={(event) => setService(event.target.value as OrganizationCode)}>
+            <option value="DVD">{t.accounts.organizationLabel.DVD}</option>
+            {MULTI_SERVICE_ADMIN_AVAILABLE ? <option value="SZS">{t.accounts.organizationLabel.SZS}</option> : null}
+          </select>
+        </label>
+        {rosterFailed ? (
+          <Notice tone="error">{t.accounts.prepareUnavailable}{' '}
+            <button type="button" className="btn btn--ghost" onClick={() => setReload((n) => n + 1)}>
+              {t.accounts.prepareRetry}
+            </button>
+          </Notice>
+        ) : roster === null ? <p role="status">{t.accounts.prepareLoading}</p>
+          : linked ? <p>{t.accounts.prepareLinked.replace('{name}', linked.fullName)}</p>
+            : (
+              <label>
+                <span>{t.accounts.prepareChoose}</span>
+                <select value={choice} disabled={busy} onChange={(event) => setChoice(event.target.value)}>
+                  <option value="">{t.accounts.prepareChoose}</option>
+                  {available.map((member) => (
+                    <option key={member.id} value={member.id}>{member.fullName}</option>
+                  ))}
+                  <option value="NEW">{t.accounts.prepareNew}</option>
+                </select>
+              </label>
+            )}
+        {duplicate ? <Notice tone="warn">{t.accounts.prepareDuplicate}</Notice> : null}
+        {linked && !linked.active ? <Notice tone="warn">{t.accounts.commandErrors.memberInactive}</Notice> : null}
+        <label>
+          <strong>{t.accounts.prepareRole}</strong>
+          <select value={role} disabled={busy} onChange={(event) => setRole(event.target.value as MembershipRole)}>
+            {MEMBERSHIP_ROLES.map((candidate) => (
+              <option key={candidate} value={candidate}>{t.accounts.roleLabel[candidate]}</option>
+            ))}
+          </select>
+        </label>
+        <Notice tone="warn">{t.accounts.prepareConfirm
+          .replace('{organization}', t.accounts.organizationLabel[service])
+          .replace('{role}', t.accounts.roleLabel[role])}</Notice>
+        {error ? <Notice tone="error">{error}</Notice> : null}
+        <div className="row-actions">
+          <button type="submit" className="btn btn--primary" disabled={!ready || busy}>
+            {t.accounts.prepareReview}
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={onClose} disabled={busy}>
+            {t.accounts.prepareClose}
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 

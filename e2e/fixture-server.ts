@@ -173,6 +173,8 @@ export interface FixtureOptions {
    */
   readonly memberships?: readonly FixtureMembership[];
   readonly owner?: boolean;
+  /** Simulate one service having no eligible call-out recipients. */
+  readonly emptyEligibleServices?: readonly ('DVD' | 'SZS')[];
 }
 
 const DRAFT_ID = '88888888-8888-4888-8888-888888888888';
@@ -651,6 +653,7 @@ export async function installFixtureProject(
           return json(route, memberships.find((m) => m.memberId)?.memberId ?? null);
         }
         if (name === 'eligible_recipients_in') {
+          if (options.emptyEligibleServices?.includes(orgService(target()) ?? 'DVD')) return json(route, []);
           return json(route, multi.eligibleByOrg[target() ?? ''] ?? []);
         }
       }
@@ -694,7 +697,10 @@ export async function installFixtureProject(
         }
         if (name === 'publish_intervention' && current) {
           current.status = 'PUBLISHED'; current.version = 2; current.published_at = new Date().toISOString();
-          tables.intervention_recipients = (args.recipient_member_ids as string[]).map((member_id) => ({
+          const ownRecipients = args.recipient_member_ids === null
+            ? (RPC.eligible_recipients as { member_id: string }[]).map((member) => member.member_id)
+            : args.recipient_member_ids as string[];
+          tables.intervention_recipients = ownRecipients.map((member_id) => ({
             intervention_id: draftId, member_id, member_name_at_publication: 'Ivo Vatrogasac',
           }));
           return json(route, draftId);
@@ -796,6 +802,21 @@ export async function installFixtureProject(
         }
         return true;
       });
+      // P7 reads a member's recipient row with an embedded intervention. Model
+      // the to-one PostgREST join here: without it a dual-service owner gets
+      // recipient rows with no parent, and the screen falsely says no call-out.
+      // Keep the normal recipient-table shape for the other fact reads.
+      const selectedRows = table === 'intervention_recipients' &&
+        url.searchParams.get('select')?.includes('interventions!inner(')
+        ? rows.map((row) => {
+            const recipient = row as Record<string, unknown>;
+            const id = recipient.intervention_id ?? INTERVENTION_ID;
+            const intervention = interventions.find((item) =>
+              (item as Record<string, unknown>).id === id,
+            );
+            return intervention ? { ...recipient, interventions: intervention } : null;
+          }).filter((row) => row !== null)
+        : rows;
       // `.single()` and `.maybeSingle()` ask PostgREST for ONE OBJECT, not an
       // array, through this header. A fixture that always answers with an array
       // makes every such read look like a missing row - which is how this first
@@ -808,7 +829,7 @@ export async function installFixtureProject(
           ? json(route, rows[0])
           : json(route, { code: 'PGRST116', message: 'no rows' }, 406);
       }
-      return json(route, rows);
+      return json(route, selectedRows);
     }
 
     return json(route, {}, 404);

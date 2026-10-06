@@ -1,0 +1,7 @@
+FireNexa — instalacija na iPhone
+Stvarni snimak Safarija, sa sakrivenim privatnim podacima.
+1. Na FireNexa sajtu dodirnite Otvori aplikaciju.
+2. U Safariju otvorite meni, pa Share.
+3. Izaberite Add to Home Screen.
+4. Potvrdite Add.
+Video zavrsava na dugmetu Add, bez prikaza privatnog pocetnog ekrana.
