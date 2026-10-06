@@ -8,20 +8,27 @@ import { appAddress, buildSite } from './build-site.mjs';
 test('final guide requires an explicit HTTPS address and refuses a test hostname', () => {
   for (const address of [undefined, 'http://example.com', 'https://user:pass@example.com',
     'https://example.com/?token=private', 'https://example.com/#/poziv',
-    'https://boka-operativa-phone-test.netlify.app/']) {
+    'https://boka-operativa-phone-test.netlify.app/', 'https://firenexa-app.netlify.app/',
+    'https://firenexa.netlify.app/']) {
     assert.throws(() => appAddress(address));
   }
   assert.equal(appAddress('https://boka-operativa-phone-test.netlify.app/', true),
     'https://boka-operativa-phone-test.netlify.app/');
+  assert.equal(appAddress('https://firenexa-app.netlify.app/', true),
+    'https://firenexa-app.netlify.app/');
+  assert.equal(appAddress('https://dado211207.github.io/dvd-tivat-app/'),
+    'https://dado211207.github.io/dvd-tivat-app/');
 });
 
 test('one configured address replaces every app link and supplies both QR assets', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'firenexa-site-'));
   try {
-    const address = 'https://example.invalid/firenexa/';
+    const address = 'https://dado211207.github.io/dvd-tivat-app/';
     await buildSite({ appUrl: address, outDir: directory });
     const html = await readFile(join(directory, 'index.html'), 'utf8');
     assert.ok(!html.includes('boka-operativa-phone-test.netlify.app'));
+    assert.ok(!html.includes('firenexa-app.netlify.app'));
+    assert.ok(!html.includes('{{FIRENEXA_APP_URL}}'));
     assert.ok(!html.includes('<!-- APP_QR -->'));
     assert.ok(!html.includes('testnu aplikaciju'));
     assert.ok(!html.includes('Zavrsna adresa i izdanje'));
@@ -33,6 +40,9 @@ test('one configured address replaces every app link and supplies both QR assets
       assert.ok(html.includes(`./${name}.html`));
       const guide = await readFile(join(directory, `${name}.html`), 'utf8');
       assert.ok(!guide.includes('boka-operativa-phone-test.netlify.app'));
+      assert.ok(!guide.includes('firenexa-app.netlify.app'));
+      assert.ok(!guide.includes('{{FIRENEXA_APP_URL}}'));
+      assert.ok(guide.includes(`href="${address}"`));
       assert.ok(guide.includes('<h2>'));
     }
     assert.equal(html.split(`href="${address}"`).length - 1, 4);
