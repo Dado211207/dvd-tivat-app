@@ -38,14 +38,14 @@ describe('at most one repeat, and only after the member has had time', () => {
     expect(attemptsRemain(0)).toBe(true);
   });
 
-  it('holds the repeat until ninety seconds have passed', () => {
+  it('holds the reminder until thirty seconds have passed', () => {
     expect(holdForNow('PROVIDER_ACCEPTED', ago(1_000), NOW)).toBe(true);
     expect(holdForNow('PROVIDER_ACCEPTED', ago(REPEAT_AFTER_MS - 1), NOW)).toBe(true);
     expect(holdForNow('PROVIDER_ACCEPTED', ago(REPEAT_AFTER_MS), NOW)).toBe(false);
   });
 
   it('allows exactly two attempts and never a third', () => {
-    // The initial alert and one repeat. A firefighter who has not answered gets
+    // The initial alert and one repeat. A firefighter who has not opened the call-out gets
     // told twice; a device that will not stop is a different product.
     expect(MAX_ATTEMPTS).toBe(2);
     expect(attemptsRemain(0)).toBe(true);
