@@ -1480,6 +1480,16 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     it('ends both holds on the worker\'s own clock, to the millisecond, as it always has', async () => {
       await resetQueue();
       const now = Date.now();
+      const staleClaim = await alertOf('szsFirefighter', szsCallout);
+      // Keep unrelated fresh alerts out of this exact-boundary check: their own
+      // reminders must not be mistaken for a third attempt on the test rows.
+      await db.query(
+        `update public.notification_outbox o set state = 'FAILED'
+          where o.intervention_id = any($1::uuid[]) and o.channel = 'WEB_PUSH'
+            and o.id <> $2 and o.id <> all($3::uuid[])
+            and o.organization_id = (select c.organization_id from public.interventions c where c.id = o.intervention_id)`,
+        [[dvdCallout, szsCallout], staleClaim, held],
+      );
       // Ten waiting for their repeat, accepted at `now - 30 s` and 999 microseconds:
       // the worker reads a stored time to the millisecond, so their hold ends at
       // `now` exactly. The other forty are out of the way.
