@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
-import { mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { canonicalizeConstraintDef, canonicalizeConstraintDefs } from './canonical-constraint.mjs';
 import { classify } from './privileges.mjs';
 import { attestationSql, differences } from './fidelity.mjs';
-import { PRODUCTION_PROJECT_REF, dumpSourceUrl, outsideRepository, restoreAdminUrl, rolesNamedIn, scramVerifier, withoutDumpRoleGrants } from '../p4-restored-capture.mjs';
+import { PRODUCTION_PROJECT_REF, dumpSourceUrl, outsideRepository, removeWork, restoreAdminUrl, rolesNamedIn, scramVerifier, withoutDumpRoleGrants } from '../p4-restored-capture.mjs';
 
 const NESTED = "CHECK ((((char_length(auth_secret) >= 8) AND (char_length(auth_secret) <= 100)) AND (auth_secret ~ '^[A-Za-z0-9_-]+$'::text)))";
 const FLAT = "CHECK (((char_length(auth_secret) >= 8) AND (char_length(auth_secret) <= 100) AND (auth_secret ~ '^[A-Za-z0-9_-]+$'::text)))";
@@ -103,6 +103,20 @@ test('work and output paths must be outside the repository', async () => {
   } finally {
     await rm(outside, { recursive: true, force: true });
   }
+});
+
+test('the run cleanup removes the whole work directory, not a hand-listed subset', async () => {
+  const work = await mkdtemp(join(tmpdir(), 'boka-rc-work-'));
+  // Every file a run writes under --work: the plaintext dump and the real
+  // auth rows, plus the attestation, environment and ledger files written
+  // beside them. An earlier cleanup removed only three of these by name and
+  // left the other three (and the directory itself) behind on the documented
+  // local/Codespace path, where no workflow `rm -rf` follows.
+  for (const name of ['public.sql', 'public.restore.sql', 'auth_users.json', 'migrations.json', 'environment.json', 'attestation.json']) {
+    await writeFile(join(work, name), 'stand-in');
+  }
+  await removeWork(work);
+  await assert.rejects(stat(work), { code: 'ENOENT' }, 'the work directory and all its files must be gone');
 });
 
 test('the dump role\'s own grants are stripped from the restored schema', () => {
