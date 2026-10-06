@@ -1353,9 +1353,9 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
         const tally = await deliverQueued({ service, send: push.send, scheduler: true, now: () => start + minute * 60_000 });
         runs.push({ sent: sentTo(push.sent), tally: { ...tally } });
       }
-      // The first alerts, nothing while they are held, then the one repeat.
+      // The first run sends the initial alerts; the next minute's tick sends the one reminder.
       expect(runs.map((run) => run.sent), JSON.stringify(runs.map((run) => run.tally))).toEqual([
-        [...FIXTURE_ALERTED].sort(), [], [...FIXTURE_ALERTED].sort(),
+        [...FIXTURE_ALERTED].sort(), [...FIXTURE_ALERTED].sort(), [],
       ]);
     });
 
@@ -1411,8 +1411,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   describe('behind fifty alerts waiting out their repeat', () => {
     /**
      * Fifty alerts on the DVD call-out, all to one of its recipients, older than
-     * anything the fixture queued: the push service accepted each thirty
-     * seconds ago, so each waits another minute for its one repeat. The sweep
+     * anything the fixture queued: the push service accepted each just now,
+     * so each remains held until its one 30-second reminder threshold. The sweep
      * is the fifty oldest open alerts - and whether an alert is due was asked
      * only after the fifty had been read.
      */
@@ -1458,23 +1458,23 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     it('sends newly queued alerts at once on the scheduler, and leaves the fifty to their hold', async () => {
       await resetQueue();
       const now = Date.now();
-      await acceptedAt(held, now - 30_000);
+      await acceptedAt(held, now);
       const push = fakePush();
       const tally = await deliverQueued({ service, send: push.send, scheduler: true, now: () => now });
       expect(sentTo(push.sent), JSON.stringify(tally)).toEqual([...FIXTURE_ALERTED].sort());
       // Exactly the run there would be without them: they are not in the sweep at all.
       expect(tally).toEqual({ accepted: 5, rejected: 3, skipped: 3, failed: 0, mislabelled: 1 });
-      expect(await untouched(held, now - 30_000), 'none repeated early').toBe(HELD);
+      expect(await untouched(held, now), 'none repeated early').toBe(HELD);
     });
 
     it('sends a call-out\'s newly queued alerts at once when its commander wakes it, behind fifty of its own', async () => {
       await resetQueue();
       const now = Date.now();
-      await acceptedAt(held, now - 30_000);
+      await acceptedAt(held, now);
       const push = fakePush();
       const tally = await deliverQueued({ service, send: push.send, scheduler: false, now: () => now }, dvdCallout);
       expect(sentTo(push.sent), JSON.stringify(tally)).toEqual(['dual@DVD', 'dualSzsWithdrawn@DVD', 'dvdFirefighter@DVD']);
-      expect(await untouched(held, now - 30_000), 'none repeated early').toBe(HELD);
+      expect(await untouched(held, now), 'none repeated early').toBe(HELD);
     });
 
     it('ends both holds on the worker\'s own clock, to the millisecond, as it always has', async () => {
@@ -1482,7 +1482,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       const now = Date.now();
       // Ten waiting for their repeat, accepted at `now - 30 s` and 999 microseconds:
       // the worker reads a stored time to the millisecond, so their hold ends at
-      // `now + 60 s` exactly. The other forty are out of the way.
+      // `now` exactly. The other forty are out of the way.
       const waiting = held.slice(0, 10);
       await acceptedAt(waiting, now - 30_000, 999);
       await db.query(`update public.notification_outbox set state = 'FAILED' where id = any($1::uuid[])`, [held.slice(10)]);
@@ -1494,19 +1494,21 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
           where id = $1`,
         [await alertOf('szsFirefighter', szsCallout), new Date(now + 30_000).toISOString()],
       );
-      const edge = now + 60_000;
-
       const early = fakePush();
-      await deliverQueued({ service, send: early.send, scheduler: true, now: () => edge - 1 });
-      const onTime = fakePush();
-      await deliverQueued({ service, send: onTime.send, scheduler: true, now: () => edge });
+      await deliverQueued({ service, send: early.send, scheduler: true, now: () => now - 1 });
+      const repeatOnTime = fakePush();
+      await deliverQueued({ service, send: repeatOnTime.send, scheduler: true, now: () => now });
+      const takeoverOnTime = fakePush();
+      await deliverQueued({ service, send: takeoverOnTime.send, scheduler: true, now: () => now + 60_000 });
 
-      const count = (sent: readonly Sent[]) => ({
-        repeats: sent.filter((s) => s.payload.repeat === true).length,
-        takenOver: sent.filter((s) => s.endpoint === endpointOf('szsFirefighter')).length,
-      });
-      expect(count(early.sent), 'a millisecond before').toEqual({ repeats: 0, takenOver: 0 });
-      expect(count(onTime.sent), 'on the millisecond').toEqual({ repeats: waiting.length, takenOver: 1 });
+      const repeats = (sent: readonly Sent[]) => sent.filter((s) => s.payload.repeat === true).length;
+      const takenOver = (sent: readonly Sent[]) => sent.filter((s) => s.endpoint === endpointOf('szsFirefighter')).length;
+      expect(repeats(early.sent), 'one millisecond before reminder threshold').toBe(0);
+      expect(repeats(repeatOnTime.sent), 'on the reminder threshold').toBe(waiting.length);
+      expect(takenOver(early.sent), 'one millisecond before stale-claim threshold').toBe(0);
+      expect(takenOver(repeatOnTime.sent), 'claim is not yet stale').toBe(0);
+      expect(takenOver(takeoverOnTime.sent), 'on the stale-claim threshold').toBe(1);
+      expect(repeats(takeoverOnTime.sent), 'no third attempt').toBe(0);
     });
   });
 
