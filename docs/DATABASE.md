@@ -573,8 +573,10 @@ it is separate from a device receipt, a human opening and a human answer.
 `dedupe_key` is unique, so a retried fan-out cannot alert the same member twice.
 The worker also claims a row only when its current state and attempt count still
 match, so two simultaneous invocations cannot both send it. The Web Push worker
-is deliberately bounded at two attempts: the immediate alert and one repeat
-after 90 seconds, only while the member has not opened the intervention.
+is deliberately bounded at two attempts: the immediate alert and one reminder
+after a 30-second threshold, only while the member has not opened the
+intervention. The scheduler runs once a minute, so the reminder is sent on its
+next tick after the threshold, normally 30-90 seconds after the initial push.
 When an opening is found, the row receives `delivery_closed_at` and
 `delivery_close_reason = 'MEMBER_OPENED'`; it no longer enters scheduled scans.
 That closure is not described as a device delivery receipt — the authoritative
