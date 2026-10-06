@@ -66,6 +66,7 @@ import { MIGRATIONS, connect, createAccount } from './harness';
 import { postgrest, type Rest } from './postgrest';
 
 const PUSH = 'supabase/migrations/202609250032_push_service.sql';
+const RESPONSE_AWARE = 'supabase/migrations/20261006130000_response_aware_push_reminders.sql';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
@@ -571,6 +572,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
 
   beforeAll(async () => {
     if (MIGRATIONS.includes(PUSH)) await db.query(sql(PUSH));
+    if (MIGRATIONS.includes(RESPONSE_AWARE)) await db.query(sql(RESPONSE_AWARE));
     service = postgrest({ role: 'service_role' });
   }, 60_000);
 
