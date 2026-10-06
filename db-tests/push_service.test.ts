@@ -1035,26 +1035,30 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   });
 
   it('sends the reminder when the member opened the call-out but has not answered', async () => {
-    await isolated(async () => {
-      await resetQueue();
-      const start = Date.now();
-      const first = fakePush();
-      await deliverQueued({ service, send: first.send, scheduler: true, now: () => start }, dvdCallout);
-      const firefighterAlert = await alertOf('dvdFirefighter', dvdCallout);
-      const firefighterVerdict = await rowsAs<{ verdict: string }>(
-        'service_role', 'select verdict from public.push_delivery_verdict($1)', [firefighterAlert],
-      );
-      expect(
-        first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter')),
-        JSON.stringify({ sent: first.sent.map((item) => item.endpoint), state: await stateOf(firefighterAlert), verdict: firefighterVerdict }),
-      ).toBe(true);
+    // The worker uses a separate PostgREST connection. Commit fixture changes
+    // before invoking it so it can see the reset queue and read receipt.
+    await resetQueue();
+    const start = Date.now();
+    const first = fakePush();
+    await deliverQueued({ service, send: first.send, scheduler: true, now: () => start }, dvdCallout);
+    const firefighterAlert = await alertOf('dvdFirefighter', dvdCallout);
+    const firefighterVerdict = await rowsAs<{ verdict: string }>(
+      'service_role', 'select verdict from public.push_delivery_verdict($1)', [firefighterAlert],
+    );
+    expect(
+      first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter')),
+      JSON.stringify({ sent: first.sent.map((item) => item.endpoint), state: await stateOf(firefighterAlert), verdict: firefighterVerdict }),
+    ).toBe(true);
 
-      expect(await act(people.dvdFirefighter.user, 'select public.acknowledge_intervention($1)', [dvdCallout])).toBe('OK');
-      const reminder = fakePush();
-      await deliverQueued({ service, send: reminder.send, scheduler: true, now: () => start + 30_000 }, dvdCallout);
-      expect(reminder.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
-      expect(reminder.sent.filter((item) => item.endpoint === endpointOf('dvdFirefighter')).every((item) => item.payload.repeat)).toBe(true);
-    });
+    expect(await committed(
+      people.dvdFirefighter.user,
+      'select public.acknowledge_intervention($1)',
+      [dvdCallout],
+    )).toBe('OK');
+    const reminder = fakePush();
+    await deliverQueued({ service, send: reminder.send, scheduler: true, now: () => start + 30_000 }, dvdCallout);
+    expect(reminder.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
+    expect(reminder.sent.filter((item) => item.endpoint === endpointOf('dvdFirefighter')).every((item) => item.payload.repeat)).toBe(true);
   });
 
   it('reminds an unanswered alert once, after thirty seconds, and never again', async () => {
