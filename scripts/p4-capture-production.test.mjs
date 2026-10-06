@@ -59,7 +59,7 @@ test('the release rehearsal keeps the password URL off command lines and out of 
   assert.match(script, /^capture_p4\(\) \{ DVD_READONLY_DATABASE_URL="\$production_url" node scripts\/p4-capture-production\.mjs "\$1"; \}\nrun_private 'Production read-only equivalence capture' capture_p4 "\$capture"\nunset production_url$/m);
   assert.match(script, /^export PGPASSFILE="\$work\/pgpass"$/m);
   assert.match(script, /mode: 0o600, flag: "wx"/);
-  assert.equal(script.match(/--dbname "\$db_url"/g)?.length, 6); // counts x2, definitions x2, operational export x2
+  assert.equal(script.match(/--dbname "\$db_url"/g)?.length, 10); // counts x2, definitions x2, operational export x2, secret inventory x4
   assert.equal(script.match(/--db-url "\$db_url"/g)?.length, 5);
   // The runner passes the URL on file descriptor 3, never in the script's environment.
   assert.match(runner, /stdio: \['inherit', 'inherit', 'inherit', 'pipe'\]/);
@@ -215,4 +215,33 @@ test('cleanup removes exactly this run\'s restore target and fails loudly if any
   assert.equal(none.code, 1);
   assert.equal(none.calls, '');
   assert.equal(none.workLeft, false);
+});
+
+test('the backup records which secrets it lacks, by name only, and never calls itself complete', async () => {
+  const script = await readFile(resolve('scripts/release-preflight.sh'), 'utf8');
+  const runbook = await readFile(resolve('docs/P7_P8_RELEASE_PREP.md'), 'utf8');
+  const worker = await readFile(resolve('supabase/functions/send-web-push/index.ts'), 'utf8');
+  // Names only: no query reads a secret value.
+  assert.match(script, /select coalesce\(string_agg\(coalesce\(name, '\(unnamed\)'\), ', ' order by name\), 'none'\) from vault\.secrets"/);
+  assert.doesNotMatch(script, /select[^"]*\b(decrypted_)?secret\b[^"]*from vault/i);
+  assert.doesNotMatch(script, /from vault\.decrypted_secrets/);
+  // The scheduled jobs are counted, not read out (their full rows go only into the encrypted archive).
+  assert.doesNotMatch(script, /select (command|\*)[^"]*from cron\.job/i);
+  // The manifest and both messages say what the archive is not.
+  assert.match(script, /THIS IS A DATABASE BACKUP, NOT A COMPLETE RECOVERY: secret material is not included\./);
+  assert.match(script, /Encrypted database backup saved \(secrets not included - see its manifest\)/);
+  assert.match(script, /Encrypted database backup \(secrets not included\)/);
+  assert.doesNotMatch(script, /Encrypted backup saved:/);
+  // Every secret the worker requires is named in the manifest line and in the owner's re-provisioning step.
+  // Supabase supplies these three to every Edge Function; every other setting must be re-provisioned by the owner.
+  const runtime = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+  const required = [...worker.matchAll(/requiredSecret\('([A-Z_]+)'\)/g)].map((m) => m[1]).filter((n) => !runtime.includes(n));
+  assert.deepEqual(required.sort(), ['PUSH_WORKER_SECRET', 'VAPID_PRIVATE_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_SUBJECT']);
+  const manifestLine = script.split('\n').find((l) => l.includes('Edge Function secrets (outside the database'));
+  for (const name of [...required, 'ALLOWED_ORIGIN', ...runtime]) {
+    assert.ok(manifestLine.includes(name), `${name} missing from the manifest line`);
+    assert.ok(runbook.includes(`\`${name}\``), `${name} missing from the runbook`);
+  }
+  assert.match(runbook, /## Secret material — not in the database backup \(owner re-provisioning\)/);
+  assert.match(runbook, /\*\*Status:\*\* not done\./);
 });

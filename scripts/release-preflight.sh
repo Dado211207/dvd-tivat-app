@@ -117,6 +117,21 @@ for table in cron.job cron.job_run_details net.http_request_queue net._http_resp
   printf '\\.\n\n' >> operational.sql
 done
 operational_counts="$(node "$REPO/scripts/restore-accounting.mjs" count operational.sql)" || fail 'Operational export is malformed.'
+# Secrets are not in this backup, and no secret value is ever read here: Supabase
+# CLI excludes the vault schema (its ciphertext is bound to the project's own key
+# anyway), and the push worker's Edge Function secrets live outside the database.
+# Only names and counts are recorded, so the owner's re-provisioning step can be
+# checked against them (docs/P7_P8_RELEASE_PREP.md, "Secret material").
+vault_secret_names='vault absent'
+if [[ "$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "select to_regclass('vault.secrets') is not null" 2>"$work/stage.log")" == t ]]; then
+  vault_secret_names="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "select coalesce(string_agg(coalesce(name, '(unnamed)'), ', ' order by name), 'none') from vault.secrets" 2>"$work/stage.log")" \
+    || fail 'Vault secret inventory (names only) failed.'
+fi
+cron_secret_use='cron absent'
+if [[ "$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "select to_regclass('cron.job') is not null" 2>"$work/stage.log")" == t ]]; then
+  cron_secret_use="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "select count(*) filter (where command ~* 'vault\.decrypted_secrets') || ' read Vault, ' || count(*) filter (where command !~* 'vault\.decrypted_secrets' and command ~* 'x-push-worker-secret|authorization') || ' carry a credential inline, of ' || count(*) from cron.job" 2>"$work/stage.log")" \
+    || fail 'Scheduled-job secret check failed.'
+fi
 run_private 'Local restore copy' node "$REPO/scripts/restore-accounting.mjs" split data.sql data.restore.sql accounting.json
 
 source_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$source_counts_sql" 2>"$work/stage.log")" \
@@ -128,14 +143,20 @@ custom_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$custom_
 printf 'Candidate: %s\nCaptured at %s UTC; auth users | members | interventions | storage objects | buckets | migration entries: %s\n' \
   "$candidate_sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$source_before" > manifest.txt
 printf 'Operational tables in operational.sql (archive only, never restored locally): %s\n' "${operational_counts:-none present}" >> manifest.txt
-printf 'Not in this backup: the vault schema (Supabase CLI excludes it from dumps).\n' >> manifest.txt
+{
+  printf 'THIS IS A DATABASE BACKUP, NOT A COMPLETE RECOVERY: secret material is not included.\n'
+  printf 'Vault secrets (names only; values not in this backup): %s\n' "$vault_secret_names"
+  printf 'Scheduled jobs: %s (an inline credential is in operational.sql, inside this encrypted archive).\n' "$cron_secret_use"
+  printf 'Edge Function secrets (outside the database; not in this backup): VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, VAPID_SUBJECT, PUSH_WORKER_SECRET, ALLOWED_ORIGIN; SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are supplied per project by Supabase.\n'
+  printf 'Re-provision them from the owner'"'"'s offline record: docs/P7_P8_RELEASE_PREP.md, "Secret material".\n'
+} >> manifest.txt
 
 archive="$backup_dir/boka-db-$(date -u +%Y%m%dT%H%M%SZ).tar.age"
 [[ ! -e "$archive" ]] || fail 'The encrypted archive filename already exists.'
 tar -cf - roles.sql schema.sql data.sql operational.sql history_schema.sql history_data.sql custom_auth_storage.sql manifest.txt | age -r "$DVD_BACKUP_RECIPIENT" -o "$archive" \
   >"$work/stage.log" 2>&1 || { rm -f -- "$archive"; fail 'Backup encryption failed.'; }
 [[ -s "$archive" ]] || fail 'Encrypted archive is empty.'
-printf 'Encrypted backup saved: %s\n' "$archive"
+printf 'Encrypted database backup saved (secrets not included - see its manifest): %s\n' "$archive"
 
 # The independent restore target: a fresh Postgres for this run only, published
 # on 127.0.0.1 alone. Supabase CLI's `supabase start` binds every port on all
@@ -193,5 +214,5 @@ report="$archive.gate-report.age"
 run_private 'Gate report encryption' age -r "$DVD_BACKUP_RECIPIENT" -o "$report" "$work/gate-report.json"
 accounting_report="$archive.restore-accounting.age"
 run_private 'Restore accounting encryption' age -r "$DVD_BACKUP_RECIPIENT" -o "$accounting_report" "$work/dump/accounting.json"
-printf 'Production-copy equivalence gate passed for %s.\nEncrypted backup: %s\nEncrypted gate report: %s\nEncrypted restore accounting: %s\n' \
+printf 'Production-copy equivalence gate passed for %s.\nEncrypted database backup (secrets not included): %s\nEncrypted gate report: %s\nEncrypted restore accounting: %s\n' \
   "$candidate_sha" "$archive" "$report" "$accounting_report"
