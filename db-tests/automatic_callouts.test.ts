@@ -4,7 +4,7 @@ import {
   asUserCommitted, completeProfile, connect, createAccount, createMember,
   grantRole, resetSchema, type TestAccount,
 } from './harness';
-// @ts-ignore JavaScript gate helper is exercised against the real DB fixture here.
+// @ts-expect-error JavaScript gate helper is exercised against the real DB fixture here.
 import { pushDecisions } from '../scripts/p4-gate/push.mjs';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
