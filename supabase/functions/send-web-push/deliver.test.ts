@@ -110,8 +110,8 @@ describe('what the worker sweeps', () => {
       const db = queue({ data: null, error: null });
       await deliverQueued({ service: db, send: neverSend, scheduler: true, now: () => now }, woken);
       expect(db.ops.find((op) => op.kind === 'rpc' && op.table === 'push_delivery_queue')?.payload, String(woken)).toEqual({
-        // Ninety seconds for a repeat, thirty for a stale claim: policy.ts's waits.
-        accepted_before: '2026-09-25T02:58:30.000Z',
+        // Thirty seconds for a reminder, thirty for a stale claim: policy.ts's waits.
+        accepted_before: '2026-09-25T02:59:30.000Z',
         claimed_before: '2026-09-25T02:59:30.000Z',
       });
     }
