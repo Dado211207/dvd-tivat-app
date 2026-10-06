@@ -39,18 +39,16 @@ backup_dir="$(cd "$DVD_BACKUP_DIR" && pwd -P)" || fail 'Backup directory does no
 case "$backup_dir/" in "$REPO/"*) fail 'Backup directory cannot be inside the repository.';; esac
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/boka-release.XXXXXXXX")"
-# The restore target is a Supabase stack of its own, named for this run only, so
-# no earlier run's database is ever reused. `--no-backup` deletes its volumes,
-# which hold the restored copy; nothing else in Docker is touched.
+# The restore target is a Postgres of its own for this run only (see
+# scripts/restore-target.mjs), so no earlier run's database is ever reused.
+# Cleanup removes exactly its labelled containers, volumes and network - which
+# hold the restored copy - and nothing else in Docker.
 stack_id=''
 cleanup() {
   local status=$?
-  if [[ -n "$stack_id" ]]; then
-    supabase stop --project-id "$stack_id" --no-backup >/dev/null 2>&1 || true
-    if [[ -n "$(docker ps -aq --filter "label=com.supabase.cli.project=$stack_id")$(docker volume ls -q --filter "label=com.supabase.cli.project=$stack_id")" ]]; then
-      printf 'Release preflight: restore stack %s still has containers or volumes. Remove them: supabase stop --project-id %s --no-backup\n' "$stack_id" "$stack_id" >&2
-      status=1
-    fi
+  if [[ -n "$stack_id" ]] && ! node "$REPO/scripts/restore-target.mjs" down "$stack_id" >/dev/null 2>&1; then
+    printf 'Release preflight: restore target %s was not fully removed. Remove it: node scripts/restore-target.mjs down %s\n' "$stack_id" "$stack_id" >&2
+    status=1
   fi
   rm -rf -- "$work"
   exit "$status"
@@ -139,29 +137,17 @@ tar -cf - roles.sql schema.sql data.sql operational.sql history_schema.sql histo
 [[ -s "$archive" ]] || fail 'Encrypted archive is empty.'
 printf 'Encrypted backup saved: %s\n' "$archive"
 
-# A newly initialised local Supabase project, unique to this run, is an
-# independent restore target. Its project id comes from its directory name.
-stack_dir="$work/boka-restore-$(date -u +%Y%m%d%H%M%S)-$RANDOM"
-mkdir "$stack_dir" && cd "$stack_dir"
-run_private 'Local Supabase init' supabase init
-stack_id="$(sed -n 's/^project_id = "\(.*\)"$/\1/p' supabase/config.toml)"
-[[ "$stack_id" == "${stack_dir##*/}" ]] || fail 'The restore stack did not get its unique project id.'
-[[ -z "$(docker volume ls -q --filter "label=com.supabase.cli.project=$stack_id")" ]] || fail 'The restore stack already has volumes.'
-run_private 'Local Supabase start' supabase start
-# The restored copy must be reachable from this machine only. Supabase CLI
-# publishes every port with no host IP, which Docker binds on all interfaces
-# (0.0.0.0 and ::), and has no option to change that; so nothing is restored
-# unless every port this stack publishes is bound to loopback.
-stack_containers="$(docker ps -q --filter "label=com.supabase.cli.project=$stack_id")"
-[[ -n "$stack_containers" ]] || fail 'The restore stack has no running containers.'
-# shellcheck disable=SC2086 # one container id per word
-bindings="$(docker inspect --format '{{range $port, $binds := .NetworkSettings.Ports}}{{range $binds}}{{.HostIp}}|{{.HostPort}} {{end}}{{end}}' $stack_containers)" \
-  || fail 'Could not inspect the restore stack ports.'
-# shellcheck disable=SC2086 # one binding per word
-exposed="$(printf '%s\n' $bindings | grep -v -E '^(127\.0\.0\.1|::1)\|' || true)"
-[[ -z "$exposed" ]] || fail "The restore stack publishes ports beyond this machine ($(printf '%s' "$exposed" | tr '\n' ' ')). Refusing to restore production data into it."
+# The independent restore target: a fresh Postgres for this run only, published
+# on 127.0.0.1 alone. Supabase CLI's `supabase start` binds every port on all
+# interfaces and has no option to change it, so it is not used here.
+stack_id="boka-restore-$(date -u +%Y%m%d%H%M%S)-$RANDOM"
+local_port="$(node "$REPO/scripts/restore-target.mjs" up "$stack_id" 2>"$work/stage.log")" \
+  || fail 'The local restore target could not be started on loopback only.'
+# Nothing is restored unless every port this run publishes is bound to loopback.
+node "$REPO/scripts/restore-target.mjs" check "$stack_id" >/dev/null 2>"$work/stage.log" \
+  || fail 'The local restore target publishes ports beyond this machine. Refusing to restore production data into it.'
 # Every session on the restore target, the gate's included, runs in UTC.
-local_url='postgresql://postgres:postgres@127.0.0.1:54322/postgres?options=-c%20TimeZone%3DUTC'
+local_url="postgresql://postgres@127.0.0.1:$local_port/postgres?options=-c%20TimeZone%3DUTC"  # password: PGPASSFILE
 local_major="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$local_url" -c "select current_setting('server_version_num')::int / 10000" 2>"$work/stage.log")" \
   || fail 'Local PostgreSQL connection failed.'
 [[ "$local_major" == 17 ]] || fail 'The restore target must run PostgreSQL 17.'
@@ -177,7 +163,7 @@ run_private 'Independent restore' psql -X --single-transaction -v ON_ERROR_STOP=
 # Every restored table must hold exactly the dumped rows, and the target no
 # pg_cron job or pg_net request, before anything else runs against it.
 DVD_RESTORE_TARGET_URL="$local_url" run_private 'Restore accounting' node "$REPO/scripts/restore-accounting.mjs" verify accounting.json
-# A freshly started Supabase stack may already own this schema. Replace its
+# A fresh restore target may already own this schema. Replace its
 # empty local ledger inside the isolated target before restoring the source.
 run_private 'Migration history restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
   -c 'drop schema if exists supabase_migrations cascade' \

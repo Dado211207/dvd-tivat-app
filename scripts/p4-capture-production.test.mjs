@@ -168,95 +168,51 @@ test('the rehearsal restores a filtered copy into a fresh stack of its own, and 
   assert.equal(script.match(/-f data\.sql /g)?.length, 1); // only where the dump writes it
   const verify = script.indexOf('restore-accounting.mjs" verify accounting.json');
   assert.ok(verify > script.indexOf('-f data.restore.sql') && verify < script.indexOf("'Migration history restore'"));
-  // A unique stack per run, checked fresh, removed with its volumes, and nothing else.
-  assert.match(script, /^stack_dir="\$work\/boka-restore-\$\(date -u \+%Y%m%d%H%M%S\)-\$RANDOM"$/m);
+  // A loopback-only target of its own per run, checked fresh; Supabase CLI's stack is not used.
+  assert.match(script, /^stack_id="boka-restore-\$\(date -u \+%Y%m%d%H%M%S\)-\$RANDOM"$/m);
+  assert.match(script, /restore-target\.mjs" up "\$stack_id"/);
+  const check = script.indexOf('restore-target.mjs" check "$stack_id"');
+  assert.ok(check > script.indexOf('restore-target.mjs" up "$stack_id"') && check < script.indexOf('local_major='));
+  assert.doesNotMatch(script, /^(?!\s*#).*\bsupabase (init|start|stop)\b/m); // only comments may mention it
+  assert.doesNotMatch(script, /docker (volume |container |network |system |image )?(rm|prune)/);
   assert.match(script, /\[\[ "\$fresh" == 0 \]\] \|\| fail 'The restore target is not a fresh database\.'/);
-  assert.equal(script.match(/supabase stop/g)?.length, 2); // the cleanup call and its hint
-  assert.match(script, /supabase stop --project-id "\$stack_id" --no-backup >\/dev\/null/);
-  assert.doesNotMatch(script, /docker (volume |container |system |image )?(rm|prune)|supabase stop --all/);
-  // The restore target, and so the gate, runs in UTC.
-  assert.match(script, /^local_url='postgresql:\/\/postgres:postgres@127\.0\.0\.1:54322\/postgres\?options=-c%20TimeZone%3DUTC'$/m);
+  // The restore target, and so the gate, runs in UTC; its password comes from PGPASSFILE only.
+  assert.match(script, /^local_url="postgresql:\/\/postgres@127\.0\.0\.1:\$local_port\/postgres\?options=-c%20TimeZone%3DUTC"/m);
 });
 
-test('cleanup stops exactly this run\'s stack with --no-backup and fails loudly if anything is left', async () => {
+test('cleanup removes exactly this run\'s restore target and fails loudly if anything is left', async () => {
   const lines = (await readFile(resolve('scripts/release-preflight.sh'), 'utf8')).split('\n');
   const start = lines.findIndex((l) => l === "stack_id=''");
   const end = lines.findIndex((l, k) => k > start && l === 'trap cleanup EXIT');
   const cleanupBlock = lines.slice(start, end + 1).join('\n');
-  const run = async (leftover, stackId, exitWith) => {
+  const run = async (downStatus, stackId, exitWith) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'boka-cleanup-')));
-    await mkdir(join(root, 'bin'));
+    await mkdir(join(root, 'scripts'));
     await mkdir(join(root, 'work'));
-    // Stand-ins that record what they were asked and report leftovers on request.
-    await writeFile(join(root, 'bin/supabase'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${root}/supabase-calls'\n`, { mode: 0o755 });
-    await writeFile(join(root, 'bin/docker'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${root}/docker-calls'\n${leftover ? "echo leftover-id\n" : ''}`, { mode: 0o755 });
-    const program = [`work='${root}/work'`, cleanupBlock, stackId ? `stack_id='${stackId}'` : ':', `exit ${exitWith}`].join('\n');
-    const child = spawn('bash', ['-c', program], { env: { PATH: `${root}/bin:/usr/bin:/bin` }, stdio: ['ignore', 'ignore', 'pipe'] });
+    // A stand-in restore-target.mjs that records how it was called.
+    await writeFile(join(root, 'scripts/restore-target.mjs'),
+      `import { appendFileSync } from 'node:fs';\nappendFileSync('${root}/calls', process.argv.slice(2).join(' ') + '\\n');\nprocess.exitCode = ${downStatus};\n`);
+    const program = [`REPO='${root}'; work='${root}/work'`, cleanupBlock, stackId ? `stack_id='${stackId}'` : ':', `exit ${exitWith}`].join('\n');
+    const child = spawn('bash', ['-c', program], { env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin` }, stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (d) => { stderr += d; });
     const code = await new Promise((done) => child.on('close', done));
-    const read = (f) => readFile(join(root, f), 'utf8').catch(() => '');
-    const result = { code, stderr, supabase: await read('supabase-calls'), docker: await read('docker-calls'),
-      workLeft: await stat(join(root, 'work')).then(() => true, () => false) };
+    const calls = await readFile(join(root, 'calls'), 'utf8').catch(() => '');
+    const workLeft = await stat(join(root, 'work')).then(() => true, () => false);
     await rm(root, { recursive: true, force: true });
-    return result;
+    return { code, stderr, calls, workLeft };
   };
-  const clean = await run(false, 'boka-restore-20261006000000-1', 0);
+  const clean = await run(0, 'boka-restore-20261006000000-1', 0);
   assert.equal(clean.code, 0);
-  assert.equal(clean.supabase, 'stop --project-id boka-restore-20261006000000-1 --no-backup\n');
-  assert.match(clean.docker, /ps -aq --filter label=com\.supabase\.cli\.project=boka-restore-20261006000000-1/);
-  assert.match(clean.docker, /volume ls -q --filter label=com\.supabase\.cli\.project=boka-restore-20261006000000-1/);
-  assert.doesNotMatch(clean.docker, /\b(rm|prune)\b/);
+  assert.equal(clean.calls, 'down boka-restore-20261006000000-1\n');
   assert.equal(clean.workLeft, false);
-  // Something of this stack survived: the run fails and says how to remove it.
-  const left = await run(true, 'boka-restore-20261006000000-2', 0);
+  const left = await run(1, 'boka-restore-20261006000000-2', 0);
   assert.equal(left.code, 1);
-  assert.match(left.stderr, /restore stack boka-restore-20261006000000-2 still has containers or volumes/);
-  // A failed run keeps its failure status; with no stack started, Supabase is not called.
-  const failed = await run(false, '', 1);
-  assert.equal(failed.code, 1);
-  assert.equal(failed.supabase, '');
-  assert.equal(failed.workLeft, false);
-});
-
-test('nothing is restored unless every port of the restore stack is bound to loopback', async () => {
-  const script = await readFile(resolve('scripts/release-preflight.sh'), 'utf8');
-  // The guard sits between starting the stack and the first thing that touches it.
-  const guard = script.indexOf('exposed="$(printf');
-  assert.ok(guard > script.indexOf("run_private 'Local Supabase start'"));
-  assert.ok(guard < script.indexOf('local_major='));
-  assert.ok(guard < script.indexOf("'Local restore roles copy'") && guard < script.indexOf("'Independent restore'"));
-
-  const lines = script.split('\n');
-  const start = lines.findIndex((l) => l.startsWith('stack_containers='));
-  const end = lines.findIndex((l, k) => k > start && l.includes('Refusing to restore production data into it.'));
-  const block = lines.slice(start, end + 1).join('\n');
-  const run = async (containers, bindings) => {
-    const root = await realpath(await mkdtemp(join(tmpdir(), 'boka-bind-')));
-    await mkdir(join(root, 'bin'));
-    // A stand-in docker: `ps` lists the given containers, `inspect` reports the given bindings.
-    await writeFile(join(root, 'bin/docker'), `#!/bin/sh\ncase "$1" in\n  ps) printf '%s\\n' ${containers.map((c) => `'${c}'`).join(' ') || "''"} | grep . ;;\n  inspect) printf '%s' '${bindings}' ;;\nesac\nexit 0\n`, { mode: 0o755 });
-    const program = ['set -euo pipefail', "fail() { printf '%s\\n' \"$1\" >&2; exit 1; }", "stack_id='boka-restore-test'", block, 'echo PASSED'].join('\n');
-    const child = spawn('bash', ['-c', program], { env: { PATH: `${root}/bin:/usr/bin:/bin` }, stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '';
-    child.stdout.on('data', (d) => { out += d; });
-    child.stderr.on('data', (d) => { out += d; });
-    const code = await new Promise((done) => child.on('close', done));
-    await rm(root, { recursive: true, force: true });
-    return { code, out };
-  };
-  // What Supabase CLI 2.119 produces on default Docker: refused.
-  const cli = await run(['db1', 'kong1'], '0.0.0.0|54322 ::|54322 0.0.0.0|54321 ::|54321 ');
-  assert.equal(cli.code, 1);
-  assert.match(cli.out, /publishes ports beyond this machine \(0\.0\.0\.0\|54322 ::\|54322 0\.0\.0\.0\|54321 ::\|54321\)/);
-  assert.equal((await run(['db1'], '127.0.0.1|54322 0.0.0.0|54323 ')).code, 1);
-  assert.equal((await run(['db1'], '127.0.0.1|54322 192.168.1.20|54322 ')).code, 1);
-  assert.equal((await run(['db1'], '127.0.0.1|54322 ::|54322 ')).code, 1);
-  assert.match((await run([], '')).out, /has no running containers/);
-  // Loopback only, IPv4 and IPv6, or containers that publish nothing: allowed.
-  for (const bindings of ['127.0.0.1|54322 ', '127.0.0.1|54322 ::1|54322 ', '']) {
-    const ok = await run(['db1', 'auth1'], bindings);
-    assert.equal(ok.code, 0, ok.out);
-    assert.match(ok.out, /PASSED/);
-  }
+  assert.match(left.stderr, /restore target boka-restore-20261006000000-2 was not fully removed/);
+  // A failed run keeps its failure status and is still cleaned up; with no target, nothing is called.
+  assert.equal((await run(0, 'boka-restore-20261006000000-3', 1)).code, 1);
+  const none = await run(0, '', 1);
+  assert.equal(none.code, 1);
+  assert.equal(none.calls, '');
+  assert.equal(none.workLeft, false);
 });

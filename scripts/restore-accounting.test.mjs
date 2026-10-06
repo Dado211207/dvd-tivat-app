@@ -102,3 +102,12 @@ test('only the platform\'s own parameter grants are left out of the local roles 
   assert.deepEqual(await verifyPlatformGrants(target(false), platformGrants),
     ['supabase_realtime_admin lacks SET on log_min_messages on the restore target; the roles dump grants it']);
 });
+
+test('database webhook data (supabase_functions) is kept out of the local restore and accounted for', () => {
+  const dump = ['COPY "supabase_functions"."hooks" ("id", "hook_table_id", "hook_name", "created_at", "request_id") FROM stdin;',
+    '1\t42\tnotify\t2026-10-01 00:00:00+00\t7', '\\.', 'COPY "public"."members" ("id") FROM stdin;', 'm1', '\\.'].join('\n');
+  const { restore, tables } = splitOperational(dump);
+  assert.deepEqual(tables, [{ table: 'supabase_functions.hooks', rows: 1, restored: false }, { table: 'public.members', rows: 1, restored: true }]);
+  assert.doesNotMatch(restore, /supabase_functions/);
+  assert.ok(OPERATIONAL_TABLES.includes('supabase_functions.hooks'));
+});

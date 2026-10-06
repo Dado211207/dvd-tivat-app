@@ -2,10 +2,11 @@
  * What release-preflight.sh's local restore may load, and proof of what it did.
  *
  * The encrypted archive keeps the complete dump. The separate local restore
- * target, a Supabase stack whose pg_cron and pg_net would run anything they are
- * given, never receives operational platform data: pg_cron's jobs carry the
- * push worker's endpoint and credentials, and pg_net's queue holds requests
- * that would be sent. (pg_dump leaves extension-owned tables out of the data
+ * target, a Supabase Postgres whose pg_cron and pg_net would run anything they
+ * are given, never receives operational platform data: pg_cron's jobs carry the
+ * push worker's endpoint and credentials, pg_net's queue holds requests that
+ * would be sent, and supabase_functions logs database webhooks, which send
+ * through pg_net. (pg_dump leaves extension-owned tables out of the data
  * dump anyway; this is the check that keeps it that way.)
  *
  *   node scripts/restore-accounting.mjs split <data.sql> <restore.sql> <accounting.json>
@@ -31,9 +32,9 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
-export const OPERATIONAL_SCHEMAS = ['cron', 'net'];
+export const OPERATIONAL_SCHEMAS = ['cron', 'net', 'supabase_functions'];
 /** The operational tables that must be empty on the restore target. */
-export const OPERATIONAL_TABLES = ['cron.job', 'cron.job_run_details', 'net.http_request_queue', 'net._http_response'];
+export const OPERATIONAL_TABLES = ['cron.job', 'cron.job_run_details', 'net.http_request_queue', 'net._http_response', 'supabase_functions.hooks'];
 
 const IDENT = String.raw`(?:"((?:[^"]|"")+)"|([a-z_][a-z0-9_$]*))`;
 const COPY_START = new RegExp(String.raw`^COPY ${IDENT}\.${IDENT}(?: \(.*\))? FROM stdin;$`);
