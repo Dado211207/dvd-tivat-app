@@ -1040,7 +1040,14 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       const start = Date.now();
       const first = fakePush();
       await deliverQueued({ service, send: first.send, scheduler: true, now: () => start }, dvdCallout);
-      expect(first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
+      const firefighterAlert = await alertOf('dvdFirefighter', dvdCallout);
+      const firefighterVerdict = await rowsAs<{ verdict: string }>(
+        'service_role', 'select verdict from public.push_delivery_verdict($1)', [firefighterAlert],
+      );
+      expect(
+        first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter')),
+        JSON.stringify({ sent: first.sent.map((item) => item.endpoint), state: await stateOf(firefighterAlert), verdict: firefighterVerdict }),
+      ).toBe(true);
 
       expect(await act(people.dvdFirefighter.user, 'select public.acknowledge_intervention($1)', [dvdCallout])).toBe('OK');
       const reminder = fakePush();
