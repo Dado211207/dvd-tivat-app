@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { OPERATIONAL_TABLES, splitOperational, splitRoles, verifyPlatformGrants, verifyTarget } from './restore-accounting.mjs';
 
 // A production-looking push job and queued request, with a fake endpoint and token.
-const FAKE_TOKEN = 'sb_secret_FAKE_0000000000000000_not_a_real_key';
+const FAKE_TOKEN = 'FAKE-PUSH-WORKER-TOKEN-not-a-real-key-0000';
 const DUMP = [
   'SET statement_timeout = 0;',
   "SELECT pg_catalog.set_config('search_path', '', false);",

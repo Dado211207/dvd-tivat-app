@@ -218,3 +218,45 @@ test('cleanup stops exactly this run\'s stack with --no-backup and fails loudly 
   assert.equal(failed.supabase, '');
   assert.equal(failed.workLeft, false);
 });
+
+test('nothing is restored unless every port of the restore stack is bound to loopback', async () => {
+  const script = await readFile(resolve('scripts/release-preflight.sh'), 'utf8');
+  // The guard sits between starting the stack and the first thing that touches it.
+  const guard = script.indexOf('exposed="$(printf');
+  assert.ok(guard > script.indexOf("run_private 'Local Supabase start'"));
+  assert.ok(guard < script.indexOf('local_major='));
+  assert.ok(guard < script.indexOf("'Local restore roles copy'") && guard < script.indexOf("'Independent restore'"));
+
+  const lines = script.split('\n');
+  const start = lines.findIndex((l) => l.startsWith('stack_containers='));
+  const end = lines.findIndex((l, k) => k > start && l.includes('Refusing to restore production data into it.'));
+  const block = lines.slice(start, end + 1).join('\n');
+  const run = async (containers, bindings) => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'boka-bind-')));
+    await mkdir(join(root, 'bin'));
+    // A stand-in docker: `ps` lists the given containers, `inspect` reports the given bindings.
+    await writeFile(join(root, 'bin/docker'), `#!/bin/sh\ncase "$1" in\n  ps) printf '%s\\n' ${containers.map((c) => `'${c}'`).join(' ') || "''"} | grep . ;;\n  inspect) printf '%s' '${bindings}' ;;\nesac\nexit 0\n`, { mode: 0o755 });
+    const program = ['set -euo pipefail', "fail() { printf '%s\\n' \"$1\" >&2; exit 1; }", "stack_id='boka-restore-test'", block, 'echo PASSED'].join('\n');
+    const child = spawn('bash', ['-c', program], { env: { PATH: `${root}/bin:/usr/bin:/bin` }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    const code = await new Promise((done) => child.on('close', done));
+    await rm(root, { recursive: true, force: true });
+    return { code, out };
+  };
+  // What Supabase CLI 2.119 produces on default Docker: refused.
+  const cli = await run(['db1', 'kong1'], '0.0.0.0|54322 ::|54322 0.0.0.0|54321 ::|54321 ');
+  assert.equal(cli.code, 1);
+  assert.match(cli.out, /publishes ports beyond this machine \(0\.0\.0\.0\|54322 ::\|54322 0\.0\.0\.0\|54321 ::\|54321\)/);
+  assert.equal((await run(['db1'], '127.0.0.1|54322 0.0.0.0|54323 ')).code, 1);
+  assert.equal((await run(['db1'], '127.0.0.1|54322 192.168.1.20|54322 ')).code, 1);
+  assert.equal((await run(['db1'], '127.0.0.1|54322 ::|54322 ')).code, 1);
+  assert.match((await run([], '')).out, /has no running containers/);
+  // Loopback only, IPv4 and IPv6, or containers that publish nothing: allowed.
+  for (const bindings of ['127.0.0.1|54322 ', '127.0.0.1|54322 ::1|54322 ', '']) {
+    const ok = await run(['db1', 'auth1'], bindings);
+    assert.equal(ok.code, 0, ok.out);
+    assert.match(ok.out, /PASSED/);
+  }
+});

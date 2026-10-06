@@ -148,6 +148,18 @@ stack_id="$(sed -n 's/^project_id = "\(.*\)"$/\1/p' supabase/config.toml)"
 [[ "$stack_id" == "${stack_dir##*/}" ]] || fail 'The restore stack did not get its unique project id.'
 [[ -z "$(docker volume ls -q --filter "label=com.supabase.cli.project=$stack_id")" ]] || fail 'The restore stack already has volumes.'
 run_private 'Local Supabase start' supabase start
+# The restored copy must be reachable from this machine only. Supabase CLI
+# publishes every port with no host IP, which Docker binds on all interfaces
+# (0.0.0.0 and ::), and has no option to change that; so nothing is restored
+# unless every port this stack publishes is bound to loopback.
+stack_containers="$(docker ps -q --filter "label=com.supabase.cli.project=$stack_id")"
+[[ -n "$stack_containers" ]] || fail 'The restore stack has no running containers.'
+# shellcheck disable=SC2086 # one container id per word
+bindings="$(docker inspect --format '{{range $port, $binds := .NetworkSettings.Ports}}{{range $binds}}{{.HostIp}}|{{.HostPort}} {{end}}{{end}}' $stack_containers)" \
+  || fail 'Could not inspect the restore stack ports.'
+# shellcheck disable=SC2086 # one binding per word
+exposed="$(printf '%s\n' $bindings | grep -v -E '^(127\.0\.0\.1|::1)\|' || true)"
+[[ -z "$exposed" ]] || fail "The restore stack publishes ports beyond this machine ($(printf '%s' "$exposed" | tr '\n' ' ')). Refusing to restore production data into it."
 # Every session on the restore target, the gate's included, runs in UTC.
 local_url='postgresql://postgres:postgres@127.0.0.1:54322/postgres?options=-c%20TimeZone%3DUTC'
 local_major="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$local_url" -c "select current_setting('server_version_num')::int / 10000" 2>"$work/stage.log")" \
