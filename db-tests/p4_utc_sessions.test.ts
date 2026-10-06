@@ -110,7 +110,7 @@ describe('P4 capture and gate sessions run in UTC whatever the server default', 
     }
     expect(unpinned[0]).not.toBe(unpinned[1]); // the zone really does change the digests...
     expect(pinned[0]).toBe(pinned[1]); // ...and the pin removes that dependence.
-  });
+  }, 120_000); // runs the full capture SQL four times; the 30s default is too tight, more so on CI.
 
   it('the gate and the restored-copy capture open UTC sessions with the same digests', async () => {
     const { Databases } = await load<GateDatabase>('scripts/p4-gate/database.mjs');
