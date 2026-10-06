@@ -11,8 +11,8 @@
  * - most importantly - exactly which fields may travel to a locked screen.
  */
 
-/** How long after an accepted alert a single repeat may be sent. */
-export const REPEAT_AFTER_MS = 90_000;
+/** How long after an accepted alert a single reminder may be sent. */
+export const REPEAT_AFTER_MS = 30_000;
 
 /**
  * How long a claimed row is left alone before another worker may take it.
