@@ -143,8 +143,10 @@ printf 'Independent PostgreSQL 17 restore counts match.\n'
 # The gate creates/drops its own databases on the local server, not production.
 cd "$REPO"
 capture="$work/fresh.production-export.json"
-DVD_READONLY_DATABASE_URL="$production_url" run_private 'Production read-only equivalence capture' \
-  node scripts/p4-capture-production.mjs "$capture"
+# The URL is assigned on the node command itself: an assignment in front of a
+# shell function is exported to everything it runs, including run_private's age.
+capture_p4() { DVD_READONLY_DATABASE_URL="$production_url" node scripts/p4-capture-production.mjs "$1"; }
+run_private 'Production read-only equivalence capture' capture_p4 "$capture"
 unset production_url
 export DVD_TEST_DATABASE_URL="$local_url"
 run_private 'Production-copy migration equivalence gate' npm run gate:p4 -- "$capture" --report "$work/gate-report.json"
