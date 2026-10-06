@@ -46,6 +46,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { DUMP_ROLE, ENVIRONMENT_SQL, attestationRecord, attestationSql, differences } from './restored-capture/fidelity.mjs';
 import { classify, privilegeReport } from './restored-capture/privileges.mjs';
+import { UTC_SESSION } from './p4-gate/database.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
@@ -146,7 +147,7 @@ async function writePrivate(path, text) {
   }
 }
 
-async function connect(url, database = null) {
+export async function connect(url, database = null) {
   const target = new URL(url);
   if (database) target.pathname = `/${database}`;
   const ssl = target.searchParams.get('sslmode') ?? (LOOPBACK.has(target.hostname) ? 'disable' : 'require');
@@ -158,6 +159,7 @@ async function connect(url, database = null) {
   });
   client.on('error', () => {});
   await client.connect();
+  await client.query(UTC_SESSION);
   return client;
 }
 

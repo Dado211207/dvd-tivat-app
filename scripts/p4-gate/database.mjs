@@ -12,6 +12,13 @@ import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import pg from 'pg';
 
+/**
+ * Every capture and gate session runs in UTC. The digests render timestamptz as
+ * text, which follows the session time zone - otherwise a server initialised
+ * with the operator's local zone would make an exact copy look different.
+ */
+export const UTC_SESSION = "set timezone = 'UTC'";
+
 export const DVD = '00000000-0000-4000-8000-000000000001';
 export const SZS = '00000000-0000-4000-8000-000000000002';
 
@@ -125,6 +132,7 @@ export class Databases {
     // take the process down before the verdict is printed.
     client.on('error', () => {});
     await client.connect();
+    await client.query(UTC_SESSION);
     this.clients.add(client);
     const end = client.end.bind(client);
     client.end = () => {

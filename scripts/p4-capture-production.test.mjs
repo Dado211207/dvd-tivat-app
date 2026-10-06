@@ -59,7 +59,7 @@ test('the release rehearsal keeps the password URL off command lines and out of 
   assert.match(script, /^capture_p4\(\) \{ DVD_READONLY_DATABASE_URL="\$production_url" node scripts\/p4-capture-production\.mjs "\$1"; \}\nrun_private 'Production read-only equivalence capture' capture_p4 "\$capture"\nunset production_url$/m);
   assert.match(script, /^export PGPASSFILE="\$work\/pgpass"$/m);
   assert.match(script, /mode: 0o600, flag: "wx"/);
-  assert.equal(script.match(/--dbname "\$db_url"/g)?.length, 4);
+  assert.equal(script.match(/--dbname "\$db_url"/g)?.length, 6); // counts x2, definitions x2, operational export x2
   assert.equal(script.match(/--db-url "\$db_url"/g)?.length, 5);
   // The runner passes the URL on file descriptor 3, never in the script's environment.
   assert.match(runner, /stdio: \['inherit', 'inherit', 'inherit', 'pipe'\]/);
@@ -151,4 +151,70 @@ test('a failing capture encrypts its diagnostic without the password URL in age\
       await rm(root, { recursive: true, force: true });
     }
   }
+});
+
+test('the rehearsal restores a filtered copy into a fresh stack of its own, and accounts for it', async () => {
+  const script = await readFile(resolve('scripts/release-preflight.sh'), 'utf8');
+  // The complete dump, operational data included, goes into the archive...
+  assert.match(script, /^tar -cf - roles\.sql schema\.sql data\.sql operational\.sql history_schema\.sql history_data\.sql custom_auth_storage\.sql manifest\.txt \| age /m);
+  assert.match(script, /copy \$table to stdout/);
+  assert.match(script, /^for table in cron\.job cron\.job_run_details net\.http_request_queue net\._http_response; do$/m);
+  // ...and only the filtered copy is restored, then verified before anything else.
+  assert.match(script, /restore-accounting\.mjs" split data\.sql data\.restore\.sql accounting\.json/);
+  assert.match(script, /-c 'SET session_replication_role = replica' -f data\.restore\.sql \\$/m);
+  assert.match(script, /-f roles\.restore\.sql -f schema\.sql/);
+  assert.match(script, /restore-accounting\.mjs" roles roles\.sql roles\.restore\.sql accounting\.json/);
+  assert.doesNotMatch(script, /replica' -f data\.sql/);
+  assert.equal(script.match(/-f data\.sql /g)?.length, 1); // only where the dump writes it
+  const verify = script.indexOf('restore-accounting.mjs" verify accounting.json');
+  assert.ok(verify > script.indexOf('-f data.restore.sql') && verify < script.indexOf("'Migration history restore'"));
+  // A unique stack per run, checked fresh, removed with its volumes, and nothing else.
+  assert.match(script, /^stack_dir="\$work\/boka-restore-\$\(date -u \+%Y%m%d%H%M%S\)-\$RANDOM"$/m);
+  assert.match(script, /\[\[ "\$fresh" == 0 \]\] \|\| fail 'The restore target is not a fresh database\.'/);
+  assert.equal(script.match(/supabase stop/g)?.length, 2); // the cleanup call and its hint
+  assert.match(script, /supabase stop --project-id "\$stack_id" --no-backup >\/dev\/null/);
+  assert.doesNotMatch(script, /docker (volume |container |system |image )?(rm|prune)|supabase stop --all/);
+  // The restore target, and so the gate, runs in UTC.
+  assert.match(script, /^local_url='postgresql:\/\/postgres:postgres@127\.0\.0\.1:54322\/postgres\?options=-c%20TimeZone%3DUTC'$/m);
+});
+
+test('cleanup stops exactly this run\'s stack with --no-backup and fails loudly if anything is left', async () => {
+  const lines = (await readFile(resolve('scripts/release-preflight.sh'), 'utf8')).split('\n');
+  const start = lines.findIndex((l) => l === "stack_id=''");
+  const end = lines.findIndex((l, k) => k > start && l === 'trap cleanup EXIT');
+  const cleanupBlock = lines.slice(start, end + 1).join('\n');
+  const run = async (leftover, stackId, exitWith) => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'boka-cleanup-')));
+    await mkdir(join(root, 'bin'));
+    await mkdir(join(root, 'work'));
+    // Stand-ins that record what they were asked and report leftovers on request.
+    await writeFile(join(root, 'bin/supabase'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${root}/supabase-calls'\n`, { mode: 0o755 });
+    await writeFile(join(root, 'bin/docker'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${root}/docker-calls'\n${leftover ? "echo leftover-id\n" : ''}`, { mode: 0o755 });
+    const program = [`work='${root}/work'`, cleanupBlock, stackId ? `stack_id='${stackId}'` : ':', `exit ${exitWith}`].join('\n');
+    const child = spawn('bash', ['-c', program], { env: { PATH: `${root}/bin:/usr/bin:/bin` }, stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (d) => { stderr += d; });
+    const code = await new Promise((done) => child.on('close', done));
+    const read = (f) => readFile(join(root, f), 'utf8').catch(() => '');
+    const result = { code, stderr, supabase: await read('supabase-calls'), docker: await read('docker-calls'),
+      workLeft: await stat(join(root, 'work')).then(() => true, () => false) };
+    await rm(root, { recursive: true, force: true });
+    return result;
+  };
+  const clean = await run(false, 'boka-restore-20261006000000-1', 0);
+  assert.equal(clean.code, 0);
+  assert.equal(clean.supabase, 'stop --project-id boka-restore-20261006000000-1 --no-backup\n');
+  assert.match(clean.docker, /ps -aq --filter label=com\.supabase\.cli\.project=boka-restore-20261006000000-1/);
+  assert.match(clean.docker, /volume ls -q --filter label=com\.supabase\.cli\.project=boka-restore-20261006000000-1/);
+  assert.doesNotMatch(clean.docker, /\b(rm|prune)\b/);
+  assert.equal(clean.workLeft, false);
+  // Something of this stack survived: the run fails and says how to remove it.
+  const left = await run(true, 'boka-restore-20261006000000-2', 0);
+  assert.equal(left.code, 1);
+  assert.match(left.stderr, /restore stack boka-restore-20261006000000-2 still has containers or volumes/);
+  // A failed run keeps its failure status; with no stack started, Supabase is not called.
+  const failed = await run(false, '', 1);
+  assert.equal(failed.code, 1);
+  assert.equal(failed.supabase, '');
+  assert.equal(failed.workLeft, false);
 });

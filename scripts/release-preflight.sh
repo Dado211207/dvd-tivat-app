@@ -39,13 +39,24 @@ backup_dir="$(cd "$DVD_BACKUP_DIR" && pwd -P)" || fail 'Backup directory does no
 case "$backup_dir/" in "$REPO/"*) fail 'Backup directory cannot be inside the repository.';; esac
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/boka-release.XXXXXXXX")"
-started=0
+# The restore target is a Supabase stack of its own, named for this run only, so
+# no earlier run's database is ever reused. `--no-backup` deletes its volumes,
+# which hold the restored copy; nothing else in Docker is touched.
+stack_id=''
 cleanup() {
-  if [[ "$started" == 1 ]]; then (cd "$work/local" && supabase stop >/dev/null 2>&1) || true; fi
+  local status=$?
+  if [[ -n "$stack_id" ]]; then
+    supabase stop --project-id "$stack_id" --no-backup >/dev/null 2>&1 || true
+    if [[ -n "$(docker ps -aq --filter "label=com.supabase.cli.project=$stack_id")$(docker volume ls -q --filter "label=com.supabase.cli.project=$stack_id")" ]]; then
+      printf 'Release preflight: restore stack %s still has containers or volumes. Remove them: supabase stop --project-id %s --no-backup\n' "$stack_id" "$stack_id" >&2
+      status=1
+    fi
+  fi
   rm -rf -- "$work"
+  exit "$status"
 }
 trap cleanup EXIT
-mkdir -p "$work/dump" "$work/local"
+mkdir -p "$work/dump"
 
 # The password reaches psql and Supabase CLI (and through it pg_dump) only via
 # a private libpq passfile inside $work, removed with it on exit: a URL in a
@@ -94,6 +105,21 @@ run_private 'Migration history schema dump' supabase db dump --db-url "$db_url" 
 run_private 'Migration history data dump' supabase db dump --db-url "$db_url" -f history_data.sql --use-copy --data-only --schema supabase_migrations
 for file in roles.sql schema.sql data.sql history_schema.sql history_data.sql; do [[ -s "$file" ]] || fail "$file is empty."; done
 cp "$REPO/scripts/restore-supabase-custom.sql" custom_auth_storage.sql
+# pg_dump leaves extension-owned tables out of the data dump, so pg_cron's jobs
+# and pg_net's queue are exported separately, read-only, for the archive only.
+# They are never restored locally (see scripts/restore-accounting.mjs).
+: > operational.sql
+for table in cron.job cron.job_run_details net.http_request_queue net._http_response; do
+  present="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "select to_regclass('$table') is not null" 2>"$work/stage.log")" \
+    || fail "Operational table check failed for $table."
+  [[ "$present" == t ]] || continue
+  printf 'COPY %s FROM stdin;\n' "$table" >> operational.sql
+  psql -X -q -v ON_ERROR_STOP=1 --dbname "$db_url" -c 'set default_transaction_read_only = on' -c "copy $table to stdout" \
+    >> operational.sql 2>"$work/stage.log" || fail "Operational export failed for $table."
+  printf '\\.\n\n' >> operational.sql
+done
+operational_counts="$(node "$REPO/scripts/restore-accounting.mjs" count operational.sql)" || fail 'Operational export is malformed.'
+run_private 'Local restore copy' node "$REPO/scripts/restore-accounting.mjs" split data.sql data.restore.sql accounting.json
 
 source_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$source_counts_sql" 2>"$work/stage.log")" \
   || fail 'Final production read-only count failed.'
@@ -103,28 +129,42 @@ custom_after="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$db_url" -c "$custom_
 [[ "$custom_before" == "$custom_after" ]] || fail 'Production auth/storage definitions changed during backup.'
 printf 'Candidate: %s\nCaptured at %s UTC; auth users | members | interventions | storage objects | buckets | migration entries: %s\n' \
   "$candidate_sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$source_before" > manifest.txt
+printf 'Operational tables in operational.sql (archive only, never restored locally): %s\n' "${operational_counts:-none present}" >> manifest.txt
+printf 'Not in this backup: the vault schema (Supabase CLI excludes it from dumps).\n' >> manifest.txt
 
 archive="$backup_dir/boka-db-$(date -u +%Y%m%dT%H%M%SZ).tar.age"
 [[ ! -e "$archive" ]] || fail 'The encrypted archive filename already exists.'
-tar -cf - roles.sql schema.sql data.sql history_schema.sql history_data.sql custom_auth_storage.sql manifest.txt | age -r "$DVD_BACKUP_RECIPIENT" -o "$archive" \
+tar -cf - roles.sql schema.sql data.sql operational.sql history_schema.sql history_data.sql custom_auth_storage.sql manifest.txt | age -r "$DVD_BACKUP_RECIPIENT" -o "$archive" \
   >"$work/stage.log" 2>&1 || { rm -f -- "$archive"; fail 'Backup encryption failed.'; }
 [[ -s "$archive" ]] || fail 'Encrypted archive is empty.'
 printf 'Encrypted backup saved: %s\n' "$archive"
 
-# A newly initialised local Supabase project is an independent restore target.
-cd "$work/local"
+# A newly initialised local Supabase project, unique to this run, is an
+# independent restore target. Its project id comes from its directory name.
+stack_dir="$work/boka-restore-$(date -u +%Y%m%d%H%M%S)-$RANDOM"
+mkdir "$stack_dir" && cd "$stack_dir"
 run_private 'Local Supabase init' supabase init
+stack_id="$(sed -n 's/^project_id = "\(.*\)"$/\1/p' supabase/config.toml)"
+[[ "$stack_id" == "${stack_dir##*/}" ]] || fail 'The restore stack did not get its unique project id.'
+[[ -z "$(docker volume ls -q --filter "label=com.supabase.cli.project=$stack_id")" ]] || fail 'The restore stack already has volumes.'
 run_private 'Local Supabase start' supabase start
-started=1
-local_url='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+# Every session on the restore target, the gate's included, runs in UTC.
+local_url='postgresql://postgres:postgres@127.0.0.1:54322/postgres?options=-c%20TimeZone%3DUTC'
 local_major="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$local_url" -c "select current_setting('server_version_num')::int / 10000" 2>"$work/stage.log")" \
   || fail 'Local PostgreSQL connection failed.'
 [[ "$local_major" == 17 ]] || fail 'The restore target must run PostgreSQL 17.'
+fresh="$(psql -X -A -t -v ON_ERROR_STOP=1 --dbname "$local_url" -c "select count(*) from pg_tables where schemaname = 'public'" 2>"$work/stage.log")" \
+  || fail 'Local restore target check failed.'
+[[ "$fresh" == 0 ]] || fail 'The restore target is not a fresh database.'
 
 cd "$work/dump"
+DVD_RESTORE_TARGET_URL="$local_url" run_private 'Local restore roles copy' node "$REPO/scripts/restore-accounting.mjs" roles roles.sql roles.restore.sql accounting.json
 run_private 'Independent restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
-  -f roles.sql -f schema.sql -c 'SET session_replication_role = replica' -f data.sql \
+  -f roles.restore.sql -f schema.sql -c 'SET session_replication_role = replica' -f data.restore.sql \
   --dbname "$local_url"
+# Every restored table must hold exactly the dumped rows, and the target no
+# pg_cron job or pg_net request, before anything else runs against it.
+DVD_RESTORE_TARGET_URL="$local_url" run_private 'Restore accounting' node "$REPO/scripts/restore-accounting.mjs" verify accounting.json
 # A freshly started Supabase stack may already own this schema. Replace its
 # empty local ledger inside the isolated target before restoring the source.
 run_private 'Migration history restore' psql -X --single-transaction -v ON_ERROR_STOP=1 \
@@ -153,5 +193,7 @@ run_private 'Production-copy migration equivalence gate' npm run gate:p4 -- "$ca
 [[ -s "$work/gate-report.json" ]] || fail 'The gate produced no report.'
 report="$archive.gate-report.age"
 run_private 'Gate report encryption' age -r "$DVD_BACKUP_RECIPIENT" -o "$report" "$work/gate-report.json"
-printf 'Production-copy equivalence gate passed for %s.\nEncrypted backup: %s\nEncrypted gate report: %s\n' \
-  "$candidate_sha" "$archive" "$report"
+accounting_report="$archive.restore-accounting.age"
+run_private 'Restore accounting encryption' age -r "$DVD_BACKUP_RECIPIENT" -o "$accounting_report" "$work/dump/accounting.json"
+printf 'Production-copy equivalence gate passed for %s.\nEncrypted backup: %s\nEncrypted gate report: %s\nEncrypted restore accounting: %s\n' \
+  "$candidate_sha" "$archive" "$report" "$accounting_report"
