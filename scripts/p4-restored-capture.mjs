@@ -19,7 +19,8 @@
  *       3  restore into a new database on a separate loopback PostgreSQL
  *       4  run scripts/p4-equivalence-production.sql on the copy and require it
  *          to reproduce the attestation exactly; only then write the capture
- *       5  delete the plaintext dump and drop the copy
+ *       5  delete the whole work directory (the dump and every intermediate
+ *          file) and drop the copy
  *
  *   node scripts/p4-restored-capture.mjs verifier
  *       Print a new random password and its SCRAM-SHA-256 verifier for
@@ -152,6 +153,17 @@ async function writePrivate(path, text) {
   } finally {
     await file.close();
   }
+}
+
+/**
+ * Remove the work directory the run created. The run owns it exclusively
+ * (`mkdir` refuses a pre-existing path), so removing the whole tree — rather
+ * than a hand-maintained list of filenames — guarantees the plaintext dump and
+ * every attestation, environment and ledger file written beside it are gone,
+ * even as new intermediate files are added later.
+ */
+export async function removeWork(work) {
+  await rm(work, { recursive: true, force: true });
 }
 
 export async function connect(url, database = null) {
@@ -419,10 +431,13 @@ async function main() {
     console.log(`\nCapture saved outside the repository: ${out}`);
     console.log(`Next: DVD_TEST_DATABASE_URL=<loopback> npm run gate:p4 -- ${out}`);
   } finally {
+    // The run created `work` and owns the whole directory, so remove all of it
+    // rather than a hand-listed subset: the dump (public.sql) and the real auth
+    // rows (auth_users.json) hold production data, and the attestation,
+    // environment and migration files written beside them must not linger
+    // either. --keep-dump keeps the directory for review.
     if (!args.includes('--keep-dump')) {
-      await rm(resolve(work, 'public.sql'), { force: true });
-      await rm(resolve(work, 'public.restore.sql'), { force: true });
-      await rm(resolve(work, 'auth_users.json'), { force: true });
+      await removeWork(work);
     }
     if (restored && !args.includes('--keep-restore')) {
       const admin = await connect(adminUrl).catch(() => null);
