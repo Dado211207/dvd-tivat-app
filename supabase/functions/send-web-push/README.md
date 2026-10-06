@@ -85,12 +85,13 @@ dashboard's protected secret mechanism; do not paste it into SQL tracked by
 this repository.
 
 The immediate post-publication request performs attempt one. A scheduled run
-may perform exactly one reminder after 30 seconds, and only if the recipient
-has not opened that intervention and it remains open. Because the scheduler
-runs once per minute, the actual reminder arrives on its next tick after the
-30-second threshold (normally 30-90 seconds after the first push). Atomic
-state/attempt matching prevents concurrent workers from both claiming the same
-attempt.
+may perform exactly one reminder after 30 seconds if the call-out remains open
+and the recipient has not submitted an answer. Opening the call-out alone does
+not suppress the reminder. An answer in `intervention_responses` closes the
+delivery unsent. Because the scheduler runs once per minute, the reminder
+arrives on its next tick after the 30-second threshold (normally 30-90 seconds
+after the first push). Atomic state/attempt matching prevents concurrent
+workers from both claiming the same attempt.
 
 ## Acceptance before operational use
 
