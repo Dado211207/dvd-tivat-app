@@ -4,6 +4,8 @@ import { pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
 
 const PREVIOUS_APP_URL = 'https://boka-operativa-phone-test.netlify.app/';
+const APP_URL_PLACEHOLDER = '{{FIRENEXA_APP_URL}}';
+const FINAL_GUIDE_BLOCKED_HOSTS = new Set(['firenexa-app.netlify.app', 'firenexa.netlify.app']);
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
@@ -14,11 +16,16 @@ export function appAddress(input, preview = false) {
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
     throw new Error('App URL must use HTTPS without credentials, query or hash.');
   }
-  if (!preview && /(^|[.-])test([.-]|$)/i.test(url.hostname)) {
-    throw new Error('A test address requires --preview and must not be printed as the final QR.');
+  const hostname = url.hostname.toLowerCase();
+  if (!preview && (FINAL_GUIDE_BLOCKED_HOSTS.has(hostname) || /(^|[.-])test([.-]|$)/i.test(hostname))) {
+    throw new Error('A test or guide host requires --preview and must not be printed as the final QR.');
   }
   return url.href;
 }
+
+const withAppAddress = (html, address) => html
+  .replaceAll(PREVIOUS_APP_URL, address)
+  .replaceAll(APP_URL_PLACEHOLDER, address);
 
 export async function buildSite({ appUrl, preview = false, outDir = 'dist-site' }) {
   const address = appAddress(appUrl, preview);
@@ -36,7 +43,7 @@ export async function buildSite({ appUrl, preview = false, outDir = 'dist-site' 
   await QRCode.toFile(resolve(output, 'assets/app-qr.svg'), address, { ...options, type: 'svg' });
   await QRCode.toFile(resolve(output, 'assets/app-qr.png'), address, options);
   const safeAddress = escapeHtml(address);
-  let html = (await readFile('site/index.html', 'utf8')).replaceAll(PREVIOUS_APP_URL, safeAddress);
+  let html = withAppAddress(await readFile('site/index.html', 'utf8'), safeAddress);
   html = html.replace('<!-- APP_QR -->', `<div class="app-qr" data-testid="app-qr">
     <img src="./assets/app-qr.svg" width="148" height="148" alt="QR kod za otvaranje FireNexa aplikacije">
     <div><strong>Otvori na telefonu</strong>
@@ -54,7 +61,7 @@ export async function buildSite({ appUrl, preview = false, outDir = 'dist-site' 
   }
   await writeFile(resolve(output, 'index.html'), html);
   for (const name of ['android.html', 'koriscenje.html']) {
-    const guide = (await readFile(`site/${name}`, 'utf8')).replaceAll(PREVIOUS_APP_URL, safeAddress);
+    const guide = withAppAddress(await readFile(`site/${name}`, 'utf8'), safeAddress);
     await writeFile(resolve(output, name), guide);
   }
   await writeFile(resolve(output, 'publication.json'), JSON.stringify({

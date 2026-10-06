@@ -9,9 +9,9 @@
 - The workflow build used the configured production Supabase URL. The published page was opened read-only and showed the FireNexa logged-out screen; no member data was displayed.
 - The previous Netlify app <https://firenexa-app.netlify.app/> remains a separate isolated test app. Do not use its sign-up or accounts for production.
 
-### Public guide — still needs its app target and QR updated
+### Public guide — source fix prepared; publishing still pending
 
-> **Do not distribute the guide or its QR for member sign-up yet.** The live guide at <https://firenexa.netlify.app/> still links and encodes <https://firenexa-app.netlify.app/>, the isolated test app, rather than the production GitHub Pages URL above.
+> **Do not distribute the live guide or its QR for member sign-up yet.** Its current published deploy still links and encodes <https://firenexa-app.netlify.app/>, the isolated test app. PR #101 changes the guide source/build guard to use one configured app URL and rejects known test hosts for final builds. After CI passes, build with <https://dado211207.github.io/dvd-tivat-app/> as the app URL, deploy a Netlify draft, verify links and both QR assets, then publish. The live page is not fixed until that verified deploy is promoted.
 
 - Current guide deploy: `6ac2a05f9fa3f188e860c23c` on Netlify site `firenexa` (`6dcc0123-3287-43a5-98a2-0ee25d33b5f2`), state ready.
 - The guide remains the previously approved package: iPhone installation recording and written Android/use guides are present. Their content has not been changed in this release review.

@@ -11,7 +11,7 @@ for (const preview of [true, false]) {
     let directory: string;
     const address = preview
       ? 'https://boka-operativa-phone-test.netlify.app/'
-      : 'https://firenexa-app.netlify.app/';
+      : 'https://dado211207.github.io/dvd-tivat-app/';
 
     test.beforeAll(() => {
       // Each worker gets its own output; never rewrite a package awaiting deploy.
