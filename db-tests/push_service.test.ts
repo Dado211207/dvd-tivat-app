@@ -639,6 +639,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
         'dualSzsWithdrawn@SZS: DELIVER -> INELIGIBLE',
         'forged member: DELIVER -> SERVICE_MISMATCH',
         'forged label: INELIGIBLE -> SERVICE_MISMATCH',
+        'dvdOther@DVD: OPENED -> RESPONDED',
+        'szsOther@SZS: OPENED -> RESPONDED',
       ].sort(),
     );
   });
@@ -700,6 +702,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     const before = await shape();
     await isolated(async () => {
       await db.query(sql(PUSH));
+      await db.query(sql(RESPONSE_AWARE));
       expect(await shape()).toBe(before);
     });
   });
@@ -1036,7 +1039,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       await resetQueue();
       const start = Date.now();
       const first = fakePush();
-      await deliverQueued({ service, send: first.send, scheduler: false, now: () => start });
+      await deliverQueued({ service, send: first.send, scheduler: false, now: () => start }, dvdCallout);
       expect(first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
 
       expect(await act(people.dvdFirefighter.user, 'select public.acknowledge_intervention($1)', [dvdCallout])).toBe('OK');
