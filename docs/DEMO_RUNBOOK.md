@@ -271,8 +271,8 @@ private window) for the commander.
 | 31 | Fully leave the Home Screen app, lock the phone, and publish a new fictional call-out to Ivo from the laptop | A generic `OPERATIVNI POZIV - DVD Tivat` notification should arrive without exposing title or location. Record actual latency and whether sound/vibration occurred; do not infer it |
 | 32 | Press the notification | The installed app opens `Moj poziv` on the exact intervention and still requires the correct signed-in account |
 | 33 | Repeat with sound enabled, silent mode and Focus/Do Not Disturb | Record each real result. A failure to make sound is a failed alarm case, not a passed push case |
-| 34 | Do not open the next alert for at least two minutes | At most one reminder appears after the 30-second threshold when the once-a-minute scheduler next runs (normally 30-90 seconds after the first push) |
-| 35 | Open/acknowledge the next call immediately | No repeat should be sent for that recipient |
+| 34 | Open the next alert but do not submit an answer for at least two minutes | At most one reminder appears after the 30-second threshold when the once-a-minute scheduler next runs (normally 30-90 seconds after the first push) |
+| 35 | Submit an answer to the next call immediately | No reminder should be sent after the answer is saved |
 | 36 | Withdraw the fictional account after queueing but before a scheduled retry | The worker records `ACCESS_REVOKED` and does not send the retry |
 
 ---
