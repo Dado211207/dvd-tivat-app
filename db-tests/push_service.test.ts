@@ -571,12 +571,26 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   const FIXTURE_ALERTED = ['dvdFirefighter@DVD', 'dual@DVD', 'dualSzsWithdrawn@DVD', 'szsFirefighter@SZS', 'dual@SZS'];
 
   beforeAll(async () => {
-    const pushIndex = MIGRATIONS.indexOf(PUSH);
-    const responseAwareIndex = MIGRATIONS.indexOf(RESPONSE_AWARE);
-    const afterP4e = pushIndex === -1 ? [] : MIGRATIONS.slice(pushIndex, responseAwareIndex + 1);
-    for (const migration of afterP4e) await db.query(sql(migration));
+    if (!MIGRATIONS.includes(PUSH) || !MIGRATIONS.includes(RESPONSE_AWARE)) {
+      throw new Error('Push-service and response-aware reminder migrations must both be in the harness');
+    }
+    await db.query(sql(PUSH));
+    // This suite is deliberately the P4e before/after fixture and includes two
+    // superuser-inserted cross-service rows which later P7 triggers reject.
+    // Supply the P7 relation used by the response-aware verdict without
+    // replaying migrations over those intentionally malformed P4e fixtures.
+    await db.query(`
+      create table public.intervention_recipient_organizations (
+        intervention_id uuid not null references public.interventions(id) on delete cascade,
+        organization_id uuid not null references public.organizations(id) on delete restrict,
+        added_by_user_id uuid references auth.users(id) on delete set null,
+        added_at timestamptz not null default now(),
+        primary key (intervention_id, organization_id)
+      );
+    `);
+    await db.query(sql(RESPONSE_AWARE));
     service = postgrest({ role: 'service_role' });
-  }, 120_000);
+  }, 60_000);
 
   afterAll(async () => {
     await service?.end();
