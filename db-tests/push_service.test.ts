@@ -571,10 +571,12 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   const FIXTURE_ALERTED = ['dvdFirefighter@DVD', 'dual@DVD', 'dualSzsWithdrawn@DVD', 'szsFirefighter@SZS', 'dual@SZS'];
 
   beforeAll(async () => {
-    if (MIGRATIONS.includes(PUSH)) await db.query(sql(PUSH));
-    if (MIGRATIONS.includes(RESPONSE_AWARE)) await db.query(sql(RESPONSE_AWARE));
+    const pushIndex = MIGRATIONS.indexOf(PUSH);
+    const responseAwareIndex = MIGRATIONS.indexOf(RESPONSE_AWARE);
+    const afterP4e = pushIndex === -1 ? [] : MIGRATIONS.slice(pushIndex, responseAwareIndex + 1);
+    for (const migration of afterP4e) await db.query(sql(migration));
     service = postgrest({ role: 'service_role' });
-  }, 60_000);
+  }, 120_000);
 
   afterAll(async () => {
     await service?.end();
