@@ -46,6 +46,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { DUMP_ROLE, ENVIRONMENT_SQL, attestationRecord, attestationSql, differences } from './restored-capture/fidelity.mjs';
 import { classify, privilegeReport } from './restored-capture/privileges.mjs';
+import { UTC_SESSION } from './p4-gate/database.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
@@ -57,9 +58,13 @@ export class Refused extends Error {
   }
 }
 
+/** The FireNexa production project: the only hosted source a dump may come from. */
+export const PRODUCTION_PROJECT_REF = 'yskhdzrdbywrpfowckpn';
+
 /**
- * The source: a hosted Supabase project reached as the dump role, or a
- * loopback stand-in for one. Refuses the owner's `postgres` login outright.
+ * The source: the production Supabase project reached as the dump role, or a
+ * loopback stand-in for one. Refuses the owner's `postgres` login outright, and
+ * any other hosted project.
  */
 export function dumpSourceUrl(raw) {
   if (!raw) throw new Refused('Set DVD_DUMP_DATABASE_URL to the dump role\'s connection URL.');
@@ -81,6 +86,9 @@ export function dumpSourceUrl(raw) {
   }
   if (!url.password) throw new Refused('DVD_DUMP_DATABASE_URL has no password.');
   if (!projectRef && !LOOPBACK.has(host)) throw new Refused('The source must be a Supabase project host or a loopback stand-in.');
+  if (projectRef && projectRef !== PRODUCTION_PROJECT_REF) {
+    throw new Refused(`The source must be the FireNexa production project (${PRODUCTION_PROJECT_REF}), not ${projectRef}.`);
+  }
   return { url, projectRef, loopback: LOOPBACK.has(host) };
 }
 
@@ -146,7 +154,7 @@ async function writePrivate(path, text) {
   }
 }
 
-async function connect(url, database = null) {
+export async function connect(url, database = null) {
   const target = new URL(url);
   if (database) target.pathname = `/${database}`;
   const ssl = target.searchParams.get('sslmode') ?? (LOOPBACK.has(target.hostname) ? 'disable' : 'require');
@@ -158,6 +166,7 @@ async function connect(url, database = null) {
   });
   client.on('error', () => {});
   await client.connect();
+  await client.query(UTC_SESSION);
   return client;
 }
 

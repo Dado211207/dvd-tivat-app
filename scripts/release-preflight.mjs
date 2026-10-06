@@ -65,16 +65,18 @@ async function main() {
   url.password = password;
   sourceUrl(url.toString());
 
+  // The URL goes to the script on file descriptor 3, not in its environment,
+  // so the script's own processes never carry it (see release-preflight.sh).
+  const env = { ...process.env, DVD_BACKUP_DIR: backupDir, DVD_BACKUP_RECIPIENT: recipient };
+  delete env.DVD_PRODUCTION_DB_URL;
+  delete env.DVD_READONLY_DATABASE_URL;
   const child = spawn('bash', ['scripts/release-preflight.sh', 'run'], {
     cwd: repo,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      DVD_PRODUCTION_DB_URL: url.toString(),
-      DVD_BACKUP_DIR: backupDir,
-      DVD_BACKUP_RECIPIENT: recipient,
-    },
+    stdio: ['inherit', 'inherit', 'inherit', 'pipe'],
+    env,
   });
+  child.stdio[3].on('error', () => {});
+  child.stdio[3].end(url.toString());
   const code = await new Promise((done) => child.on('exit', done));
   if (code !== 0) process.exitCode = code ?? 1;
 }

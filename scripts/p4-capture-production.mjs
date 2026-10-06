@@ -20,6 +20,9 @@ import pg from 'pg';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const projectRef = 'yskhdzrdbywrpfowckpn';
 
+/** Read-only, bounded, and in UTC, as the gate's own sessions are (see UTC_SESSION). */
+export const CAPTURE_SESSION = "set default_transaction_read_only = on; set statement_timeout = 120000; set timezone = 'UTC'";
+
 export function sourceUrl(connectionString) {
   const url = new URL(connectionString);
   const direct = url.hostname === `db.${projectRef}.supabase.co` && url.username === 'postgres';
@@ -71,7 +74,7 @@ async function main() {
   });
   try {
     await client.connect();
-    await client.query('set default_transaction_read_only = on; set statement_timeout = 120000');
+    await client.query(CAPTURE_SESSION);
     const row = captureResult(await client.query(sql));
     // wx refuses to overwrite a previous capture or follow an existing
     // symlink. Permissions stay private even with a permissive shell umask.
