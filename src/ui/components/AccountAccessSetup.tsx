@@ -100,6 +100,15 @@ export function AccountAccessSetup() {
     (membership) => membership.organization === 'SZS',
   );
   const membershipSummary = (() => {
+    // The installation owner may act in both services without a membership row.
+    // Show the effective server-approved access instead of "no service".
+    if (access.kind === 'SIGNED_IN' && access.role === 'OWNER') {
+      return access.availableServices
+        .map((service) =>
+          `${t.accounts.organizationLabel[service]} — ${t.accounts.roleLabel.OWNER}`,
+        )
+        .join(' · ');
+    }
     if (ownMemberships === null) return t.accountAccess.checkingServices;
     if (ownMemberships === undefined) return t.accountAccess.servicesUnavailable;
     if (ownMemberships.length === 0) return t.accountAccess.noServiceMembership;
