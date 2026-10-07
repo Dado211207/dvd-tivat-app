@@ -38,14 +38,14 @@ describe('at most one repeat, and only after the member has had time', () => {
     expect(attemptsRemain(0)).toBe(true);
   });
 
-  it('holds the repeat until ninety seconds have passed', () => {
+  it('holds the reminder until thirty seconds have passed', () => {
     expect(holdForNow('PROVIDER_ACCEPTED', ago(1_000), NOW)).toBe(true);
     expect(holdForNow('PROVIDER_ACCEPTED', ago(REPEAT_AFTER_MS - 1), NOW)).toBe(true);
     expect(holdForNow('PROVIDER_ACCEPTED', ago(REPEAT_AFTER_MS), NOW)).toBe(false);
   });
 
   it('allows exactly two attempts and never a third', () => {
-    // The initial alert and one repeat. A firefighter who has not answered gets
+    // The initial alert and one repeat. A firefighter who has not opened the call-out gets
     // told twice; a device that will not stop is a different product.
     expect(MAX_ATTEMPTS).toBe(2);
     expect(attemptsRemain(0)).toBe(true);
@@ -135,8 +135,9 @@ describe('the database\'s verdict decides what happens to an alert', () => {
     }
   });
 
-  it('closes an opened alert and one whose call-out has ended, and sets aside a row no command writes', () => {
-    expect(deliveryAction({ verdict: 'OPENED' })).toEqual({ kind: 'CLOSE', reason: 'MEMBER_OPENED' });
+  it('closes a responded alert and one whose call-out has ended, and sets aside a row no command writes', () => {
+    expect(deliveryAction({ verdict: 'RESPONDED' })).toEqual({ kind: 'CLOSE', reason: 'MEMBER_RESPONDED' });
+    expect(deliveryAction({ verdict: 'OPENED' })).toEqual({ kind: 'LEAVE' });
     expect(deliveryAction({ verdict: 'CALLOUT_NOT_OPEN' })).toEqual({ kind: 'CLOSE', reason: 'CALLOUT_NOT_OPEN' });
     expect(deliveryAction({ verdict: 'SERVICE_MISMATCH' })).toEqual({ kind: 'CLOSE', reason: 'SERVICE_MISMATCH' });
     expect(deliveryAction({ verdict: 'NOT_A_RECIPIENT' })).toEqual({ kind: 'CLOSE', reason: 'NOT_A_RECIPIENT' });
@@ -153,7 +154,7 @@ describe('the database\'s verdict decides what happens to an alert', () => {
   it('leaves alone anything it does not recognise, rather than send on it', () => {
     // No row (not a queued Web Push alert), or an answer this build does not
     // know. Neither is a reason to wake somebody, nor to spend their one repeat.
-    for (const unknown of [null, undefined, 'DELIVER', 1, { verdict: 'deliver' }, { verdict: 'MAYBE' }, { verdict: true }, {}]) {
+    for (const unknown of [null, undefined, 'DELIVER', 1, { verdict: 'OPENED' }, { verdict: 'deliver' }, { verdict: 'MAYBE' }, { verdict: true }, {}]) {
       expect(deliveryAction(unknown), JSON.stringify(unknown)).toEqual({ kind: 'LEAVE' });
     }
   });

@@ -104,8 +104,10 @@ the scheduler; the response body reports them as `failed`.
   primary path. Running it more often would paper over a broken immediate
   wake-up rather than reveal one, and the brief is explicit: no schedule change
   without evidence.
-- **One repeat, still.** `MAX_ATTEMPTS = 2` and `REPEAT_AFTER_MS = 90_000` are
-  untouched. Two is the whole promise the interface makes to a firefighter.
+- **One reminder, still.** `MAX_ATTEMPTS = 2` remains unchanged; the reminder
+  threshold is now `REPEAT_AFTER_MS = 30_000`. Two attempts is the whole promise
+  the interface makes to a firefighter. The one-minute scheduler means actual
+  delivery occurs on its next tick after the 30-second threshold.
 - **Atomic claims, duplicate protection, send-time eligibility re-checks,
   revoked-subscription handling** — all unchanged. Concurrency does not weaken
   them: rows within one invocation are distinct by construction, and the

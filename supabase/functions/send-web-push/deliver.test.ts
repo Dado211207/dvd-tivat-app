@@ -110,8 +110,8 @@ describe('what the worker sweeps', () => {
       const db = queue({ data: null, error: null });
       await deliverQueued({ service: db, send: neverSend, scheduler: true, now: () => now }, woken);
       expect(db.ops.find((op) => op.kind === 'rpc' && op.table === 'push_delivery_queue')?.payload, String(woken)).toEqual({
-        // Ninety seconds for a repeat, thirty for a stale claim: policy.ts's waits.
-        accepted_before: '2026-09-25T02:58:30.000Z',
+        // Thirty seconds for a reminder, thirty for a stale claim: policy.ts's waits.
+        accepted_before: '2026-09-25T02:59:30.000Z',
         claimed_before: '2026-09-25T02:59:30.000Z',
       });
     }
@@ -124,7 +124,7 @@ describe('what the worker sweeps', () => {
 
   it('reports the alerts nobody can write - all of them, or only the woken call-out\'s', async () => {
     for (const woken of [undefined, CALLOUT]) {
-      const db = queue(verdictOf('OPENED'), undefined, { data: 51, error: null });
+      const db = queue(verdictOf('RESPONDED'), undefined, { data: 51, error: null });
       expect(await deliverQueued({ service: db, send: neverSend, scheduler: true }, woken)).toMatchObject({ mislabelled: 51, skipped: 1 });
       const asked = db.ops.filter((op) => op.kind === 'rpc' && op.table === 'push_delivery_mislabelled');
       expect(asked.map((op) => op.payload)).toEqual([{ target_intervention: woken ?? null }]);
@@ -185,7 +185,7 @@ describe('setting an alert aside', () => {
   const CLOSES = [
     ['SERVICE_MISMATCH', 'SERVICE_MISMATCH'],
     ['NOT_A_RECIPIENT', 'NOT_A_RECIPIENT'],
-    ['OPENED', 'MEMBER_OPENED'],
+    ['RESPONDED', 'MEMBER_RESPONDED'],
     ['CALLOUT_NOT_OPEN', 'CALLOUT_NOT_OPEN'],
   ] as const;
 
@@ -212,7 +212,7 @@ describe('setting an alert aside', () => {
   });
 
   it('treats a lost race to close an opened alert, or one whose call-out ended, as it always did', async () => {
-    for (const verdict of ['OPENED', 'CALLOUT_NOT_OPEN']) {
+    for (const verdict of ['RESPONDED', 'CALLOUT_NOT_OPEN']) {
       const db = queue(verdictOf(verdict), { data: null, error: { message: 'serialization failure' } });
       expect(await deliverQueued({ service: db, send: neverSend, scheduler: true }), verdict).toMatchObject({ skipped: 1, failed: 0 });
     }

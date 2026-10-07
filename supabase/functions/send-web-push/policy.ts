@@ -11,8 +11,8 @@
  * - most importantly - exactly which fields may travel to a locked screen.
  */
 
-/** How long after an accepted alert a single repeat may be sent. */
-export const REPEAT_AFTER_MS = 90_000;
+/** How long after an accepted alert a single reminder may be sent. */
+export const REPEAT_AFTER_MS = 30_000;
 
 /**
  * How long a claimed row is left alone before another worker may take it.
@@ -127,14 +127,15 @@ export type DeliveryAction =
 /**
  * Why an alert is set aside unsent, as `delivery_close_reason` records it.
  *
- * Two are about the member or the call-out and happen every day: they opened
- * it (MEMBER_OPENED), or it ended before the alert went out (CALLOUT_NOT_OPEN).
+ * Two are about the member or the call-out and happen every day: the member
+ * answered (MEMBER_RESPONDED), or it ended before the alert went out
+ * (CALLOUT_NOT_OPEN). Opening the alert alone is not a response.
  * Two are about the ROW, and no command writes one: its call-out and member are
  * not in its service (SERVICE_MISMATCH), or its member was never sent the
  * call-out (NOT_A_RECIPIENT). Those are an integrity problem - see
  * `QUARANTINE`.
  */
-export type CloseReason = 'MEMBER_OPENED' | 'CALLOUT_NOT_OPEN' | 'SERVICE_MISMATCH' | 'NOT_A_RECIPIENT';
+export type CloseReason = 'MEMBER_RESPONDED' | 'CALLOUT_NOT_OPEN' | 'SERVICE_MISMATCH' | 'NOT_A_RECIPIENT';
 
 /**
  * The reasons a row is set aside because something wrote it that should not
@@ -148,7 +149,7 @@ export function deliveryAction(verdict: unknown): DeliveryAction {
   const { verdict: answer, user_id: userId, published_at: publishedAt } = verdict as Record<string, unknown>;
   if (answer === 'SERVICE_MISMATCH') return { kind: 'CLOSE', reason: 'SERVICE_MISMATCH' };
   if (answer === 'NOT_A_RECIPIENT') return { kind: 'CLOSE', reason: 'NOT_A_RECIPIENT' };
-  if (answer === 'OPENED') return { kind: 'CLOSE', reason: 'MEMBER_OPENED' };
+  if (answer === 'RESPONDED') return { kind: 'CLOSE', reason: 'MEMBER_RESPONDED' };
   if (answer === 'CALLOUT_NOT_OPEN') return { kind: 'CLOSE', reason: 'CALLOUT_NOT_OPEN' };
   if (answer === 'INELIGIBLE') return { kind: 'REFUSE' };
   if (answer === 'DELIVER') {

@@ -66,6 +66,7 @@ import { MIGRATIONS, connect, createAccount } from './harness';
 import { postgrest, type Rest } from './postgrest';
 
 const PUSH = 'supabase/migrations/202609250032_push_service.sql';
+const RESPONSE_AWARE = 'supabase/migrations/20261006130000_response_aware_push_reminders.sql';
 
 const DVD = '00000000-0000-4000-8000-000000000001';
 const SZS = '00000000-0000-4000-8000-000000000002';
@@ -367,9 +368,12 @@ beforeAll(async () => {
     (['szsFirefighter', 'szsOther', 'szsSuspended', 'dual', 'dualSzsWithdrawn'] as const).map((who) => people[who].szs),
   ]);
 
-  // One recipient in each service has already opened their call-out.
+  // One recipient in each service has opened AND answered their call-out.
+  // Opening alone is not a response and must not suppress the reminder.
   await committed(people.dvdOther.user, 'select public.acknowledge_intervention($1)', [dvdCallout]);
+  await committed(people.dvdOther.user, "select public.submit_response($1, 'NE_MOGU', null, false)", [dvdCallout]);
   await committed(people.szsOther.user, 'select public.acknowledge_intervention($1)', [szsCallout]);
+  await committed(people.szsOther.user, "select public.submit_response($1, 'NE_MOGU', null, false)", [szsCallout]);
 
   // Two rows no command writes. Only the service role or a superuser can: this
   // is what a bug, a hand-run repair or an import would leave behind.
@@ -567,7 +571,24 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   const FIXTURE_ALERTED = ['dvdFirefighter@DVD', 'dual@DVD', 'dualSzsWithdrawn@DVD', 'szsFirefighter@SZS', 'dual@SZS'];
 
   beforeAll(async () => {
-    if (MIGRATIONS.includes(PUSH)) await db.query(sql(PUSH));
+    if (!MIGRATIONS.includes(PUSH) || !MIGRATIONS.includes(RESPONSE_AWARE)) {
+      throw new Error('Push-service and response-aware reminder migrations must both be in the harness');
+    }
+    await db.query(sql(PUSH));
+    // This suite is deliberately the P4e before/after fixture and includes two
+    // superuser-inserted cross-service rows which later P7 triggers reject.
+    // Supply the P7 relation used by the response-aware verdict without
+    // replaying migrations over those intentionally malformed P4e fixtures.
+    await db.query(`
+      create table public.intervention_recipient_organizations (
+        intervention_id uuid not null references public.interventions(id) on delete cascade,
+        organization_id uuid not null references public.organizations(id) on delete restrict,
+        added_by_user_id uuid references auth.users(id) on delete set null,
+        added_at timestamptz not null default now(),
+        primary key (intervention_id, organization_id)
+      );
+    `);
+    await db.query(sql(RESPONSE_AWARE));
     service = postgrest({ role: 'service_role' });
   }, 60_000);
 
@@ -618,6 +639,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
         'dualSzsWithdrawn@SZS: DELIVER -> INELIGIBLE',
         'forged member: DELIVER -> SERVICE_MISMATCH',
         'forged label: INELIGIBLE -> SERVICE_MISMATCH',
+        'dvdOther@DVD: OPENED -> RESPONDED',
+        'szsOther@SZS: OPENED -> RESPONDED',
       ].sort(),
     );
   });
@@ -679,6 +702,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     const before = await shape();
     await isolated(async () => {
       await db.query(sql(PUSH));
+      await db.query(sql(RESPONSE_AWARE));
       expect(await shape()).toBe(before);
     });
   });
@@ -800,12 +824,12 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       const verdict = new Map(verdicts.map((row) => [row.id, row.verdict]));
       const expected: [Label, string, string][] = [
         ['dvdFirefighter', dvdCallout, 'DELIVER'],
-        ['dvdOther', dvdCallout, 'OPENED'],
+        ['dvdOther', dvdCallout, 'RESPONDED'],
         ['dvdSuspended', dvdCallout, 'INELIGIBLE'],
         ['dual', dvdCallout, 'DELIVER'],
         ['dualSzsWithdrawn', dvdCallout, 'DELIVER'],
         ['szsFirefighter', szsCallout, 'DELIVER'],
-        ['szsOther', szsCallout, 'OPENED'],
+        ['szsOther', szsCallout, 'RESPONDED'],
         ['szsSuspended', szsCallout, 'INELIGIBLE'],
         ['dual', szsCallout, 'DELIVER'],
         ['dualSzsWithdrawn', szsCallout, 'INELIGIBLE'],
@@ -923,8 +947,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
       // Its delivery still moves - every write the worker makes.
       expect(await raw(`update public.notification_outbox set state = 'SENT_TO_PROVIDER', attempt_count = 1, updated_at = now() where id = $1`, [alert])).toBe('OK');
       expect(await raw(`update public.notification_outbox set state = 'PROVIDER_ACCEPTED', updated_at = now() where id = $1`, [alert])).toBe('OK');
-      expect(await raw(`update public.notification_outbox set delivery_closed_at = now(), delivery_close_reason = 'MEMBER_OPENED' where id = $1`, [alert])).toBe('OK');
-      for (const reason of ['SERVICE_MISMATCH', 'NOT_A_RECIPIENT', 'CALLOUT_NOT_OPEN']) {
+      expect(await raw(`update public.notification_outbox set delivery_closed_at = now(), delivery_close_reason = 'MEMBER_RESPONDED' where id = $1`, [alert])).toBe('OK');
+      for (const reason of ['SERVICE_MISMATCH', 'NOT_A_RECIPIENT', 'CALLOUT_NOT_OPEN', 'MEMBER_RESPONDED']) {
         expect(await raw(`update public.notification_outbox set delivery_close_reason = $2 where id = $1`, [alert, reason]), reason).toBe('OK');
       }
       expect(await raw(`update public.notification_outbox set delivery_close_reason = 'BECAUSE_I_SAID_SO' where id = $1`, [alert])).toMatch(/check constraint|violates/);
@@ -961,7 +985,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     expect(alerted).toEqual(
       ['dvdFirefighter@DVD', 'dual@DVD', 'dualSzsWithdrawn@DVD', 'szsFirefighter@SZS', 'dual@SZS'].sort(),
     );
-    // Five sent; three refused; two already opened and one set aside. The row
+    // Five sent; three refused; two already answered and one set aside. The row
     // that can be neither sent nor set aside is not handed to the worker at all
     // - see "behind rows nobody can close" below - and is counted instead.
     expect(tally).toEqual({ accepted: 5, rejected: 3, skipped: 3, failed: 0, mislabelled: 1 });
@@ -976,7 +1000,7 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     }
     for (const [who, callout] of [['dvdOther', dvdCallout], ['szsOther', szsCallout]] as const) {
       expect(await stateOf(await alertOf(who, callout)), who).toEqual({
-        state: 'QUEUED', attempt_count: 0, delivery_close_reason: 'MEMBER_OPENED', attempts: '',
+        state: 'QUEUED', attempt_count: 0, delivery_close_reason: 'MEMBER_RESPONDED', attempts: '',
       });
     }
     // Set aside without an attempt: nothing was tried, and nothing counts against it.
@@ -1010,7 +1034,39 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     }
   });
 
-  it('repeats an unanswered alert once, after ninety seconds, and never again', async () => {
+  it('sends the reminder when the member opened the call-out but has not answered', async () => {
+    // The worker uses a separate PostgREST connection. Commit fixture changes
+    // before invoking it so it can see the reset queue and read receipt.
+    await resetQueue();
+    const start = Date.now();
+    const first = fakePush();
+    await deliverQueued({ service, send: first.send, scheduler: true, now: () => start }, dvdCallout);
+    const firefighterAlert = await alertOf('dvdFirefighter', dvdCallout);
+    expect(
+      first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter')),
+      JSON.stringify({ sent: first.sent.map((item) => item.endpoint), state: await stateOf(firefighterAlert) }),
+    ).toBe(true);
+
+    await committed(
+      people.dvdFirefighter.user,
+      'select public.acknowledge_intervention($1)',
+      [dvdCallout],
+    );
+    const { rows: receipts } = await db.query<{ opened: boolean; answered: boolean }>(
+      `select exists (select 1 from public.intervention_acknowledgements
+                        where intervention_id = $1 and member_id = $2) as opened,
+              exists (select 1 from public.intervention_responses
+                        where intervention_id = $1 and member_id = $2) as answered`,
+      [dvdCallout, people.dvdFirefighter.dvd],
+    );
+    expect(receipts).toEqual([{ opened: true, answered: false }]);
+    const reminder = fakePush();
+    await deliverQueued({ service, send: reminder.send, scheduler: true, now: () => start + 30_000 }, dvdCallout);
+    expect(reminder.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
+    expect(reminder.sent.filter((item) => item.endpoint === endpointOf('dvdFirefighter')).every((item) => item.payload.repeat)).toBe(true);
+  });
+
+  it('reminds an unanswered alert once, after thirty seconds, and never again', async () => {
     await resetQueue();
     const start = Date.now();
     const at = (seconds: number) => () => start + seconds * 1000;
@@ -1023,8 +1079,12 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     await deliverQueued({ service, send: early.send, scheduler: true, now: at(1) });
     expect(early.sent, 'nothing is repeated a second later').toHaveLength(0);
 
+    const beforeDue = fakePush();
+    await deliverQueued({ service, send: beforeDue.send, scheduler: true, now: at(29) });
+    expect(beforeDue.sent, 'the reminder is not due before thirty seconds').toHaveLength(0);
+
     const repeat = fakePush();
-    await deliverQueued({ service, send: repeat.send, scheduler: true, now: at(91) });
+    await deliverQueued({ service, send: repeat.send, scheduler: true, now: at(30) });
     expect(repeat.sent.map((s) => s.endpoint).sort()).toEqual(first.sent.map((s) => s.endpoint).sort());
     expect(repeat.sent.every((s) => s.payload.repeat === true)).toBe(true);
     expect(await stateOf(await alertOf('szsFirefighter', szsCallout))).toEqual({
@@ -1032,8 +1092,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     });
 
     const third = fakePush();
-    await deliverQueued({ service, send: third.send, scheduler: true, now: at(182) });
-    expect(third.sent, 'the initial alert and one repeat, never a third').toHaveLength(0);
+    await deliverQueued({ service, send: third.send, scheduler: true, now: at(61) });
+    expect(third.sent, 'the initial alert and one reminder, never a third').toHaveLength(0);
   });
 
   it('sends each alert once when two workers race for the same queue', async () => {
@@ -1349,9 +1409,9 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
         const tally = await deliverQueued({ service, send: push.send, scheduler: true, now: () => start + minute * 60_000 });
         runs.push({ sent: sentTo(push.sent), tally: { ...tally } });
       }
-      // The first alerts, nothing while they are held, then the one repeat.
+      // The first run sends the initial alerts; the next minute's tick sends the one reminder.
       expect(runs.map((run) => run.sent), JSON.stringify(runs.map((run) => run.tally))).toEqual([
-        [...FIXTURE_ALERTED].sort(), [], [...FIXTURE_ALERTED].sort(),
+        [...FIXTURE_ALERTED].sort(), [...FIXTURE_ALERTED].sort(), [],
       ]);
     });
 
@@ -1407,8 +1467,8 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
   describe('behind fifty alerts waiting out their repeat', () => {
     /**
      * Fifty alerts on the DVD call-out, all to one of its recipients, older than
-     * anything the fixture queued: the push service accepted each thirty
-     * seconds ago, so each waits another minute for its one repeat. The sweep
+     * anything the fixture queued: the push service accepted each just now,
+     * so each remains held until its one 30-second reminder threshold. The sweep
      * is the fifty oldest open alerts - and whether an alert is due was asked
      * only after the fifty had been read.
      */
@@ -1454,31 +1514,41 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     it('sends newly queued alerts at once on the scheduler, and leaves the fifty to their hold', async () => {
       await resetQueue();
       const now = Date.now();
-      await acceptedAt(held, now - 30_000);
+      await acceptedAt(held, now);
       const push = fakePush();
       const tally = await deliverQueued({ service, send: push.send, scheduler: true, now: () => now });
       expect(sentTo(push.sent), JSON.stringify(tally)).toEqual([...FIXTURE_ALERTED].sort());
       // Exactly the run there would be without them: they are not in the sweep at all.
       expect(tally).toEqual({ accepted: 5, rejected: 3, skipped: 3, failed: 0, mislabelled: 1 });
-      expect(await untouched(held, now - 30_000), 'none repeated early').toBe(HELD);
+      expect(await untouched(held, now), 'none repeated early').toBe(HELD);
     });
 
     it('sends a call-out\'s newly queued alerts at once when its commander wakes it, behind fifty of its own', async () => {
       await resetQueue();
       const now = Date.now();
-      await acceptedAt(held, now - 30_000);
+      await acceptedAt(held, now);
       const push = fakePush();
       const tally = await deliverQueued({ service, send: push.send, scheduler: false, now: () => now }, dvdCallout);
       expect(sentTo(push.sent), JSON.stringify(tally)).toEqual(['dual@DVD', 'dualSzsWithdrawn@DVD', 'dvdFirefighter@DVD']);
-      expect(await untouched(held, now - 30_000), 'none repeated early').toBe(HELD);
+      expect(await untouched(held, now), 'none repeated early').toBe(HELD);
     });
 
     it('ends both holds on the worker\'s own clock, to the millisecond, as it always has', async () => {
       await resetQueue();
       const now = Date.now();
+      const staleClaim = await alertOf('szsFirefighter', szsCallout);
+      // Keep unrelated fresh alerts out of this exact-boundary check: their own
+      // reminders must not be mistaken for a third attempt on the test rows.
+      await db.query(
+        `update public.notification_outbox o set state = 'FAILED'
+          where o.intervention_id = any($1::uuid[]) and o.channel = 'WEB_PUSH'
+            and o.id <> $2 and o.id <> all($3::uuid[])
+            and o.organization_id = (select c.organization_id from public.interventions c where c.id = o.intervention_id)`,
+        [[dvdCallout, szsCallout], staleClaim, held],
+      );
       // Ten waiting for their repeat, accepted at `now - 30 s` and 999 microseconds:
       // the worker reads a stored time to the millisecond, so their hold ends at
-      // `now + 60 s` exactly. The other forty are out of the way.
+      // `now` exactly. The other forty are out of the way.
       const waiting = held.slice(0, 10);
       await acceptedAt(waiting, now - 30_000, 999);
       await db.query(`update public.notification_outbox set state = 'FAILED' where id = any($1::uuid[])`, [held.slice(10)]);
@@ -1490,19 +1560,21 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
           where id = $1`,
         [await alertOf('szsFirefighter', szsCallout), new Date(now + 30_000).toISOString()],
       );
-      const edge = now + 60_000;
-
       const early = fakePush();
-      await deliverQueued({ service, send: early.send, scheduler: true, now: () => edge - 1 });
-      const onTime = fakePush();
-      await deliverQueued({ service, send: onTime.send, scheduler: true, now: () => edge });
+      await deliverQueued({ service, send: early.send, scheduler: true, now: () => now - 1 });
+      const repeatOnTime = fakePush();
+      await deliverQueued({ service, send: repeatOnTime.send, scheduler: true, now: () => now });
+      const takeoverOnTime = fakePush();
+      await deliverQueued({ service, send: takeoverOnTime.send, scheduler: true, now: () => now + 60_000 });
 
-      const count = (sent: readonly Sent[]) => ({
-        repeats: sent.filter((s) => s.payload.repeat === true).length,
-        takenOver: sent.filter((s) => s.endpoint === endpointOf('szsFirefighter')).length,
-      });
-      expect(count(early.sent), 'a millisecond before').toEqual({ repeats: 0, takenOver: 0 });
-      expect(count(onTime.sent), 'on the millisecond').toEqual({ repeats: waiting.length, takenOver: 1 });
+      const repeats = (sent: readonly Sent[]) => sent.filter((s) => s.payload.repeat === true).length;
+      const takenOver = (sent: readonly Sent[]) => sent.filter((s) => s.endpoint === endpointOf('szsFirefighter')).length;
+      expect(repeats(early.sent), 'one millisecond before reminder threshold').toBe(0);
+      expect(repeats(repeatOnTime.sent), 'on the reminder threshold').toBe(waiting.length);
+      expect(takenOver(early.sent), 'one millisecond before stale-claim threshold').toBe(0);
+      expect(takenOver(repeatOnTime.sent), 'claim is not yet stale').toBe(0);
+      expect(takenOver(takeoverOnTime.sent), 'on the stale-claim threshold').toBe(1);
+      expect(repeats(takeoverOnTime.sent), 'no third attempt').toBe(0);
     });
   });
 
