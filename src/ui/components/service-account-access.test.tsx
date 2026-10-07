@@ -101,13 +101,13 @@ describe('citizen-first service access', () => {
 });
 
 describe('installation owner service access', () => {
-  it('shows both owner services when the owner has no membership rows', async () => {
+  it('explains owner access without inventing a membership row', async () => {
     loadMemberships.mockResolvedValue([]);
     await renderAccount(OWNER);
 
     const text = container.textContent ?? '';
-    expect(text).toMatch(/DVD Tivat — Vlasnik sistema/);
-    expect(text).toMatch(/Sluzba zastite i spasavanja Tivat — Vlasnik sistema/);
-    expect(text).not.toMatch(/Nema dodijeljenu sluzbu/);
+    expect(text).toMatch(/Nema dodijeljenu sluzbu/);
+    expect(text).toMatch(/Vlasnicka uloga omogucava operativni pristup/);
+    expect(text).not.toMatch(/DVD Tivat — Vlasnik sistema/);
   });
 });
