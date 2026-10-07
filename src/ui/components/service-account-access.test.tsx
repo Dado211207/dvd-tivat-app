@@ -35,6 +35,15 @@ const CITIZEN: AccessGateway = {
   fetchAccountStatus: async () => 'ACTIVE',
 };
 
+const OWNER: AccessGateway = {
+  currentUser: async () => ({ id: 'owner-1', email: 'owner@example.invalid' }),
+  fetchProfile: async () => ({ fullName: 'Owner Example', profileComplete: true }),
+  fetchRole: async () => 'OWNER',
+  fetchAccountStatus: async () => 'ACTIVE',
+  fetchServiceContext: async () => ({ memberships: [], isOwner: true }),
+  fetchRoleIn: async () => 'OWNER',
+};
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -50,10 +59,10 @@ afterEach(() => {
   container.remove();
 });
 
-async function renderAccount() {
+async function renderAccount(gateway: AccessGateway = CITIZEN) {
   await act(async () => {
     root.render(
-      <AccessProvider gateway={CITIZEN} configured>
+      <AccessProvider gateway={gateway} configured>
         <AccountAccessSetup />
       </AccessProvider>,
     );
@@ -88,5 +97,17 @@ describe('citizen-first service access', () => {
     expect(text).toMatch(/Sluzba zastite i spasavanja Tivat clanstvo je aktivno/i);
     expect(text).toMatch(/Komandir/i);
     expect(text).toMatch(/DVD podaci ostaju nedostupni/i);
+  });
+});
+
+describe('installation owner service access', () => {
+  it('shows both owner services when the owner has no membership rows', async () => {
+    loadMemberships.mockResolvedValue([]);
+    await renderAccount(OWNER);
+
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/DVD Tivat — Vlasnik sistema/);
+    expect(text).toMatch(/Sluzba zastite i spasavanja Tivat — Vlasnik sistema/);
+    expect(text).not.toMatch(/Nema dodijeljenu sluzbu/);
   });
 });
