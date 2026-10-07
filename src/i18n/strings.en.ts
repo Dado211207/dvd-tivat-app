@@ -127,6 +127,7 @@ export const en: Strings = {
     szsMembershipActive: '{organization} membership is active with the role {role}. SZS operational data is not open in this phase, and DVD data remains unavailable without a DVD role.',
     signedInAs: 'Signed-in account', serverRole: 'DVD operational role',
     servicesAndRoles: 'Services and roles', noServiceMembership: 'No service assigned',
+    ownerAccessWithoutMembership: 'The owner role grants operational access to services without separate membership. Responding personally to a call-out depends on linking this account to a member record in the roster.',
     checkingServices: 'Checking services and roles...',
     servicesUnavailable: 'Services and roles could not be checked. Try again; the application does not assume access.',
     roleFromServer: 'The server supplied these roles at the last check. The application does not store or assume them.',
