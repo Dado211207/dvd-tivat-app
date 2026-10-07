@@ -574,6 +574,9 @@ export function AccountAccessSetup() {
               <dd>{membershipSummary}</dd>
             </div>
           </dl>
+          {access.role === 'OWNER' ? (
+            <Notice tone="info">{t.accountAccess.ownerAccessWithoutMembership}</Notice>
+          ) : null}
           <p className="account-identity__note">
             {t.accountAccess.roleFromServer}
           </p>

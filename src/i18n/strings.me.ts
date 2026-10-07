@@ -134,6 +134,7 @@ export const me = {
     szsMembershipActive: '{organization} clanstvo je aktivno sa ulogom {role}. SZS operativni podaci jos nijesu otvoreni u ovoj fazi, a DVD podaci ostaju nedostupni bez DVD uloge.',
     signedInAs: 'Prijavljeni nalog', serverRole: 'DVD operativna uloga',
     servicesAndRoles: 'Sluzbe i uloge', noServiceMembership: 'Nema dodijeljenu sluzbu',
+    ownerAccessWithoutMembership: 'Vlasnicka uloga omogucava operativni pristup sluzbama bez zasebnog clanstva. Licni odaziv na poziv zavisi od veze ovog naloga sa zapisom clana u Evidenciji.',
     checkingServices: 'Provjeravam sluzbe i uloge...',
     servicesUnavailable: 'Sluzbe i uloge trenutno nijesu mogle biti provjerene. Pokusajte ponovo; aplikacija ne pretpostavlja pristup.',
     roleFromServer: 'Uloge je dao server pri posljednjoj provjeri. Aplikacija ih ne pamti i ne pretpostavlja.',
