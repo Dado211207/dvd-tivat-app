@@ -1042,19 +1042,24 @@ describe('after P4e: a device is the account\'s, an alert is the call-out\'s ser
     const first = fakePush();
     await deliverQueued({ service, send: first.send, scheduler: true, now: () => start }, dvdCallout);
     const firefighterAlert = await alertOf('dvdFirefighter', dvdCallout);
-    const firefighterVerdict = await rowsAs<{ verdict: string }>(
-      'service_role', 'select verdict from public.push_delivery_verdict($1)', [firefighterAlert],
-    );
     expect(
       first.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter')),
-      JSON.stringify({ sent: first.sent.map((item) => item.endpoint), state: await stateOf(firefighterAlert), verdict: firefighterVerdict }),
+      JSON.stringify({ sent: first.sent.map((item) => item.endpoint), state: await stateOf(firefighterAlert) }),
     ).toBe(true);
 
-    expect(await committed(
+    await committed(
       people.dvdFirefighter.user,
       'select public.acknowledge_intervention($1)',
       [dvdCallout],
-    )).toBe('OK');
+    );
+    const { rows: receipts } = await db.query<{ opened: boolean; answered: boolean }>(
+      `select exists (select 1 from public.intervention_acknowledgements
+                        where intervention_id = $1 and member_id = $2) as opened,
+              exists (select 1 from public.intervention_responses
+                        where intervention_id = $1 and member_id = $2) as answered`,
+      [dvdCallout, people.dvdFirefighter.dvd],
+    );
+    expect(receipts).toEqual([{ opened: true, answered: false }]);
     const reminder = fakePush();
     await deliverQueued({ service, send: reminder.send, scheduler: true, now: () => start + 30_000 }, dvdCallout);
     expect(reminder.sent.some((item) => item.endpoint === endpointOf('dvdFirefighter'))).toBe(true);
