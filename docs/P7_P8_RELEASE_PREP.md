@@ -1,5 +1,35 @@
 # P7 + P8 release candidate: execution record
 
+## Current production checkpoint — 2026-10-08
+
+- **Production:** the public Pages application is
+  <https://dado211207.github.io/dvd-tivat-app/>. Before this finishing branch,
+  `main` was `2c1f13e`; CI and the Pages deployment passed on that head.
+- **Database and worker:** 49 migrations are applied through
+  `20261006130000_response_aware_push_reminders.sql`; `send-web-push` v7 and the
+  one-minute scheduler are active. There was no open intervention or queued,
+  retrying or pending Web Push row in the latest read-only check.
+- **Real-device evidence:** the owner completed signup/confirmation/sign-in,
+  installed the iPhone PWA, received the initial alert and the single
+  response-aware reminder after 30+ seconds, saved a response and closed the
+  fictional TEST call-out. A second prepared test account also received both
+  pushes. Test accounts were disabled and trial roster data was removed.
+- **Guide:** <https://firenexa.netlify.app/> points to the production Pages app
+  and is suitable for the later controlled onboarding invitation.
+- **Recovery:** custom SMTP and email confirmation are accepted. Password
+  recovery remains hidden until the recovery template and complete reset flow
+  pass their own real-mail acceptance.
+- **Recovery evidence still open:** the successful encrypted rehearsal and
+  equivalence gate at `471bd7f` predate the final hosted migrations. Create and
+  independently decrypt/restore a fresh encrypted post-rollout backup before
+  relying on it for recovery.
+- **This finishing branch:** adds one security-advisor migration, professional
+  invite/recovery templates and current onboarding/release evidence. Record its
+  exact CI head before applying the migration or publishing a new build.
+
+The dated sections below are retained as historical evidence and do not
+override this checkpoint.
+
 
 ## Current release checkpoint — 2026-10-06 after production deployment (supersedes historical checkpoints below)
 

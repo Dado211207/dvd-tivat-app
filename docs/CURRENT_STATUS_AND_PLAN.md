@@ -1,3 +1,19 @@
+> **Aktuelni produkcioni presjek — 8. oktobar 2026.** Produkciona aplikacija je
+> <https://dado211207.github.io/dvd-tivat-app/>; javni vodič je
+> <https://firenexa.netlify.app/>. `main` je prije ovog završnog sigurnosnog
+> paketa bio na `2c1f13e`: CI i Pages objava su prošli. Produkcija ima 49
+> primijenjenih migracija, aktivni `send-web-push` v7 i aktivan minutni
+> raspoređivač. Vlasnik je na stvarnim uređajima potvrdio registraciju i email,
+> prijavu, instalaciju, prvu push poruku, jedan podsjetnik poslije 30+ sekundi
+> bez odgovora, odgovor i zatvaranje TEST poziva. Testni nalozi su isključeni i
+> probni sastav očišćen.
+>
+> Prije poziva stvarnim članovima još ostaju: ovaj završni sigurnosni paket i
+> njegov CI/deploy, stvarna proba oporavka lozinke prije uključivanja ekrana,
+> nova šifrovana kopija poslije završnih migracija, te vođeni pilot prema
+> `RELEASE_ACCEPTANCE.md`. Raniji odjeljci ispod su istorija i ne smiju
+> nadjačati ovaj presjek.
+>
 > **4 October 2026:** the guide now serves deploy `6ac2a05f9fa3f188e860c23c` (real iPhone video, written Android and usage guides); `6ac15ece…` below is the previous deploy. Its QR targets the app on the isolated test Supabase project — not for member sign-up before production cutover. See [FIRENEXA_PUBLICATION.md](./FIRENEXA_PUBLICATION.md).
 >
 > **3 October 2026 checkpoint:** app <https://firenexa-app.netlify.app/>

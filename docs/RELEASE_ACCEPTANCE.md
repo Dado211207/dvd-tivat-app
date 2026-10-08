@@ -1,5 +1,20 @@
 # Release acceptance record
 
+## Verified production observations — 8 October 2026
+
+These observations are evidence already supplied by the owner. They do not
+replace the remaining device matrix or the three supervised pilot exercises.
+
+| Check | Verified observation |
+| --- | --- |
+| Public app and guide | App: <https://dado211207.github.io/dvd-tivat-app/>; guide: <https://firenexa.netlify.app/> |
+| Signup and email confirmation | A fresh external account received the branded confirmation email, followed its link and signed in successfully |
+| Installed iPhone PWA | Signed in from the Home Screen installation and enabled notifications |
+| TEST call-out | Initial notification arrived; a single reminder arrived after 30+ seconds when unanswered; response was saved; call-out was closed |
+| Second test account | Prepared through the owner workflow, enabled notifications, received both the initial alert and reminder, then completed the test |
+| Cleanup | Trial accounts were disabled and the test roster was cleaned after the exercise |
+| Still open | Android physical-device acceptance, password recovery, post-rollout encrypted backup, and three supervised firefighter pilot exercises |
+
 Complete one copy of this record before DVD Tivat relies on a new production
 release. Use fictional exercises until the society has formally approved real
 member data.
