@@ -1,8 +1,26 @@
-# Account recovery
+# Email confirmation and account recovery
 
 The application contains a password-recovery flow that uses an emailed one-time
 code. It stays hidden until the target Supabase project has a working mail
 provider and the recovery template has been accepted on a real mailbox.
+
+## Email confirmation before inviting members
+
+1. In the production Supabase project, configure a custom SMTP provider with a
+   verified sender address. The built-in sender is unsuitable for external
+   member addresses.
+2. Set the Auth Site URL to `https://dado211207.github.io/dvd-tivat-app/` and
+   add that exact URL to the allowed redirect URLs. The client requests this
+   app directory for both registration and resend; check the current Pages
+   deployment before enabling confirmation.
+3. Keep the confirmation email template's `{{ .ConfirmationURL }}` link. Enable
+   **Confirm email** only after custom SMTP sends to a disposable external
+   mailbox. Register that address, confirm the email arrives, click the link,
+   check it returns to `/dvd-tivat-app/`, then sign in. Test resend on a
+   different unconfirmed address.
+4. Keep existing member roles owner-assigned. Do not send real invitations
+   until a fresh signup, confirmation, and sign-in round trip succeeds on a
+   real device.
 
 ## Hosted setup
 
@@ -14,7 +32,7 @@ provider and the recovery template has been accepted on a real mailbox.
    not match the code-entry screen.
 
    ```html
-   <h2>Boka Operativa - promjena lozinke</h2>
+   <h2>FireNexa - promjena lozinke</h2>
    <p>Jednokratni kod za promjenu lozinke:</p>
    <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">{{ .Token }}</p>
    <p>Kod kratko traje i moze se iskoristiti samo jednom.</p>
