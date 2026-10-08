@@ -41,7 +41,7 @@ describe('Supabase security-advisor hardening', () => {
 
     expect(result.rows).toHaveLength(triggerGuards.length);
     for (const row of result.rows) {
-      expect(row.proconfig, row.proname).toContain('search_path=');
+      expect(row.proconfig, row.proname).toContain('search_path=""');
     }
   });
 
