@@ -150,6 +150,7 @@ describe('when the request never reaches the server', () => {
     signIn.mockResolvedValue({ ok: false });
     await attemptSignIn();
     expect(container.textContent ?? '').toMatch(/Provjerite email i lozinku/i);
+    expect(container.textContent ?? '').toMatch(/Ako ste se tek registrovali.*potvrdite email/i);
     expect(container.textContent ?? '').not.toMatch(/nije stigao do servera/i);
 
     // And the next network failure starts counting again from one, rather than

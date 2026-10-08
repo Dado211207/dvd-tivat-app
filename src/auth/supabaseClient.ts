@@ -56,7 +56,7 @@ export function accountBackend(): SupabaseClient {
  * errors, which must not be distinguishable either.
  */
 export const GENERIC_CREDENTIAL_ERROR =
-  'Prijava nije uspjela. Provjerite email i lozinku, pa pokusajte ponovo.';
+  'Prijava nije uspjela. Provjerite email i lozinku. Ako ste se tek registrovali, prvo potvrdite email preko linka iz poruke. Zatim pokusajte ponovo.';
 
 /**
  * "The server never answered" is a different thing, and safe to say.

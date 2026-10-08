@@ -140,7 +140,7 @@ export const me = {
     roleFromServer: 'Uloge je dao server pri posljednjoj provjeri. Aplikacija ih ne pamti i ne pretpostavlja.',
     checkAgain: 'Provjeri pristup ponovo', retry: 'Pokusaj ponovo',
     unknownRole: 'Nepoznata uloga',
-    credentialError: 'Prijava nije uspjela. Provjerite email i lozinku, pa pokusajte ponovo.',
+    credentialError: 'Prijava nije uspjela. Provjerite email i lozinku. Ako ste se tek registrovali, prvo potvrdite email preko linka iz poruke. Zatim pokusajte ponovo.',
     networkError: 'Server nije dostupan. Zahtjev nije stigao do servera ili odgovor nije primljen. Provjerite internet vezu i pokusajte ponovo.',
     networkBlocked: 'Server i dalje nije dostupan. Ako ste inace na internetu, zahtjev mozda blokira dodatak za blokiranje sadrzaja, zastita privatnosti u pregledacu ili mreza na kojoj ste. Mozete pokusati sa drugog pregledaca ili druge mreze, ili pitati vlasnika sistema.',
   },

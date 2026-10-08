@@ -95,6 +95,8 @@ describe('what the three messages may contain', () => {
 
   it('keeps the credential message about the credentials and nothing else', () => {
     expect(GENERIC_CREDENTIAL_ERROR).toMatch(/email i lozinku/i);
+    expect(GENERIC_CREDENTIAL_ERROR).toMatch(/Ako ste se tek registrovali.*potvrdite email/i);
+    expect(GENERIC_CREDENTIAL_ERROR).not.toMatch(/vas email nije potvrdjen/i);
     expect(GENERIC_CREDENTIAL_ERROR).not.toMatch(/server|mrez|internet/i);
   });
 

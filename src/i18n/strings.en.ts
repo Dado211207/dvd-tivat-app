@@ -133,7 +133,7 @@ export const en: Strings = {
     roleFromServer: 'The server supplied these roles at the last check. The application does not store or assume them.',
     checkAgain: 'Check access again', retry: 'Try again',
     unknownRole: 'Unknown role',
-    credentialError: 'Sign-in failed. Check your email and password, then try again.',
+    credentialError: 'Sign-in failed. Check your email and password. If you just signed up, confirm your email using the link in the message first. Then try again.',
     networkError: 'The server is unavailable. The request did not reach the server or no response was received. Check your internet connection and try again.',
     networkBlocked: 'The server is still unavailable. If you otherwise have internet access, a content blocker, browser privacy protection or your network may be blocking the request. Try another browser or network, or contact the system owner.',
   },
