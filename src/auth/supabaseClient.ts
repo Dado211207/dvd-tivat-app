@@ -234,6 +234,12 @@ function unreachable(error: unknown): boolean {
  * must not undo by inspecting the response. The person is told to sign in; if
  * the address was already registered, that is exactly the right instruction.
  */
+function confirmationRedirectUrl(): string {
+  // The app may live below an origin, for example /dvd-tivat-app/ on Pages.
+  // Hash routes and query strings are not part of its static entry point.
+  return new URL('.', window.location.href).href;
+}
+
 export async function registerWithEmail(
   email: string,
   password: string,
@@ -244,9 +250,8 @@ export async function registerWithEmail(
       email: email.trim().toLowerCase(),
       password,
       options: {
-        // Confirmation must return to the address where registration started.
-        // Both the existing and the new app origin need to be allowed in Auth.
-        emailRedirectTo: `${window.location.origin}/`,
+        // Return to the app's directory, including its Pages subpath.
+        emailRedirectTo: confirmationRedirectUrl(),
         data: {
           full_name: profile.fullName.trim(),
           phone: profile.phone,
@@ -269,7 +274,7 @@ export async function resendSignupConfirmation(email: string): Promise<AuthOutco
     const { error } = await accountBackend().auth.resend({
       type: 'signup',
       email: email.trim().toLowerCase(),
-      options: { emailRedirectTo: `${window.location.origin}/` },
+      options: { emailRedirectTo: confirmationRedirectUrl() },
     });
     return error
       ? { ok: false, unreachable: unreachable(error) }
