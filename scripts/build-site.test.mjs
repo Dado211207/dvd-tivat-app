@@ -31,6 +31,7 @@ test('one configured address replaces every app link and supplies both QR assets
     assert.ok(!html.includes('{{FIRENEXA_APP_URL}}'));
     assert.ok(!html.includes('<!-- APP_QR -->'));
     assert.ok(!html.includes('testnu aplikaciju'));
+    assert.ok(!html.includes('izaberi TEST'));
     assert.ok(!html.includes('Zavrsna adresa i izdanje'));
     assert.ok(html.includes('./videos/iphone.mp4'));
     assert.ok(!html.includes('./videos/android.mp4'));
@@ -51,6 +52,8 @@ test('one configured address replaces every app link and supplies both QR assets
     }
     assert.equal(html.split(`href="${address}"`).length - 1, 4);
     assert.ok(html.includes('data-testid="app-qr"'));
+    const css = await readFile(join(directory, 'site.css'), 'utf8');
+    assert.match(css, /\\.video-card a\\.button-primary\\s*\\{\\s*color:\\s*#05232c;/);
     assert.deepEqual(JSON.parse(await readFile(join(directory, 'publication.json'), 'utf8')),
       { appUrl: address, preview: false, qrTarget: address });
     assert.ok((await readFile(join(directory, 'assets/app-qr.svg'), 'utf8')).includes('<svg'));
