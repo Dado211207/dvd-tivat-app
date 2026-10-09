@@ -1,3 +1,14 @@
+# FireNexa - trenutno stanje i plan
+
+> **Ispravka objave — 9. oktobar 2026.** Produkciona aplikacija je na
+> <https://dado211207.github.io/dvd-tivat-app/>. Javni vodič je na
+> <https://firenexa.netlify.app/>, ali njegov `publication.json`, linkovi i QR
+> još vode na izolovanu test aplikaciju <https://firenexa-app.netlify.app/>.
+> Ne dijeliti vodič ni QR za prijavu članova dok se ne izgradi sa Pages adresom,
+> provjeri Netlify draft i objavi isti provjereni deploy. Detalji su u
+> [zapisu objave](./FIRENEXA_PUBLICATION.md). PR #109 (`93ec2b5`) je
+> dokumentacioni merge i nije promijenio aplikaciju.
+
 > **Aktuelni produkcioni presjek — 8. oktobar 2026.** Produkciona aplikacija je
 > <https://dado211207.github.io/dvd-tivat-app/>; javni vodič je
 > <https://firenexa.netlify.app/>. `main` je prije ovog završnog sigurnosnog
@@ -28,8 +39,6 @@
 > SZS/dual roles, physical iPhone/Android push and production recovery gates
 > remain unverified. [Exact evidence and limits](./FINAL_ORIGIN_TRANSITION.md).
 > Earlier dated sections below are historical and do not override this checkpoint.
-
-# FireNexa - trenutno stanje i plan
 
 ## Nastavak razvoja u Work okruzenju (2. oktobar 2026)
 
