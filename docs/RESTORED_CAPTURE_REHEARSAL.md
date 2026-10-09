@@ -39,7 +39,7 @@ and capture on the ephemeral runner only.
   mode). This session could not run it (HTTPS-only egress); the owner-triggered
   runner does.
 
-## Blocking finding: pg_net hardening needs Supabase, not the owner
+## Blocking finding: pg_net grants cannot be changed per project
 
 `scripts/restored-capture/harden-pg-net.sql` revokes PUBLIC's privileges on
 `net.http_request_queue` / `net._http_response`. **The project owner cannot run
@@ -47,39 +47,50 @@ it.** Those objects are owned by `supabase_admin`; the owner login `postgres`
 is not a superuser and cannot `SET ROLE supabase_admin`, so its
 `REVOKE ... FROM PUBLIC` raises a warning and changes nothing (verified on the
 isolated project 2026-10-04: PUBLIC retained all eight privileges afterward).
+Supabase Support confirmed on 2026-10-09 that this is expected: `pg_net` is
+created by `supabase_admin`, and only the grantor can revoke those grants.
+Support cannot modify them for an individual project. The grants are required
+by pg_cron, Database Webhooks and the pg_net worker, and can be reapplied when
+the extension is created, during major Postgres upgrades, or when Database
+Webhooks are enabled. Supabase is working on opt-in access but gave no ETA.
 
 A rolled-back probe of the dump role on the real isolated project
 (`scripts/restored-capture/privileges.sql`, across every schema) confirms the
 dump role's **only** residual write path is that pg_net queue — no role
 membership, no `SECURITY DEFINER` functions, no `public`/`auth`/`vault`/
-`pgsodium` writes. `verify-role` therefore refuses the dump while PUBLIC holds
-pg_net. Two ways forward:
+`pgsodium` writes. The public queue grants still let every direct-login role
+manipulate queued requests, read or redirect request headers (including
+secrets), restart the worker, and interfere with requests. A proposed dedicated
+dump login inherits those grants. `default_transaction_read_only` does not
+remove them. `verify-role` must continue to refuse the dump. Support's answer
+closes the per-project revoke path; method B remains blocked unless the
+architecture changes or the owner explicitly accepts this security risk.
 
-- **Clean (recommended): Supabase support** revokes PUBLIC on `net.*` (the body
-  of `harden-pg-net.sql`, run as `supabase_admin`). Then the dump role has no
-  write path and `verify-role` passes. The push cron keeps working — it runs as
-  `postgres`, which `harden-pg-net.sql` re-grants `INSERT` + sequence `USAGE`;
-  `net.http_post` is `SECURITY INVOKER` and its helper functions keep PUBLIC
-  `EXECUTE` (verified on production, read-only).
-- **Residual-accepted fallback:** keep pg_net as is and accept that the
-  short-lived dump role *could*, if its holder were malicious, escalate via the
-  documented cron-trigger trick. This is bounded by: the role lives ~1 hour and
-  is dropped immediately; the runner and operator are trusted; and a malicious
-  operator could instead use method A's `postgres`, which is strictly more
-  powerful. If accepted, `verify-role` must be given an explicit opt-in (not yet
-  implemented — add a reviewed `--accept-pgnet-residual` flag; do not weaken the
-  default).
+- **No supported grant-revocation path:** `scripts/restored-capture/harden-pg-net.sql`
+  is retained as evidence of the attempted hardening. It must not be run as a
+  fix; the owner's `postgres` role cannot apply its revokes.
+- **Residual-accepted fallback:** only proceed after an explicit owner risk
+  decision. The short-lived dump role would still have pg_net access while it
+  exists; its expiry does not remove that access. No acceptance has been
+  recorded, and `verify-role` remains fail-closed. Do not create the role or
+  add a workflow bypass unless the risk and controls are explicitly reviewed.
+- **Safer architecture:** avoid adding another direct database login. Keep
+  `net` out of Data API exposed schemas, do not grant database logins to
+  untrusted services, and use the Data API for services that do not need raw
+  PostgreSQL. Method B still needs a separately designed and reviewed route.
 
 ## Production sequence (ordered; review before any step)
 
 Each step is an owner action unless marked. Nothing here has been executed
 against production.
 
-1. **pg_net:** Supabase support revokes PUBLIC on `net.*` (clean path), or the
-   owner records acceptance of the residual (fallback). Confirm with a
-   read-only check that PUBLIC no longer holds the queue (clean path).
-2. **Create the dump role** from `scripts/restored-capture/dump-role.sql`, run
-   in the dashboard SQL editor. Generate the password + SCRAM verifier with
+1. **pg_net decision:** do not retry the ineffective `REVOKE` or ask Support
+   to change these per-project grants. Keep `verify-role` refusing access unless
+   a reviewed architecture removes the need for an added direct-login role, or
+   the owner explicitly accepts the residual risk.
+2. **Do not create the dump role** from `scripts/restored-capture/dump-role.sql`
+   while the PUBLIC grants remain. If a future approved design permits it,
+   generate the password + SCRAM verifier with
    `node scripts/p4-restored-capture.mjs verifier`; paste only the verifier into
    the SQL; put the password only into the GitHub Actions **secret**
    `DVD_DUMP_DATABASE_URL` as the full session-pooler URL. The role expires in 4
@@ -115,14 +126,11 @@ against production.
 
 ## Smallest owner action
 
-One of:
-- **Clean:** file a Supabase support request to revoke PUBLIC's privileges on
-  `net.http_request_queue`, `net._http_response` and
-  `net.http_request_queue_id_seq` (the exact statements are in
-  `harden-pg-net.sql`). Then steps 2–6 are a dashboard paste plus one
-  `workflow_dispatch` click with the secret set.
-- **Fallback:** record acceptance of the pg_net residual and add the reviewed
-  `verify-role` opt-in; then steps 2–6 as above.
+There is no supported per-project grant change. The current method B remains
+blocked. Either design a route that avoids creating an additional direct-login
+role, or record the owner's explicit acceptance of the pg_net risk and review
+the controls before implementing any opt-in. Do not weaken `verify-role` by
+default.
 
 Either way, the production-derived P4 gate and the backup/restore gate remain
 **not passed** until the sequence actually runs against production.
