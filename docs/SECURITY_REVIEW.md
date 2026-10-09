@@ -5,10 +5,12 @@ Reviewed: 2026-10-08
 Production security checkpoint: email confirmation, custom SMTP and the
 confirmation/sign-in round trip are verified. Password recovery remains hidden
 until its separate code-and-password acceptance passes. The Supabase security
-advisor's trigger-function search-path findings and the relocatable
-`btree_gist`-in-public finding are addressed by
+advisor's trigger-function search-path findings are addressed by
 `20261008195738_harden_function_search_paths_and_extension_schema.sql` and its
-database regression tests. Client-callable security-definer RPCs are not
+database regression tests. The `btree_gist`-in-public warning remains: the
+hosted extension is owned by `supabase_admin`, while the migration role is
+`postgres` and is not a member of that owner role. It must not be relocated
+by this migration. Client-callable security-definer RPCs are not
 blindly revoked: their server-side role/service checks are part of the tested
 application contract. Leaked-password protection is unavailable on the current
 Free plan and must not be described as enabled.
