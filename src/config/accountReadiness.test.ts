@@ -97,4 +97,22 @@ describe('account and report production foundation', () => {
     expect(client).toContain('VITE_SUPABASE_PUBLISHABLE_KEY');
     expect(client).not.toMatch(/import\.meta\.env\.[A-Z_]*(SECRET|SERVICE_ROLE)/);
   });
+
+  it('keeps professional versioned confirmation, invite and recovery templates', () => {
+    const confirmation = read('supabase/templates/confirmation.html');
+    const invitation = read('supabase/templates/invite.html');
+    const recovery = read('supabase/templates/recovery.html');
+
+    for (const template of [confirmation, invitation, recovery]) {
+      expect(template).toContain('FireNexa');
+      expect(template).toContain('firenexasupportcg@gmail.com');
+      expect(template).toContain('/dvd-tivat-app/icons/icon-192.png');
+      expect(template).not.toMatch(/sb_(?:secret|publishable)_[A-Za-z0-9_-]{10,}/);
+    }
+
+    expect(confirmation).toContain('{{ .ConfirmationURL }}');
+    expect(invitation).toContain('{{ .ConfirmationURL }}');
+    expect(recovery).toContain('{{ .Token }}');
+    expect(recovery).not.toContain('{{ .ConfirmationURL }}');
+  });
 });

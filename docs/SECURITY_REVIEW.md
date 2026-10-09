@@ -1,6 +1,19 @@
 # Security review
 
-Reviewed: 2026-09-20
+Reviewed: 2026-10-08
+
+Production security checkpoint: email confirmation, custom SMTP and the
+confirmation/sign-in round trip are verified. Password recovery remains hidden
+until its separate code-and-password acceptance passes. The Supabase security
+advisor's trigger-function search-path findings are addressed by
+`20261008195738_harden_function_search_paths_and_extension_schema.sql` and its
+database regression tests. The `btree_gist`-in-public warning remains: the
+hosted extension is owned by `supabase_admin`, while the migration role is
+`postgres` and is not a member of that owner role. It must not be relocated
+by this migration. Client-callable security-definer RPCs are not
+blindly revoked: their server-side role/service checks are part of the tested
+application contract. Leaked-password protection is unavailable on the current
+Free plan and must not be described as enabled.
 
 This review maps the concrete security checks raised in the supplied videos to
 the repository that actually ships. It is evidence for the public fictional-data
@@ -12,7 +25,7 @@ demonstration, not approval to use real member or incident data.
 | --- | --- | --- |
 | Client secrets | Only the Supabase URL, publishable key, public VAPID key and guarded feature flag use `VITE_*`. The service-role and VAPID private keys exist only in server configuration. `scripts/check-bundle-secrets.mjs` rejects service-role material in `dist`. | Covered |
 | Repository secrets | `.env*` is ignored except the documented example. The current tree and reachable Git history were checked for high-confidence private-key/service-role assignments; none was found. | Covered at review time |
-| Authentication | Supabase Auth owns password storage and sessions. The UI never stores or hashes passwords itself. Recovery stays build-disabled until the SMTP acceptance gate in `ACCOUNT_RECOVERY.md` passes. | Covered, recovery gated |
+| Authentication | Supabase Auth owns password storage and sessions. The UI never stores or hashes passwords itself. Custom SMTP and confirmation are accepted; recovery stays build-disabled until its separate acceptance in `ACCOUNT_RECOVERY.md` passes. | Covered, recovery gated |
 | Authorisation and admin access | Database privileges, row-level security and security-definer RPC checks enforce the role matrix. Hiding a browser route is not treated as security. The push worker independently verifies either the scheduler secret or a signed-in command role. | Covered |
 | Input and injection | React escapes rendered text; there is no `dangerouslySetInnerHTML`, `innerHTML`, `eval` or dynamic function construction in application source. Database calls use typed Supabase/RPC parameters and migrations constrain operational values. | Covered |
 | XSS containment | The document now restricts scripts, connections, frames, objects, media and resource origins with a Content Security Policy. Inline scripts are not allowed. Inline styles remain allowed because Leaflet positions map elements with style attributes. | Covered for this static host |

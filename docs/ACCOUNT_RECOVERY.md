@@ -1,8 +1,19 @@
 # Email confirmation and account recovery
 
 The application contains a password-recovery flow that uses an emailed one-time
-code. It stays hidden until the target Supabase project has a working mail
-provider and the recovery template has been accepted on a real mailbox.
+code. It stays hidden until the recovery template and the full reset flow have
+been accepted on a real mailbox.
+
+## Production status (8 October 2026)
+
+- Custom Gmail SMTP is configured for `firenexasupportcg@gmail.com`.
+- **Confirm email** is enabled. A fresh external signup received the branded
+  message, followed its link and signed in successfully on the public app.
+- The versioned confirmation template is
+  `supabase/templates/confirmation.html`.
+- Password recovery remains build-disabled until the acceptance list below is
+  completed. SMTP acceptance for signup does not by itself prove the recovery
+  code and password-change flow.
 
 ## Email confirmation before inviting members
 
@@ -13,35 +24,26 @@ provider and the recovery template has been accepted on a real mailbox.
    add that exact URL to the allowed redirect URLs. The client requests this
    app directory for both registration and resend; check the current Pages
    deployment before enabling confirmation.
-3. Keep the confirmation email template's `{{ .ConfirmationURL }}` link. Enable
-   **Confirm email** only after custom SMTP sends to a disposable external
-   mailbox. Register that address, confirm the email arrives, click the link,
-   check it returns to `/dvd-tivat-app/`, then sign in. Test resend on a
-   different unconfirmed address.
-4. Keep existing member roles owner-assigned. Do not send real invitations
-   until a fresh signup, confirmation, and sign-in round trip succeeds on a
-   real device.
+3. Publish `supabase/templates/confirmation.html` as the confirmation template
+   and keep its `{{ .ConfirmationURL }}` link.
+4. Keep existing member roles owner-assigned. Registration never grants DVD or
+   SZS access by itself.
 
 ## Hosted setup
 
 1. In Supabase, open **Authentication -> Emails -> SMTP Settings** and configure
    the society's mail provider. Use a sender address that the provider has
    verified.
-2. Open **Authentication -> Email Templates -> Reset password** and use this
-   body. The `{{ .Token }}` placeholder is required; a confirmation link does
-   not match the code-entry screen.
+2. Open **Authentication -> Email Templates -> Reset password** and publish
+   `supabase/templates/recovery.html`. Its `{{ .Token }}` placeholder is
+   required; a confirmation link does not match the code-entry screen.
+3. If dashboard invitations are ever used, publish
+   `supabase/templates/invite.html` as the invite template. Ordinary firefighter
+   onboarding should normally use self-registration and owner-assigned access.
 
-   ```html
-   <h2>FireNexa - promjena lozinke</h2>
-   <p>Jednokratni kod za promjenu lozinke:</p>
-   <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">{{ .Token }}</p>
-   <p>Kod kratko traje i moze se iskoristiti samo jednom.</p>
-   <p>Ako nijeste trazili promjenu lozinke, zanemarite ovu poruku.</p>
-   ```
-
-3. Keep the recovery-email rate limit enabled. The screen also prevents another
+4. Keep the recovery-email rate limit enabled. The screen also prevents another
    request for 60 seconds, but the server limit is authoritative.
-4. Leave the GitHub Actions variable `VITE_PASSWORD_RESET_ENABLED` unset or set
+5. Leave the GitHub Actions variable `VITE_PASSWORD_RESET_ENABLED` unset or set
    to `false` while completing the acceptance below.
 
 ## Acceptance before enabling

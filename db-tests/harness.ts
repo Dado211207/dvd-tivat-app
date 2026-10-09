@@ -76,6 +76,7 @@ export const MIGRATIONS = [
   'supabase/migrations/20261002134634_callout_readiness_counts.sql',
   'supabase/migrations/20261002163200_owner_prepare_service_member.sql',
   'supabase/migrations/20261006130000_response_aware_push_reminders.sql',
+  'supabase/migrations/20261008195738_harden_function_search_paths_and_extension_schema.sql',
 ];
 
 export const DATABASE_URL =
