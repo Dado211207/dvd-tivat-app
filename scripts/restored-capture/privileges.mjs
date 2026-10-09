@@ -19,9 +19,11 @@
  * Removing them (scripts/restored-capture/harden-pg-net.sql) needs
  * `supabase_admin` - the project owner's `postgres` login cannot (verified
  * 2026-10-04: it is not a superuser and cannot SET ROLE supabase_admin, so its
- * REVOKE FROM PUBLIC no-ops). So this refusal clears only after a Supabase
- * support action, or an explicit documented acceptance of the pg_net residual
- * (docs/RESTORED_CAPTURE_REHEARSAL.md). A rolled-back probe on the real
+ * REVOKE FROM PUBLIC no-ops). Supabase Support confirmed 2026-10-09 it cannot
+ * change these grants per project. This refusal therefore remains until a
+ * reviewed architecture change avoids an added direct-login role, or the
+ * owner explicitly accepts the documented risk (docs/RESTORED_CAPTURE_REHEARSAL.md).
+ * A rolled-back probe on the real
  * isolated project confirms pg_net is the ONLY residual write path: no role
  * membership, no SECURITY DEFINER functions, no public/auth/vault/pgsodium
  * writes.
