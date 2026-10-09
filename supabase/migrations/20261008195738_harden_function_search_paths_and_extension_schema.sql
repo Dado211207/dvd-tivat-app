@@ -14,7 +14,6 @@ alter function public.refuse_response_rebinding() set search_path = '';
 alter function public.refuse_journey_rebinding() set search_path = '';
 alter function public.refuse_availability_rebinding() set search_path = '';
 
--- Supabase exposes public through the Data API. btree_gist is relocatable, and
--- its objects are implementation details rather than FireNexa API endpoints.
-create schema if not exists extensions;
-alter extension btree_gist set schema extensions;
+-- The hosted btree_gist extension belongs to supabase_admin. The application
+-- migration role postgres cannot relocate it; leave this platform-owned
+-- extension in place and track its advisory separately.
