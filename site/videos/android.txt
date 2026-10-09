@@ -2,7 +2,7 @@ Instalacija na Android
 
 1. Otvorite aplikaciju u Chromeu
 
-Na Android telefonu otvorite Chrome i stranicu firenexa.netlify.app. Dodirnite Otvori aplikaciju. Provjerite da je adresa aplikacije firenexa-app.netlify.app prije instalacije. Instalirajte aplikaciju, a ne ovu informativnu stranicu.
+Na Android telefonu otvorite Chrome i stranicu firenexa.netlify.app. Dodirnite Otvori aplikaciju. Provjerite da je adresa aplikacije {{FIRENEXA_APP_URL}} prije instalacije. Instalirajte aplikaciju, a ne ovu informativnu stranicu.
 
 Ako je link otvoren unutar Vibera ili druge aplikacije, otvorite ga u Chromeu.
 

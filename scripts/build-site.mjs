@@ -39,6 +39,10 @@ export async function buildSite({ appUrl, preview = false, outDir = 'dist-site' 
   await cp('site/site.css', resolve(output, 'site.css'));
   await cp('site/assets/firenexa.svg', resolve(output, 'assets/firenexa.svg'));
   await cp('site/videos', resolve(output, 'videos'), { recursive: true });
+  // The Android transcript names the app address in prose. Resolve it from
+  // the same build input as the links and QR so it cannot point at a test app.
+  const androidTranscript = withAppAddress(await readFile('site/videos/android.txt', 'utf8'), address);
+  await writeFile(resolve(output, 'videos/android.txt'), androidTranscript);
   const options = { errorCorrectionLevel: 'M', margin: 4, width: 512 };
   await QRCode.toFile(resolve(output, 'assets/app-qr.svg'), address, { ...options, type: 'svg' });
   await QRCode.toFile(resolve(output, 'assets/app-qr.png'), address, options);
