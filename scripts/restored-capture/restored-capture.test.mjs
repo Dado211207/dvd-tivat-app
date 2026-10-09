@@ -55,6 +55,17 @@ test('classify refuses any application write path, membership or extra read', ()
   assert.ok(platform.platform.some((p) => p.includes('pg_stat_statements')));
 });
 
+test('unsupported pg_net hardening SQL is inert and cannot change platform grants', async () => {
+  const sql = await readFile(resolve(HERE, 'harden-pg-net.sql'), 'utf8');
+  const executable = sql
+    .split('\\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('--'));
+  assert.deepEqual(executable, []);
+  assert.match(sql, /contains no executable SQL/i);
+  assert.match(sql, /Support confirmed[\s\S]*cannot modify pg_net grants/i);
+});
+
 test('the dump source must be the dump role, never the owner, and the target must be a separate loopback', () => {
   const ok = dumpSourceUrl('postgresql://dvd_release_dump:pw@db.yskhdzrdbywrpfowckpn.supabase.co:5432/postgres');
   assert.equal(ok.projectRef, 'yskhdzrdbywrpfowckpn');
