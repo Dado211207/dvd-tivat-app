@@ -4,7 +4,32 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-10-03
+Last updated: 2026-10-09
+
+## Current handoff — 2026-10-09
+
+The production app is on GitHub Pages at
+<https://dado211207.github.io/dvd-tivat-app/>. `main` is
+`aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`; CI and its Pages deployment passed.
+The public guide remains unsafe to share: its Netlify `publication.json` and QR
+still target the isolated test app at <https://firenexa-app.netlify.app/>.
+The correct guide build has not been produced or deployed in this workspace.
+
+Read [the current publication record](../FIRENEXA_PUBLICATION.md) before
+resuming deployment. The remaining publication step is to build and verify the
+guide using the Pages URL, then deploy it as a draft to the existing Netlify
+guide site, verify it, and promote that same deploy. Current environment has no
+Netlify CLI login and the available Netlify connector cannot upload deploy
+files. Do not mark the guide published or share its QR until a live deploy and
+its metadata have been checked. This does not indicate the application is
+offline.
+
+Application-side release gates remain separate: real password-reset email
+acceptance, a fresh encrypted post-rollout database backup/restore verification,
+and the planned Android/SZS/dual-service physical-device and pilot checks. No
+operational acceptance is recorded by the successful CI or Pages deployment.
+Historical sections below are retained as dated checkpoints; use the current
+publication record and later release notes where older statements conflict.
 
 ## Resumed delivery checkpoint — 2026-10-03
 
