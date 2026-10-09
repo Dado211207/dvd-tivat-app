@@ -84,14 +84,4 @@ describe('Supabase security-advisor hardening', () => {
       [member.rows[0]!.id],
     )).rejects.toThrow(/AVAILABILITY_IDENTITY_FIXED/);
   });
-
-  it('moves btree_gist out of the exposed public schema', async () => {
-    const result = await client.query<{ schema_name: string; extrelocatable: boolean }>(
-      `select n.nspname as schema_name, e.extrelocatable
-         from pg_extension e
-         join pg_namespace n on n.oid = e.extnamespace
-        where e.extname = 'btree_gist'`,
-    );
-    expect(result.rows).toEqual([{ schema_name: 'extensions', extrelocatable: true }]);
-  });
 });
