@@ -36,6 +36,10 @@ test('one configured address replaces every app link and supplies both QR assets
     assert.ok(!html.includes('./videos/android.mp4'));
     assert.ok(!html.includes('./videos/usage.mp4'));
     assert.ok((await stat(join(directory, 'videos/iphone.mp4'))).size > 100_000);
+    const androidTranscript = await readFile(join(directory, 'videos/android.txt'), 'utf8');
+    assert.ok(androidTranscript.includes(address));
+    assert.ok(!androidTranscript.includes('firenexa-app.netlify.app'));
+    assert.ok(!androidTranscript.includes('{{FIRENEXA_APP_URL}}'));
     for (const name of ['android', 'koriscenje']) {
       assert.ok(html.includes(`./${name}.html`));
       const guide = await readFile(join(directory, `${name}.html`), 'utf8');
