@@ -5,7 +5,7 @@
 ### Application
 
 - Production app: <https://dado211207.github.io/dvd-tivat-app/>.
-- Last verified application release: `aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`; its CI and GitHub Pages deployment completed successfully. `main` now also contains documentation-only merge `93ec2b59e7fa64204eb9f0f51bec7042e4656af3`; that merge changed no app code and did not publish the guide.
+- Last verified application release: `aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`; its CI and GitHub Pages deployment completed successfully. Documentation-only PRs #109 and #110 were merged afterward; neither changed app code or published the guide.
 - The separate Netlify app at <https://firenexa-app.netlify.app/> remains isolated test infrastructure. Never direct members there.
 
 ### Public guide — still blocked from publication

@@ -6,8 +6,8 @@
 > još vode na izolovanu test aplikaciju <https://firenexa-app.netlify.app/>.
 > Ne dijeliti vodič ni QR za prijavu članova dok se ne izgradi sa Pages adresom,
 > provjeri Netlify draft i objavi isti provjereni deploy. Detalji su u
-> [zapisu objave](./FIRENEXA_PUBLICATION.md). PR #109 (`93ec2b5`) je
-> dokumentacioni merge i nije promijenio aplikaciju.
+> [zapisu objave](./FIRENEXA_PUBLICATION.md). PR-ovi #109 i #110 su
+> dokumentacioni mergeovi i nijesu promijenili aplikaciju.
 
 > **Aktuelni produkcioni presjek — 8. oktobar 2026.** Produkciona aplikacija je
 > <https://dado211207.github.io/dvd-tivat-app/>; javni vodič je

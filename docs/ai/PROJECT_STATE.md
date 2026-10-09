@@ -9,10 +9,10 @@ Last updated: 2026-10-09
 ## Current handoff — 2026-10-09
 
 The production app is on GitHub Pages at
-<https://dado211207.github.io/dvd-tivat-app/>. `main` is
-`93ec2b59e7fa64204eb9f0f51bec7042e4656af3` after the documentation-only PR
-#109. The last verified app release is `aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`,
-whose CI and Pages deployment passed; PR #109 changed no app code.
+<https://dado211207.github.io/dvd-tivat-app/>. The last verified app release is
+`aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`, whose CI and Pages deployment
+passed. Documentation-only PRs #109 and #110 were merged afterward; neither
+changed app code.
 The public guide remains unsafe to share: its Netlify `publication.json` and QR
 still target the isolated test app at <https://firenexa-app.netlify.app/>.
 The correct guide build has not been produced or deployed in this workspace.
