@@ -1,38 +1,22 @@
 # FireNexa hosted publication
 
-## Current publication state — 9 October 2026
+## Current publication state — 10 October 2026
 
 ### Application
 
 - Production app: <https://dado211207.github.io/dvd-tivat-app/>.
-- Last verified application release: `aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`; its CI and GitHub Pages deployment completed successfully. Documentation-only PRs #109 and #110 were merged afterward; neither changed app code or published the guide.
-- The separate Netlify app at <https://firenexa-app.netlify.app/> remains isolated test infrastructure. Never direct members there.
+- The separate Netlify app at <https://firenexa-app.netlify.app/> remains isolated test infrastructure. The public guide does not target it.
 
-### Public guide — still blocked from publication
+### Public guide
 
-The live guide at <https://firenexa.netlify.app/> is still on deploy
-`6ac2a05f9fa3f188e860c23c` for Netlify site `6dcc0123-3287-43a5-98a2-0ee25d33b5f2`.
-Its public `publication.json` still points the app URL and QR target to
-<https://firenexa-app.netlify.app/>. **Do not distribute the live guide or its
-QR for member sign-up.** The guide source has a production URL build option and
-guards against known test hosts, but source changes do not fix the hosted copy.
+- Public guide: <https://firenexa.netlify.app/>.
+- Published production deploy: `6ac9de70b321ea9896777e0f`, ready and published on 10 October 2026 at 06:45 UTC.
+- The generated package was built with the production Pages app URL above as its app-link and QR target. The corrected guide preview was visually checked before publishing.
+- The 9 October warning below referred to the previous deployment and is superseded by this verified publication.
 
-Next publication must be built with
-`https://dado211207.github.io/dvd-tivat-app/`, and the generated
-`publication.json`, links, QR SVG and PNG must all be checked before the same
-build is uploaded as a Netlify draft, tested, and promoted. The iPhone install
-recording and written Android/use instructions are the approved guide format;
-do not replace them with generated phone footage. Keep the existing deploy
-available for rollback until the replacement is verified.
+### Remaining application acceptance
 
-This workspace currently has neither Netlify CLI authentication nor an
-upload-capable Netlify connector, so it cannot build the QR assets or upload a
-draft here. No new guide deploy has been created. When deploy access is
-available, run `npm ci`, `npm run test:site`, then
-`npm run build:site -- --app-url https://dado211207.github.io/dvd-tivat-app/`;
-confirm `dist-site/publication.json` sets both `appUrl` and `qrTarget` to that
-Pages URL and has `preview: false`, and confirm no test-app URL remains in the
-generated site before deploying.
+Guide publication is complete. Before operational reliance, finish the documented release checks: password-recovery acceptance, physical Android acceptance, encrypted backup and restore rehearsal, and three supervised fictional pilot exercises. See [RELEASE_ACCEPTANCE.md](./RELEASE_ACCEPTANCE.md).
 
 ## Current publication state — 6 October 2026
 
