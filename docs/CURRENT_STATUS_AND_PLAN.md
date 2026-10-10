@@ -8,7 +8,7 @@
 > su odvojeni projekti. Ranija napomena ispod o testnom QR-u opisuje prethodni
 > deploy i više nije važeća za objavljeni vodič.
 >
-> **Aktuelni produkcioni presjek — 8. oktobar 2026.** Produkciona aplikacija je
+> **Provjereni produkcioni presjek aplikacije — 8. oktobar 2026.** Produkciona aplikacija je
 > <https://dado211207.github.io/dvd-tivat-app/>; javni vodič je
 > <https://firenexa.netlify.app/>. `main` je prije ovog završnog sigurnosnog
 > paketa bio na `2c1f13e`: CI i Pages objava su prošli. Produkcija ima 49
