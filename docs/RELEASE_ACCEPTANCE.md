@@ -1,13 +1,13 @@
 # Release acceptance record
 
-## Verified production observations — 8 October 2026; publication rechecked 9 October
+## Verified production observations — 10 October 2026
 
 These observations are evidence already supplied by the owner. They do not
 replace the remaining device matrix or the three supervised pilot exercises.
 
 | Check | Verified observation |
 | --- | --- |
-| Public app and guide | App: <https://dado211207.github.io/dvd-tivat-app/>; guide: <https://firenexa.netlify.app/>. The guide's links and QR still target the isolated test app; do not distribute it for member sign-up until the verified production-targeted guide is published. |
+| Public app and guide | App: <https://dado211207.github.io/dvd-tivat-app/>. Guide: <https://firenexa.netlify.app/>, published from production deploy `6ac9de70b321ea9896777e0f` on 10 October 2026. The corrected guide QR and app links target the Pages app URL above. |
 | Signup and email confirmation | A fresh external account received the branded confirmation email, followed its link and signed in successfully |
 | Installed iPhone PWA | Signed in from the Home Screen installation and enabled notifications |
 | TEST call-out | Initial notification arrived; a single reminder arrived after 30+ seconds when unanswered; response was saved; call-out was closed |
