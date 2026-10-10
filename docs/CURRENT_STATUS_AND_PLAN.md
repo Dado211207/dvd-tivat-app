@@ -1,15 +1,14 @@
 # FireNexa - trenutno stanje i plan
 
-> **Ispravka objave — 9. oktobar 2026.** Produkciona aplikacija je na
-> <https://dado211207.github.io/dvd-tivat-app/>. Javni vodič je na
-> <https://firenexa.netlify.app/>, ali njegov `publication.json`, linkovi i QR
-> još vode na izolovanu test aplikaciju <https://firenexa-app.netlify.app/>.
-> Ne dijeliti vodič ni QR za prijavu članova dok se ne izgradi sa Pages adresom,
-> provjeri Netlify draft i objavi isti provjereni deploy. Detalji su u
-> [zapisu objave](./FIRENEXA_PUBLICATION.md). PR-ovi #109 i #110 su
-> dokumentacioni mergeovi i nijesu promijenili aplikaciju.
-
-> **Aktuelni produkcioni presjek — 8. oktobar 2026.** Produkciona aplikacija je
+> **Objava provjerena — 10. oktobar 2026.** Vodič je objavljen na Netlify-u
+> iz deploya `6ac9de70b321ea9896777e0f` (production, ready; published at
+> 2026-10-10 06:45 UTC). Glavna adresa vodiča je <https://firenexa.netlify.app/>.
+> Cilj aplikacije u QR kodu i linkovima je produkciona Pages adresa
+> <https://dado211207.github.io/dvd-tivat-app/>. Netlify sajt vodiča i aplikacija
+> su odvojeni projekti. Ranija napomena ispod o testnom QR-u opisuje prethodni
+> deploy i više nije važeća za objavljeni vodič.
+>
+> **Provjereni produkcioni presjek aplikacije — 8. oktobar 2026.** Produkciona aplikacija je
 > <https://dado211207.github.io/dvd-tivat-app/>; javni vodič je
 > <https://firenexa.netlify.app/>. `main` je prije ovog završnog sigurnosnog
 > paketa bio na `2c1f13e`: CI i Pages objava su prošli. Produkcija ima 49

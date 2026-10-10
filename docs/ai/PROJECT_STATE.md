@@ -4,34 +4,31 @@ Single source of truth for resuming this work without reading the conversation
 that produced it. **Update this file in the same commit as the change it
 describes.**
 
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 
-## Current handoff — 2026-10-09
+## Current handoff — 2026-10-10
 
-The production app is on GitHub Pages at
-<https://dado211207.github.io/dvd-tivat-app/>. The last verified app release is
-`aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`, whose CI and Pages deployment
-passed. Documentation-only PRs #109 and #110 were merged afterward; neither
-changed app code.
-The public guide remains unsafe to share: its Netlify `publication.json` and QR
-still target the isolated test app at <https://firenexa-app.netlify.app/>.
-The correct guide build has not been produced or deployed in this workspace.
+The production app is at <https://dado211207.github.io/dvd-tivat-app/>. The
+separate Netlify app at <https://firenexa-app.netlify.app/> remains isolated
+test infrastructure.
 
-Read [the current publication record](../FIRENEXA_PUBLICATION.md) before
-resuming deployment. The remaining publication step is to build and verify the
-guide using the Pages URL, then deploy it as a draft to the existing Netlify
-guide site, verify it, and promote that same deploy. Current environment has no
-Netlify CLI login and the available Netlify connector cannot upload deploy
-files. Do not mark the guide published or share its QR until a live deploy and
-its metadata have been checked. This does not indicate the application is
-offline.
+The public guide is published at <https://firenexa.netlify.app/> from Netlify
+production deploy `6ac9de70b321ea9896777e0f`, marked ready and published at
+2026-10-10 06:45 UTC. The guide was built with the production Pages app URL as
+its link and QR target. The previous 9 October warnings in this file described
+the superseded guide deploy. See the current [publication record](../FIRENEXA_PUBLICATION.md).
 
-Application-side release gates remain separate: real password-reset email
-acceptance, a fresh encrypted post-rollout database backup/restore verification,
-and the planned Android/SZS/dual-service physical-device and pilot checks. No
-operational acceptance is recorded by the successful CI or Pages deployment.
-Historical sections below are retained as dated checkpoints; use the current
-publication record and later release notes where older statements conflict.
+The guide is complete. App operational acceptance remains open for password
+recovery through a real mailbox, physical Android checks, an encrypted backup
+and restore rehearsal after the final hosted migrations, and three supervised
+fictional pilot exercises. Do not infer operational readiness from guide
+publication or CI. Use [the release acceptance record](../RELEASE_ACCEPTANCE.md)
+to record outcomes.
+
+The exact current Netlify deploy was checked through the Netlify connector.
+No app, database, account, role, push-worker or environment setting was changed
+by the guide publication. Historical sections below are dated checkpoints and
+must not override this handoff.
 
 ## Resumed delivery checkpoint — 2026-10-03
 

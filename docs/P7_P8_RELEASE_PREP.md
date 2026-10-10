@@ -3,11 +3,13 @@ Total output lines: 177
 
 # P7 + P8 release candidate: execution record
 
-## Current publication safety note — 2026-10-09
+## Current publication safety note — 2026-10-10
 
-- The production application remains at <https://dado211207.github.io/dvd-tivat-app/>. The last verified app release is `aade5e806b7559731a1fd2a2e8cd84ccb2f9aa5b`; PRs #109 and #110 since then changed documentation only.
-- The live public guide <https://firenexa.netlify.app/> is still deploy `6ac2a05f9fa3f188e860c23c`, and its public `publication.json`, app links and QR point to the isolated test app <https://firenexa-app.netlify.app/>. **Do not share or print the guide or QR for member sign-up.** Rebuild for the GitHub Pages production URL, verify a Netlify draft, then publish that verified deploy. Details are in [FIRENEXA_PUBLICATION.md](./FIRENEXA_PUBLICATION.md).
-- The 8 October production checkpoint below records the app, database and Web Push evidence as it stood then. Its statement that the guide pointed to production and was suitable for onboarding is superseded by this 9 October recheck.
+- The production application remains at <https://dado211207.github.io/dvd-tivat-app/>. The app release evidence and hosted-service checks below are dated checkpoints; the public guide is now separately published.
+- The public guide <https://firenexa.netlify.app/> is on production deploy `6ac9de70b321ea9896777e0f`, ready and published on 10 October 2026 at 06:45 UTC.
+- The deployed guide package was built with the production Pages app URL as its app and QR target; its preview was visually checked before publication. The separate <https://firenexa-app.netlify.app/> remains isolated test infrastructure and is not the guide target.
+- The 9 October safety note below describes the preceding guide deployment and is superseded by this verified publication.
+- Application acceptance remains separate: password-recovery email flow, physical Android acceptance, a fresh encrypted post-rollout backup and restore rehearsal, and three supervised fictional pilot exercises. Do not treat guide publication or CI as operational acceptance.
 
 ## Previous production checkpoint — 2026-10-08
 
