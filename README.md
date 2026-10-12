@@ -1,6 +1,9 @@
 # FireNexa — Fire & Rescue Response Platform
 
-> **Current status, 2026-09-30:** The isolated Free cloud phone test received a Web Push notification on the owner's locked iPhone. The selected in-app sound applies only while the web app is visible; iOS uses its system notification sound in the background. Read [current status and plan](docs/CURRENT_STATUS_AND_PLAN.md) and [phone test evidence](docs/CLOUD_PHONE_TEST.md). The draft PR and production are separate; this is not operational acceptance.
+> [Aktuelni projektni handoff](docs/PROJECT_HANDOFF.md) — presjek 12. oktobra 2026.
+
+
+> **Historijski presjek, 2026-09-30:** The isolated Free cloud phone test received a Web Push notification on the owner's locked iPhone. The selected in-app sound applies only while the web app is visible; iOS uses its system notification sound in the background. Read [current status and plan](docs/CURRENT_STATUS_AND_PLAN.md) and [phone test evidence](docs/CLOUD_PHONE_TEST.md). The draft PR and production are separate; this is not operational acceptance.
 
 > **Current work, 2 October 2026:** FireNexa is the owner-selected name. The
 > finishing candidate is on `codex/callout-readiness` (draft #82, combined CI
